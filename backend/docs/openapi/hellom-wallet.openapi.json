@@ -1,0 +1,1119 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Hellom Wallet API",
+    "version": "1.0.0",
+    "description": "OpenAPI contract for Hellom wallet, payout, and Xendit webhook endpoints."
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8000/api/v1/hellom",
+      "description": "Local"
+    }
+  ],
+  "tags": [
+    { "name": "Auth" },
+    { "name": "Wallet" },
+    { "name": "Webhook" }
+  ],
+  "paths": {
+    "/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Login and get API token",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                  "email": { "type": "string", "format": "email" },
+                  "password": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessEnvelope" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "properties": {
+                            "token": { "type": "string" },
+                            "user": { "type": "object" }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/billing/wallet/topup-mock": {
+      "post": {
+        "tags": ["Wallet"],
+        "summary": "Top-up wallet (mock)",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["amount"],
+                "properties": {
+                  "amount": { "type": "integer", "minimum": 10000 },
+                  "source": { "type": "string", "nullable": true },
+                  "notes": { "type": "string", "nullable": true }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Top-up success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessEnvelope" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "properties": {
+                            "wallet": { "$ref": "#/components/schemas/Wallet" },
+                            "topup": { "$ref": "#/components/schemas/WalletTransaction" }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/billing/checkout-confirm-wallet": {
+      "post": {
+        "tags": ["Wallet"],
+        "summary": "Confirm checkout using wallet",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["intent_token"],
+                "properties": {
+                  "intent_token": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Checkout confirmed from wallet",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope" }
+              }
+            }
+          },
+          "422": { "$ref": "#/components/responses/ValidationError" }
+        }
+      }
+    },
+    "/billing/subscriptions/{subscriptionId}/renew-wallet": {
+      "post": {
+        "tags": ["Wallet"],
+        "summary": "Renew subscription using wallet",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "subscriptionId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer", "minimum": 1 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Renewal paid from wallet",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "422": { "$ref": "#/components/responses/ValidationError" }
+        }
+      }
+    },
+    "/billing/subscriptions/{subscriptionId}/auto-renew-wallet": {
+      "post": {
+        "tags": ["Wallet"],
+        "summary": "Set subscription wallet auto-renew preference",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "subscriptionId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer", "minimum": 1 }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["enabled"],
+                "properties": {
+                  "enabled": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Auto-renew preference updated",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/billing/wallet/auto-renew-preview": {
+      "get": {
+        "tags": ["Wallet"],
+        "summary": "Preview wallet auto-renew due subscriptions",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "days", "in": "query", "required": false, "schema": { "type": "integer", "minimum": 1, "maximum": 90, "default": 30 } },
+          { "name": "limit", "in": "query", "required": false, "schema": { "type": "integer", "minimum": 1, "maximum": 200, "default": 100 } },
+          { "name": "include_overdue", "in": "query", "required": false, "schema": { "type": "boolean", "default": true } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Preview result",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/wallet/overview": {
+      "get": {
+        "tags": ["Wallet"],
+        "summary": "Get wallet overview",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Wallet overview",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessEnvelope" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "properties": {
+                            "organization": { "$ref": "#/components/schemas/Organization" },
+                            "requester_role": { "$ref": "#/components/schemas/Role" },
+                            "wallet": { "$ref": "#/components/schemas/Wallet" },
+                            "recent_transactions": {
+                              "type": "array",
+                              "items": { "$ref": "#/components/schemas/WalletTransaction" }
+                            },
+                            "pending_withdrawals": {
+                              "type": "array",
+                              "items": { "$ref": "#/components/schemas/Withdrawal" }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/wallet/payout-policy": {
+      "get": {
+        "tags": ["Wallet"],
+        "summary": "Get payout/settlement policy by channel",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "channel", "in": "query", "required": false, "schema": { "type": "string" } },
+          { "name": "amount", "in": "query", "required": false, "schema": { "type": "integer", "minimum": 1 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Payout policy",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/wallet/finance-summary": {
+      "get": {
+        "tags": ["Wallet"],
+        "summary": "Get finance summary",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 1, "maximum": 90, "default": 30 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Finance summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessEnvelope" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "properties": {
+                            "organization": { "$ref": "#/components/schemas/Organization" },
+                            "requester_role": { "$ref": "#/components/schemas/Role" },
+                            "range": {
+                              "type": "object",
+                              "properties": {
+                                "days": { "type": "integer" },
+                                "start_at": { "type": "string", "format": "date-time" },
+                                "end_at": { "type": "string", "format": "date-time" }
+                              }
+                            },
+                            "wallet": { "$ref": "#/components/schemas/Wallet" },
+                            "period": {
+                              "type": "object",
+                              "properties": {
+                                "inflow": { "type": "integer" },
+                                "outflow": { "type": "integer" },
+                                "net": { "type": "integer" },
+                                "transaction_count": { "type": "integer" }
+                              }
+                            },
+                            "withdrawals": {
+                              "type": "object",
+                              "properties": {
+                                "pending_count": { "type": "integer" },
+                                "processing_count": { "type": "integer" },
+                                "paid_count": { "type": "integer" },
+                                "failed_count": { "type": "integer" },
+                                "rejected_count": { "type": "integer" },
+                                "cancelled_count": { "type": "integer" }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/wallet/transactions": {
+      "get": {
+        "tags": ["Wallet"],
+        "summary": "List wallet transactions",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "type", "in": "query", "required": false, "schema": { "type": "string", "maxLength": 30 } },
+          { "name": "limit", "in": "query", "required": false, "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 } },
+          { "name": "cursor", "in": "query", "required": false, "schema": { "type": "integer", "minimum": 1 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Transactions list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessEnvelope" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "properties": {
+                            "organization_id": { "type": "integer" },
+                            "requester_role": { "$ref": "#/components/schemas/Role" },
+                            "filters": { "$ref": "#/components/schemas/PaginationFilters" },
+                            "pagination": { "$ref": "#/components/schemas/PaginationMeta" },
+                            "items": {
+                              "type": "array",
+                              "items": { "$ref": "#/components/schemas/WalletTransaction" }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/wallet/withdrawals": {
+      "get": {
+        "tags": ["Wallet"],
+        "summary": "List withdrawal requests",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/WithdrawalStatus" },
+          { "name": "limit", "in": "query", "required": false, "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 } },
+          { "name": "cursor", "in": "query", "required": false, "schema": { "type": "integer", "minimum": 1 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Withdrawal requests list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessEnvelope" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "properties": {
+                            "organization_id": { "type": "integer" },
+                            "requester_role": { "$ref": "#/components/schemas/Role" },
+                            "filters": { "$ref": "#/components/schemas/PaginationFilters" },
+                            "pagination": { "$ref": "#/components/schemas/PaginationMeta" },
+                            "items": {
+                              "type": "array",
+                              "items": { "$ref": "#/components/schemas/Withdrawal" }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      },
+      "post": {
+        "tags": ["Wallet"],
+        "summary": "Request withdrawal",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["amount", "bank_code", "account_number", "account_name"],
+                "properties": {
+                  "amount": { "type": "integer", "minimum": 10000 },
+                  "bank_code": { "type": "string", "maxLength": 30 },
+                  "account_number": { "type": "string", "maxLength": 50 },
+                  "account_name": { "type": "string", "maxLength": 120 },
+                  "notes": { "type": "string", "maxLength": 500, "nullable": true }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Withdrawal created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessEnvelope" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "properties": {
+                            "wallet": { "$ref": "#/components/schemas/Wallet" },
+                            "withdrawal": { "$ref": "#/components/schemas/Withdrawal" },
+                            "next_step": {
+                              "type": "object",
+                              "properties": {
+                                "integration": { "type": "string", "example": "xendit_disbursement" },
+                                "external_ref": { "type": "string" }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "422": { "$ref": "#/components/responses/ValidationError" }
+        }
+      }
+    },
+    "/wallet/payout-history": {
+      "get": {
+        "tags": ["Wallet"],
+        "summary": "Get payout history",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/WithdrawalStatus" },
+          { "name": "limit", "in": "query", "required": false, "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 } },
+          { "name": "cursor", "in": "query", "required": false, "schema": { "type": "integer", "minimum": 1 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Payout history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessEnvelope" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "properties": {
+                            "organization_id": { "type": "integer" },
+                            "requester_role": { "$ref": "#/components/schemas/Role" },
+                            "filters": { "$ref": "#/components/schemas/PaginationFilters" },
+                            "pagination": { "$ref": "#/components/schemas/PaginationMeta" },
+                            "summary": {
+                              "type": "object",
+                              "properties": {
+                                "total_requests": { "type": "integer" },
+                                "pending_or_processing": { "type": "integer" },
+                                "paid_count": { "type": "integer" },
+                                "rejected_or_cancelled": { "type": "integer" }
+                              }
+                            },
+                            "items": {
+                              "type": "array",
+                              "items": { "$ref": "#/components/schemas/Withdrawal" }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/wallet/admin/payout-queue": {
+      "get": {
+        "tags": ["Wallet"],
+        "summary": "Get admin payout queue",
+        "description": "Default rows when status is omitted: pending, processing, failed.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "$ref": "#/components/parameters/WithdrawalStatus" },
+          { "name": "limit", "in": "query", "required": false, "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 } },
+          { "name": "cursor", "in": "query", "required": false, "schema": { "type": "integer", "minimum": 1 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Admin payout queue",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessEnvelope" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "properties": {
+                            "organization": { "$ref": "#/components/schemas/Organization" },
+                            "requester_role": { "$ref": "#/components/schemas/Role" },
+                            "filters": { "$ref": "#/components/schemas/PaginationFilters" },
+                            "pagination": { "$ref": "#/components/schemas/PaginationMeta" },
+                            "summary": {
+                              "type": "object",
+                              "properties": {
+                                "pending_count": { "type": "integer" },
+                                "processing_count": { "type": "integer" },
+                                "failed_count": { "type": "integer" },
+                                "paid_count": { "type": "integer" }
+                              }
+                            },
+                            "items": {
+                              "type": "array",
+                              "items": { "$ref": "#/components/schemas/WithdrawalWithActions" }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/wallet/withdrawals/{withdrawalId}/approve": {
+      "post": {
+        "tags": ["Wallet"],
+        "summary": "Approve withdrawal (pending -> processing)",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/WithdrawalId" }],
+        "responses": {
+          "200": {
+            "description": "Approved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessEnvelope" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "properties": {
+                            "withdrawal": { "$ref": "#/components/schemas/Withdrawal" },
+                            "next_step": {
+                              "type": "object",
+                              "properties": {
+                                "integration": { "type": "string", "example": "xendit_disbursement" },
+                                "provider": { "type": "string", "example": "xendit" },
+                                "external_ref": { "type": "string" },
+                                "amount": { "type": "integer" },
+                                "bank_code": { "type": "string" },
+                                "account_number": { "type": "string" },
+                                "account_name": { "type": "string" }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "422": { "$ref": "#/components/responses/ValidationError" }
+        }
+      }
+    },
+    "/wallet/withdrawals/{withdrawalId}/reject": {
+      "post": {
+        "tags": ["Wallet"],
+        "summary": "Reject withdrawal and release balance",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/WithdrawalId" }],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "notes": { "type": "string", "maxLength": 500, "nullable": true }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessEnvelope" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "properties": {
+                            "wallet": { "$ref": "#/components/schemas/Wallet" },
+                            "withdrawal": { "$ref": "#/components/schemas/Withdrawal" }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "422": { "$ref": "#/components/responses/ValidationError" }
+        }
+      }
+    },
+    "/wallet/withdrawals/{withdrawalId}/mark-paid": {
+      "post": {
+        "tags": ["Wallet"],
+        "summary": "Mark withdrawal as paid",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/WithdrawalId" }],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "provider_ref": { "type": "string", "maxLength": 120, "nullable": true },
+                  "notes": { "type": "string", "maxLength": 500, "nullable": true }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Marked paid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessEnvelope" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "properties": {
+                            "wallet": { "$ref": "#/components/schemas/Wallet" },
+                            "withdrawal": { "$ref": "#/components/schemas/Withdrawal" }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "422": { "$ref": "#/components/responses/ValidationError" }
+        }
+      }
+    },
+    "/wallet/withdrawals/{withdrawalId}/mark-failed": {
+      "post": {
+        "tags": ["Wallet"],
+        "summary": "Mark withdrawal as failed and release balance",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/WithdrawalId" }],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "notes": { "type": "string", "maxLength": 500, "nullable": true }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Marked failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessEnvelope" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "properties": {
+                            "wallet": { "$ref": "#/components/schemas/Wallet" },
+                            "withdrawal": { "$ref": "#/components/schemas/Withdrawal" }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "422": { "$ref": "#/components/responses/ValidationError" }
+        }
+      }
+    },
+    "/wallet/withdrawals/{withdrawalId}/cancel": {
+      "post": {
+        "tags": ["Wallet"],
+        "summary": "Cancel pending withdrawal",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/WithdrawalId" }],
+        "responses": {
+          "200": {
+            "description": "Cancelled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SuccessEnvelope" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "properties": {
+                            "wallet": { "$ref": "#/components/schemas/Wallet" },
+                            "withdrawal": { "$ref": "#/components/schemas/Withdrawal" }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "422": { "$ref": "#/components/responses/ValidationError" }
+        }
+      }
+    },
+    "/billing/webhook/xendit": {
+      "post": {
+        "tags": ["Webhook"],
+        "summary": "Receive Xendit webhook",
+        "description": "Requires X-CALLBACK-TOKEN header.",
+        "parameters": [
+          {
+            "name": "X-CALLBACK-TOKEN",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": { "type": "string" },
+                  "event": { "type": "string" },
+                  "organization_id": { "type": "integer", "nullable": true },
+                  "amount": { "type": "integer", "nullable": true },
+                  "external_id": { "type": "string", "nullable": true },
+                  "metadata": { "type": "object", "nullable": true, "additionalProperties": true }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Processed or duplicate ignored",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessEnvelope" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/InvalidCallbackToken" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "Token"
+      }
+    },
+    "parameters": {
+      "WithdrawalId": {
+        "name": "withdrawalId",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "integer", "minimum": 1 }
+      },
+      "WithdrawalStatus": {
+        "name": "status",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "enum": ["pending", "processing", "paid", "rejected", "cancelled", "failed"]
+        }
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "Unauthorized",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorEnvelope" }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "Forbidden",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorEnvelope" }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Not found",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorEnvelope" }
+          }
+        }
+      },
+      "ValidationError": {
+        "description": "Validation/business rule error",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorEnvelope" }
+          }
+        }
+      },
+      "InvalidCallbackToken": {
+        "description": "Invalid callback token",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorEnvelope" }
+          }
+        }
+      },
+      "InternalError": {
+        "description": "Internal server error",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorEnvelope" }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "SuccessEnvelope": {
+        "type": "object",
+        "required": ["success", "message", "data", "error"],
+        "properties": {
+          "success": { "type": "boolean", "enum": [true] },
+          "message": { "type": "string" },
+          "data": { "nullable": true },
+          "error": { "type": "null" }
+        }
+      },
+      "ErrorEnvelope": {
+        "type": "object",
+        "required": ["success", "message", "data", "error"],
+        "properties": {
+          "success": { "type": "boolean", "enum": [false] },
+          "message": { "type": "string" },
+          "data": { "type": "null" },
+          "error": { "nullable": true }
+        }
+      },
+      "Role": {
+        "type": "string",
+        "enum": ["owner", "admin", "member"]
+      },
+      "Organization": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "name": { "type": "string" },
+          "slug": { "type": "string" }
+        }
+      },
+      "Wallet": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "organization_id": { "type": "integer" },
+          "currency": { "type": "string", "example": "IDR" },
+          "available_balance": { "type": "integer" },
+          "pending_balance": { "type": "integer" },
+          "total_in": { "type": "integer" },
+          "total_out": { "type": "integer" },
+          "status": { "type": "string", "example": "active" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "WalletTransaction": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "type": { "type": "string" },
+          "direction": { "type": "string", "enum": ["credit", "debit"] },
+          "amount": { "type": "integer" },
+          "balance_after": { "type": "integer" },
+          "reference_type": { "type": "string", "nullable": true },
+          "reference_id": { "type": "string", "nullable": true },
+          "external_ref": { "type": "string", "nullable": true },
+          "description": { "type": "string", "nullable": true },
+          "metadata": { "type": "object", "nullable": true, "additionalProperties": true },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Withdrawal": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "processing", "paid", "rejected", "cancelled", "failed"]
+          },
+          "amount": { "type": "integer" },
+          "fee_amount": { "type": "integer" },
+          "net_amount": { "type": "integer" },
+          "bank_code": { "type": "string", "nullable": true },
+          "account_number_masked": { "type": "string", "nullable": true },
+          "account_name": { "type": "string", "nullable": true },
+          "provider": { "type": "string" },
+          "external_ref": { "type": "string", "nullable": true },
+          "provider_ref": { "type": "string", "nullable": true },
+          "notes": { "type": "string", "nullable": true },
+          "processed_at": { "type": "string", "format": "date-time", "nullable": true },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "WithdrawalActions": {
+        "type": "object",
+        "properties": {
+          "can_approve": { "type": "boolean" },
+          "can_reject": { "type": "boolean" },
+          "can_mark_paid": { "type": "boolean" },
+          "can_mark_failed": { "type": "boolean" },
+          "can_cancel": { "type": "boolean" }
+        }
+      },
+      "WithdrawalWithActions": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Withdrawal" },
+          {
+            "type": "object",
+            "properties": {
+              "actions": { "$ref": "#/components/schemas/WithdrawalActions" }
+            }
+          }
+        ]
+      },
+      "PaginationMeta": {
+        "type": "object",
+        "properties": {
+          "has_more": { "type": "boolean" },
+          "next_cursor": { "type": "integer", "nullable": true }
+        }
+      },
+      "PaginationFilters": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "nullable": true },
+          "type": { "type": "string", "nullable": true },
+          "limit": { "type": "integer" },
+          "cursor": { "type": "integer", "nullable": true }
+        }
+      }
+    }
+  }
+}

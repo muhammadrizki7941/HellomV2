@@ -1,0 +1,86 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Playfair+Display:ital,wght@0,500;0,600;1,500;1,600&display=swap');
+
+@font-face {
+  font-family: "Brittany Signature";
+  src: url("/fonts/BrittanySignature.woff2") format("woff2"),
+       url("/fonts/BrittanySignature.woff") format("woff"),
+       url("/fonts/BrittanySignature.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@import "tailwindcss";
+
+@theme {
+  --font-family-display: "Playfair Display", ui-serif, Georgia, serif;
+  --font-family-body: "Inter", ui-sans-serif, system-ui, sans-serif;
+  
+  --color-brand-bg: #111111;
+  --color-brand-bg2: #1f1b16;
+  --color-brand-bg3: #2a241d;
+  --color-brand-accent: #facc15;
+  --color-brand-text: #fffdf5;
+  --color-brand-muted: #d6d3c9;
+}
+
+:root {
+  --brand-primary: #0c0c0c;
+  --brand-secondary: #334155;
+  --brand-accent: #facc15;
+  --brand-bg: #111111;
+  --brand-bg2: #1f1b16;
+  --brand-bg3: #2a241d;
+  --brand-text: #fffdf5;
+  --brand-muted: #d6d3c9;
+}
+
+@layer base {
+  html, body, #root {
+    height: 100%;
+  }
+
+  body {
+    background-color: var(--brand-bg, #0c0c0c);
+    color: var(--brand-text, #f0ede8);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-family: var(--font-family-body);
+  }
+
+  ::selection { background: var(--brand-accent); color: #111111; }
+
+  .font-display {
+    font-family: var(--font-family-display);
+  }
+
+  .font-body {
+    font-family: var(--font-family-body);
+  }
+
+  .font-signature {
+    font-family: "Brittany Signature", "Playfair Display", ui-serif, Georgia, serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-family-display);
+    letter-spacing: 0;
+  }
+
+  a { color: inherit; }
+}
+
+@keyframes ticker {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.animate-ticker {
+  animation: ticker 28s linear infinite;
+}
+.animate-ticker:hover {
+  animation-play-state: paused;
+}
+
+/* small helpers used by the app */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; -webkit-overflow-scrolling: touch; }

@@ -1,0 +1,1141 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hellom — Satu Platform. Semua yang Bisnis Lo Butuhkan.</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,700;1,800&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --black:#080808;
+  --black-2:#111111;
+  --black-3:#1a1a1a;
+  --black-4:#242424;
+  --yellow:#F5C518;
+  --yellow-dim:#D4A800;
+  --yellow-pale:#FFF8D6;
+  --white:#FAFAFA;
+  --white-dim:#E8E8E8;
+  --gray:#888888;
+  --gray-light:#555555;
+  --border:#2a2a2a;
+  --font-display:'Montserrat',sans-serif;
+  --font-body:'Helvetica Neue','Helvetica',Arial,sans-serif;
+  --radius-sm:6px;
+  --radius-md:12px;
+  --radius-lg:18px;
+  --radius-xl:24px;
+}
+html{scroll-behavior:smooth}
+body{background:var(--black);color:var(--white);font-family:var(--font-body);font-size:16px;line-height:1.6;overflow-x:hidden}
+a{color:inherit;text-decoration:none}
+img{max-width:100%;display:block}
+button{cursor:pointer;font-family:var(--font-body);border:none;background:none}
+
+/* NAVBAR */
+nav{
+  position:sticky;top:0;z-index:100;
+  background:rgba(8,8,8,0.92);
+  backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--border);
+  padding:0 5%;
+  display:flex;align-items:center;justify-content:space-between;
+  height:64px;
+}
+.logo{font-family:var(--font-display);font-size:22px;font-weight:800;letter-spacing:-0.5px}
+.logo span{color:var(--yellow)}
+.nav-links{display:flex;gap:32px;list-style:none}
+.nav-links a{font-size:14px;color:var(--gray);transition:color .2s;font-weight:500}
+.nav-links a:hover{color:var(--white)}
+.nav-cta{display:flex;gap:10px;align-items:center}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 20px;border-radius:var(--radius-sm);font-size:14px;font-weight:600;font-family:var(--font-body);transition:all .2s;white-space:nowrap}
+.btn-ghost{background:transparent;border:1px solid var(--border);color:var(--white-dim)}
+.btn-ghost:hover{border-color:var(--gray);color:var(--white)}
+.btn-yellow{background:var(--yellow);color:var(--black);border:1px solid var(--yellow)}
+.btn-yellow:hover{background:#FFD740;transform:translateY(-1px)}
+.btn-yellow-outline{background:transparent;border:1px solid var(--yellow);color:var(--yellow)}
+.btn-yellow-outline:hover{background:var(--yellow);color:var(--black)}
+.btn-lg{padding:14px 28px;font-size:15px;border-radius:var(--radius-md)}
+.btn-xl{padding:16px 36px;font-size:16px;border-radius:var(--radius-md)}
+
+/* HERO */
+.hero{
+  padding:100px 5% 80px;
+  position:relative;
+  overflow:hidden;
+}
+.hero::before{
+  content:'';
+  position:absolute;top:-200px;left:50%;transform:translateX(-50%);
+  width:800px;height:600px;
+  background:radial-gradient(ellipse at center,rgba(245,197,24,0.06) 0%,transparent 70%);
+  pointer-events:none;
+}
+.hero-badge{
+  display:inline-flex;align-items:center;gap:8px;
+  background:rgba(245,197,24,0.1);
+  border:1px solid rgba(245,197,24,0.25);
+  border-radius:999px;
+  padding:6px 14px;
+  font-size:12px;font-weight:600;color:var(--yellow);
+  letter-spacing:0.5px;text-transform:uppercase;
+  margin-bottom:28px;
+}
+.hero-badge .dot{width:6px;height:6px;background:var(--yellow);border-radius:50%;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+.hero-layout{display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center}
+.hero-title{
+  font-family:var(--font-display);
+  font-size:clamp(40px,5vw,68px);
+  font-weight:800;
+  line-height:1.05;
+  letter-spacing:-2px;
+  margin-bottom:24px;
+}
+.hero-title .accent{color:var(--yellow);font-style:italic}
+.hero-desc{font-size:17px;color:#aaa;line-height:1.7;max-width:480px;margin-bottom:36px}
+.hero-desc strong{color:var(--white);font-weight:500}
+.hero-actions{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:48px}
+.hero-meta{display:flex;gap:28px}
+.hero-meta-item{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--gray)}
+.hero-meta-item .num{font-family:var(--font-display);font-size:20px;font-weight:700;color:var(--white)}
+.hero-visual{position:relative}
+.hero-card-stack{position:relative;height:420px}
+.hcard{
+  position:absolute;
+  background:var(--black-2);
+  border:1px solid var(--border);
+  border-radius:var(--radius-lg);
+  padding:20px;
+  width:280px;
+}
+.hcard-main{width:320px;top:30px;right:0;border-color:rgba(245,197,24,0.3);box-shadow:0 0 40px rgba(245,197,24,0.05)}
+.hcard-2{width:240px;top:0;right:260px;opacity:.7}
+.hcard-3{width:240px;top:200px;right:220px;opacity:.6}
+.hcard-tag{
+  display:inline-flex;align-items:center;gap:4px;
+  font-size:10px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;
+  padding:3px 8px;border-radius:4px;margin-bottom:12px;
+}
+.tag-sub{background:rgba(245,197,24,0.12);color:var(--yellow)}
+.tag-buy{background:rgba(80,200,120,0.12);color:#50C878}
+.tag-free{background:rgba(100,180,255,0.12);color:#64B4FF}
+.hcard-title{font-family:var(--font-display);font-size:15px;font-weight:700;margin-bottom:6px}
+.hcard-price{font-size:22px;font-weight:700;color:var(--yellow);font-family:var(--font-display)}
+.hcard-price span{font-size:12px;color:var(--gray);font-weight:400}
+.hcard-icons{display:flex;gap:6px;margin-top:14px}
+.hcard-icon{width:28px;height:28px;background:var(--black-3);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px}
+.hcard-bar{height:4px;background:var(--black-4);border-radius:2px;margin-top:16px;overflow:hidden}
+.hcard-bar-fill{height:100%;background:var(--yellow);border-radius:2px;width:72%}
+
+/* TICKER */
+.ticker-wrap{
+  overflow:hidden;border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+  background:var(--black-2);padding:12px 0;
+}
+.ticker-track{display:flex;gap:0;animation:ticker 25s linear infinite;width:max-content}
+.ticker-item{
+  display:flex;align-items:center;gap:10px;
+  padding:0 28px;
+  font-size:13px;font-weight:600;letter-spacing:0.3px;color:var(--gray);
+  border-right:1px solid var(--border);white-space:nowrap;
+}
+.ticker-item .dot{width:5px;height:5px;background:var(--yellow);border-radius:50%}
+@keyframes ticker{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+
+/* STATS */
+.stats{padding:70px 5%;border-bottom:1px solid var(--border)}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden}
+.stat-item{background:var(--black);padding:36px 32px}
+.stat-num{font-family:var(--font-display);font-size:48px;font-weight:800;line-height:1;letter-spacing:-2px;color:var(--yellow);margin-bottom:8px}
+.stat-label{font-size:14px;color:var(--gray);line-height:1.4}
+
+/* SECTION HEADER */
+.section-header{text-align:center;margin-bottom:56px}
+.section-eyebrow{font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--yellow);margin-bottom:14px}
+.section-title{font-family:var(--font-display);font-size:clamp(30px,3.5vw,48px);font-weight:800;line-height:1.1;letter-spacing:-1.5px;margin-bottom:16px}
+.section-title .acc{color:var(--yellow)}
+.section-desc{font-size:16px;color:#999;max-width:560px;margin:0 auto;line-height:1.7}
+
+/* CATEGORIES */
+.categories{padding:80px 5%}
+.cat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.cat-card{
+  background:var(--black-2);
+  border:1px solid var(--border);
+  border-radius:var(--radius-lg);
+  padding:28px 24px;
+  transition:all .25s;
+  cursor:pointer;
+  position:relative;overflow:hidden;
+}
+.cat-card::after{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(circle at 50% 0%,rgba(245,197,24,0.04) 0%,transparent 60%);
+  opacity:0;transition:opacity .3s;
+}
+.cat-card:hover{border-color:rgba(245,197,24,0.4);transform:translateY(-4px)}
+.cat-card:hover::after{opacity:1}
+.cat-icon{
+  width:48px;height:48px;
+  background:rgba(245,197,24,0.08);border:1px solid rgba(245,197,24,0.15);
+  border-radius:12px;display:flex;align-items:center;justify-content:center;
+  font-size:22px;margin-bottom:18px;
+}
+.cat-title{font-family:var(--font-display);font-size:17px;font-weight:700;margin-bottom:6px}
+.cat-desc{font-size:13px;color:var(--gray);line-height:1.5;margin-bottom:16px}
+.cat-count{font-size:12px;font-weight:600;color:var(--yellow)}
+.cat-arrow{float:right;color:var(--gray);font-size:18px;transition:transform .2s}
+.cat-card:hover .cat-arrow{transform:translate(3px,-3px);color:var(--yellow)}
+
+/* PRODUCTS */
+.products{padding:80px 5%;background:var(--black-2);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.products-header{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:40px}
+.prod-tabs{display:flex;gap:4px;background:var(--black-3);padding:4px;border-radius:var(--radius-sm);border:1px solid var(--border)}
+.prod-tab{
+  padding:7px 18px;border-radius:6px;font-size:13px;font-weight:600;
+  color:var(--gray);transition:all .2s;cursor:pointer;
+}
+.prod-tab.active{background:var(--yellow);color:var(--black)}
+.prod-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+.prod-card{
+  background:var(--black);
+  border:1px solid var(--border);
+  border-radius:var(--radius-lg);
+  overflow:hidden;
+  transition:all .25s;
+}
+.prod-card:hover{border-color:rgba(245,197,24,0.3);transform:translateY(-3px)}
+.prod-thumb{
+  height:160px;
+  background:var(--black-3);
+  display:flex;align-items:center;justify-content:center;
+  font-size:48px;position:relative;overflow:hidden;
+  border-bottom:1px solid var(--border);
+}
+.prod-thumb-bg{
+  position:absolute;inset:0;
+  display:flex;align-items:center;justify-content:center;
+  font-size:80px;opacity:0.07;filter:blur(4px);
+}
+.prod-thumb-icon{position:relative;z-index:1;font-size:44px}
+.prod-body{padding:20px}
+.prod-badges{display:flex;gap:6px;margin-bottom:10px}
+.prod-badge{
+  font-size:10px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;
+  padding:3px 8px;border-radius:4px;
+}
+.badge-sub{background:rgba(245,197,24,0.1);color:var(--yellow);border:1px solid rgba(245,197,24,0.2)}
+.badge-buy{background:rgba(80,200,120,0.1);color:#50C878;border:1px solid rgba(80,200,120,0.2)}
+.badge-free{background:rgba(100,180,255,0.1);color:#64B4FF;border:1px solid rgba(100,180,255,0.2)}
+.badge-hot{background:rgba(255,100,80,0.1);color:#FF6450;border:1px solid rgba(255,100,80,0.2)}
+.prod-title{font-family:var(--font-display);font-size:16px;font-weight:700;margin-bottom:6px;line-height:1.3}
+.prod-desc{font-size:13px;color:var(--gray);line-height:1.5;margin-bottom:16px}
+.prod-footer{display:flex;align-items:center;justify-content:space-between}
+.prod-price{font-family:var(--font-display);font-weight:700}
+.prod-price .amount{font-size:20px;color:var(--yellow)}
+.prod-price .period{font-size:12px;color:var(--gray)}
+.prod-price .old{font-size:12px;color:var(--gray);text-decoration:line-through;margin-right:4px}
+.prod-price .free{font-size:18px;color:#64B4FF}
+.btn-prod{padding:8px 16px;font-size:13px;border-radius:var(--radius-sm)}
+
+/* WHY */
+.why{padding:80px 5%}
+.why-grid{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center}
+.why-left .section-header{text-align:left;margin-bottom:32px}
+.why-points{display:flex;flex-direction:column;gap:20px}
+.why-point{display:flex;gap:16px}
+.why-num{
+  flex-shrink:0;
+  width:36px;height:36px;
+  background:rgba(245,197,24,0.08);border:1px solid rgba(245,197,24,0.2);
+  border-radius:8px;display:flex;align-items:center;justify-content:center;
+  font-family:var(--font-display);font-size:13px;font-weight:800;color:var(--yellow);
+}
+.why-point-title{font-weight:600;font-size:15px;margin-bottom:4px}
+.why-point-desc{font-size:13px;color:var(--gray);line-height:1.5}
+.why-visual{position:relative}
+.why-terminal{
+  background:var(--black-2);border:1px solid var(--border);
+  border-radius:var(--radius-lg);padding:0;overflow:hidden;
+}
+.terminal-header{
+  background:var(--black-3);padding:12px 16px;
+  display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);
+}
+.terminal-dots{display:flex;gap:6px}
+.tdot{width:10px;height:10px;border-radius:50%}
+.terminal-title{font-size:12px;color:var(--gray);margin-left:8px;font-family:monospace}
+.terminal-body{padding:20px 16px;font-family:monospace;font-size:13px;line-height:1.8}
+.t-line{margin-bottom:2px}
+.t-key{color:#64B4FF}
+.t-val{color:#50C878}
+.t-comment{color:var(--gray)}
+.t-warn{color:var(--yellow)}
+.t-sep{border:none;border-top:1px solid var(--border);margin:10px 0}
+.why-badges{display:flex;gap:10px;flex-wrap:wrap;padding:16px;border-top:1px solid var(--border)}
+.why-badge{
+  display:flex;align-items:center;gap:6px;
+  background:var(--black-3);border:1px solid var(--border);
+  border-radius:999px;padding:6px 12px;
+  font-size:12px;font-weight:600;color:var(--white-dim);
+}
+.why-badge .dot{width:6px;height:6px;background:var(--yellow);border-radius:50%}
+
+/* PRICING */
+.pricing{padding:80px 5%;background:var(--black-2);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.pricing-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;max-width:900px;margin:0 auto}
+.price-card{
+  background:var(--black);
+  border:1px solid var(--border);
+  border-radius:var(--radius-xl);
+  padding:32px 28px;
+  position:relative;transition:all .25s;
+}
+.price-card.featured{
+  border-color:var(--yellow);
+  background:linear-gradient(160deg,rgba(245,197,24,0.04) 0%,var(--black) 60%);
+}
+.price-badge-top{
+  position:absolute;top:-12px;left:50%;transform:translateX(-50%);
+  background:var(--yellow);color:var(--black);
+  font-size:11px;font-weight:800;padding:4px 14px;border-radius:999px;
+  letter-spacing:0.5px;text-transform:uppercase;white-space:nowrap;
+}
+.price-label{font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray);margin-bottom:12px}
+.price-amount{font-family:var(--font-display);font-size:42px;font-weight:800;letter-spacing:-2px;line-height:1;margin-bottom:6px}
+.price-amount .unit{font-size:16px;font-weight:500;color:var(--gray)}
+.price-period{font-size:13px;color:var(--gray);margin-bottom:24px}
+.price-divider{border:none;border-top:1px solid var(--border);margin:24px 0}
+.price-features{list-style:none;display:flex;flex-direction:column;gap:10px;margin-bottom:28px}
+.price-features li{font-size:13px;color:#bbb;display:flex;align-items:flex-start;gap:10px}
+.price-features li::before{content:'✓';color:var(--yellow);font-weight:700;flex-shrink:0}
+.price-features li.no{color:var(--gray)}
+.price-features li.no::before{content:'–';color:var(--gray)}
+
+/* ARTICLES */
+.articles{padding:80px 5%}
+.articles-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+.article-card{
+  background:var(--black-2);border:1px solid var(--border);
+  border-radius:var(--radius-lg);overflow:hidden;
+  transition:all .25s;
+}
+.article-card:hover{border-color:rgba(245,197,24,0.3);transform:translateY(-3px)}
+.article-thumb{
+  height:180px;background:var(--black-3);
+  display:flex;align-items:center;justify-content:center;
+  font-size:56px;position:relative;border-bottom:1px solid var(--border);
+  overflow:hidden;
+}
+.article-thumb-gradient{
+  position:absolute;inset:0;
+  opacity:0.5;
+}
+.article-body{padding:20px}
+.article-cat{
+  font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;
+  color:var(--yellow);margin-bottom:10px;
+}
+.article-title{font-family:var(--font-display);font-size:16px;font-weight:700;line-height:1.35;margin-bottom:8px}
+.article-excerpt{font-size:13px;color:var(--gray);line-height:1.55;margin-bottom:16px}
+.article-meta{display:flex;justify-content:space-between;align-items:center}
+.article-date{font-size:11px;color:var(--gray-light)}
+.article-read{font-size:12px;font-weight:600;color:var(--yellow);display:flex;align-items:center;gap:4px}
+.article-read:hover{text-decoration:underline}
+
+/* TESTIMONIALS */
+.testimonials{padding:80px 5%;background:var(--black-2);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.testi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+.testi-card{
+  background:var(--black);border:1px solid var(--border);
+  border-radius:var(--radius-lg);padding:24px;
+  transition:all .25s;
+}
+.testi-card:hover{border-color:rgba(245,197,24,0.2)}
+.testi-stars{color:var(--yellow);font-size:14px;margin-bottom:12px;letter-spacing:2px}
+.testi-quote{font-size:14px;color:#ccc;line-height:1.6;margin-bottom:18px;font-style:italic}
+.testi-author{display:flex;align-items:center;gap:12px}
+.testi-avatar{
+  width:38px;height:38px;border-radius:50%;
+  background:rgba(245,197,24,0.15);border:1px solid rgba(245,197,24,0.3);
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--font-display);font-size:14px;font-weight:700;color:var(--yellow);
+}
+.testi-name{font-weight:600;font-size:14px}
+.testi-role{font-size:12px;color:var(--gray)}
+
+/* CTA BANNER */
+.cta-banner{
+  padding:100px 5%;text-align:center;position:relative;overflow:hidden;
+}
+.cta-banner::before{
+  content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:600px;height:400px;
+  background:radial-gradient(ellipse at center,rgba(245,197,24,0.08) 0%,transparent 70%);
+  pointer-events:none;
+}
+.cta-title{
+  font-family:var(--font-display);
+  font-size:clamp(36px,5vw,64px);
+  font-weight:800;letter-spacing:-2px;line-height:1.05;
+  margin-bottom:20px;position:relative;
+}
+.cta-title .acc{color:var(--yellow);font-style:italic}
+.cta-desc{font-size:17px;color:#999;max-width:500px;margin:0 auto 36px;line-height:1.7}
+.cta-actions{display:flex;gap:12px;justify-content:center}
+.cta-note{font-size:13px;color:var(--gray);margin-top:16px}
+.cta-note a{color:var(--yellow)}
+
+/* FOOTER */
+footer{
+  background:var(--black-2);border-top:1px solid var(--border);
+  padding:60px 5% 32px;
+}
+.footer-grid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:48px;margin-bottom:48px}
+.footer-brand .logo{font-size:20px;margin-bottom:12px}
+.footer-brand p{font-size:13px;color:var(--gray);line-height:1.6;max-width:260px;margin-bottom:20px}
+.footer-social{display:flex;gap:10px}
+.social-btn{
+  width:34px;height:34px;background:var(--black-3);border:1px solid var(--border);
+  border-radius:8px;display:flex;align-items:center;justify-content:center;
+  font-size:14px;transition:all .2s;
+}
+.social-btn:hover{border-color:var(--yellow);color:var(--yellow)}
+.footer-col h4{font-family:var(--font-display);font-size:13px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:var(--white-dim);margin-bottom:18px}
+.footer-col ul{list-style:none;display:flex;flex-direction:column;gap:10px}
+.footer-col li a{font-size:13px;color:var(--gray);transition:color .2s}
+.footer-col li a:hover{color:var(--yellow)}
+.footer-bottom{
+  border-top:1px solid var(--border);padding-top:24px;
+  display:flex;justify-content:space-between;align-items:center;
+}
+.footer-bottom p{font-size:12px;color:var(--gray-light)}
+.footer-tags{display:flex;gap:8px}
+.ftag{
+  font-size:11px;color:var(--gray-light);
+  background:var(--black-3);border:1px solid var(--border);
+  padding:4px 10px;border-radius:4px;
+}
+
+/* SECTION PADDING */
+.section{padding:80px 5%}
+
+/* RESPONSIVE HINTS */
+@media(max-width:1024px){
+  .hero-layout{grid-template-columns:1fr}
+  .hero-visual{display:none}
+  .cat-grid{grid-template-columns:repeat(2,1fr)}
+  .prod-grid{grid-template-columns:repeat(2,1fr)}
+  .why-grid{grid-template-columns:1fr}
+  .pricing-grid{grid-template-columns:1fr}
+  .articles-grid{grid-template-columns:repeat(2,1fr)}
+  .testi-grid{grid-template-columns:1fr}
+  .footer-grid{grid-template-columns:1fr 1fr}
+  .stats-grid{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:768px){
+  .nav-links{display:none}
+  .cat-grid{grid-template-columns:1fr}
+  .prod-grid{grid-template-columns:1fr}
+  .articles-grid{grid-template-columns:1fr}
+  .hero-actions{flex-direction:column;align-items:flex-start}
+  .cta-actions{flex-direction:column;align-items:center}
+  .footer-grid{grid-template-columns:1fr}
+  .footer-bottom{flex-direction:column;gap:12px;text-align:center}
+  .products-header{flex-direction:column;gap:16px;align-items:flex-start}
+}
+
+/* SCROLL ANIMATIONS */
+@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+.fade-up{animation:fadeUp .5s ease forwards}
+
+/* DIVIDER */
+.section-divider{border:none;border-top:1px solid var(--border)}
+
+/* HIGHLIGHT BAR */
+.highlight-bar{
+  background:var(--yellow);padding:10px 5%;
+  display:flex;justify-content:center;align-items:center;gap:20px;
+  font-size:13px;font-weight:600;color:var(--black);
+}
+.highlight-bar a{color:var(--black);text-decoration:underline}
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="highlight-bar">
+  🎉 &nbsp;Landing Builder sekarang gratis selamanya — buat landing page pertama lo hari ini.
+  <a href="#">Mulai Gratis →</a>
+</div>
+
+<!-- NAVBAR -->
+<nav>
+  <a href="#" class="logo">Hell<span>OM</span></a>
+  <ul class="nav-links">
+    <li><a href="#produk">Produk</a></li>
+    <li><a href="#harga">Harga</a></li>
+    <li><a href="#artikel">Artikel</a></li>
+    <li><a href="#">Tentang</a></li>
+    <li><a href="#">Kontak</a></li>
+  </ul>
+  <div class="nav-cta">
+    <button class="btn btn-ghost">Masuk</button>
+    <button class="btn btn-yellow">Daftar Gratis →</button>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-layout">
+    <div class="hero-content">
+      <div class="hero-badge">
+        <span class="dot"></span>
+        Platform UMKM Indonesia
+      </div>
+      <h1 class="hero-title">
+        Satu platform.<br>
+        <span class="accent">Semua yang bisnis</span><br>
+        lo butuhkan.
+      </h1>
+      <p class="hero-desc">
+        Dari kasir digital, landing page, sampai toko online —<br>
+        <strong>Hellom hadir buat UMKM yang mau tampil serius</strong><br>
+        tanpa ribet setup, tanpa bayar mahal di awal.
+      </p>
+      <div class="hero-actions">
+        <button class="btn btn-yellow btn-xl">Mulai Gratis Sekarang →</button>
+        <button class="btn btn-ghost btn-xl">Lihat Semua Produk</button>
+      </div>
+      <div class="hero-meta">
+        <div class="hero-meta-item">
+          <span class="num">100+</span>
+          <span>bisnis aktif</span>
+        </div>
+        <div class="hero-meta-item">
+          <span class="num">5</span>
+          <span>menit setup</span>
+        </div>
+        <div class="hero-meta-item">
+          <span class="num">99%</span>
+          <span>kepuasan klien</span>
+        </div>
+      </div>
+    </div>
+    <div class="hero-visual">
+      <div class="hero-card-stack">
+        <div class="hcard hcard-2">
+          <div class="hcard-tag tag-free">Gratis</div>
+          <div class="hcard-title">Landing Builder</div>
+          <div class="hcard-price">Rp 0 <span>/ selamanya</span></div>
+          <div class="hcard-icons">
+            <div class="hcard-icon">🎨</div>
+            <div class="hcard-icon">📱</div>
+            <div class="hcard-icon">⚡</div>
+          </div>
+        </div>
+        <div class="hcard hcard-3">
+          <div class="hcard-tag tag-buy">Sekali Beli</div>
+          <div class="hcard-title">Template Pro Pack</div>
+          <div class="hcard-price">Rp 79rb <span>/ selamanya</span></div>
+          <div class="hcard-bar"><div class="hcard-bar-fill"></div></div>
+        </div>
+        <div class="hcard hcard-main">
+          <div class="hcard-tag tag-sub">Berlangganan</div>
+          <div class="hcard-title">POS / Kasir Digital</div>
+          <div class="hcard-price">Rp 99rb <span>/ bulan</span></div>
+          <div class="hcard-icons">
+            <div class="hcard-icon">🧾</div>
+            <div class="hcard-icon">📊</div>
+            <div class="hcard-icon">💳</div>
+            <div class="hcard-icon">🔔</div>
+          </div>
+          <div class="hcard-bar"><div class="hcard-bar-fill" style="width:85%"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TICKER -->
+<div class="ticker-wrap">
+  <div class="ticker-track" id="ticker">
+    <div class="ticker-item"><span class="dot"></span>POS Digital</div>
+    <div class="ticker-item"><span class="dot"></span>Landing Page</div>
+    <div class="ticker-item"><span class="dot"></span>Toko Online</div>
+    <div class="ticker-item"><span class="dot"></span>Aplikasi Member</div>
+    <div class="ticker-item"><span class="dot"></span>Dashboard Analytics</div>
+    <div class="ticker-item"><span class="dot"></span>Source Code</div>
+    <div class="ticker-item"><span class="dot"></span>Template UI</div>
+    <div class="ticker-item"><span class="dot"></span>Kursus Digital</div>
+    <div class="ticker-item"><span class="dot"></span>Custom Software</div>
+    <div class="ticker-item"><span class="dot"></span>Notifikasi Otomatis</div>
+    <div class="ticker-item"><span class="dot"></span>Laporan Transaksi</div>
+    <div class="ticker-item"><span class="dot"></span>Manajemen Stok</div>
+    <!-- duplicate for loop -->
+    <div class="ticker-item"><span class="dot"></span>POS Digital</div>
+    <div class="ticker-item"><span class="dot"></span>Landing Page</div>
+    <div class="ticker-item"><span class="dot"></span>Toko Online</div>
+    <div class="ticker-item"><span class="dot"></span>Aplikasi Member</div>
+    <div class="ticker-item"><span class="dot"></span>Dashboard Analytics</div>
+    <div class="ticker-item"><span class="dot"></span>Source Code</div>
+    <div class="ticker-item"><span class="dot"></span>Template UI</div>
+    <div class="ticker-item"><span class="dot"></span>Kursus Digital</div>
+    <div class="ticker-item"><span class="dot"></span>Custom Software</div>
+    <div class="ticker-item"><span class="dot"></span>Notifikasi Otomatis</div>
+    <div class="ticker-item"><span class="dot"></span>Laporan Transaksi</div>
+    <div class="ticker-item"><span class="dot"></span>Manajemen Stok</div>
+  </div>
+</div>
+
+<!-- STATS -->
+<section class="stats">
+  <div class="stats-grid">
+    <div class="stat-item">
+      <div class="stat-num">100+</div>
+      <div class="stat-label">Bisnis & restoran<br>sudah aktif pakai</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-num">50+</div>
+      <div class="stat-label">Organisasi &<br>komunitas terdaftar</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-num">99%</div>
+      <div class="stat-label">Tingkat kepuasan<br>pelanggan aktif</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-num">5 <span style="font-size:24px">mnt</span></div>
+      <div class="stat-label">Rata-rata waktu<br>setup hingga aktif</div>
+    </div>
+  </div>
+</section>
+
+<!-- CATEGORIES -->
+<section class="categories" id="produk">
+  <div class="section-header">
+    <div class="section-eyebrow">Kategori Produk</div>
+    <h2 class="section-title">Pilih yang bisnis lo<br><span class="acc">betul-betul butuhkan</span></h2>
+    <p class="section-desc">Ada yang gratis selamanya, ada yang sekali beli, ada yang berlangganan. Semua harga transparan. Tidak ada biaya tersembunyi.</p>
+  </div>
+  <div class="cat-grid">
+    <div class="cat-card">
+      <div class="cat-icon">📱</div>
+      <div class="cat-title">Aplikasi SaaS</div>
+      <div class="cat-desc">POS, member app, dashboard analytics — tinggal aktifkan, langsung kerja.</div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div class="cat-count">3 aplikasi tersedia</div>
+        <span class="cat-arrow">↗</span>
+      </div>
+    </div>
+    <div class="cat-card">
+      <div class="cat-icon">🎨</div>
+      <div class="cat-title">Template & UI Kit</div>
+      <div class="cat-desc">Desain siap pakai untuk landing page, toko online, dan profil bisnis.</div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div class="cat-count">12 template tersedia</div>
+        <span class="cat-arrow">↗</span>
+      </div>
+    </div>
+    <div class="cat-card">
+      <div class="cat-icon">💻</div>
+      <div class="cat-title">Source Code</div>
+      <div class="cat-desc">Kode siap pakai Laravel & React — tinggal install, modifikasi, deploy.</div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div class="cat-count">8 source code tersedia</div>
+        <span class="cat-arrow">↗</span>
+      </div>
+    </div>
+    <div class="cat-card">
+      <div class="cat-icon">🎓</div>
+      <div class="cat-title">Kursus Online</div>
+      <div class="cat-desc">Pelajari digital marketing, web dev, dan growth bisnis dari praktisi.</div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div class="cat-count">5 kursus tersedia</div>
+        <span class="cat-arrow">↗</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRODUCTS -->
+<section class="products">
+  <div class="products-header">
+    <div>
+      <div class="section-eyebrow">Produk Unggulan</div>
+      <h2 class="section-title" style="font-size:32px;text-align:left">Pilihan terbaik dari kami</h2>
+    </div>
+    <div style="display:flex;gap:12px;align-items:center">
+      <div class="prod-tabs">
+        <div class="prod-tab active">Semua</div>
+        <div class="prod-tab">Berlangganan</div>
+        <div class="prod-tab">Sekali Beli</div>
+        <div class="prod-tab">Gratis</div>
+      </div>
+      <a href="#" style="font-size:13px;color:var(--yellow);font-weight:600">Lihat semua →</a>
+    </div>
+  </div>
+  <div class="prod-grid">
+    <!-- Card 1 -->
+    <div class="prod-card">
+      <div class="prod-thumb">
+        <div class="prod-thumb-bg">🧾</div>
+        <div class="prod-thumb-icon">🧾</div>
+      </div>
+      <div class="prod-body">
+        <div class="prod-badges">
+          <span class="prod-badge badge-sub">Berlangganan</span>
+          <span class="prod-badge badge-hot">Terpopuler</span>
+        </div>
+        <div class="prod-title">POS / Kasir Digital</div>
+        <div class="prod-desc">Kelola pesanan, stok, transaksi, dan laporan harian dari satu aplikasi. Cocok untuk restoran & toko.</div>
+        <div class="prod-footer">
+          <div class="prod-price"><span class="amount">Rp 99rb</span><span class="period"> / bulan</span></div>
+          <button class="btn btn-yellow btn-prod">Coba 14 Hari →</button>
+        </div>
+      </div>
+    </div>
+    <!-- Card 2 -->
+    <div class="prod-card">
+      <div class="prod-thumb">
+        <div class="prod-thumb-bg">🚀</div>
+        <div class="prod-thumb-icon">🚀</div>
+      </div>
+      <div class="prod-body">
+        <div class="prod-badges">
+          <span class="prod-badge badge-free">Gratis Selamanya</span>
+        </div>
+        <div class="prod-title">Landing Page Builder</div>
+        <div class="prod-desc">Buat landing page bisnis lo dalam menit. Tampil profesional dengan template yang bisa langsung dipakai.</div>
+        <div class="prod-footer">
+          <div class="prod-price"><span class="free">Gratis</span></div>
+          <button class="btn btn-yellow-outline btn-prod">Mulai Sekarang →</button>
+        </div>
+      </div>
+    </div>
+    <!-- Card 3 -->
+    <div class="prod-card">
+      <div class="prod-thumb">
+        <div class="prod-thumb-bg">👥</div>
+        <div class="prod-thumb-icon">👥</div>
+      </div>
+      <div class="prod-body">
+        <div class="prod-badges">
+          <span class="prod-badge badge-sub">Berlangganan</span>
+        </div>
+        <div class="prod-title">Aplikasi Member & Loyalitas</div>
+        <div class="prod-desc">Bangun komunitas pelanggan setia. Kelola poin, reward, dan histori transaksi member dengan mudah.</div>
+        <div class="prod-footer">
+          <div class="prod-price"><span class="amount">Rp 149rb</span><span class="period"> / bulan</span></div>
+          <button class="btn btn-yellow btn-prod">Coba Gratis →</button>
+        </div>
+      </div>
+    </div>
+    <!-- Card 4 -->
+    <div class="prod-card">
+      <div class="prod-thumb">
+        <div class="prod-thumb-bg">🎨</div>
+        <div class="prod-thumb-icon">🎨</div>
+      </div>
+      <div class="prod-body">
+        <div class="prod-badges">
+          <span class="prod-badge badge-buy">Sekali Beli</span>
+        </div>
+        <div class="prod-title">Template Toko Online Pro</div>
+        <div class="prod-desc">50+ desain toko online siap pakai. Responsif, modern, dan mudah dikustomisasi sesuai brand lo.</div>
+        <div class="prod-footer">
+          <div class="prod-price"><span class="old">Rp 149rb</span><span class="amount">Rp 79rb</span></div>
+          <button class="btn btn-yellow btn-prod">Beli Sekarang →</button>
+        </div>
+      </div>
+    </div>
+    <!-- Card 5 -->
+    <div class="prod-card">
+      <div class="prod-thumb">
+        <div class="prod-thumb-bg">💻</div>
+        <div class="prod-thumb-icon">💻</div>
+      </div>
+      <div class="prod-body">
+        <div class="prod-badges">
+          <span class="prod-badge badge-buy">Sekali Beli</span>
+          <span class="prod-badge badge-hot">Baru</span>
+        </div>
+        <div class="prod-title">Source Code Laravel UMKM Starter</div>
+        <div class="prod-desc">Boilerplate Laravel lengkap dengan auth, dashboard, manajemen produk & laporan. Hemat 40 jam development.</div>
+        <div class="prod-footer">
+          <div class="prod-price"><span class="amount">Rp 199rb</span></div>
+          <button class="btn btn-yellow btn-prod">Beli Sekarang →</button>
+        </div>
+      </div>
+    </div>
+    <!-- Card 6 -->
+    <div class="prod-card">
+      <div class="prod-thumb">
+        <div class="prod-thumb-bg">🎓</div>
+        <div class="prod-thumb-icon">🎓</div>
+      </div>
+      <div class="prod-body">
+        <div class="prod-badges">
+          <span class="prod-badge badge-buy">Sekali Beli</span>
+        </div>
+        <div class="prod-title">Kursus Digital Marketing untuk UMKM</div>
+        <div class="prod-desc">Dari nol sampai bisa iklan Meta Ads, TikTok, dan WhatsApp Blast dengan budget terbatas.</div>
+        <div class="prod-footer">
+          <div class="prod-price"><span class="amount">Rp 149rb</span></div>
+          <button class="btn btn-yellow btn-prod">Beli Sekarang →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- WHY HELLOM -->
+<section class="why">
+  <div class="why-grid">
+    <div class="why-left">
+      <div class="section-header">
+        <div class="section-eyebrow">Kenapa Hellom</div>
+        <h2 class="section-title" style="text-align:left">Bukan sekadar vendor.<br><span class="acc">Mitra bisnis lo.</span></h2>
+        <p class="section-desc" style="text-align:left;margin:0">Banyak vendor jual produk lalu hilang. Hellom ada dari onboarding, bantu setup, sampai bisnis lo beneran jalan.</p>
+      </div>
+      <div class="why-points">
+        <div class="why-point">
+          <div class="why-num">01</div>
+          <div>
+            <div class="why-point-title">Onboarding jelas dan cepat</div>
+            <div class="why-point-desc">Tim aktif bantu lo dari pertama daftar sampai sistem berjalan — tidak dibiarkan baca dokumentasi sendirian.</div>
+          </div>
+        </div>
+        <div class="why-point">
+          <div class="why-num">02</div>
+          <div>
+            <div class="why-point-title">Semua modul terhubung</div>
+            <div class="why-point-desc">POS, member, landing page, dan billing berjalan bersama dalam satu panel terpadu yang terkoneksi.</div>
+          </div>
+        </div>
+        <div class="why-point">
+          <div class="why-num">03</div>
+          <div>
+            <div class="why-point-title">Harga yang bisa dijelaskan</div>
+            <div class="why-point-desc">Tidak ada angka yang tiba-tiba muncul di invoice. Platform fee 5% per transaksi — itu saja, tidak ada biaya tersembunyi.</div>
+          </div>
+        </div>
+        <div class="why-point">
+          <div class="why-num">04</div>
+          <div>
+            <div class="why-point-title">Desain yang tidak malu-maluin</div>
+            <div class="why-point-desc">Tampilan yang lo dan tim bangga tunjukkan ke klien. Bukan template asal jadi.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="why-visual">
+      <div class="why-terminal">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <div class="tdot" style="background:#FF5F57"></div>
+            <div class="tdot" style="background:#FFBD2E"></div>
+            <div class="tdot" style="background:#28C840"></div>
+          </div>
+          <div class="terminal-title">hellom — dashboard bisnis</div>
+        </div>
+        <div class="terminal-body">
+          <div class="t-line"><span class="t-comment">// status bisnis lo hari ini</span></div>
+          <hr class="t-sep">
+          <div class="t-line"><span class="t-key">transaksi_hari_ini</span>  <span class="t-val">Rp 2.340.000</span></div>
+          <div class="t-line"><span class="t-key">jumlah_pesanan</span>      <span class="t-val">47 pesanan</span></div>
+          <div class="t-line"><span class="t-key">pelanggan_baru</span>      <span class="t-val">12 orang</span></div>
+          <div class="t-line"><span class="t-key">member_aktif</span>        <span class="t-val">284 member</span></div>
+          <hr class="t-sep">
+          <div class="t-line"><span class="t-key">stok_hampir_habis</span>   <span class="t-warn">3 produk</span></div>
+          <div class="t-line"><span class="t-key">notif_otomatis</span>      <span class="t-val">✓ aktif</span></div>
+          <div class="t-line"><span class="t-key">laporan_mingguan</span>    <span class="t-val">✓ terkirim ke WA</span></div>
+          <hr class="t-sep">
+          <div class="t-line"><span class="t-comment">// semua berjalan. bisnis lo aman.</span></div>
+        </div>
+        <div class="why-badges">
+          <div class="why-badge"><span class="dot"></span>Real-time sync</div>
+          <div class="why-badge"><span class="dot"></span>Notif WhatsApp</div>
+          <div class="why-badge"><span class="dot"></span>Multi-cabang</div>
+          <div class="why-badge"><span class="dot"></span>Export PDF</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section class="pricing" id="harga">
+  <div class="section-header">
+    <div class="section-eyebrow">Soal Harga</div>
+    <h2 class="section-title">Harga harusnya bisa<br><span class="acc">dijelaskan, bukan cuma dikasih.</span></h2>
+    <p class="section-desc">Tidak ada angka yang tiba-tiba muncul di invoice. Hellom percaya transparansi adalah bagian dari pelayanan.</p>
+  </div>
+  <div class="pricing-grid">
+    <div class="price-card">
+      <div class="price-label">Gratis Selamanya</div>
+      <div class="price-amount">Rp <span style="color:var(--yellow)">0</span></div>
+      <div class="price-period">tidak perlu kartu kredit</div>
+      <div class="price-divider"></div>
+      <ul class="price-features">
+        <li>Landing Page Builder</li>
+        <li>1 halaman aktif</li>
+        <li>Template dasar (10+)</li>
+        <li>Analitik kunjungan</li>
+        <li class="no">POS & Kasir</li>
+        <li class="no">Aplikasi Member</li>
+        <li class="no">Custom domain</li>
+      </ul>
+      <button class="btn btn-ghost btn-lg" style="width:100%">Mulai Gratis</button>
+    </div>
+    <div class="price-card featured">
+      <div class="price-badge-top">Paling Laku</div>
+      <div class="price-label">Langganan Bulanan</div>
+      <div class="price-amount">Rp <span style="color:var(--yellow)">199rb</span></div>
+      <div class="price-period">per bulan, bisa cancel kapan saja</div>
+      <div class="price-divider"></div>
+      <ul class="price-features">
+        <li>Semua fitur Gratis</li>
+        <li>POS & Kasir Digital</li>
+        <li>Aplikasi Member Loyalitas</li>
+        <li>Custom domain</li>
+        <li>Template premium (50+)</li>
+        <li>Laporan & analytics lengkap</li>
+        <li>Notifikasi WhatsApp otomatis</li>
+      </ul>
+      <button class="btn btn-yellow btn-lg" style="width:100%">Mulai 14 Hari Gratis →</button>
+    </div>
+    <div class="price-card">
+      <div class="price-label">Custom Development</div>
+      <div class="price-amount" style="font-size:28px;letter-spacing:-1px">Cerita <span style="color:var(--yellow)">dulu</span></div>
+      <div class="price-period">penawaran sesuai kebutuhan bisnis</div>
+      <div class="price-divider"></div>
+      <ul class="price-features">
+        <li>Desain & development kustom</li>
+        <li>Integrasi sistem existing</li>
+        <li>SLA dan dukungan khusus</li>
+        <li>Training tim internal</li>
+        <li>Branding & white-label</li>
+        <li>Multi-tenant / franchise</li>
+      </ul>
+      <button class="btn btn-ghost btn-lg" style="width:100%;border-color:rgba(245,197,24,0.3);color:var(--yellow)">Diskusi Kebutuhan →</button>
+    </div>
+  </div>
+  <p style="text-align:center;font-size:13px;color:var(--gray);margin-top:32px">
+    Produk <strong style="color:var(--white-dim)">Sekali Beli</strong> tersedia terpisah. Template, source code, dan kursus bisa dibeli tanpa berlangganan.
+    <a href="#produk" style="color:var(--yellow)">Lihat semua produk →</a>
+  </p>
+</section>
+
+<!-- ARTICLES -->
+<section class="articles" id="artikel">
+  <div class="section-header">
+    <div class="section-eyebrow">Artikel & Insight</div>
+    <h2 class="section-title">Bukan sekadar jual.<br><span class="acc">Lo juga kami edukasi.</span></h2>
+    <p class="section-desc">Panduan praktis buat UMKM — dari cara setting kasir, strategi marketing digital, sampai tips kelola bisnis yang lebih efisien.</p>
+  </div>
+  <div class="articles-grid">
+    <div class="article-card">
+      <div class="article-thumb" style="background:linear-gradient(135deg,#1a1a1a 0%,#0a0a0a 100%)">
+        <div class="article-thumb-gradient" style="background:radial-gradient(circle at 30% 50%,rgba(245,197,24,0.15),transparent)"></div>
+        <span style="position:relative;z-index:1;font-size:52px">📊</span>
+      </div>
+      <div class="article-body">
+        <div class="article-cat">Bisnis & UMKM</div>
+        <div class="article-title">5 Kesalahan Paling Umum UMKM Saat Memilih Software Kasir</div>
+        <div class="article-excerpt">Banyak bisnis gagal di sistem bukan karena produknya jelek — tapi karena pilihan software yang tidak sesuai skala dan kebutuhan operasional.</div>
+        <div class="article-meta">
+          <span class="article-date">8 Mei 2026</span>
+          <a href="#" class="article-read">Baca Artikel →</a>
+        </div>
+      </div>
+    </div>
+    <div class="article-card">
+      <div class="article-thumb" style="background:linear-gradient(135deg,#1a1a1a 0%,#0a0a0a 100%)">
+        <div class="article-thumb-gradient" style="background:radial-gradient(circle at 70% 30%,rgba(100,180,255,0.12),transparent)"></div>
+        <span style="position:relative;z-index:1;font-size:52px">📱</span>
+      </div>
+      <div class="article-body">
+        <div class="article-cat">Digital Marketing</div>
+        <div class="article-title">Cara Buat Landing Page yang Beneran Convert — Bukan Sekadar Cantik</div>
+        <div class="article-excerpt">Landing page yang bagus bukan yang paling ramai animasinya. Ini 7 elemen wajib yang harus ada supaya pengunjung mau ambil tindakan.</div>
+        <div class="article-meta">
+          <span class="article-date">5 Mei 2026</span>
+          <a href="#" class="article-read">Baca Artikel →</a>
+        </div>
+      </div>
+    </div>
+    <div class="article-card">
+      <div class="article-thumb" style="background:linear-gradient(135deg,#1a1a1a 0%,#0a0a0a 100%)">
+        <div class="article-thumb-gradient" style="background:radial-gradient(circle at 50% 80%,rgba(80,200,120,0.1),transparent)"></div>
+        <span style="position:relative;z-index:1;font-size:52px">🤝</span>
+      </div>
+      <div class="article-body">
+        <div class="article-cat">Strategi Pertumbuhan</div>
+        <div class="article-title">Sistem Member Loyalitas: Cara Murah Buat Pelanggan Balik Lagi</div>
+        <div class="article-excerpt">Mendapatkan pelanggan baru 5x lebih mahal dari menjaga yang lama. Ini cara praktis membangun sistem loyalitas dari nol tanpa budget besar.</div>
+        <div class="article-meta">
+          <span class="article-date">2 Mei 2026</span>
+          <a href="#" class="article-read">Baca Artikel →</a>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div style="text-align:center;margin-top:40px">
+    <button class="btn btn-ghost btn-lg">Lihat Semua Artikel →</button>
+  </div>
+</section>
+
+<!-- TESTIMONIALS -->
+<section class="testimonials">
+  <div class="section-header">
+    <div class="section-eyebrow">Kata Mereka</div>
+    <h2 class="section-title">Gue nggak perlu lo percaya<br><span class="acc">sebelum lo baca ini dulu.</span></h2>
+    <p class="section-desc">Tiga orang, tiga kebutuhan berbeda. Tapi ada satu hal yang sama — mereka semua mulai dari nggak yakin.</p>
+  </div>
+  <div class="testi-grid">
+    <div class="testi-card">
+      <div class="testi-stars">★★★★★</div>
+      <div class="testi-quote">"Sebelum pakai Hellom, kami catat semua manual di buku. Sekarang laporan harian langsung masuk WA owner — saya bisa pantau dari mana saja."</div>
+      <div class="testi-author">
+        <div class="testi-avatar">RS</div>
+        <div>
+          <div class="testi-name">Rina Sari</div>
+          <div class="testi-role">Founder Toko Online, Jakarta</div>
+        </div>
+      </div>
+    </div>
+    <div class="testi-card" style="border-color:rgba(245,197,24,0.25)">
+      <div class="testi-stars">★★★★★</div>
+      <div class="testi-quote">"Kami punya 3 cabang restoran. Dulu ribet banget rekap per cabang. Sekarang semua terintegrasi, satu dashboard buat semua."</div>
+      <div class="testi-author">
+        <div class="testi-avatar">AF</div>
+        <div>
+          <div class="testi-name">Ahmad Fauzi</div>
+          <div class="testi-role">Owner Restoran, Padang</div>
+        </div>
+      </div>
+    </div>
+    <div class="testi-card">
+      <div class="testi-stars">★★★★★</div>
+      <div class="testi-quote">"Proses onboarding-nya benar-benar simpel. Tim Hellom responsif dan proses setup beres dalam satu hari. Tidak disuruh baca manual panjang."</div>
+      <div class="testi-author">
+        <div class="testi-avatar">DP</div>
+        <div>
+          <div class="testi-name">Dian Putri</div>
+          <div class="testi-role">CEO Startup, Bandung</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA BANNER -->
+<section class="cta-banner">
+  <h2 class="cta-title">Mulai langganan<br>dan aktifkan bisnis lo<br><span class="acc">dalam hitungan menit.</span></h2>
+  <p class="cta-desc">Buat akun Hellom, pilih aplikasi yang lo butuhkan, dan aktifkan. Semua langkah sudah disiapkan untuk lo — tidak perlu tim IT.</p>
+  <div class="cta-actions">
+    <button class="btn btn-yellow btn-xl">Daftar & Aktifkan Sekarang →</button>
+    <button class="btn btn-ghost btn-xl">Masuk ke Akun</button>
+  </div>
+  <p class="cta-note">Tidak perlu kartu kredit. <a href="#">Baca syarat & ketentuan</a></p>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-grid">
+    <div class="footer-brand">
+      <div class="logo">Hell<span style="color:var(--yellow)">OM</span></div>
+      <p>Platform digital untuk UMKM Indonesia. Dari kasir, landing page, sampai toko online — semua dalam satu ekosistem yang terhubung.</p>
+      <div class="footer-social">
+        <a href="#" class="social-btn">𝕏</a>
+        <a href="#" class="social-btn">in</a>
+        <a href="#" class="social-btn">ig</a>
+        <a href="#" class="social-btn">▶</a>
+      </div>
+    </div>
+    <div class="footer-col">
+      <h4>Produk</h4>
+      <ul>
+        <li><a href="#">POS / Kasir Digital</a></li>
+        <li><a href="#">Landing Page Builder</a></li>
+        <li><a href="#">Aplikasi Member</a></li>
+        <li><a href="#">Template & UI Kit</a></li>
+        <li><a href="#">Source Code</a></li>
+        <li><a href="#">Kursus Online</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h4>Akun</h4>
+      <ul>
+        <li><a href="#">Masuk</a></li>
+        <li><a href="#">Daftar Gratis</a></li>
+        <li><a href="#">Dashboard</a></li>
+        <li><a href="#">Harga</a></li>
+        <li><a href="#">FAQ</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h4>Perusahaan</h4>
+      <ul>
+        <li><a href="#">Tentang Hellom</a></li>
+        <li><a href="#">Artikel & Blog</a></li>
+        <li><a href="#">Kontak</a></li>
+        <li><a href="#">Syarat & Ketentuan</a></li>
+        <li><a href="#">Kebijakan Privasi</a></li>
+        <li><a href="#">Kebijakan Refund</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <p>© 2026 Hellom. Digital Agency. Semua hak dilindungi.</p>
+    <div class="footer-tags">
+      <span class="ftag">Bayar via QRIS</span>
+      <span class="ftag">Transfer Bank</span>
+      <span class="ftag">SSL Aman</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+// Tab switching
+document.querySelectorAll('.prod-tab').forEach(tab => {
+  tab.addEventListener('click', function() {
+    document.querySelectorAll('.prod-tab').forEach(t => t.classList.remove('active'));
+    this.classList.add('active');
+  });
+});
+
+// Smooth hover interactions on cards
+document.querySelectorAll('.prod-card, .cat-card, .article-card, .testi-card').forEach(card => {
+  card.addEventListener('mousemove', function(e) {
+    const rect = this.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width - 0.5) * 6;
+    const y = ((e.clientY - rect.top) / rect.height - 0.5) * 6;
+    this.style.transform = `translateY(-3px) rotateX(${-y}deg) rotateY(${x}deg)`;
+  });
+  card.addEventListener('mouseleave', function() {
+    this.style.transform = '';
+  });
+});
+
+// Animate stats on scroll
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.style.animation = 'fadeUp 0.5s ease forwards';
+      observer.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.1 });
+
+document.querySelectorAll('.stat-item, .cat-card, .prod-card, .article-card, .price-card').forEach(el => {
+  el.style.opacity = '0';
+  observer.observe(el);
+});
+</script>
+</body>
+</html>

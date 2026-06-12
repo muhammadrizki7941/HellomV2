@@ -1,0 +1,88 @@
+RUN BACKEND (Laravel)
+
+PENTING: Jalankan perintah Laravel dari folder `backend/`.
+
+PowerShell (VS Code Terminal):
+Set-Location "C:\laragon\app\Self-OrderMenu\backend"
+
+php artisan optimize:clear
+
+   INFO  Clearing cached bootstrap files.
+
+  config ................................................................................................. 1.92ms DONE
+  cache ................................................................................................. 10.71ms DONE
+  compiled ............................................................................................... 2.56ms DONE
+  events ................................................................................................. 1.09ms DONE
+  routes ................................................................................................. 0.96ms DONE
+  views ................................................................................................. 37.72ms DONE
+
+
+php artisan serve --host=127.0.0.1 --port=8000
+
+   INFO  Server running on [http://127.0.0.1:8000].
+
+  Press Ctrl+C to stop the server
+
+
+RUN REALTIME (Socket.IO)
+
+Realtime server berjalan di port 3001 (terpisah dari Laravel).
+
+Cara cepat (recommended):
+- VS Code → Run Task → pilih: "Start Realtime (Socket.IO)"
+
+Atau via PowerShell:
+- powershell -NoProfile -ExecutionPolicy Bypass -File "C:\laragon\app\Self-OrderMenu\scripts\start-realtime.ps1"
+
+Stop realtime:
+- VS Code → Run Task → "Stop Realtime (Socket.IO)"
+atau:
+- powershell -NoProfile -ExecutionPolicy Bypass -File "C:\laragon\app\Self-OrderMenu\scripts\stop-realtime.ps1"
+
+
+RUN ALL (1 klik)
+
+VS Code → Run Task → "Start All (Laravel + Realtime)"
+
+
+CATATAN REALTIME URL (PENTING)
+
+Kalau admin/customer dibuka dari PC yang sama, ini OK:
+- REALTIME_PUBLIC_URL=http://127.0.0.1:3001
+
+Kalau dibuka dari HP/device lain, jangan pakai 127.0.0.1.
+Ganti REALTIME_PUBLIC_URL ke IP PC kamu, contoh:
+- REALTIME_PUBLIC_URL=http://192.168.1.10:3001
+
+
+NGROK
+
+Kalau kamu pakai `php artisan serve` (port 8000), jalankan:
+ngrok config add-authtoken <PASTE_YOUR_TOKEN_HERE>
+ngrok http 8000
+
+Kalau kamu pakai Laragon Apache/Nginx (port 80), jalankan:
+ngrok http 80
+
+Catatan keamanan: jangan simpan token ngrok di repo / file project.
+
+## Payment settings (Admin)
+
+- Open: `/admin/payments` to enable/disable methods (Cash, QRIS Statis, QRIS Dinamis).
+- QRIS Statis: upload QR image (recommended) or fill payload.
+- QRIS Dinamis (API): this project includes a ready Midtrans Core API integration.
+  - Configure in `backend/.env`:
+    - `MIDTRANS_SERVER_KEY=...`
+    - `MIDTRANS_IS_PRODUCTION=false` (set true for production)
+
+## Customer demo mode (Admin)
+
+Supaya tampilan customer saat deploy terlihat profesional (tanpa blok "Mode Tes" dan teks demo), gunakan toggle ini:
+- Open: `/admin/brand`
+- Section: "Mode Customer" → matikan "Aktifkan Mode Demo (Customer)"
+
+## Reservasi + Pre-Order Menu
+
+- Customer reservasi sekarang bisa sekalian pilih menu (pre-order) dari menu yang tersedia.
+- Syarat minimal order (`min_menu_total`) akan dicek dari total menu yang dipilih (otomatis), bukan input manual.
+- Admin bisa lihat detail pre-order di halaman detail reservasi dan ubah status: pending/confirmed/completed/cancelled.

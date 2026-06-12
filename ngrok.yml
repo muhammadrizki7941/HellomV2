@@ -1,0 +1,9 @@
+version: 2
+
+tunnels:
+  web:
+    proto: http
+    addr: 8000
+  realtime:
+    proto: http
+    addr: 3001

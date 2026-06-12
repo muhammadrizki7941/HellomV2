@@ -1,0 +1,31 @@
+# --- OS / Editor ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log
+
+# --- Laravel backend (in /backend) ---
+/backend/.env
+/backend/.env.*
+!/backend/.env.example
+/backend/vendor/
+/backend/node_modules/
+/backend/public/hot
+/backend/public/build
+/backend/public/storage
+/backend/storage/*.key
+/backend/storage/pail
+/backend/storage/logs/
+/backend/storage/framework/
+/backend/bootstrap/cache/*.php
+
+# --- Realtime node server (in /realtime) ---
+/realtime/node_modules/
+/realtime/.env
+/realtime/.env.*
+/realtime/npm-debug.log*
+/realtime/yarn-error.log*
+
+# --- Laragon / misc ---
+*.sqlite
