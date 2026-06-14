@@ -2,8 +2,8 @@
   "name": "POS System - Hellom",
   "short_name": "POS Hellom",
   "description": "Sistem kasir dan manajemen restoran berbasis cloud",
-  "start_url": "/hellom/pos/orders",
-  "scope": "/hellom/",
+  "start_url": "/pos/orders",
+  "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
   "background_color": "#fffdf5",
@@ -28,13 +28,13 @@
     {
       "name": "Daftar Pesanan",
       "short_name": "Orders",
-      "url": "/hellom/pos/orders",
+      "url": "/pos/orders",
       "icons": [{ "src": "assets/hellom.png", "sizes": "192x192" }]
     },
     {
       "name": "Manajemen Member",
       "short_name": "Members",
-      "url": "/hellom/pos/members",
+      "url": "/pos/members",
       "icons": [{ "src": "assets/hellom.png", "sizes": "192x192" }]
     }
   ]

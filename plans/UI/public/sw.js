@@ -1,5 +1,5 @@
 const CACHE = 'hellom-pos-v2';
-const SHELL = '/hellom/';
+const SHELL = '/';
 const STATIC_EXT = /\.(js|css|png|jpg|jpeg|webp|gif|svg|ico|woff2?|ttf|eot)(\?.*)?$/;
 
 self.addEventListener('install', (e) => {
