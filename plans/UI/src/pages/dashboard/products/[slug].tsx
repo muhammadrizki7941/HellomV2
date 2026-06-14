@@ -584,10 +584,10 @@ export default function ProductSlugPage(): ReactElement {
                       />
                       <div>
                         <div className="text-sm font-semibold text-zinc-900">
-                          Gateway {gatewayLabel(gatewayStatus?.provider)}
+                          Pembayaran via {gatewayLabel(gatewayStatus?.provider)}
                         </div>
                         <p className="mt-1 text-sm text-zinc-600">
-                          Pembayaran akan diarahkan ke halaman gateway yang aktif dan status akan diperbarui otomatis.
+                          Kamu akan diarahkan ke halaman pembayaran aman dan status diperbarui otomatis setelah berhasil.
                         </p>
                       </div>
                     </label>
@@ -612,9 +612,9 @@ export default function ProductSlugPage(): ReactElement {
                         }}
                       />
                       <div className="w-full">
-                        <div className="text-sm font-semibold text-zinc-900">Manual Payment</div>
+                        <div className="text-sm font-semibold text-zinc-900">Bayar Manual (Transfer / QRIS)</div>
                         <p className="mt-1 text-sm text-zinc-600">
-                          Pilih metode manual, lakukan transfer atau scan QR, lalu konfirmasi pembayaran ke owner via WhatsApp.
+                          Lakukan transfer atau scan QR ke rekening owner, lalu kirim bukti pembayaran via WhatsApp.
                         </p>
                       </div>
                     </label>
@@ -864,7 +864,7 @@ export default function ProductSlugPage(): ReactElement {
                       : canUseGateway
                         ? gatewayLabel(gatewayStatus?.provider)
                         : canUseManual
-                          ? 'Manual Payment'
+                          ? 'Bayar Manual'
                           : 'Belum tersedia'}
                 </div>
               </div>
@@ -885,11 +885,11 @@ export default function ProductSlugPage(): ReactElement {
 
               {!isPurchased && !isPending && checkoutStep === 'confirm' ? (
                 <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3">
-                  <div className="text-xs uppercase tracking-wide text-zinc-400">Ringkasan checkout</div>
+                  <div className="text-xs uppercase tracking-wide text-zinc-400">Ringkasan</div>
                   <p className="mt-2 text-sm text-zinc-700">
                     {paymentFlow === 'manual'
-                      ? `Pembayaran manual via ${paymentMethodLabel(manualMethod, manualMethods)} akan dibuat sebagai transaksi pending.`
-                      : `Pembayaran akan diarahkan ke ${gatewayLabel(gatewayStatus?.provider)} dan status diperbarui otomatis.`}
+                      ? `Setelah konfirmasi, kamu akan mendapat instruksi pembayaran via ${paymentMethodLabel(manualMethod, manualMethods)}.`
+                      : `Kamu akan diarahkan ke halaman pembayaran ${gatewayLabel(gatewayStatus?.provider)} dan status diperbarui otomatis.`}
                   </p>
                 </div>
               ) : null}
@@ -964,7 +964,7 @@ export default function ProductSlugPage(): ReactElement {
                 'Menunggu konfirmasi manual'
               ) : isPendingGateway ? (
                 <>
-                  <ShoppingBag className="h-4 w-4" /> Buat ulang checkout
+                  <ShoppingBag className="h-4 w-4" /> Coba Bayar Lagi
                 </>
               ) : product.type === 'subscription_locked' ? (
                 <>
@@ -978,7 +978,7 @@ export default function ProductSlugPage(): ReactElement {
                       ? 'Pilih metode pembayaran'
                       : checkoutStep === 'payment'
                         ? 'Lanjut konfirmasi'
-                        : 'Konfirmasi checkout'}
+                        : 'Konfirmasi & Bayar'}
                 </>
               )}
             </button>

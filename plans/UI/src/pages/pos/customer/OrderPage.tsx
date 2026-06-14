@@ -685,9 +685,10 @@ export default function OrderPage() {
   const qrisImageUrl = absoluteAssetUrl(paymentConfig?.qris_static_image_url);
   const groupedSections = [
     { id: 'home', label: 'Home' },
-  { id: 'menu', label: 'Products' },
-  { id: 'pesanan', label: 'Order' },
+    { id: 'menu', label: 'Products' },
+    { id: 'pesanan', label: 'Order' },
     { id: 'promo', label: 'Promo' },
+    { id: 'akun', label: 'Akun' },
   ];
 
   const reservationPackageTotal = useMemo(() => {
@@ -743,6 +744,15 @@ export default function OrderPage() {
   }, [paymentMethods, selectedPaymentMethod]);
 
   const handleSectionSelect = (id: string) => {
+    if (id === 'akun') {
+      const memberUrl = tenantSlug
+        ? activeTableToken
+          ? `/customer/${tenantSlug}/order/${activeTableToken}/member`
+          : `/customer/${tenantSlug}/member`
+        : '/';
+      navigate(memberUrl);
+      return;
+    }
     setActiveSection(id);
     goToSection(id);
   };
@@ -1190,18 +1200,18 @@ export default function OrderPage() {
                   </button>
                 </div>
 
-                <div className="mt-5">
-                  <h2 className="text-[2.2rem] font-extrabold leading-none tracking-[-0.03em]">{featuredProduct.name}</h2>
-                  <p className="mt-3 max-w-[290px] text-sm leading-6 text-white/78">
+                <div className="mt-4">
+                  <h2 className="line-clamp-2 text-[1.45rem] font-extrabold leading-tight tracking-[-0.02em]">{featuredProduct.name}</h2>
+                  <p className="mt-2 max-w-[290px] text-xs leading-5 text-white/65">
                     {featuredProduct.description || 'Rasa yang pas, dibuat fresh, dan cocok untuk temani momen kamu.'}
                   </p>
                 </div>
 
-                <div className="mt-5 flex flex-wrap items-center gap-4">
-                  <div className="rounded-[18px] border border-white/14 bg-white/8 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
-                    <p className="text-[11px] text-white/65">Harga Untukmu</p>
-                    <p className="mt-1 text-[1.8rem] font-extrabold leading-none">{formatCurrency(featuredProduct.price)}</p>
-                    <span className={cn('mt-2 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold', getStockBadgeClass(featuredProduct))}>
+                <div className="mt-4 flex items-center gap-3">
+                  <div className="flex-1 rounded-[14px] border border-white/14 bg-white/8 px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+                    <p className="text-[10px] font-medium text-white/55">Harga</p>
+                    <p className="mt-0.5 text-lg font-extrabold leading-none">{formatCurrency(featuredProduct.price)}</p>
+                    <span className={cn('mt-1.5 inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-semibold', getStockBadgeClass(featuredProduct))}>
                       {getStockLabel(featuredProduct)}
                     </span>
                   </div>
@@ -1209,11 +1219,11 @@ export default function OrderPage() {
                     type="button"
                     onClick={handleFeaturedCheckout}
                     disabled={!isProductAvailable(featuredProduct)}
-                    className="inline-flex min-h-[56px] items-center gap-3 rounded-full px-6 py-4 text-base font-bold text-white shadow-[0_16px_32px_rgba(16,185,129,0.35)] disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold text-white shadow-[0_8px_24px_rgba(16,185,129,0.28)] disabled:cursor-not-allowed disabled:opacity-50"
                     style={{ backgroundColor: accent }}
                   >
-                    <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-white/12">
-                      <ShoppingCart className="h-5 w-5" />
+                    <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/15">
+                      <ShoppingCart className="h-3.5 w-3.5" />
                     </span>
                     Checkout
                   </button>
@@ -1420,27 +1430,45 @@ export default function OrderPage() {
           </div>
         </section>
 
-        <section id="member" className="mt-8 rounded-[28px] border border-white/75 bg-[#1A1A1A] p-5 text-white shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-white/50">Akses Member</p>
-          <h2 className="mt-3 text-2xl font-bold">Benefit member tenant</h2>
-          <p className="mt-2 text-sm leading-6 text-white/70">
-            Gunakan akun member untuk promo, loyalty, dan riwayat pembelian yang terhubung ke tenant ini.
-          </p>
-          <div className="mt-5 flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={() => openExternal(experience.routes.member_login || menuRoute)}
-              className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-[#1A1A1A]"
-            >
-              Login Member
-            </button>
-            <button
-              type="button"
-              onClick={() => openExternal(experience.routes.member_register || menuRoute)}
-              className="rounded-full border border-white/20 bg-white/10 px-5 py-3 text-sm font-semibold text-white"
-            >
-              Daftar Member
-            </button>
+        <section id="member" className="mt-8 overflow-hidden rounded-[28px] bg-[#1A1A1A] shadow-sm">
+          <div className="p-5 text-white">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/45">Akses Member</p>
+            <h2 className="mt-2 text-xl font-extrabold">Benefit member tenant</h2>
+            <p className="mt-2 text-sm leading-6 text-white/65">
+              Kumpulkan poin setiap pembelian, tukar dengan reward eksklusif, dan pantau riwayat pesananmu.
+            </p>
+
+            {/* Benefits list */}
+            <div className="mt-4 space-y-2">
+              {[
+                '⭐ Kumpulkan poin di setiap transaksi',
+                '🎁 Tukar poin dengan diskon & reward',
+                '📋 Lihat riwayat pesanan & reservasi',
+                '🔔 Dapat notifikasi promo khusus member',
+              ].map((text) => (
+                <div key={text} className="flex items-center gap-2 text-sm text-white/70">
+                  <span>{text}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-5 flex gap-3">
+              <button
+                type="button"
+                onClick={() => handleSectionSelect('akun')}
+                className="flex-1 rounded-full py-3 text-sm font-bold text-[#1A1A1A]"
+                style={{ backgroundColor: '#F5C518' }}
+              >
+                Login Member
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSectionSelect('akun')}
+                className="flex-1 rounded-full border border-white/25 bg-white/10 py-3 text-sm font-semibold text-white"
+              >
+                Daftar Member
+              </button>
+            </div>
           </div>
         </section>
 
@@ -2195,6 +2223,7 @@ function BottomNav({
     menu: <UtensilsCrossed className="h-4 w-4" />,
     pesanan: <ReceiptText className="h-4 w-4" />,
     promo: <Ticket className="h-4 w-4" />,
+    akun: <UserRound className="h-4 w-4" />,
   };
 
   return (
@@ -2205,31 +2234,31 @@ function BottomNav({
     >
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-[linear-gradient(180deg,rgba(26,26,26,0)_0%,rgba(26,26,26,0.92)_48%,rgba(26,26,26,1)_100%)]" />
       <div className="relative mx-auto max-w-[430px] rounded-[30px] border border-[#2D2D2D] bg-[#1A1A1A] p-2 shadow-[0_20px_60px_rgba(15,23,42,0.14)] backdrop-blur-xl">
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-5 gap-1">
         {items.map((item) => (
           <button
             key={item.id}
             type="button"
             onClick={() => onSelect(item.id)}
             className={cn(
-              'group relative overflow-hidden rounded-[22px] px-2 py-2.5 text-xs font-semibold transition duration-300',
+              'group relative overflow-hidden rounded-[20px] px-1 py-2.5 text-[10px] font-semibold transition duration-300',
               activeId === item.id ? 'bg-[#1A1A1A] text-[#F5C518] shadow-[0_14px_28px_rgba(18,26,47,0.24)]' : 'text-[#888888] hover:bg-[#2D2D2D]'
             )}
           >
             <span
               className={cn(
-                'absolute inset-x-5 top-0 h-[2px] rounded-full transition duration-300',
+                'absolute inset-x-3 top-0 h-[2px] rounded-full transition duration-300',
                 activeId === item.id ? 'bg-[#F5C518] opacity-100' : 'bg-transparent opacity-0'
               )}
             />
-            <span className="flex flex-col items-center gap-1.5">
+            <span className="flex flex-col items-center gap-1">
               <span
                 className={cn(
-                  'flex h-8 w-8 items-center justify-center rounded-full transition duration-300',
+                  'flex h-7 w-7 items-center justify-center rounded-full transition duration-300',
                   activeId === item.id ? 'bg-white/12 text-[#F5C518]' : 'bg-[#2D2D2D] text-[#888888] group-hover:bg-[#2D2D2D]'
                 )}
               >
-                {iconMap[item.id] || <Store className="h-4 w-4" />}
+                {iconMap[item.id] || <Store className="h-3.5 w-3.5" />}
               </span>
               <span className={cn('tracking-[-0.01em]', activeId === item.id ? 'text-[#F5C518]' : 'text-[#888888]')}>{item.label}</span>
             </span>

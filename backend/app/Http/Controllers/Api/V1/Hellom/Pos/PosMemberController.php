@@ -205,6 +205,95 @@ class PosMemberController extends BasePosController
         return $available;
     }
 
+    public function publicRegister(\Illuminate\Http\Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'org_slug' => 'required|string',
+            'name'     => 'required|string|max:100',
+            'phone'    => 'required|string|max:20',
+            'email'    => 'nullable|email|max:100',
+        ]);
+
+        $org = \App\Models\Organization::where('slug', $validated['org_slug'])->first();
+        if (!$org) {
+            return response()->json(['success' => false, 'message' => 'Organisasi tidak ditemukan'], 404);
+        }
+
+        $tenantSlug = $org->pos_tenant_slug ?: $org->slug;
+
+        $existing = PosMember::where('tenant_id', $tenantSlug)
+            ->where('phone', $validated['phone'])
+            ->first();
+
+        if ($existing) {
+            return response()->json([
+                'success' => true,
+                'data'    => ['member' => $existing],
+                'message' => 'Nomor HP sudah terdaftar. Selamat datang kembali!',
+                'error'   => null,
+            ]);
+        }
+
+        if (!empty($validated['email'])) {
+            $emailUsed = PosMember::where('tenant_id', $tenantSlug)
+                ->where('email', $validated['email'])
+                ->exists();
+            if ($emailUsed) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Email sudah dipakai oleh member lain',
+                ], 422);
+            }
+        }
+
+        $member = PosMember::create([
+            'tenant_id' => $tenantSlug,
+            'name'      => $validated['name'],
+            'phone'     => $validated['phone'],
+            'email'     => $validated['email'] ?? null,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'data'    => ['member' => $member],
+            'message' => 'Pendaftaran member berhasil! 🎉',
+            'error'   => null,
+        ], 201);
+    }
+
+    public function publicLookup(\Illuminate\Http\Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'org'   => 'required|string',
+            'phone' => 'required|string',
+        ]);
+
+        $org = \App\Models\Organization::where('slug', $validated['org'])->first();
+        if (!$org) {
+            return response()->json(['success' => false, 'message' => 'Organisasi tidak ditemukan'], 404);
+        }
+
+        $tenantSlug = $org->pos_tenant_slug ?: $org->slug;
+
+        $member = PosMember::where('tenant_id', $tenantSlug)
+            ->where('phone', $validated['phone'])
+            ->first();
+
+        if (!$member) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Nomor HP tidak terdaftar sebagai member',
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data'    => ['member' => $member],
+            'message' => 'Member ditemukan',
+            'error'   => null,
+        ]);
+    }
+
     private function getNextRewardProgress(string $tenantSlug, PosMember $member): ?array
     {
         // Cari reward terdekat yang belum tercapai

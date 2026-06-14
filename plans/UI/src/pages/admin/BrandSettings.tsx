@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Loader2, Save, Upload } from 'lucide-react';
-import { getToken, HELLOM_API_BASE } from '@/lib/hellomApi';
-import { DEFAULT_BRAND, resetBrandCache, type BrandSettings } from '@/hooks/useBrand';
-import { getAdminMailSettings, sendAdminMailTest, updateAdminMailSettings } from '@/lib/hellomApi';
+import { getToken, HELLOM_API_BASE, getAdminMailSettings, sendAdminMailTest, updateAdminMailSettings } from '@/lib/hellomApi';
+import { DEFAULT_BRAND, resetBrandCache, fetchBrand, type BrandSettings } from '@/hooks/useBrand';
 
 type Notice = { type: 'success' | 'error'; text: string } | null;
 type BannerItem = {
@@ -90,6 +89,7 @@ export default function BrandSettingsPage() {
     document.title = 'Branding utama Hellom | Super Admin';
   }, []);
 
+  // FIX 1: Pisah useEffect untuk brand & mail agar tidak ada dependency issue
   useEffect(() => {
     let active = true;
     const token = getToken();
@@ -100,6 +100,7 @@ export default function BrandSettingsPage() {
       return;
     }
 
+    // Fetch brand
     fetch(`${HELLOM_API_BASE}/admin/brand`, {
       method: 'GET',
       headers: {
@@ -115,12 +116,25 @@ export default function BrandSettingsPage() {
         return normalizeBrand(payload?.data?.brand);
       })
       .then((brand) => {
-        if (!active) {
-          return;
-        }
+        if (!active) return;
         setForm(brand);
         setLogoPreview(brand.logo_base64 || brand.logo_url);
         setFaviconPreview(brand.favicon_url);
+
+        // FIX 2: Fetch mail settings SETELAH brand loaded, pakai support_email dari brand
+        getAdminMailSettings()
+          .then((result) => {
+            if (!active) return;
+            setMailForm((current) => ({
+              ...current,
+              ...result.mail,
+              password: '',
+              password_masked: result.mail.password_masked || '',
+              // FIX 3: Gunakan brand.support_email yang sudah pasti ada
+              test_email: brand.support_email || result.mail.from_address || '',
+            }));
+          })
+          .catch(() => undefined);
       })
       .catch((error) => {
         if (active) {
@@ -133,19 +147,7 @@ export default function BrandSettingsPage() {
         }
       });
 
-    getAdminMailSettings()
-      .then((result) => {
-        if (!active) return;
-        setMailForm((current) => ({
-          ...current,
-          ...result.mail,
-          password: '',
-          password_masked: result.mail.password_masked || '',
-          test_email: form.support_email || result.mail.from_address || '',
-        }));
-      })
-      .catch(() => undefined);
-
+    // Fetch banners
     fetch(`${HELLOM_API_BASE}/admin/banners`, {
       method: 'GET',
       headers: {
@@ -170,40 +172,28 @@ export default function BrandSettingsPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!logoFile) {
-      return;
-    }
-
+    if (!logoFile) return;
     const objectUrl = URL.createObjectURL(logoFile);
     setLogoPreview(objectUrl);
     setLogoLoadError(false);
-
     return () => URL.revokeObjectURL(objectUrl);
   }, [logoFile]);
 
   useEffect(() => {
-    if (!faviconFile) {
-      return;
-    }
-
+    if (!faviconFile) return;
     const objectUrl = URL.createObjectURL(faviconFile);
     setFaviconPreview(objectUrl);
     setFaviconLoadError(false);
-
     return () => URL.revokeObjectURL(objectUrl);
   }, [faviconFile]);
 
   useEffect(() => {
-    if (!bannerImageFile) {
-      return;
-    }
-
+    if (!bannerImageFile) return;
     const objectUrl = URL.createObjectURL(bannerImageFile);
     setBannerImagePreview(objectUrl);
-
     return () => URL.revokeObjectURL(objectUrl);
   }, [bannerImageFile]);
 
@@ -263,13 +253,8 @@ export default function BrandSettingsPage() {
         }
       });
 
-      if (logoFile) {
-        formData.append('logo', logoFile);
-      }
-
-      if (faviconFile) {
-        formData.append('favicon', faviconFile);
-      }
+      if (logoFile) formData.append('logo', logoFile);
+      if (faviconFile) formData.append('favicon', faviconFile);
 
       const response = await fetch(`${HELLOM_API_BASE}/admin/brand`, {
         method: 'POST',
@@ -294,6 +279,7 @@ export default function BrandSettingsPage() {
       setLogoLoadError(false);
       setFaviconLoadError(false);
       resetBrandCache();
+      await fetchBrand(true);
       setMessage({ type: 'success', text: 'Branding berhasil disimpan dan cache brand sudah direset.' });
     } catch (error) {
       setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Gagal menyimpan branding' });
@@ -428,7 +414,7 @@ export default function BrandSettingsPage() {
       const savedBanner = payload.data as BannerItem;
       setBanners((current) => {
         if (editingBannerId) {
-          return current.map((item) => item.id === editingBannerId ? savedBanner : item);
+          return current.map((item) => (item.id === editingBannerId ? savedBanner : item));
         }
         return [savedBanner, ...current];
       });
@@ -441,6 +427,7 @@ export default function BrandSettingsPage() {
     }
   };
 
+  // FIX 4: Hapus 'void' operator, gunakan handler async yang proper
   const handleDeleteBanner = async (bannerId: number) => {
     const token = getToken();
     if (!token) {
@@ -448,9 +435,7 @@ export default function BrandSettingsPage() {
       return;
     }
 
-    if (!window.confirm('Hapus banner ini dari landing page publik?')) {
-      return;
-    }
+    if (!window.confirm('Hapus banner ini dari landing page publik?')) return;
 
     try {
       const response = await fetch(`${HELLOM_API_BASE}/admin/banners/${bannerId}`, {
@@ -564,10 +549,10 @@ export default function BrandSettingsPage() {
                 <label className="mb-2 block text-sm font-medium text-slate-700">Logo utama</label>
                 <label className="flex min-h-[180px] cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center">
                   {logoPreview && !logoLoadError ? (
-                    <img 
-                      src={logoPreview} 
-                      alt="Preview logo" 
-                      className="mb-4 max-h-16 w-auto object-contain" 
+                    <img
+                      src={logoPreview}
+                      alt="Preview logo"
+                      className="mb-4 max-h-16 w-auto object-contain"
                       onError={() => setLogoLoadError(true)}
                     />
                   ) : (
@@ -587,10 +572,10 @@ export default function BrandSettingsPage() {
                 <label className="mb-2 block text-sm font-medium text-slate-700">Favicon</label>
                 <label className="flex min-h-[180px] cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center">
                   {faviconPreview && !faviconLoadError ? (
-                    <img 
-                      src={faviconPreview} 
-                      alt="Preview favicon" 
-                      className="mb-4 h-16 w-16 rounded-2xl object-contain" 
+                    <img
+                      src={faviconPreview}
+                      alt="Preview favicon"
+                      className="mb-4 h-16 w-16 rounded-2xl object-contain"
                       onError={() => setFaviconLoadError(true)}
                     />
                   ) : (
@@ -808,7 +793,8 @@ export default function BrandSettingsPage() {
                         <button type="button" onClick={() => startEditBanner(banner)} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700">
                           Edit
                         </button>
-                        <button type="button" onClick={() => void handleDeleteBanner(banner.id)} className="rounded-xl border border-rose-200 px-3 py-2 text-sm font-semibold text-rose-600">
+                        {/* FIX 4: Hapus void operator, pakai async handler langsung */}
+                        <button type="button" onClick={() => { handleDeleteBanner(banner.id).catch(console.error); }} className="rounded-xl border border-rose-200 px-3 py-2 text-sm font-semibold text-rose-600">
                           Hapus
                         </button>
                       </div>
@@ -921,7 +907,8 @@ export default function BrandSettingsPage() {
                 <div className="rounded-3xl border border-white/10 px-5 py-5">
                   <p className="text-xs uppercase tracking-[0.24em] text-white/60">Register</p>
                   <h3 className="mt-3 text-lg font-bold">{previewBrand.register_title}</h3>
-                  <p className="mt-2 text-sm text-white/72">{previewBrand.register_subtitle}</p>
+                  {/* FIX 5: text-white/72 → text-white/70 (class valid Tailwind) */}
+                  <p className="mt-2 text-sm text-white/70">{previewBrand.register_subtitle}</p>
                 </div>
               </div>
 

@@ -39,6 +39,7 @@ import PosMenu from '@/pages/pos/PosMenu';
 import PosTables from '@/pages/pos/PosTables';
 import PosCustomerOrder from '@/pages/pos/PosCustomerOrder';
 import PosCustomerOrderSuccess from '@/pages/pos/customer/SuccessPage';
+import MemberPortalPage from '@/pages/pos/customer/MemberPortalPage';
 import PosSettings from '@/pages/pos/PosSettings';
 import PosMemberList from '@/pages/pos/PosMemberList';
 import PosLoyaltySettings from '@/pages/pos/PosLoyaltySettings';
@@ -69,6 +70,8 @@ export default function App() {
       <Route path="/customer/:organizationSlug/order/:tableToken/success/:orderNumber" element={<PosCustomerOrderSuccess />} />
       <Route path="/customer/order/:tableToken/success/:orderNumber" element={<PosCustomerOrderSuccess />} />
       <Route path="/customer/:organizationSlug/order/:tableToken/success/:orderNumber" element={<PosCustomerOrderSuccess />} />
+      <Route path="/customer/:organizationSlug/member" element={<MemberPortalPage />} />
+      <Route path="/customer/:organizationSlug/order/:tableToken/member" element={<MemberPortalPage />} />
 
       <Route path="/produk" element={<ProdukPublicPage />} />
 

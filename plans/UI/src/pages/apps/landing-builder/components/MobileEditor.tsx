@@ -199,14 +199,16 @@ export const MobileEditor: React.FC<MobileEditorProps> = ({
       {activeSheet === 'add' && (
         <>
           <div className="fixed inset-0 bg-black/20 z-40" onClick={() => setActiveSheet('none')} />
-          <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl z-50 max-h-[70vh] overflow-y-auto animate-in slide-in-from-bottom duration-300">
-            <div className="sticky top-0 bg-white border-b border-zinc-100 p-4 flex justify-between items-center">
+          <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl z-50 h-[85vh] max-h-[85vh] flex flex-col animate-in slide-in-from-bottom duration-300">
+            <div className="sticky top-0 bg-white border-b border-zinc-100 p-4 flex justify-between items-center shrink-0">
               <h3 className="font-bold text-lg">Add New Block</h3>
               <button onClick={() => setActiveSheet('none')} className="p-2 bg-zinc-100 rounded-full">
                 <ChevronDown className="w-5 h-5" />
               </button>
             </div>
-            <BlockToolbox onAddBlock={handleAddBlock} />
+            <div className="flex-1 overflow-y-auto">
+              <BlockToolbox onAddBlock={handleAddBlock} />
+            </div>
           </div>
         </>
       )}
@@ -215,20 +217,40 @@ export const MobileEditor: React.FC<MobileEditorProps> = ({
       {activeSheet === 'edit' && selectedBlock && (
         <>
           <div className="fixed inset-0 bg-black/20 z-40" onClick={() => setActiveSheet('none')} />
-          <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl z-50 max-h-[70vh] overflow-y-auto animate-in slide-in-from-bottom duration-300">
-            <div className="sticky top-0 bg-white border-b border-zinc-100 p-4 flex justify-between items-center">
+          <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl z-50 h-[85vh] max-h-[85vh] flex flex-col animate-in slide-in-from-bottom duration-300">
+            <div className="sticky top-0 bg-white border-b border-zinc-100 p-4 flex justify-between items-center shrink-0">
               <h3 className="font-bold text-lg">Edit {selectedBlock.type}</h3>
               <button onClick={() => setActiveSheet('none')} className="p-2 bg-zinc-100 rounded-full">
                 <ChevronDown className="w-5 h-5" />
               </button>
             </div>
-            <PropertyPanel 
-              selectedBlock={selectedBlock}
-              activeTheme={activeTheme}
-              updateBlockContent={updateBlockContent}
-              updateBlockStyles={updateBlockStyles}
-              handleFileUpload={handleFileUpload}
-            />
+            <div className="flex-1 overflow-y-auto">
+              <PropertyPanel 
+                selectedBlock={selectedBlock}
+                activeTheme={activeTheme}
+                updateBlockContent={updateBlockContent}
+                updateBlockStyles={updateBlockStyles}
+                handleFileUpload={handleFileUpload}
+              />
+            </div>
+            <div className="sticky bottom-0 bg-white border-t border-zinc-100 p-4 flex gap-2 shrink-0">
+              <button 
+                onClick={() => setActiveSheet('none')}
+                className="flex-1 px-4 py-3 bg-zinc-100 text-zinc-700 rounded-lg font-semibold hover:bg-zinc-200"
+              >
+                Batal
+              </button>
+              <button 
+                onClick={() => {
+                  onSave();
+                  setActiveSheet('none');
+                }}
+                disabled={isSaving}
+                className="flex-1 px-4 py-3 bg-black text-white rounded-lg font-semibold hover:bg-zinc-800 disabled:opacity-60"
+              >
+                Simpan
+              </button>
+            </div>
           </div>
         </>
       )}

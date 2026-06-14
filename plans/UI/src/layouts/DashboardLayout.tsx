@@ -3,7 +3,8 @@ import { Outlet, NavLink, Link, useLocation, useNavigate } from 'react-router-do
 import { LayoutDashboard, Layout, ShoppingCart, LogOut, User, CreditCard, Menu, X, Lock, Settings, Sparkles, ArrowRight, Grid, Package } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { clearSession, getAuthMe, getMemberDashboardCards, getPaymentGatewayStatus, getSessionEventName, getSessionUser, getToken, logout, setSession } from '@/lib/hellomApi';
-import { BRAND_LOGO_PATH, BRAND_NAME } from '@/lib/branding';
+import { BRAND_LOGO_PATH, BRAND_NAME, getBrandLogo } from '@/lib/branding';
+import { fetchBrand, BrandSettings } from '@/hooks/useBrand';
 import SubscriptionModal from '@/components/SubscriptionModal';
 import NotificationBell from '@/components/consumer/NotificationBell';
 
@@ -49,6 +50,7 @@ export default function DashboardLayout() {
   const [subscriptionApp, setSubscriptionApp] = useState<DashboardApp | null>(null);
   const [memberWalletEnabled, setMemberWalletEnabled] = useState(false);
   const [activeGatewayLabel, setActiveGatewayLabel] = useState('Xendit');
+  const [brand, setBrand] = useState<BrandSettings | null>(null);
 
   const loadCards = useCallback(async () => {
     try {
@@ -70,6 +72,14 @@ export default function DashboardLayout() {
       }
     } catch {
     }
+  }, []);
+
+  useEffect(() => {
+    // Fetch brand settings on mount (use cache if available)
+    fetchBrand().then(setBrand).catch(() => {
+      // Use default brand if fetch fails
+      setBrand(null);
+    });
   }, []);
 
   useEffect(() => {
@@ -178,8 +188,8 @@ export default function DashboardLayout() {
       {/* Mobile Header */}
       <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-white border-b border-zinc-200 flex items-center justify-between px-4 z-30">
         <Link to="/" className="flex items-center gap-2">
-          <img src={BRAND_LOGO_PATH} alt={BRAND_NAME} draggable={false} loading="lazy" className="w-8 h-8 rounded-lg object-cover border border-zinc-200" />
-          <span className="text-xl font-bold tracking-tight">{BRAND_NAME}</span>
+          <img src={getBrandLogo(brand?.logo_url)} alt={brand?.app_name || BRAND_NAME} draggable={false} loading="lazy" className="w-8 h-8 rounded-lg object-cover border border-zinc-200" />
+          <span className="text-xl font-bold tracking-tight">{brand?.app_name || BRAND_NAME}</span>
         </Link>
         <div className="flex items-center gap-2">
           <NotificationBell />
@@ -204,8 +214,8 @@ export default function DashboardLayout() {
       )}>
           <div className="hidden md:flex p-6 border-b border-zinc-100">
           <Link to="/" className="flex items-center gap-2">
-            <img src={BRAND_LOGO_PATH} alt={BRAND_NAME} draggable={false} loading="lazy" className="w-8 h-8 rounded-lg object-cover border border-zinc-200" />
-            <span className="text-xl font-bold tracking-tight">{BRAND_NAME}</span>
+            <img src={getBrandLogo(brand?.logo_url)} alt={brand?.app_name || BRAND_NAME} draggable={false} loading="lazy" className="w-8 h-8 rounded-lg object-cover border border-zinc-200" />
+            <span className="text-xl font-bold tracking-tight">{brand?.app_name || BRAND_NAME}</span>
           </Link>
         </div>
         

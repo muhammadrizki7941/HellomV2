@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -103,13 +103,47 @@ const navItems = [
 export default function BottomNav({ activeTab, onTabChange, activeOrdersCount }: BottomNavProps) {
   const [visible, setVisible] = useState(false);
   const [showMoreSheet, setShowMoreSheet] = useState(false);
+  const hideTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const startHideTimer = () => {
+    // Clear existing timer
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current);
+    }
+    
+    // Set new timer untuk hide setelah 5 detik
+    hideTimerRef.current = setTimeout(() => {
+      setVisible(false);
+    }, 5000);
+  };
+
+  const handleInteraction = () => {
+    // Show nav saat ada interaksi
+    setVisible(true);
+    // Reset timer
+    startHideTimer();
+  };
 
   useEffect(() => {
     // Animasi masuk saat load
     setVisible(true);
+    startHideTimer();
+
+    // Event listener untuk show nav saat ada interaksi
+    document.addEventListener('touchstart', handleInteraction);
+    document.addEventListener('mousedown', handleInteraction);
+
+    return () => {
+      document.removeEventListener('touchstart', handleInteraction);
+      document.removeEventListener('mousedown', handleInteraction);
+      if (hideTimerRef.current) {
+        clearTimeout(hideTimerRef.current);
+      }
+    };
   }, []);
 
   const handleTabChange = (tabId: string) => {
+    handleInteraction();
     if (tabId === 'more') {
       setShowMoreSheet(true);
     } else {
@@ -126,7 +160,7 @@ export default function BottomNav({ activeTab, onTabChange, activeOrdersCount }:
       {/* Floating Pill Navigation */}
       <div
         className={cn(
-          'fixed bottom-0 left-0 right-0 z-50 transition-transform duration-500 pb-safe',
+          'fixed bottom-0 left-0 right-0 z-50 transition-transform duration-500 pb-safe hidden md:block',
           visible ? 'translate-y-0' : 'translate-y-full'
         )}
       >

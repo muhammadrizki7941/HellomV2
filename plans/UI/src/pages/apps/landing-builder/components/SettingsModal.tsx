@@ -21,16 +21,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
-        <div className="p-6 border-b border-zinc-100 flex justify-between items-center">
-          <h3 className="font-bold text-zinc-900">Page Settings & Widgets</h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-2 md:p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col">
+        <div className="p-4 md:p-6 border-b border-zinc-100 flex justify-between items-center shrink-0">
+          <h3 className="font-bold text-base md:text-lg text-zinc-900">Page Settings & Widgets</h3>
           <button onClick={onClose} className="p-2 hover:bg-zinc-100 rounded-full text-zinc-400 hover:text-zinc-600">
             <X className="w-5 h-5" />
           </button>
         </div>
         
-        <div className="p-6 space-y-6">
+        <div className="p-4 md:p-6 space-y-6 overflow-y-auto flex-1">
           {/* WhatsApp Widget Settings */}
           <div className="space-y-4">
             <div className="flex items-center gap-2 mb-2">
@@ -80,10 +80,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
         </div>
 
-        <div className="p-6 bg-zinc-50 border-t border-zinc-100">
+        <div className="p-4 md:p-6 bg-zinc-50 border-t border-zinc-100 shrink-0">
           <button 
             onClick={onClose}
-            className="w-full py-3 bg-zinc-900 text-white font-bold rounded-xl hover:bg-zinc-800 transition-all"
+            className="w-full py-2 md:py-3 bg-zinc-900 text-white font-bold rounded-xl hover:bg-zinc-800 transition-all text-sm md:text-base"
           >
             Simpan Pengaturan
           </button>

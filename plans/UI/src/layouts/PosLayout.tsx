@@ -4,6 +4,7 @@ import { LayoutDashboard, ShoppingCart, Users, BarChart3, Utensils, Settings, Lo
 import { useState, useEffect } from 'react';
 import BottomNav from '@/components/pos/BottomNav';
 import { getAuthMe, getPosOrders, getSessionEventName, getSessionUser, getToken, setSession } from '@/lib/hellomApi';
+import { usePWAInstall } from '@/hooks/usePWAInstall';
 import {
   getPosOrderListResetAt,
   getPosOrderListResetEventName,
@@ -38,10 +39,12 @@ const countActiveOrders = (orders: Array<{ status: string; created_at?: string }
 
 export default function PosLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showIosGuide, setShowIosGuide] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('');
   const [activeOrdersCount, setActiveOrdersCount] = useState(0);
+  const { state: installState, install } = usePWAInstall();
 
   // Map current location to active tab
   useEffect(() => {
@@ -220,7 +223,17 @@ export default function PosLayout() {
               <Menu className="h-6 w-6" />
             </button>
             <h1 className="text-lg font-semibold text-[#111111]">POS System</h1>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              {(installState === 'available' || installState === 'ios') && (
+                <button
+                  type="button"
+                  onClick={installState === 'available' ? () => void install() : () => setShowIosGuide(true)}
+                  className="flex items-center gap-1 rounded-lg bg-amber-100 px-2.5 py-1.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-200"
+                  title="Install sebagai aplikasi"
+                >
+                  📲 Install
+                </button>
+              )}
               <Link
                 to="/pos/settings"
                 className="p-2 text-[#8a7d63] hover:text-[#111111] hover:bg-[#fff7db] rounded-lg transition-colors"
@@ -239,7 +252,7 @@ export default function PosLayout() {
         </div>
 
         {/* Main Content */}
-        <main className="flex-1 bg-[#fffdf5] p-6 pb-24 lg:pb-6">
+        <main className="flex-1 bg-[#fffdf5] p-3 pb-24 sm:p-5 lg:p-6 lg:pb-6">
           <Outlet />
         </main>
 
@@ -252,6 +265,27 @@ export default function PosLayout() {
           />
         </div>
       </div>
+
+      {/* iOS Add-to-Home-Screen Guide */}
+      {showIosGuide && (
+        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+            <h3 className="mb-3 text-base font-semibold text-gray-900">Install POS Hellom di iPhone / iPad</h3>
+            <ol className="space-y-2.5 text-sm text-gray-600">
+              <li>1. Ketuk ikon <strong>Bagikan</strong> (□↑) di toolbar bawah Safari</li>
+              <li>2. Gulir daftar lalu pilih <strong>"Tambahkan ke Layar Utama"</strong></li>
+              <li>3. Ketuk <strong>Tambahkan</strong> di pojok kanan atas</li>
+            </ol>
+            <button
+              type="button"
+              onClick={() => setShowIosGuide(false)}
+              className="mt-5 w-full rounded-xl bg-amber-400 py-2.5 text-sm font-semibold text-gray-900 transition hover:bg-amber-500"
+            >
+              Mengerti
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Mobile Sidebar Overlay */}
       <div className={cn('fixed inset-0 z-50 lg:hidden', sidebarOpen ? 'pointer-events-auto' : 'pointer-events-none')}>

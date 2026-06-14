@@ -18,7 +18,8 @@ import {
   setSession,
   switchOrganization,
 } from '@/lib/hellomApi';
-import { BRAND_LOGO_PATH, BRAND_NAME } from '@/lib/branding';
+import { BRAND_LOGO_PATH, BRAND_NAME, getBrandLogo } from '@/lib/branding';
+import { fetchBrand, BrandSettings } from '@/hooks/useBrand';
 
 export default function AdminLayout() {
   const navigate = useNavigate();
@@ -28,6 +29,15 @@ export default function AdminLayout() {
   const [organizations, setOrganizations] = useState<Array<{ id: number; name: string; role: string }>>([]);
   const [currentOrgId, setCurrentOrgId] = useState<number | null>(null);
   const [switchingOrg, setSwitchingOrg] = useState(false);
+  const [brand, setBrand] = useState<BrandSettings | null>(null);
+
+  useEffect(() => {
+    // Fetch brand settings on mount (use cache if available)
+    fetchBrand().then(setBrand).catch(() => {
+      // Use default brand if fetch fails
+      setBrand(null);
+    });
+  }, []);
 
   useEffect(() => {
     const syncSession = () => {
@@ -154,8 +164,8 @@ export default function AdminLayout() {
         isSidebarOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <div className="h-16 flex items-center px-6 border-b border-zinc-800">
-          <img src={BRAND_LOGO_PATH} alt={BRAND_NAME} draggable={false} loading="lazy" className="w-7 h-7 rounded-md object-cover border border-zinc-700 mr-2" />
-          <span className="font-bold text-lg tracking-tight">{BRAND_NAME} Admin</span>
+          <img src={getBrandLogo(brand?.logo_url)} alt={brand?.app_name || BRAND_NAME} draggable={false} loading="lazy" className="w-7 h-7 rounded-md object-cover border border-zinc-700 mr-2" />
+          <span className="font-bold text-lg tracking-tight">{brand?.app_name || BRAND_NAME} Admin</span>
         </div>
 
         <nav className="p-4 space-y-1">

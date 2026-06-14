@@ -1,15 +1,39 @@
 <!doctype html>
-<html lang="en">
+<html lang="id">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" href="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" />
-    <link rel="apple-touch-icon" href="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" />
-    <title>Hellom</title>
+
+    <!-- PWA -->
+    <link rel="manifest" href="/hellom/manifest.json" />
+    <meta name="theme-color" content="#F5C518" />
+
+    <!-- iOS PWA -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="POS Hellom" />
+    <link rel="apple-touch-icon" href="/hellom/assets/hellom.png" />
+
+    <!-- App icon -->
+    <link rel="icon" type="image/png" href="/hellom/assets/hellom.png" />
+
+    <title>Hellom POS</title>
+
+    <!-- Service Worker registration -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker
+            .register('/hellom/sw.js', { scope: '/hellom/' })
+            .catch(function (err) {
+              console.warn('[SW] Registration failed:', err);
+            });
+        });
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-

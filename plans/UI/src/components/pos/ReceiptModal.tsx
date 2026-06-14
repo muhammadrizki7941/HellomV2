@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from 'react';
-import { X, Printer } from 'lucide-react';
+import { X, Printer, Copy, MessageCircle } from 'lucide-react';
 import { getPosOrderReceipt } from '@/lib/hellomApi';
 import html2canvas from 'html2canvas';
 
@@ -17,6 +17,7 @@ interface ReceiptData {
   table_code?: string;
   customer_name?: string;
   customer_phone?: string;
+  customer_whatsapp?: string;
   notes?: string;
   items: Array<{
     name: string;
@@ -159,6 +160,120 @@ const ReceiptModal = ({ isOpen, onClose, orderId }: ReceiptProps) => {
     } finally {
       setIsDownloading(false);
     }
+  };
+
+  const getReceiptText = (): string => {
+    if (!receipt) return '';
+
+    const lines: string[] = [];
+    const formatRp = (amount: number) => `Rp ${amount.toLocaleString('id-ID')}`;
+    const formatDate = (date: string) => {
+      const d = new Date(date);
+      return `${d.getDate()} ${d.toLocaleDateString('id-ID', { month: 'long' })} ${d.getFullYear()}, pukul ${d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`;
+    };
+    const getServiceTypeLabel = (type: string) => {
+      switch (type) {
+        case 'dine_in': return 'Dine In';
+        case 'takeaway': return 'Take Away';
+        default: return type;
+      }
+    };
+
+    // HEADER
+    lines.push(receipt.organization.name);
+    if (receipt.organization.address) lines.push(receipt.organization.address);
+    if (receipt.organization.phone) lines.push(`Telp: ${receipt.organization.phone}`);
+    lines.push(''.padEnd(50, '-'));
+
+    // INFO PESANAN
+    lines.push(`No    : ${receipt.order_number}`);
+    lines.push(`Tgl   : ${formatDate(receipt.created_at)}`);
+    lines.push(`Tipe  : ${getServiceTypeLabel(receipt.service_type)}`);
+    if (receipt.table_code) lines.push(`Meja  : ${receipt.table_code}`);
+    if (receipt.customer_name) lines.push(`Nama  : ${receipt.customer_name}`);
+    if (receipt.customer_phone) lines.push(`HP    : ${receipt.customer_phone}`);
+    lines.push(''.padEnd(50, '-'));
+
+    // ITEMS
+    receipt.items.forEach((item) => {
+      lines.push(item.name);
+      lines.push(`${item.quantity} x ${formatRp(item.price)}${' '.repeat(20)}${formatRp(item.subtotal)}`);
+    });
+    lines.push(''.padEnd(50, '-'));
+
+    // TOTAL
+    lines.push(`TOTAL${' '.repeat(40)}${formatRp(receipt.total_amount)}`);
+
+    // PAYMENT INFO
+    if (receipt.payment) {
+      lines.push(''.padEnd(50, '-'));
+      lines.push('Pembayaran:');
+      if (receipt.payment.method === 'cash') lines.push('Tunai');
+      if (receipt.payment.method === 'transfer') lines.push('Transfer Bank');
+      if (receipt.payment.method === 'qris') lines.push('QRIS');
+      
+      if (receipt.payment.method === 'cash') {
+        lines.push(`Bayar${' '.repeat(40)}${formatRp(receipt.payment.amount)}`);
+        if (receipt.payment.change > 0) {
+          lines.push(`Kembalian${' '.repeat(35)}${formatRp(receipt.payment.change)}`);
+        }
+      }
+      if (receipt.payment.note) lines.push(`Ref: ${receipt.payment.note}`);
+      if (receipt.payment.paid_at) lines.push(`Waktu bayar: ${formatDate(receipt.payment.paid_at)}`);
+    }
+
+    lines.push(''.padEnd(50, '-'));
+    lines.push('Terima kasih sudah mampir! 😊');
+    lines.push('Sampai jumpa lagi');
+
+    return lines.join('\n');
+  };
+
+  const handleCopy = () => {
+    if (!receipt) return;
+
+    const receiptText = getReceiptText();
+    
+    // Copy ke clipboard
+    navigator.clipboard.writeText(receiptText).then(() => {
+      alert('Kwitansi berhasil disalin! Siap untuk dikirim ke WhatsApp');
+    }).catch((err) => {
+      console.error('Gagal menyalin:', err);
+      alert('Gagal menyalin kwitansi');
+    });
+  };
+
+  const handleSendWhatsApp = () => {
+    if (!receipt) return;
+
+    // Gunakan customer_whatsapp atau customer_phone
+    const whatsappNumber = receipt.customer_whatsapp || receipt.customer_phone;
+    
+    if (!whatsappNumber) {
+      alert('Nomor WhatsApp customer tidak tersedia. Silakan salin kwitansi dan kirim manual ke WhatsApp.');
+      return;
+    }
+
+    // Generate teks kwitansi
+    const receiptText = getReceiptText();
+
+    // Encode teks untuk URL
+    const encodedText = encodeURIComponent(receiptText);
+
+    // Format nomor: hapus spasi, tanda strip, kurung. Tambahkan +62 jika diawali 0
+    let phone = whatsappNumber.replace(/[\s\-()]/g, '');
+    if (phone.startsWith('0')) {
+      phone = '62' + phone.slice(1);
+    }
+    if (!phone.startsWith('+')) {
+      phone = '+' + phone;
+    }
+
+    // Buat URL WhatsApp
+    const whatsappUrl = `https://wa.me/${phone}?text=${encodedText}`;
+
+    // Redirect ke WhatsApp
+    window.open(whatsappUrl, '_blank');
   };
 
 
@@ -328,50 +443,50 @@ const ReceiptModal = ({ isOpen, onClose, orderId }: ReceiptProps) => {
 
         {/* TOMBOL AKSI */}
         {receipt && !loading && !error && (
-          <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
-            <button
-              onClick={handlePrint}
-              style={{
-                flex: 1,
-                padding: '8px 16px',
-                backgroundColor: '#2563eb',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: 'pointer'
-              }}
-            >
-              🖨️ Cetak
-            </button>
-            <button
-              onClick={handleDownload}
-              disabled={isDownloading}
-              style={{
-                flex: 1,
-                padding: '8px 16px',
-                backgroundColor: isDownloading ? '#9ca3af' : '#16a34a',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: isDownloading ? 'not-allowed' : 'pointer'
-              }}
-            >
-              {isDownloading ? 'Mengunduh...' : '⬇️ Unduh JPG'}
-            </button>
-            <button
-              onClick={onClose}
-              style={{
-                flex: 1,
-                padding: '8px 16px',
-                backgroundColor: '#6b7280',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: 'pointer'
-              }}
-            >
-              ✕ Tutup
-            </button>
+          <div className="border-t border-gray-200 bg-gray-50 px-4 py-3">
+            <div className="grid grid-cols-5 gap-2">
+              <button
+                onClick={handlePrint}
+                className="flex flex-col items-center gap-1 rounded-lg py-2 px-2 text-xs font-medium text-gray-700 hover:bg-blue-50 transition"
+                title="Cetak Kwitansi"
+              >
+                <Printer className="h-4 w-4 text-blue-600" />
+                <span>Cetak</span>
+              </button>
+              <button
+                onClick={handleDownload}
+                disabled={isDownloading}
+                className="flex flex-col items-center gap-1 rounded-lg py-2 px-2 text-xs font-medium text-gray-700 hover:bg-green-50 transition disabled:opacity-60 disabled:cursor-not-allowed"
+                title="Unduh sebagai JPG"
+              >
+                <span className="text-lg">⬇️</span>
+                <span>{isDownloading ? 'Loading' : 'Unduh'}</span>
+              </button>
+              <button
+                onClick={handleSendWhatsApp}
+                className="flex flex-col items-center gap-1 rounded-lg py-2 px-2 text-xs font-medium text-gray-700 hover:bg-green-50 transition"
+                title="Kirim via WhatsApp"
+              >
+                <MessageCircle className="h-4 w-4 text-green-600" />
+                <span>WhatsApp</span>
+              </button>
+              <button
+                onClick={handleCopy}
+                className="flex flex-col items-center gap-1 rounded-lg py-2 px-2 text-xs font-medium text-gray-700 hover:bg-amber-50 transition"
+                title="Salin ke clipboard untuk WhatsApp"
+              >
+                <Copy className="h-4 w-4 text-amber-600" />
+                <span>Salin</span>
+              </button>
+              <button
+                onClick={onClose}
+                className="flex flex-col items-center gap-1 rounded-lg py-2 px-2 text-xs font-medium text-gray-700 hover:bg-gray-200 transition"
+                title="Tutup"
+              >
+                <X className="h-4 w-4 text-gray-600" />
+                <span>Tutup</span>
+              </button>
+            </div>
           </div>
         )}
       </div>

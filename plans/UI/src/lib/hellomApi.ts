@@ -1157,9 +1157,10 @@ export function createPosMember(payload: Record<string, unknown>) {
   });
 }
 
-export function searchPosMembers(query: { keyword?: string }) {
+export function searchPosMembers(query: { q?: string; keyword?: string }) {
   const params = new URLSearchParams();
-  if (query.keyword) params.set('keyword', query.keyword);
+  const searchTerm = query.q || query.keyword || '';
+  if (searchTerm) params.set('q', searchTerm);
   const qs = params.toString() ? `?${params.toString()}` : '';
   return apiRequest<Record<string, unknown>>(`/pos/members/search${qs}`);
 }
@@ -1422,6 +1423,24 @@ export function deleteAdminClient(clientId: number) {
   return apiRequest<Record<string, unknown>>(`/admin/showcase/clients/${clientId}`, {
     method: 'DELETE',
   });
+}
+
+// ─── POS Public Member (no auth required — customer-facing) ───
+
+export function registerPublicPosMember(
+  orgSlug: string,
+  payload: { name: string; phone: string; email?: string }
+) {
+  return publicApiRequest<Record<string, unknown>>('/pos/public/members/register', {
+    method: 'POST',
+    body: { org_slug: orgSlug, ...payload },
+  });
+}
+
+export function lookupPublicPosMember(orgSlug: string, phone: string) {
+  return publicApiRequest<Record<string, unknown>>(
+    `/pos/public/members/lookup?org=${encodeURIComponent(orgSlug)}&phone=${encodeURIComponent(phone)}`
+  );
 }
 
 export function uploadShowcaseMedia(payload: FormData | File) {

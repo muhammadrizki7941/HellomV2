@@ -130,7 +130,7 @@ export default function NotificationBell() {
             onClick={() => setIsOpen(false)}
           />
           {/* Dropdown */}
-          <div className="absolute right-0 top-12 z-50">
+          <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[calc(100vw-2rem)] max-w-md lg:absolute lg:left-auto lg:top-12 lg:-translate-x-0 lg:-translate-y-0 lg:right-0 lg:w-96">
             <NotificationDropdown
               notifications={notifications}
               loading={loading}

@@ -31,7 +31,7 @@ const statusStyles: Record<PurchaseStatus, string> = {
 
 const statusLabels: Record<PurchaseStatus, string> = {
   paid: 'Aktif',
-  pending: 'Menunggu Pembayaran',
+  pending: 'Belum Dibayar',
   failed: 'Gagal',
   refunded: 'Refund',
 };
@@ -62,8 +62,67 @@ const paymentMethodLabel = (purchase: Purchase, methods: ManualPaymentMethod[]) 
     if (purchase.payment_method === 'gopay') return 'GoPay';
     if (purchase.payment_method === 'dana') return 'DANA';
   }
-
   return gatewayLabel(purchase.payment_gateway);
+};
+
+const ActionLink = ({
+  item,
+  manualMethods,
+  manualUrl,
+  detailUrl,
+}: {
+  item: Purchase;
+  manualMethods: ManualPaymentMethod[];
+  manualUrl: string;
+  detailUrl: string;
+}) => {
+  if (item.payment_status === 'paid' && detailUrl) {
+    return (
+      <Link
+        to={detailUrl}
+        className="inline-flex items-center gap-1 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-800 transition-colors"
+      >
+        Buka Produk
+      </Link>
+    );
+  }
+  if (item.payment_status === 'pending' && item.payment_gateway === 'manual') {
+    return manualUrl ? (
+      <a
+        href={manualUrl}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex items-center gap-1 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-800 hover:bg-zinc-50 transition-colors"
+      >
+        Konfirmasi via WhatsApp
+      </a>
+    ) : (
+      <span className="text-xs text-amber-700">Nomor owner belum tersedia</span>
+    );
+  }
+  if (item.payment_status === 'pending' && item.checkout_url) {
+    return (
+      <a
+        href={item.checkout_url}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex items-center gap-1 rounded-lg bg-amber-400 px-3 py-1.5 text-xs font-semibold text-gray-900 hover:bg-amber-500 transition-colors"
+      >
+        Lanjut Bayar
+      </a>
+    );
+  }
+  if (detailUrl) {
+    return (
+      <Link
+        to={detailUrl}
+        className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors"
+      >
+        Lihat Detail
+      </Link>
+    );
+  }
+  return <span className="text-xs text-zinc-400">-</span>;
 };
 
 export default function MyPurchases() {
@@ -77,22 +136,22 @@ export default function MyPurchases() {
     const load = async () => {
       setLoading(true);
       setError(null);
-
       try {
         const [response, gatewayStatus] = await Promise.all([
           getMyPurchases(),
           getPaymentGatewayStatus().catch(() => null),
         ]);
-
         setItems((response || []) as Purchase[]);
-        setManualMethods(((gatewayStatus as { manual_payment?: { methods?: ManualPaymentMethod[] } } | null)?.manual_payment?.methods) || []);
+        setManualMethods(
+          ((gatewayStatus as { manual_payment?: { methods?: ManualPaymentMethod[] } } | null)
+            ?.manual_payment?.methods) || []
+        );
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Gagal memuat pembelian');
       } finally {
         setLoading(false);
       }
     };
-
     void load();
   }, []);
 
@@ -103,7 +162,6 @@ export default function MyPurchases() {
 
   const manualConfirmationUrl = (item: Purchase) => {
     if (!whatsappPhone || !item.product?.name) return '';
-
     const message = [
       `Halo owner ${brand.business_name || brand.app_name},`,
       `Saya ingin konfirmasi pembayaran produk ${item.product.name}.`,
@@ -112,7 +170,6 @@ export default function MyPurchases() {
       `Nominal: Rp ${Number(item.amount_paid || 0).toLocaleString('id-ID')}`,
       'Mohon dibantu cek status pembayaran saya. Terima kasih.',
     ].join('\n');
-
     return `https://wa.me/${whatsappPhone}?text=${encodeURIComponent(message)}`;
   };
 
@@ -120,7 +177,7 @@ export default function MyPurchases() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-zinc-900">Produk Saya</h1>
-        <p className="text-sm text-zinc-600">Riwayat pembelian, metode pembayaran, dan akses produk digital kamu.</p>
+        <p className="text-sm text-zinc-500">Riwayat pembelian dan akses produk digital kamu.</p>
       </div>
 
       {error && (
@@ -130,89 +187,136 @@ export default function MyPurchases() {
       )}
 
       {loading ? (
-        <div className="text-sm text-zinc-500">Memuat pembelian...</div>
+        <div className="py-10 text-center text-sm text-zinc-400">Memuat data pembelian...</div>
+      ) : items.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 px-6 py-12 text-center">
+          <p className="text-sm font-medium text-zinc-500">Belum ada produk yang dibeli.</p>
+          <Link
+            to="/dashboard/products"
+            className="mt-3 inline-block text-sm font-semibold text-zinc-900 underline underline-offset-4 hover:text-zinc-700"
+          >
+            Lihat katalog produk
+          </Link>
+        </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
-          <table className="w-full text-sm">
-            <thead className="bg-zinc-50 text-zinc-600">
-              <tr>
-                <th className="px-4 py-3 text-left font-semibold">Produk</th>
-                <th className="px-4 py-3 text-left font-semibold">Harga</th>
-                <th className="px-4 py-3 text-left font-semibold">Metode</th>
-                <th className="px-4 py-3 text-left font-semibold">Status</th>
-                <th className="px-4 py-3 text-left font-semibold">Tanggal Beli</th>
-                <th className="px-4 py-3 text-left font-semibold">Aksi</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-100">
-              {items.map((item) => {
-                const detailUrl = item.product?.slug ? `/dashboard/products/${item.product.slug}/checkout` : '';
-                const manualUrl = manualConfirmationUrl(item);
-
-                return (
-                  <tr key={item.id}>
-                    <td className="px-4 py-3">
-                      <div className="font-semibold text-zinc-900">{item.product?.name || '-'}</div>
-                      {item.transaction_code ? (
-                        <div className="mt-1 text-xs text-zinc-500">Invoice: {item.transaction_code}</div>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3">Rp {Number(item.amount_paid || 0).toLocaleString('id-ID')}</td>
-                    <td className="px-4 py-3 text-zinc-700">{paymentMethodLabel(item, manualMethods)}</td>
-                    <td className="px-4 py-3">
-                      <span className={`rounded-full px-2 py-1 text-xs font-semibold ${statusStyles[item.payment_status]}`}>
+        <>
+          {/* Mobile card list */}
+          <div className="space-y-3 md:hidden">
+            {items.map((item) => {
+              const detailUrl = item.product?.slug
+                ? `/dashboard/products/${item.product.slug}/checkout`
+                : '';
+              const manualUrl = manualConfirmationUrl(item);
+              return (
+                <div
+                  key={item.id}
+                  className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm"
+                >
+                  <div className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-semibold text-zinc-900">
+                          {item.product?.name || '-'}
+                        </p>
+                        {item.transaction_code ? (
+                          <p className="mt-0.5 text-xs text-zinc-400">
+                            #{item.transaction_code}
+                          </p>
+                        ) : null}
+                      </div>
+                      <span
+                        className={`flex-shrink-0 rounded-full px-2 py-1 text-xs font-semibold ${statusStyles[item.payment_status]}`}
+                      >
                         {statusLabels[item.payment_status]}
                       </span>
-                    </td>
-                    <td className="px-4 py-3 text-zinc-500">{String(item.created_at || '').split('T')[0]}</td>
-                    <td className="px-4 py-3">
-                      {item.payment_status === 'paid' && detailUrl ? (
-                        <Link to={detailUrl} className="text-sm font-semibold text-zinc-900 hover:text-zinc-700">
-                          Buka produk
-                        </Link>
-                      ) : item.payment_status === 'pending' && item.payment_gateway === 'manual' ? (
-                        manualUrl ? (
-                          <a
-                            href={manualUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-sm font-semibold text-zinc-900 hover:text-zinc-700"
-                          >
-                            Konfirmasi via WhatsApp
-                          </a>
-                        ) : (
-                          <span className="text-xs text-amber-700">Nomor owner belum tersedia</span>
-                        )
-                      ) : item.payment_status === 'pending' && item.checkout_url ? (
-                        <a
-                          href={item.checkout_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-sm font-semibold text-zinc-900 hover:text-zinc-700"
-                        >
-                          Lanjut bayar
-                        </a>
-                      ) : detailUrl ? (
-                        <Link to={detailUrl} className="text-sm font-semibold text-zinc-900 hover:text-zinc-700">
-                          Lihat detail
-                        </Link>
-                      ) : (
-                        <span className="text-xs text-zinc-500">-</span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-              {items.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-zinc-500">
-                    Belum ada pembelian.
-                  </td>
+                    </div>
+
+                    <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-xs text-zinc-500">
+                      <span className="font-semibold text-zinc-800">
+                        Rp {Number(item.amount_paid || 0).toLocaleString('id-ID')}
+                      </span>
+                      <span className="text-zinc-300">·</span>
+                      <span>{paymentMethodLabel(item, manualMethods)}</span>
+                      <span className="text-zinc-300">·</span>
+                      <span>{String(item.created_at || '').split('T')[0]}</span>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-zinc-100 px-4 py-3">
+                    <ActionLink
+                      item={item}
+                      manualMethods={manualMethods}
+                      manualUrl={manualUrl}
+                      detailUrl={detailUrl}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm md:block">
+            <table className="w-full text-sm">
+              <thead className="bg-zinc-50">
+                <tr className="text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                  <th className="px-5 py-3">Produk</th>
+                  <th className="px-5 py-3">Harga</th>
+                  <th className="px-5 py-3">Metode</th>
+                  <th className="px-5 py-3">Status</th>
+                  <th className="px-5 py-3">Tanggal</th>
+                  <th className="px-5 py-3">Aksi</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-zinc-100">
+                {items.map((item) => {
+                  const detailUrl = item.product?.slug
+                    ? `/dashboard/products/${item.product.slug}/checkout`
+                    : '';
+                  const manualUrl = manualConfirmationUrl(item);
+                  return (
+                    <tr key={item.id} className="hover:bg-zinc-50/60">
+                      <td className="px-5 py-3.5">
+                        <div className="font-semibold text-zinc-900">
+                          {item.product?.name || '-'}
+                        </div>
+                        {item.transaction_code ? (
+                          <div className="mt-0.5 text-xs text-zinc-400">
+                            #{item.transaction_code}
+                          </div>
+                        ) : null}
+                      </td>
+                      <td className="px-5 py-3.5 font-medium text-zinc-800">
+                        Rp {Number(item.amount_paid || 0).toLocaleString('id-ID')}
+                      </td>
+                      <td className="px-5 py-3.5 text-zinc-600">
+                        {paymentMethodLabel(item, manualMethods)}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusStyles[item.payment_status]}`}
+                        >
+                          {statusLabels[item.payment_status]}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5 text-zinc-500">
+                        {String(item.created_at || '').split('T')[0]}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <ActionLink
+                          item={item}
+                          manualMethods={manualMethods}
+                          manualUrl={manualUrl}
+                          detailUrl={detailUrl}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );

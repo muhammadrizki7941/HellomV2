@@ -2,15 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowDownLeft,
   ArrowUpRight,
-  BadgeCheck,
   Building2,
   CreditCard,
   Lock,
   QrCode,
   RefreshCw,
-  ShieldCheck,
   Sparkles,
-  TicketPercent,
   Wallet,
 } from 'lucide-react';
 import SubscriptionModal from '@/components/SubscriptionModal';
@@ -47,6 +44,19 @@ function formatCurrency(value: number) {
   return `Rp ${value.toLocaleString('id-ID')}`;
 }
 
+const txTypeLabel = (type: string) => {
+  const map: Record<string, string> = {
+    wallet_topup: 'Top Up Saldo',
+    subscription_debit: 'Pembayaran Langganan',
+    wallet_debit: 'Pembayaran',
+    wallet_credit: 'Kredit Saldo',
+    subscription_renewal: 'Perpanjangan',
+    refund: 'Refund',
+    manual_topup: 'Top Up Manual',
+  };
+  return map[type] || (type || '-').replace(/_/g, ' ');
+};
+
 export default function Payments() {
   const [activeTab, setActiveTab] = useState<TabMode>('overview');
   const [loading, setLoading] = useState(false);
@@ -82,9 +92,9 @@ export default function Payments() {
   const [withdrawEstimatedNet, setWithdrawEstimatedNet] = useState<number | null>(null);
 
   const [withdrawAmount, setWithdrawAmount] = useState('');
-  const [bankCode, setBankCode] = useState('BCA');
-  const [accountNumber, setAccountNumber] = useState('1234567890');
-  const [accountName, setAccountName] = useState('Demo Owner');
+  const [bankCode, setBankCode] = useState('');
+  const [accountNumber, setAccountNumber] = useState('');
+  const [accountName, setAccountName] = useState('');
 
   const [selectedApp, setSelectedApp] = useState<{ name: string; slug: string } | null>(null);
 
@@ -94,8 +104,6 @@ export default function Payments() {
   );
   const canManagePayouts = ['owner', 'admin', 'super_admin'].includes(requesterRole);
   const gatewayReady = Boolean(gatewayStatus?.is_ready);
-  const gatewayEnvironment = gatewayStatus?.mode === 'production' ? 'Production' : 'Sandbox';
-  const providerLabel = gatewayStatus?.active_provider === 'ipaymu' ? 'iPaymu' : 'Xendit';
 
   const loadPage = async () => {
     setLoading(true);
@@ -144,9 +152,7 @@ export default function Payments() {
           ),
         ]);
 
-        if (cancelled) {
-          return;
-        }
+        if (cancelled) return;
 
         setQrisEstimatedFee(qrisPolicy.estimation.fee_amount);
         setQrisEstimatedNet(qrisPolicy.estimation.net_amount);
@@ -155,10 +161,7 @@ export default function Payments() {
         setWithdrawEstimatedFee(withdrawPolicy.estimation.fee_amount);
         setWithdrawEstimatedNet(withdrawPolicy.estimation.net_amount);
       } catch {
-        if (cancelled) {
-          return;
-        }
-
+        if (cancelled) return;
         setQrisEstimatedFee(null);
         setQrisEstimatedNet(null);
         setVaEstimatedFee(null);
@@ -169,10 +172,7 @@ export default function Payments() {
     };
 
     void loadEstimates();
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [depositAmount, withdrawAmount]);
 
   const handleWithdraw = async (event: React.FormEvent) => {
@@ -187,13 +187,13 @@ export default function Payments() {
         bank_code: bankCode,
         account_number: accountNumber,
         account_name: accountName,
-        notes: 'dashboard_payments_withdrawal',
+        notes: '',
       });
       setWithdrawAmount('');
-      setSuccessMessage('Permintaan withdrawal berhasil dikirim dan masuk antrean review.');
+      setSuccessMessage('Permintaan penarikan berhasil dikirim dan sedang dalam proses review.');
       await loadPage();
     } catch (submitError) {
-      const message = submitError instanceof Error ? submitError.message : 'Gagal request withdrawal';
+      const message = submitError instanceof Error ? submitError.message : 'Gagal mengajukan penarikan';
       setError(message);
     } finally {
       setSubmitting(false);
@@ -207,13 +207,9 @@ export default function Payments() {
 
     try {
       if (!gatewayReady) {
-        await walletTopupMock({
-          amount,
-          source,
-          notes: 'gateway_not_ready_wallet_topup_simulation',
-        });
+        await walletTopupMock({ amount, source, notes: '' });
         await loadPage();
-        setSuccessMessage(`Gateway belum siap penuh, jadi sistem memakai simulasi aman untuk ${source.toUpperCase()}. Begitu kredensial ${providerLabel} lengkap, tombol ini akan membuat payment session sungguhan.`);
+        setSuccessMessage('Permintaan deposit sedang diproses. Saldo Anda akan diperbarui setelah konfirmasi.');
         return;
       }
 
@@ -221,7 +217,7 @@ export default function Payments() {
       if (result.payment_url) {
         window.open(result.payment_url, '_blank', 'noopener,noreferrer');
       }
-      setSuccessMessage(`Link pembayaran ${source.toUpperCase()} untuk ${formatCurrency(amount)} berhasil dibuat. Saldo akan masuk otomatis setelah pembayaran sukses.`);
+      setSuccessMessage(`Halaman pembayaran untuk ${formatCurrency(amount)} berhasil dibuat. Saldo akan masuk otomatis setelah pembayaran sukses.`);
     } catch (topupError) {
       const message = topupError instanceof Error ? topupError.message : 'Top up gagal';
       setError(message);
@@ -234,9 +230,9 @@ export default function Payments() {
     return (
       <div className="mx-auto max-w-4xl space-y-6 p-4 md:p-8">
         <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6">
-          <h1 className="text-2xl font-bold text-amber-900">Fitur wallet member sedang disembunyikan</h1>
+          <h1 className="text-2xl font-bold text-amber-900">Dompet Digital Tidak Tersedia</h1>
           <p className="mt-3 text-sm leading-6 text-amber-800">
-            Owner sedang mematikan wallet/e-wallet untuk seluruh pembeli. Checkout langganan tetap berjalan dari modal aktivasi aplikasi dengan gateway {providerLabel}.
+            Fitur dompet digital sedang tidak aktif. Anda tetap bisa mengaktifkan aplikasi berbayar melalui metode pembayaran lain.
           </p>
         </div>
       </div>
@@ -244,41 +240,45 @@ export default function Payments() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-8">
-      <div className="rounded-3xl border border-zinc-200 bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-800 p-6 text-white shadow-xl shadow-zinc-950/10">
+    <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
+      {/* Hero — dark banner */}
+      <div className="rounded-3xl border border-zinc-200 bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-800 p-5 text-white shadow-xl shadow-zinc-950/10 sm:p-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-          <div className="max-w-3xl">
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-amber-200">
+          <div className="max-w-2xl">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-amber-200">
               <Sparkles className="h-3.5 w-3.5" />
-              Wallet, deposit, dan checkout
+              Dompet Digital Hellom
             </div>
-            <h1 className="mt-4 text-3xl font-bold tracking-tight text-white">Pembayaran member Hellom yang siap lanjut ke {providerLabel}</h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-300">
-              Wallet tetap menjadi saldo utama untuk auto-renew dan payout. Di halaman ini member juga bisa melihat kesiapan gateway, top up via channel, dan aktivasi aplikasi berbayar yang masih terkunci.
+            <h1 className="mt-4 text-2xl font-bold tracking-tight text-white sm:text-3xl">
+              Kelola Saldo & Pembayaran
+            </h1>
+            <p className="mt-2 text-sm leading-6 text-zinc-300">
+              Top up saldo untuk perpanjangan otomatis, atau gunakan saldo langsung untuk mengaktifkan aplikasi berbayar.
             </p>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-2 gap-3 sm:w-auto">
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Saldo tersedia</p>
-              <p className="mt-2 text-3xl font-bold text-white">{formatCurrency(availableBalance)}</p>
-              <p className="mt-1 text-xs text-zinc-400">Pending {formatCurrency(pendingBalance)}</p>
+              <p className="mt-2 text-2xl font-bold text-white sm:text-3xl">{formatCurrency(availableBalance)}</p>
+              {pendingBalance > 0 && (
+                <p className="mt-1 text-xs text-zinc-400">Menunggu: {formatCurrency(pendingBalance)}</p>
+              )}
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Gateway status</p>
-              <p className="mt-2 text-lg font-bold text-white">
-                {gatewayReady ? `${providerLabel} ${gatewayEnvironment}` : 'Belum aktif penuh'}
+              <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Status</p>
+              <p className="mt-2 text-base font-bold text-white">
+                {gatewayReady ? 'Siap' : 'Dalam Konfigurasi'}
               </p>
               <p className="mt-1 text-xs text-zinc-400">
-                {gatewayStatus?.webhook.callback_token_configured
-                  ? 'Webhook callback sudah diverifikasi'
-                  : 'Token callback masih perlu dipasang'}
+                {gatewayReady ? 'Pembayaran aktif' : 'Hubungi dukungan'}
               </p>
             </div>
           </div>
         </div>
       </div>
 
+      {/* Tabs */}
       <div className="flex flex-wrap items-center gap-2">
         {(['overview', 'deposit', 'withdraw'] as TabMode[]).map((tab) => (
           <button
@@ -291,7 +291,7 @@ export default function Payments() {
                 : 'border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50'
             )}
           >
-            {tab === 'overview' ? 'Overview' : tab === 'deposit' ? 'Deposit & Checkout' : 'Withdraw'}
+            {tab === 'overview' ? 'Ringkasan' : tab === 'deposit' ? 'Isi Saldo' : 'Tarik Saldo'}
           </button>
         ))}
         <button
@@ -306,22 +306,26 @@ export default function Payments() {
       {(error || successMessage) && (
         <div className="space-y-3">
           {error && (
-            <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+            <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {error}
+            </div>
           )}
           {successMessage && (
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{successMessage}</div>
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+              {successMessage}
+            </div>
           )}
         </div>
       )}
 
+      {/* ── Overview ── */}
       {activeTab === 'overview' && (
         <div className="space-y-6">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {[
-              { label: 'Total masuk', value: totalIn, icon: ArrowDownLeft, tone: 'emerald' },
-              { label: 'Total keluar', value: totalOut, icon: ArrowUpRight, tone: 'rose' },
-              { label: 'App terkunci', value: lockedApps.length, icon: Lock, tone: 'amber' },
-              { label: 'Metode siap', value: gatewayStatus ? Object.values(gatewayStatus.supports).filter(Boolean).length : 0, icon: ShieldCheck, tone: 'sky' },
+              { label: 'Total masuk', value: totalIn, icon: ArrowDownLeft, tone: 'emerald', isCurrency: true },
+              { label: 'Total keluar', value: totalOut, icon: ArrowUpRight, tone: 'rose', isCurrency: true },
+              { label: 'Aplikasi terkunci', value: lockedApps.length, icon: Lock, tone: 'amber', isCurrency: false },
             ].map((card) => (
               <div key={card.label} className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
                 <div className="flex items-center gap-3">
@@ -330,18 +334,15 @@ export default function Payments() {
                       'flex h-12 w-12 items-center justify-center rounded-2xl',
                       card.tone === 'emerald' && 'bg-emerald-100 text-emerald-700',
                       card.tone === 'rose' && 'bg-rose-100 text-rose-700',
-                      card.tone === 'amber' && 'bg-amber-100 text-amber-700',
-                      card.tone === 'sky' && 'bg-sky-100 text-sky-700'
+                      card.tone === 'amber' && 'bg-amber-100 text-amber-700'
                     )}
                   >
                     <card.icon className="h-5 w-5" />
                   </div>
                   <div>
                     <p className="text-sm font-medium text-zinc-500">{card.label}</p>
-                    <p className="text-2xl font-bold text-zinc-950">
-                      {card.label === 'App terkunci' || card.label === 'Metode siap'
-                        ? card.value.toLocaleString('id-ID')
-                        : formatCurrency(card.value)}
+                    <p className="text-xl font-bold text-zinc-950 sm:text-2xl">
+                      {card.isCurrency ? formatCurrency(card.value) : card.value.toLocaleString('id-ID')}
                     </p>
                   </div>
                 </div>
@@ -349,42 +350,46 @@ export default function Payments() {
             ))}
           </div>
 
-          <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-            <section className="rounded-3xl border border-zinc-200 bg-white shadow-sm">
-              <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-4">
-                <div>
-                  <h2 className="text-lg font-bold text-zinc-950">Riwayat transaksi wallet</h2>
-                  <p className="text-sm text-zinc-500">Ledger terbaru untuk deposit, debit langganan, dan settlement.</p>
-                </div>
+          <div className="grid gap-6 xl:grid-cols-[1.4fr_0.6fr]">
+            {/* Transaction history */}
+            <section className="overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm">
+              <div className="border-b border-zinc-200 px-6 py-4">
+                <h2 className="text-lg font-bold text-zinc-950">Riwayat Transaksi</h2>
+                <p className="text-sm text-zinc-500">Seluruh aktivitas saldo dompet digital Anda.</p>
               </div>
-
               <div className="overflow-x-auto">
                 <table className="min-w-full">
                   <thead className="bg-zinc-50">
                     <tr className="text-left text-xs font-bold uppercase tracking-wide text-zinc-500">
-                      <th className="px-6 py-3">Type</th>
+                      <th className="px-6 py-3">Keterangan</th>
                       <th className="px-6 py-3">Tanggal</th>
-                      <th className="px-6 py-3">Amount</th>
-                      <th className="px-6 py-3">Direction</th>
+                      <th className="px-6 py-3">Nominal</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-100">
-                    {transactions.map((trx) => (
-                      <tr key={String(trx.id)} className="hover:bg-zinc-50">
-                        <td className="px-6 py-4 text-sm font-semibold text-zinc-900">{String(trx.type || '-')}</td>
-                        <td className="px-6 py-4 text-sm text-zinc-500">{String(trx.created_at || '-')}</td>
-                        <td className={cn(
-                          'px-6 py-4 text-sm font-bold',
-                          String(trx.direction) === 'credit' ? 'text-emerald-700' : 'text-zinc-900'
-                        )}>
-                          {String(trx.direction) === 'credit' ? '+' : '-'} {formatCurrency(Number(trx.amount || 0))}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-zinc-500 capitalize">{String(trx.direction || '-')}</td>
-                      </tr>
-                    ))}
+                    {transactions.map((trx) => {
+                      const isCredit = String(trx.direction) === 'credit';
+                      const dateStr = String(trx.created_at || '-').split('T')[0];
+                      return (
+                        <tr key={String(trx.id)} className="hover:bg-zinc-50">
+                          <td className="px-6 py-4 text-sm font-semibold text-zinc-900">
+                            {txTypeLabel(String(trx.type || ''))}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-zinc-500">{dateStr}</td>
+                          <td className={cn(
+                            'px-6 py-4 text-sm font-bold',
+                            isCredit ? 'text-emerald-700' : 'text-zinc-800'
+                          )}>
+                            {isCredit ? '+' : '-'} {formatCurrency(Number(trx.amount || 0))}
+                          </td>
+                        </tr>
+                      );
+                    })}
                     {!loading && transactions.length === 0 && (
                       <tr>
-                        <td colSpan={4} className="px-6 py-10 text-center text-sm text-zinc-500">Belum ada transaksi.</td>
+                        <td colSpan={3} className="px-6 py-10 text-center text-sm text-zinc-500">
+                          Belum ada transaksi.
+                        </td>
                       </tr>
                     )}
                   </tbody>
@@ -392,100 +397,74 @@ export default function Payments() {
               </div>
             </section>
 
-            <section className="space-y-4">
-              <div className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
-                <h2 className="text-lg font-bold text-zinc-950">Kesiapan integrasi</h2>
-                <div className="mt-4 space-y-3 text-sm">
-                  <div className="flex items-start gap-3 rounded-2xl bg-zinc-50 p-3">
-                    <BadgeCheck className={cn('mt-0.5 h-4 w-4', canManagePayouts ? 'text-emerald-600' : 'text-amber-600')} />
-                    <div>
-                      <p className="font-semibold text-zinc-900">Hak akses payout mengikuti role organisasi</p>
-                      <p className="text-zinc-500">
-                        {canManagePayouts
-                          ? `Akun ini terdeteksi sebagai ${requesterRole.replace('_', ' ')} dan dapat mengajukan atau meninjau payout sesuai izin.`
-                          : 'Akun ini hanya dapat melihat saldo dan histori; withdrawal tetap dibatasi untuk owner, admin, atau super admin.'}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3 rounded-2xl bg-zinc-50 p-3">
-                    <BadgeCheck className={cn('mt-0.5 h-4 w-4', gatewayReady ? 'text-emerald-600' : 'text-amber-600')} />
-                    <div>
-                      <p className="font-semibold text-zinc-900">{providerLabel} mode {gatewayStatus?.mode || 'sandbox'}</p>
-                      <p className="text-zinc-500">
-                        {gatewayReady
-                          ? `Kredensial ${providerLabel} sudah terbaca dari backend. Deposit member akan memakai payment session gateway aktif sesuai environment.`
-                          : 'Gateway belum lengkap, jadi halaman ini hanya akan memakai simulasi aman sampai kredensial owner atau super admin disimpan.'}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3 rounded-2xl bg-zinc-50 p-3">
-                    <BadgeCheck className="mt-0.5 h-4 w-4 text-emerald-600" />
-                    <div>
-                      <p className="font-semibold text-zinc-900">Webhook route sudah dipasang</p>
-                      <p className="break-all text-zinc-500">{gatewayStatus?.webhook.path || '/api/v1/hellom/webhooks/xendit'}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
-                <h2 className="text-lg font-bold text-zinc-950">Aplikasi berbayar yang masih terkunci</h2>
-                <div className="mt-4 space-y-3">
-                  {lockedApps.map((item) => (
-                    <div key={item.app.slug} className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <p className="font-semibold text-zinc-950">{item.app.name}</p>
-                          <p className="mt-1 text-sm text-zinc-500">
-                            {item.cta.recommended_plan
-                              ? `${item.cta.recommended_plan.name} | ${formatCurrency(item.cta.recommended_plan.price)}`
-                              : 'Belum ada plan rekomendasi'}
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => setSelectedApp({ name: item.app.name, slug: item.app.slug })}
-                          className="rounded-2xl bg-zinc-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-zinc-800"
-                        >
-                          Aktivasi
-                        </button>
+            {/* Locked apps */}
+            <section className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
+              <h2 className="text-lg font-bold text-zinc-950">Aplikasi Terkunci</h2>
+              <p className="mt-1 text-sm text-zinc-500">
+                Aktifkan untuk mendapatkan akses penuh.
+              </p>
+              <div className="mt-4 space-y-3">
+                {lockedApps.map((item) => (
+                  <div key={item.app.slug} className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="font-semibold text-zinc-950">{item.app.name}</p>
+                        <p className="mt-1 text-sm text-zinc-500">
+                          {item.cta.recommended_plan
+                            ? `${item.cta.recommended_plan.name} — ${formatCurrency(item.cta.recommended_plan.price)}`
+                            : 'Lihat pilihan paket'}
+                        </p>
                       </div>
+                      <button
+                        onClick={() => setSelectedApp({ name: item.app.name, slug: item.app.slug })}
+                        className="rounded-2xl bg-zinc-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-zinc-800"
+                      >
+                        Aktifkan
+                      </button>
                     </div>
-                  ))}
-                  {lockedApps.length === 0 && (
-                    <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 p-4 text-sm text-zinc-500">
-                      Semua aplikasi yang tampil di catalog sudah aktif untuk organisasi ini.
-                    </div>
-                  )}
-                </div>
+                  </div>
+                ))}
+                {lockedApps.length === 0 && (
+                  <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 p-4 text-sm text-zinc-500">
+                    Semua aplikasi sudah aktif.
+                  </div>
+                )}
               </div>
             </section>
           </div>
         </div>
       )}
 
+      {/* ── Isi Saldo (Deposit) ── */}
       {activeTab === 'deposit' && (
         <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
           <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-bold text-zinc-950">Top up saldo dan checkout langsung</h2>
+            <h2 className="text-xl font-bold text-zinc-950">Isi Saldo</h2>
             <p className="mt-2 text-sm text-zinc-500">
-              Member dapat memilih jalur deposit dulu ke wallet atau langsung aktivasi aplikasi berbayar dari dashboard.
+              Pilih metode deposit untuk menambahkan saldo dompet digital Anda.
             </p>
 
             <div className="mt-6 grid gap-4 md:grid-cols-2">
+              {/* QRIS */}
               <article className="rounded-3xl border border-zinc-200 bg-zinc-50 p-5">
                 <div className="flex items-center gap-3">
                   <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
                     <QrCode className="h-5 w-5" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-zinc-950">QRIS Deposit</h3>
-                    <p className="text-sm text-zinc-500">Top up cepat untuk saldo wallet member.</p>
+                    <h3 className="font-bold text-zinc-950">QRIS</h3>
+                    <p className="text-sm text-zinc-500">Scan & bayar instan dari aplikasi dompet manapun.</p>
                   </div>
                 </div>
-                <div className="mt-5 space-y-2 text-sm text-zinc-600">
-                  <p>Estimasi fee: {qrisEstimatedFee !== null ? formatCurrency(qrisEstimatedFee) : '-'}</p>
-                  <p>Saldo bersih estimasi: {qrisEstimatedNet !== null ? formatCurrency(qrisEstimatedNet) : '-'}</p>
-                  <p>Environment: {gatewayEnvironment}</p>
+                <div className="mt-5 space-y-1.5 text-sm text-zinc-600">
+                  {qrisEstimatedFee !== null && qrisEstimatedFee > 0 && (
+                    <p>Biaya layanan: {formatCurrency(qrisEstimatedFee)}</p>
+                  )}
+                  {qrisEstimatedNet !== null && (
+                    <p className="font-medium text-zinc-800">
+                      Saldo masuk: {formatCurrency(qrisEstimatedNet)}
+                    </p>
+                  )}
                 </div>
                 <button
                   onClick={() => void handleTopupSession(100000, 'qris')}
@@ -493,23 +472,24 @@ export default function Payments() {
                   className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-zinc-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:opacity-60"
                 >
                   <Wallet className="h-4 w-4" />
-                  Buka deposit QRIS 100k
+                  Deposit via QRIS (Rp 100.000)
                 </button>
               </article>
 
+              {/* VA */}
               <article className="rounded-3xl border border-zinc-200 bg-zinc-50 p-5">
                 <div className="flex items-center gap-3">
                   <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-100 text-sky-700">
                     <Building2 className="h-5 w-5" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-zinc-950">Virtual Account</h3>
-                    <p className="text-sm text-zinc-500">Cocok untuk deposit nominal tetap dan invoice fallback.</p>
+                    <h3 className="font-bold text-zinc-950">Transfer Bank</h3>
+                    <p className="text-sm text-zinc-500">Cocok untuk nominal besar via transfer ATM/mobile banking.</p>
                   </div>
                 </div>
                 <div className="mt-5 space-y-3">
                   <label className="space-y-2 text-sm">
-                    <span className="font-medium text-zinc-700">Simulasi nominal</span>
+                    <span className="font-medium text-zinc-700">Jumlah deposit (Rp)</span>
                     <input
                       type="number"
                       min="10000"
@@ -518,25 +498,35 @@ export default function Payments() {
                       className="w-full rounded-2xl border border-zinc-300 px-4 py-3 text-zinc-900 outline-none transition focus:border-amber-400"
                     />
                   </label>
-                  <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-600">
-                    Fee estimasi {vaEstimatedFee !== null ? formatCurrency(vaEstimatedFee) : '-'} | Dana masuk {vaEstimatedNet !== null ? formatCurrency(vaEstimatedNet) : '-'}
-                  </div>
+                  {(vaEstimatedFee !== null || vaEstimatedNet !== null) && (
+                    <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-600">
+                      {vaEstimatedFee !== null && vaEstimatedFee > 0 && (
+                        <span>Biaya: {formatCurrency(vaEstimatedFee)} · </span>
+                      )}
+                      {vaEstimatedNet !== null && (
+                        <span>Saldo masuk: {formatCurrency(vaEstimatedNet)}</span>
+                      )}
+                    </div>
+                  )}
                   <button
                     onClick={() => void handleTopupSession(depositAmount, 'va')}
                     disabled={submitting || depositAmount < 10000}
                     className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-zinc-300 bg-white px-4 py-3 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-100 disabled:opacity-60"
                   >
                     <CreditCard className="h-4 w-4" />
-                    Buka deposit VA
+                    Deposit via Transfer Bank
                   </button>
                 </div>
               </article>
             </div>
           </section>
 
+          {/* Locked apps in deposit tab */}
           <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-bold text-zinc-950">Checkout aplikasi terkunci</h2>
-            <p className="mt-2 text-sm text-zinc-500">Kasus seperti POS kini langsung diarahkan ke flow aktivasi dari dashboard member.</p>
+            <h2 className="text-xl font-bold text-zinc-950">Aktifkan Aplikasi</h2>
+            <p className="mt-2 text-sm text-zinc-500">
+              Bayar langsung untuk mengaktifkan aplikasi yang belum aktif.
+            </p>
             <div className="mt-5 space-y-3">
               {lockedApps.map((item) => (
                 <div key={item.app.slug} className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
@@ -544,57 +534,46 @@ export default function Payments() {
                     <div>
                       <p className="font-semibold text-zinc-950">{item.app.name}</p>
                       <p className="mt-1 text-sm text-zinc-500">
-                        Rekomendasi: {item.cta.recommended_plan?.name || 'Plan belum disiapkan'}
+                        {item.cta.recommended_plan?.name || 'Lihat pilihan paket'}
                       </p>
                     </div>
                     <button
                       onClick={() => setSelectedApp({ name: item.app.name, slug: item.app.slug })}
                       className="rounded-2xl bg-zinc-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-zinc-800"
                     >
-                      Bayar sekarang
+                      Bayar
                     </button>
                   </div>
                 </div>
               ))}
               {lockedApps.length === 0 && (
                 <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 p-4 text-sm text-zinc-500">
-                  Tidak ada aplikasi terkunci untuk akun ini.
+                  Tidak ada aplikasi yang perlu diaktifkan.
                 </div>
               )}
-            </div>
-
-            <div className="mt-6 rounded-3xl border border-amber-200 bg-amber-50 p-4">
-              <div className="flex items-start gap-3">
-                <TicketPercent className="mt-0.5 h-5 w-5 text-amber-700" />
-                <div>
-                  <p className="font-semibold text-amber-900">Promo code sudah siap dipakai saat subscribe</p>
-                  <p className="mt-1 text-sm text-amber-800">
-                    Modal subscribe sekarang membaca plan dari backend dan siap menerima diskon tanpa teks putih yang menyilaukan.
-                  </p>
-                </div>
-              </div>
             </div>
           </section>
         </div>
       )}
 
+      {/* ── Tarik Saldo (Withdraw) ── */}
       {activeTab === 'withdraw' && (
         <div className="mx-auto max-w-3xl rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm md:p-8">
           <div className="text-center">
             <p className="text-sm font-medium uppercase tracking-wide text-zinc-500">Saldo yang bisa ditarik</p>
             <h2 className="mt-3 text-4xl font-bold text-zinc-950">{formatCurrency(availableBalance)}</h2>
-            <p className="mt-2 text-sm text-zinc-500">Withdrawal akan tetap mengikuti kebijakan fee dan settlement backend.</p>
+            <p className="mt-2 text-sm text-zinc-500">Penarikan akan diproses sesuai ketentuan yang berlaku.</p>
           </div>
 
           {!canManagePayouts && (
             <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              Role akun ini adalah <span className="font-semibold">{requesterRole.replace('_', ' ')}</span>. Withdrawal hanya bisa diajukan oleh owner, admin, atau super admin organisasi.
+              Akun Anda belum memiliki akses untuk melakukan penarikan saldo. Hubungi pemilik organisasi untuk informasi lebih lanjut.
             </div>
           )}
 
           <form onSubmit={handleWithdraw} className="mt-8 space-y-5">
             <label className="space-y-2 text-sm">
-              <span className="font-semibold text-zinc-700">Nominal withdrawal</span>
+              <span className="font-semibold text-zinc-700">Jumlah penarikan</span>
               <div className="relative">
                 <span className="absolute left-4 top-3.5 text-sm font-semibold text-zinc-500">Rp</span>
                 <input
@@ -613,11 +592,12 @@ export default function Payments() {
 
             <div className="grid gap-4 md:grid-cols-3">
               <label className="space-y-2 text-sm">
-                <span className="font-semibold text-zinc-700">Bank</span>
+                <span className="font-semibold text-zinc-700">Kode Bank</span>
                 <input
                   value={bankCode}
                   onChange={(event) => setBankCode(event.target.value)}
                   disabled={!canManagePayouts}
+                  placeholder="BCA"
                   className="w-full rounded-2xl border border-zinc-300 px-4 py-3 text-zinc-900 outline-none transition focus:border-amber-400"
                 />
               </label>
@@ -627,6 +607,7 @@ export default function Payments() {
                   value={accountNumber}
                   onChange={(event) => setAccountNumber(event.target.value)}
                   disabled={!canManagePayouts}
+                  placeholder="1234567890"
                   className="w-full rounded-2xl border border-zinc-300 px-4 py-3 text-zinc-900 outline-none transition focus:border-amber-400"
                 />
               </label>
@@ -636,14 +617,22 @@ export default function Payments() {
                   value={accountName}
                   onChange={(event) => setAccountName(event.target.value)}
                   disabled={!canManagePayouts}
+                  placeholder="Nama pemilik rekening"
                   className="w-full rounded-2xl border border-zinc-300 px-4 py-3 text-zinc-900 outline-none transition focus:border-amber-400"
                 />
               </label>
             </div>
 
-            <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">
-              Estimasi fee payout bank: {withdrawEstimatedFee !== null ? formatCurrency(withdrawEstimatedFee) : '-'} | Dana bersih: {withdrawEstimatedNet !== null ? formatCurrency(withdrawEstimatedNet) : '-'}
-            </div>
+            {(withdrawEstimatedFee !== null || withdrawEstimatedNet !== null) && (
+              <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">
+                {withdrawEstimatedFee !== null && withdrawEstimatedFee > 0 && (
+                  <span>Biaya transfer: {formatCurrency(withdrawEstimatedFee)} · </span>
+                )}
+                {withdrawEstimatedNet !== null && (
+                  <span>Dana bersih diterima: {formatCurrency(withdrawEstimatedNet)}</span>
+                )}
+              </div>
+            )}
 
             <button
               type="submit"
@@ -651,12 +640,12 @@ export default function Payments() {
               className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-zinc-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:opacity-60"
             >
               <ArrowUpRight className="h-4 w-4" />
-              {submitting ? 'Memproses...' : 'Request withdrawal'}
+              {submitting ? 'Memproses...' : 'Ajukan Penarikan'}
             </button>
           </form>
 
           <div className="mt-8 rounded-3xl border border-zinc-200 bg-zinc-50 p-5">
-            <h3 className="text-sm font-bold uppercase tracking-wide text-zinc-700">Antrean withdrawal terbaru</h3>
+            <h3 className="text-sm font-bold uppercase tracking-wide text-zinc-700">Penarikan yang Sedang Diproses</h3>
             <div className="mt-4 space-y-3">
               {pendingWithdrawals.map((item) => (
                 <div key={String(item.id)} className="flex items-center justify-between gap-4 rounded-2xl border border-zinc-200 bg-white px-4 py-3">
@@ -664,16 +653,18 @@ export default function Payments() {
                     <p className="text-sm font-semibold text-zinc-900">
                       {formatCurrency(Number(item.amount || 0))} ke {String(item.bank_code || '-')}
                     </p>
-                    <p className="text-xs text-zinc-500">{String(item.created_at || '-')}</p>
+                    <p className="text-xs text-zinc-500">
+                      {String(item.created_at || '-').split('T')[0]}
+                    </p>
                   </div>
                   <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-semibold capitalize text-zinc-700">
-                    {String(item.status || 'pending')}
+                    {String(item.status || 'pending') === 'pending' ? 'Menunggu' : String(item.status || '')}
                   </span>
                 </div>
               ))}
               {pendingWithdrawals.length === 0 && (
                 <div className="rounded-2xl border border-dashed border-zinc-300 bg-white px-4 py-4 text-sm text-zinc-500">
-                  Belum ada withdrawal yang sedang diproses.
+                  Tidak ada penarikan yang sedang diproses.
                 </div>
               )}
             </div>

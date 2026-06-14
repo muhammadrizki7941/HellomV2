@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Send } from 'lucide-react';
+import { ExternalLink, Send } from 'lucide-react';
 import { confirmPosOrderPayment } from '@/lib/hellomApi';
+
+type PaymentMethod = 'cash' | 'transfer' | 'qris' | 'dana' | 'gopay';
 
 interface PaymentModalOrder {
   id: number;
@@ -16,34 +18,42 @@ interface PaymentModalProps {
   order: PaymentModalOrder | null;
 }
 
+const BASE = import.meta.env.BASE_URL ?? '/hellom/';
+
+const METHODS: { key: PaymentMethod; label: string; icon?: string; img?: string; color?: string }[] = [
+  { key: 'cash', icon: '💵', label: 'Tunai' },
+  { key: 'transfer', icon: '🏦', label: 'Transfer' },
+  { key: 'qris', img: `${BASE}assets/QRIS-ICON.webp`, label: 'QRIS' },
+  { key: 'dana', img: `${BASE}assets/DANA-ICON.png`, label: 'Dana', color: '#118EEA' },
+  { key: 'gopay', img: `${BASE}assets/GOPAY-ICON.jpg`, label: 'GoPay', color: '#00AA13' },
+];
+
+const EWALLET_LINKS: Record<string, string> = {
+  dana: 'https://link.dana.id/',
+  gopay: 'https://gojek.onelink.me/iAHD/gopay',
+};
+
 const PaymentModal = ({ isOpen, onClose, onSuccess, order }: PaymentModalProps) => {
-  const [method, setMethod] = useState<'cash' | 'transfer' | 'qris'>('cash');
+  const [method, setMethod] = useState<PaymentMethod>('cash');
   const [payAmount, setPayAmount] = useState('');
   const [payNote, setPayNote] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
-    if (!isOpen || !order) {
-      return;
-    }
-
+    if (!isOpen || !order) return;
     setMethod('cash');
     setPayAmount('');
     setPayNote('');
   }, [isOpen, order]);
 
   useEffect(() => {
-    if (!order) {
-      return;
-    }
-
+    if (!order) return;
     const amount = order.final_amount ?? order.total_amount ?? 0;
     if (method !== 'cash' && amount > 0) {
       setPayAmount(String(amount));
-      return;
+    } else {
+      setPayAmount('');
     }
-
-    setPayAmount('');
   }, [method, order]);
 
   if (!isOpen || !order) return null;
@@ -53,7 +63,7 @@ const PaymentModal = ({ isOpen, onClose, onSuccess, order }: PaymentModalProps) 
   const change = Math.max(0, payAmountNum - totalToPay);
   const isShort = method === 'cash' && payAmountNum > 0 && payAmountNum < totalToPay;
 
-  const formatNumber = (num: number) => num.toLocaleString('id-ID');
+  const fmt = (n: number) => n.toLocaleString('id-ID');
 
   const quickAmounts = [
     totalToPay,
@@ -63,7 +73,7 @@ const PaymentModal = ({ isOpen, onClose, onSuccess, order }: PaymentModalProps) 
     50000,
     100000,
   ]
-    .filter((value, index, arr) => value >= totalToPay && arr.indexOf(value) === index)
+    .filter((v, i, arr) => v >= totalToPay && arr.indexOf(v) === i)
     .slice(0, 4);
 
   const handleConfirm = async () => {
@@ -82,140 +92,209 @@ const PaymentModal = ({ isOpen, onClose, onSuccess, order }: PaymentModalProps) 
     }
   };
 
+  const openEwallet = () => {
+    const url = EWALLET_LINKS[method];
+    if (url) window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const currentMethod = METHODS.find((m) => m.key === method);
+  const isEwallet = method === 'dana' || method === 'gopay';
+
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-4 pb-24 md:items-center md:pb-4">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-4 pb-4 md:items-center">
       <div
-        className="max-h-[75vh] w-full overflow-hidden rounded-t-3xl bg-white shadow-2xl md:max-w-md md:rounded-2xl md:max-h-[88vh]"
+        className="max-h-[90vh] w-full overflow-hidden rounded-t-3xl bg-white shadow-2xl md:max-w-md md:rounded-2xl"
         style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 0px)' }}
       >
-        <div className="border-b border-amber-100 bg-gradient-to-r from-amber-50 via-yellow-50 to-white px-6 py-4">
+        {/* Header */}
+        <div className="border-b border-gray-200 bg-white px-6 py-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-zinc-900">Payment Confirmation</h2>
-            <button onClick={onClose} className="text-zinc-400 transition hover:text-amber-700">
-              x
-            </button>
+            <h2 className="text-base font-semibold text-gray-900">Konfirmasi Pembayaran</h2>
+            <button onClick={onClose} className="text-gray-400 transition hover:text-gray-600">✕</button>
           </div>
-          <div className="mt-1 text-sm font-medium text-zinc-500">{order.order_number}</div>
+          <div className="mt-1 text-xs text-gray-500">{order.order_number}</div>
         </div>
 
-        <div className="max-h-[calc(88vh-84px)] overflow-y-auto">
-          <div className="space-y-5 p-6 pb-28">
-          <div className="rounded-3xl border border-amber-100 bg-gradient-to-br from-amber-50 via-yellow-50 to-white p-4 text-center shadow-sm">
-            <div className="mb-1 text-sm font-semibold text-amber-700">Total Payment</div>
-            <div className="text-3xl font-black tracking-tight text-amber-900">Rp {formatNumber(totalToPay)}</div>
-          </div>
+        <div className="max-h-[calc(90vh-84px)] overflow-y-auto">
+          <div className="space-y-4 p-5 pb-20">
 
-          <div>
-            <label className="mb-2 block text-sm font-semibold text-zinc-700">Payment Method</label>
-            <div className="grid grid-cols-3 gap-2">
-              {[
-                { key: 'cash', icon: '💵', label: 'Cash' },
-                { key: 'transfer', icon: '🏦', label: 'Transfer' },
-                { key: 'qris', icon: '📱', label: 'QRIS' },
-              ].map((item) => (
-                <button
-                  key={item.key}
-                  onClick={() => setMethod(item.key as 'cash' | 'transfer' | 'qris')}
-                  className={`flex flex-col items-center gap-1 rounded-xl py-3 text-sm font-semibold transition ${
-                    method === item.key
-                      ? 'bg-amber-400 text-zinc-950 shadow-md shadow-amber-400/30'
-                      : 'bg-zinc-100 text-zinc-600 hover:bg-amber-50 hover:text-amber-900'
-                  }`}
-                >
-                  <span className="text-sm">{item.icon}</span>
-                  {item.label}
-                </button>
-              ))}
+            {/* Total */}
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-gray-600">Total Pembayaran</span>
+                <span className="text-lg font-semibold text-gray-900">Rp {fmt(totalToPay)}</span>
+              </div>
             </div>
-          </div>
 
-          {method === 'cash' && (
+            {/* Payment Methods — 2 rows of 3 columns (last col in row 2 is empty) */}
             <div>
-              <label className="mb-2 block text-sm font-semibold text-zinc-700">Amount Received</label>
+              <label className="mb-2 block text-xs font-semibold text-gray-700">Metode Pembayaran</label>
+              <div className="grid grid-cols-3 gap-2">
+                {METHODS.map((m) => {
+                  const active = method === m.key;
+                  return (
+                    <button
+                      key={m.key}
+                      onClick={() => setMethod(m.key)}
+                      className={`flex flex-col items-center gap-1.5 rounded-lg py-2.5 text-xs font-medium transition ${
+                        active
+                          ? 'bg-amber-400 text-gray-900 shadow-sm ring-2 ring-amber-400'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      {m.img ? (
+                        <img
+                          src={m.img}
+                          alt={m.label}
+                          className="h-6 w-auto max-w-[48px] rounded object-contain"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).style.display = 'none';
+                          }}
+                        />
+                      ) : (
+                        <span className="text-base leading-none">{m.icon}</span>
+                      )}
+                      <span>{m.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-              <div className="mb-3 flex flex-wrap gap-2">
-                {quickAmounts.map((amount) => (
+            {/* Cash */}
+            {method === 'cash' && (
+              <div>
+                <label className="mb-2 block text-xs font-semibold text-gray-700">Jumlah Diterima</label>
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {quickAmounts.map((amount) => (
+                    <button
+                      key={amount}
+                      onClick={() => setPayAmount(String(amount))}
+                      className={`rounded-md border px-2.5 py-1.5 text-xs font-medium transition ${
+                        payAmountNum === amount
+                          ? 'border-amber-400 bg-amber-50 text-amber-700'
+                          : 'border-gray-300 bg-white text-gray-600 hover:border-gray-400'
+                      }`}
+                    >
+                      Rp {fmt(amount)}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="number"
+                  value={payAmount}
+                  onChange={(e) => setPayAmount(e.target.value)}
+                  placeholder={`Min. Rp ${fmt(totalToPay)}`}
+                  className={`w-full rounded-lg border px-3 py-2 text-right text-sm font-medium text-gray-900 outline-none transition ${
+                    isShort
+                      ? 'border-red-300 bg-red-50'
+                      : 'border-gray-300 bg-white focus:border-amber-400 focus:ring-1 focus:ring-amber-400'
+                  }`}
+                />
+                {payAmountNum >= totalToPay && (
+                  <div className="mt-3 rounded-lg border border-green-200 bg-green-50 p-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-green-700">Kembalian</span>
+                      <span className="text-sm font-semibold text-green-800">Rp {fmt(change)}</span>
+                    </div>
+                  </div>
+                )}
+                {isShort && (
+                  <p className="mt-2 text-center text-xs text-red-500">
+                    Kurang Rp {fmt(totalToPay - payAmountNum)}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Transfer */}
+            {method === 'transfer' && (
+              <div className="rounded-lg border border-gray-300 bg-white p-3">
+                <div className="mb-1 text-xs font-semibold text-gray-900">Konfirmasi Transfer</div>
+                <p className="mb-3 text-xs leading-relaxed text-gray-600">
+                  Pastikan transfer <strong>Rp {fmt(totalToPay)}</strong> sudah diterima sebelum konfirmasi.
+                </p>
+                <input
+                  value={payNote}
+                  onChange={(e) => setPayNote(e.target.value)}
+                  placeholder="Referensi transfer (opsional)"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs text-gray-900 outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400"
+                />
+              </div>
+            )}
+
+            {/* QRIS */}
+            {method === 'qris' && (
+              <div className="rounded-lg border border-gray-300 bg-white p-3">
+                <div className="mb-1 text-xs font-semibold text-gray-900">Konfirmasi QRIS</div>
+                <p className="mb-3 text-xs leading-relaxed text-gray-600">
+                  Pastikan pembayaran QRIS <strong>Rp {fmt(totalToPay)}</strong> sudah berhasil.
+                </p>
+                <input
+                  value={payNote}
+                  onChange={(e) => setPayNote(e.target.value)}
+                  placeholder="Referensi QRIS (opsional)"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs text-gray-900 outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400"
+                />
+              </div>
+            )}
+
+            {/* Dana / GoPay */}
+            {isEwallet && (
+              <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+                <div
+                  className="px-4 py-3 text-white"
+                  style={{ backgroundColor: currentMethod?.color ?? '#555' }}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold">
+                      Bayar via {currentMethod?.label}
+                    </span>
+                    <span className="text-sm font-bold">Rp {fmt(totalToPay)}</span>
+                  </div>
+                  <p className="mt-1 text-xs opacity-80">
+                    Klik tombol di bawah untuk membuka aplikasi {currentMethod?.label}
+                  </p>
+                </div>
+
+                <div className="p-3 space-y-3">
                   <button
-                    key={amount}
-                    onClick={() => setPayAmount(String(amount))}
-                    className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
-                      payAmountNum === amount
-                        ? 'border-amber-400 bg-amber-400 text-zinc-950'
-                        : 'border-zinc-300 bg-white text-zinc-600 hover:border-amber-300 hover:bg-amber-50'
-                    }`}
+                    type="button"
+                    onClick={openEwallet}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg py-3 text-sm font-semibold text-white transition active:opacity-80"
+                    style={{ backgroundColor: currentMethod?.color ?? '#555' }}
                   >
-                    Rp {formatNumber(amount)}
+                    <ExternalLink className="h-4 w-4" />
+                    Buka Aplikasi {currentMethod?.label}
                   </button>
-                ))}
-              </div>
 
-              <input
-                type="number"
-                value={payAmount}
-                onChange={(e) => setPayAmount(e.target.value)}
-                placeholder={`Min. Rp ${formatNumber(totalToPay)}`}
-                className={`w-full rounded-2xl border px-4 py-3 text-right text-lg font-bold text-zinc-900 outline-none ${
-                  isShort ? 'border-red-400 bg-red-50' : 'border-amber-200 bg-amber-50/40 focus:border-amber-400'
-                }`}
-              />
+                  <input
+                    value={payNote}
+                    onChange={(e) => setPayNote(e.target.value)}
+                    placeholder={`ID transaksi ${currentMethod?.label} (opsional)`}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs text-gray-900 outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400"
+                  />
 
-              {payAmountNum >= totalToPay && (
-                <div className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-center">
-                  <div className="text-sm font-semibold text-emerald-700">Change</div>
-                  <div className="text-2xl font-black text-emerald-800">Rp {formatNumber(change)}</div>
+                  <p className="text-[11px] text-center text-gray-400">
+                    Setelah pelanggan membayar, klik "Konfirmasi Pembayaran" di bawah
+                  </p>
                 </div>
-              )}
-
-              {isShort && (
-                <div className="mt-2 text-center text-sm text-red-500">
-                  Short by Rp {formatNumber(totalToPay - payAmountNum)}
-                </div>
-              )}
-            </div>
-          )}
-
-          {method === 'transfer' && (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-              <div className="mb-1 text-sm font-semibold text-amber-900">Transfer Confirmation</div>
-              <p className="text-xs leading-5 text-amber-800">
-                Pastikan transfer sebesar <strong>Rp {formatNumber(totalToPay)}</strong> sudah diterima sebelum konfirmasi.
-              </p>
-              <input
-                value={payNote}
-                onChange={(e) => setPayNote(e.target.value)}
-                placeholder="No. referensi transfer (opsional)"
-                className="mt-3 w-full rounded-xl border border-amber-300 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none focus:border-amber-400"
-              />
-            </div>
-          )}
-
-          {method === 'qris' && (
-            <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 via-yellow-50 to-white p-4 text-center">
-              <div className="text-sm font-semibold text-amber-900">QRIS Confirmation</div>
-              <div className="mt-1 text-xs leading-5 text-amber-800">
-                Ensure QRIS payment of <strong>Rp {formatNumber(totalToPay)}</strong> has been successful before confirmation.
               </div>
-              <input
-                value={payNote}
-                onChange={(e) => setPayNote(e.target.value)}
-                placeholder="QRIS payment note (optional)"
-                className="mt-3 w-full rounded-xl border border-amber-300 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none focus:border-amber-400"
-              />
-            </div>
-          )}
+            )}
           </div>
 
+          {/* Confirm Button */}
           <div
-            className="sticky bottom-0 border-t border-amber-100 bg-white/95 px-6 pb-6 pt-4 backdrop-blur"
-            style={{ paddingBottom: 'calc(max(env(safe-area-inset-bottom), 0px) + 1rem)' }}
+            className="sticky bottom-0 border-t border-gray-200 bg-white px-5 py-3"
+            style={{ paddingBottom: 'calc(max(env(safe-area-inset-bottom), 0px) + 0.75rem)' }}
           >
             <button
               onClick={() => void handleConfirm()}
               disabled={isProcessing || isShort}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-amber-400 px-4 py-3.5 font-bold text-zinc-950 shadow-lg shadow-amber-400/30 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-amber-400 px-4 py-2.5 text-sm font-semibold text-gray-900 transition hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Send className="h-4 w-4" />
-              {isProcessing ? 'Processing...' : 'Confirm Payment'}
+              {isProcessing ? 'Memproses...' : 'Konfirmasi Pembayaran'}
             </button>
           </div>
         </div>

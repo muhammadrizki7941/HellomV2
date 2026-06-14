@@ -69,10 +69,6 @@ export const AuthLeftPanel = ({ brand, logoSrc, variant }: AuthLeftPanelProps) =
       </div>
 
       <div className="space-y-4">
-        <h1 className="text-3xl font-semibold leading-tight text-white sm:text-4xl" style={{ fontFamily: 'Inter, "Plus Jakarta Sans", "Geist", sans-serif' }}>
-          Muhammad Rizki.
-          <span className="block text-[#F6B400]">Your Creative Business Partner</span>
-        </h1>
         <p className="max-w-xl text-sm text-white/70 sm:text-base">
           Masuk atau daftar untuk mengakses dashboard, POS payment, produk digital, dan sistem bisnis yang dibangun dalam ekosistem Hellom.
         </p>

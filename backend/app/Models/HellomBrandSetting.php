@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Storage;
 
 class HellomBrandSetting extends Model
 {
@@ -49,7 +48,7 @@ class HellomBrandSetting extends Model
     public static function getSettings(): self
     {
         $settings = static::first();
-        
+
         if (!$settings) {
             $settings = static::create([
                 'app_name' => 'Hellom',
@@ -63,7 +62,7 @@ class HellomBrandSetting extends Model
                 'login_subtitle' => 'Masuk ke akun kamu dan lanjutkan kerja hari ini.',
                 'register_title' => 'Bikin akun baru',
                 'register_subtitle' => 'Gabung dan mulai kelola bisnis kamu bareng Hellom.',
-                'footer_text' => '© 2026 Hellom. All rights reserved.',
+                'footer_text' => 'Â© 2026 Hellom. All rights reserved.',
                 'meta_title' => 'Hellom',
             ]);
         }
@@ -71,18 +70,51 @@ class HellomBrandSetting extends Model
         return $settings;
     }
 
+    /**
+     * Base application URL without trailing slash, e.g. http://127.0.0.1:8000
+     */
+    protected function appBaseUrl(): string
+    {
+        return rtrim((string) config('app.url'), '/');
+    }
+
+    /**
+     * Build an absolute URL for a path stored on the 'public' disk
+     * (accessible via the public/storage symlink).
+     * Always returns an absolute URL based on APP_URL so it works correctly
+     * even when the frontend runs on a different origin/port (e.g. localhost:3000)
+     * than the backend (e.g. 127.0.0.1:8000).
+     */
+    protected function absoluteStorageUrl(string $path): string
+    {
+        return $this->appBaseUrl() . '/storage/' . ltrim($path, '/');
+    }
+
+    /**
+     * Build an absolute URL for a static file under public/, e.g. public/brand/logo.png
+     */
+    protected function absolutePublicUrl(string $relativePath): string
+    {
+        return $this->appBaseUrl() . '/' . ltrim($relativePath, '/');
+    }
+
     public function logoUrl(): ?string
     {
         // Priority 1: Database stored path (from upload)
         if (!empty($this->logo_path)) {
-            return Storage::disk('public')->url($this->logo_path);
+            return $this->absoluteStorageUrl($this->logo_path);
         }
-        
+
         // Priority 2: Static file in public/brand/logo.png
         if (file_exists(public_path('brand/logo.png'))) {
-            return '/brand/logo.png';
+            return $this->absolutePublicUrl('brand/logo.png');
         }
-        
+
+        // Priority 3: Static file in public/assets/hellom.png (fallback)
+        if (file_exists(public_path('assets/hellom.png'))) {
+            return $this->absolutePublicUrl('assets/hellom.png');
+        }
+
         return null;
     }
 
@@ -90,14 +122,14 @@ class HellomBrandSetting extends Model
     {
         // Priority 1: Database stored path (from upload)
         if (!empty($this->logo_dark_path)) {
-            return Storage::disk('public')->url($this->logo_dark_path);
+            return $this->absoluteStorageUrl($this->logo_dark_path);
         }
-        
+
         // Priority 2: Static file in public/brand/logo-dark.png
         if (file_exists(public_path('brand/logo-dark.png'))) {
-            return '/brand/logo-dark.png';
+            return $this->absolutePublicUrl('brand/logo-dark.png');
         }
-        
+
         // Fallback to logo
         return $this->logoUrl();
     }
@@ -106,17 +138,17 @@ class HellomBrandSetting extends Model
     {
         // Priority 1: Database stored path (from upload)
         if (!empty($this->favicon_path)) {
-            return Storage::disk('public')->url($this->favicon_path);
+            return $this->absoluteStorageUrl($this->favicon_path);
         }
 
         // Priority 2: Static file in public/brand/favicon.ico
         if (file_exists(public_path('brand/favicon.ico'))) {
-            return '/brand/favicon.ico';
+            return $this->absolutePublicUrl('brand/favicon.ico');
         }
-        
+
         // Priority 3: Static file in public/brand/favicon.png
         if (file_exists(public_path('brand/favicon.png'))) {
-            return '/brand/favicon.png';
+            return $this->absolutePublicUrl('brand/favicon.png');
         }
 
         return null;

@@ -1,25 +1,49 @@
 import { useEffect, useState } from 'react';
-import { 
-  Layout, ShoppingCart, ArrowRight, Lock, Users, 
-  TrendingUp, DollarSign, Smartphone, Store, Wallet, 
-  Plus, Bell, Clock, CreditCard, Tag, Sparkles
+import {
+  ShoppingCart, ArrowRight,
+  DollarSign, Users, Wallet,
+  Plus, Bell, Clock, CreditCard, Sparkles, Tag
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import SubscriptionModal from '@/components/SubscriptionModal';
 import TopUpModal from '@/components/TopUpModal';
 import OnboardingTips from '@/components/consumer/OnboardingTips';
-import { PROMOS } from '@/lib/mockData';
 import { cn } from '@/lib/utils';
-import { createWalletTopupSession, getAutoRenewPreview, getCatalogApps, getLandingBuilderStats, getPaymentGatewayStatus, getWalletOverview, getWalletTransactions } from '@/lib/hellomApi';
+import {
+  createWalletTopupSession,
+  getAutoRenewPreview,
+  getCatalogApps,
+  getConsumerNotifications,
+  getLandingBuilderStats,
+  getPaymentGatewayStatus,
+  getWalletOverview,
+  getWalletTransactions,
+} from '@/lib/hellomApi';
+
+type Announcement = {
+  id: number | string;
+  title?: string;
+  message?: string;
+  body?: string;
+  type?: string;
+};
+
+const txTypeLabel = (type: string) => {
+  const map: Record<string, string> = {
+    wallet_topup: 'Top Up Saldo',
+    subscription_debit: 'Pembayaran Langganan',
+    wallet_debit: 'Pembayaran',
+    wallet_credit: 'Kredit Saldo',
+    subscription_renewal: 'Perpanjangan Langganan',
+    refund: 'Refund',
+    manual_topup: 'Top Up Manual',
+  };
+  return map[type] || type.replace(/_/g, ' ');
+};
 
 export default function DashboardHome() {
-  const [stats, setStats] = useState({
-    visitors: 0,
-    sales: 0,
-    revenue: 0
-  });
-
-  const [walletBalance, setWalletBalance] = useState(500000);
+  const [stats, setStats] = useState({ visitors: 0, sales: 0, revenue: 0 });
+  const [walletBalance, setWalletBalance] = useState(0);
   const [walletPending, setWalletPending] = useState(0);
   const [walletError, setWalletError] = useState<string | null>(null);
   const [gatewayStatus, setGatewayStatus] = useState<{
@@ -28,25 +52,26 @@ export default function DashboardHome() {
     member_wallet_enabled: boolean;
     active_provider: 'xendit' | 'ipaymu';
   } | null>(null);
-  const [historyRows, setHistoryRows] = useState<Array<{ id: string; item: string; date: string; amount: number; status: string; nextBilling: string }>>([]);
-  const [autoRenewInfo, setAutoRenewInfo] = useState({
-    dueCount: 0,
-    minimumTopupRequired: 0,
-  });
+  const [historyRows, setHistoryRows] = useState<
+    Array<{ id: string; item: string; date: string; amount: number; status: string; direction: string }>
+  >([]);
+  const [autoRenewInfo, setAutoRenewInfo] = useState({ dueCount: 0, minimumTopupRequired: 0 });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isTopUpOpen, setIsTopUpOpen] = useState(false);
   const [selectedApp, setSelectedApp] = useState<{ name: string; icon: any; slug?: string } | null>(null);
   const [lockedApps, setLockedApps] = useState<Array<{ slug: string; name: string; price: number }>>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
 
   const loadWallet = async () => {
     try {
-      const [overview, preview, landingStats, transactions, catalog, gateway] = await Promise.all([
+      const [overview, preview, landingStats, transactions, catalog, gateway, notifs] = await Promise.all([
         getWalletOverview(),
         getAutoRenewPreview({ days: 30, include_overdue: true, limit: 50 }),
         getLandingBuilderStats(),
         getWalletTransactions({ limit: 10 }),
         getCatalogApps().catch(() => ({ items: [] as any[] })),
         getPaymentGatewayStatus().catch(() => null),
+        getConsumerNotifications().catch(() => null),
       ]);
 
       setWalletBalance(overview.wallet.available_balance || 0);
@@ -81,25 +106,36 @@ export default function DashboardHome() {
       setHistoryRows(
         items.slice(0, 8).map((item) => ({
           id: String(item.id),
-          item: String(item.type || 'wallet_transaction'),
+          item: txTypeLabel(String(item.type || 'transaksi')),
           date: String(item.created_at || '-').split('T')[0],
           amount: Number(item.amount || 0),
-          status: String(item.direction) === 'credit' ? 'Success' : 'Processed',
-          nextBilling: '-',
+          status: String(item.direction) === 'credit' ? 'Masuk' : 'Keluar',
+          direction: String(item.direction),
         }))
       );
+
       setLockedApps(
         (catalog.items || [])
           .filter((item: any) => !item.entitlement?.allowed)
           .map((item: any) => ({
             slug: String(item.app?.slug || ''),
-            name: String(item.app?.name || 'App'),
+            name: String(item.app?.name || 'Aplikasi'),
             price: Number(item.cta?.recommended_plan?.price || 0),
           }))
       );
+
+      // Load real announcements from backend
+      if (notifs) {
+        const raw = notifs as any;
+        const list = Array.isArray(raw)
+          ? raw
+          : (raw?.data || raw?.notifications || raw?.items || []);
+        setAnnouncements(list as Announcement[]);
+      }
+
       setWalletError(null);
     } catch (loadError) {
-      const message = loadError instanceof Error ? loadError.message : 'Gagal memuat wallet';
+      const message = loadError instanceof Error ? loadError.message : 'Gagal memuat data';
       setWalletError(message);
     }
   };
@@ -115,7 +151,7 @@ export default function DashboardHome() {
 
   const handleDeposit = () => {
     if (!gatewayStatus?.member_wallet_enabled) {
-      setWalletError('Fitur wallet/e-wallet sedang dimatikan oleh owner.');
+      setWalletError('Fitur wallet sedang dinonaktifkan oleh penyedia layanan.');
       return;
     }
     setIsTopUpOpen(true);
@@ -123,25 +159,19 @@ export default function DashboardHome() {
 
   const handleTopUp = async (payload: { amount: number; channel: string }) => {
     if (!gatewayStatus?.member_wallet_enabled) {
-      throw new Error('Fitur wallet/e-wallet sedang dimatikan oleh owner.');
+      throw new Error('Fitur wallet sedang tidak tersedia.');
     }
-
-    const providerLabel = gatewayStatus?.active_provider === 'ipaymu' ? 'iPaymu' : 'Xendit';
     if (!gatewayStatus?.is_ready) {
-      throw new Error(`Gateway ${providerLabel} belum siap. Minta owner atau super admin melengkapi kredensialnya terlebih dahulu.`);
+      throw new Error('Sistem pembayaran sedang dalam konfigurasi. Coba beberapa saat lagi.');
     }
 
-    const result = await createWalletTopupSession({
-      amount: payload.amount,
-      channel: payload.channel,
-    });
+    const result = await createWalletTopupSession({ amount: payload.amount, channel: payload.channel });
 
     if (!result.payment_url) {
-      throw new Error(`Link pembayaran ${providerLabel} tidak berhasil dibuat.`);
+      throw new Error('Halaman pembayaran tidak dapat dibuat. Coba lagi atau hubungi dukungan.');
     }
 
     window.open(result.payment_url, '_blank', 'noopener,noreferrer');
-
     await loadWallet();
 
     return {
@@ -155,156 +185,173 @@ export default function DashboardHome() {
   return (
     <div className="space-y-8">
       <OnboardingTips />
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+
+      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-900">Dashboard Organisasi</h1>
-          <p className="text-zinc-600">Overview performa bisnis dan status langganan Anda.</p>
+          <h1 className="text-2xl font-bold text-zinc-900">Dashboard</h1>
+          <p className="text-zinc-500">Ringkasan bisnis dan status langganan Anda.</p>
         </div>
         {gatewayStatus?.member_wallet_enabled && (
-        <div className="flex items-center gap-3">
-          <div className="bg-white px-4 py-2 rounded-lg border border-zinc-200 shadow-sm flex items-center gap-3">
-            <div className="p-1.5 bg-yellow-100 text-yellow-700 rounded-md">
-              <Wallet className="w-4 h-4" />
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 rounded-lg border border-zinc-200 bg-white px-4 py-2 shadow-sm">
+              <div className="rounded-md bg-yellow-100 p-1.5 text-yellow-700">
+                <Wallet className="h-4 w-4" />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-zinc-500">Saldo</p>
+                <p className="text-sm font-bold text-zinc-900">Rp {walletBalance.toLocaleString('id-ID')}</p>
+                {walletPending > 0 && (
+                  <p className="text-[11px] text-zinc-400">
+                    Pending: Rp {walletPending.toLocaleString('id-ID')}
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={handleDeposit}
+                className="ml-2 rounded-md bg-zinc-900 p-1.5 text-white transition-colors hover:bg-zinc-800"
+                title="Top Up Saldo"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
             </div>
-            <div>
-              <p className="text-xs text-zinc-500 font-medium">Wallet Balance</p>
-              <p className="text-sm font-bold text-zinc-900">Rp {walletBalance.toLocaleString('id-ID')}</p>
-              <p className="text-[11px] text-zinc-400">Pending: Rp {walletPending.toLocaleString('id-ID')}</p>
-            </div>
-            <button 
-              onClick={handleDeposit}
-              className="ml-2 p-1.5 bg-zinc-900 text-white rounded-md hover:bg-zinc-800 transition-colors"
-              title="Deposit Saldo"
-            >
-              <Plus className="w-4 h-4" />
-            </button>
           </div>
-        </div>
         )}
       </div>
 
-      {/* Promos & Alerts */}
+      {/* Error */}
       {walletError && (
-        <div className="p-3 rounded-lg bg-red-50 border border-red-100 text-sm text-red-600">
+        <div className="rounded-lg border border-red-100 bg-red-50 p-3 text-sm text-red-600">
           {walletError}
         </div>
       )}
-      {!gatewayStatus?.member_wallet_enabled && (
-        <div className="p-3 rounded-lg bg-amber-50 border border-amber-100 text-sm text-amber-800">
-          Owner sedang mematikan fitur wallet/e-wallet member. Checkout aplikasi berbayar tetap bisa lanjut lewat pembayaran langsung.
+
+      {/* Wallet disabled notice */}
+      {gatewayStatus !== null && !gatewayStatus.member_wallet_enabled && (
+        <div className="rounded-lg border border-amber-100 bg-amber-50 p-3 text-sm text-amber-800">
+          Pembayaran saldo digital sedang tidak tersedia. Anda tetap bisa mengaktifkan aplikasi melalui pembayaran langsung.
         </div>
       )}
 
-      {PROMOS.length > 0 && (
-        <div className="grid gap-4">
-          {PROMOS.map((promo) => (
-            <div 
-              key={promo.id} 
-              className={cn(
-                "p-4 rounded-xl border flex items-start gap-4",
-                promo.type === 'offer' 
-                  ? "bg-gradient-to-r from-purple-50 to-white border-purple-100" 
-                  : "bg-blue-50 border-blue-100"
-              )}
-            >
-              <div className={cn(
-                "p-2 rounded-lg shrink-0",
-                promo.type === 'offer' ? "bg-purple-100 text-purple-600" : "bg-blue-100 text-blue-600"
-              )}>
-                {promo.type === 'offer' ? <Tag className="w-5 h-5" /> : <Bell className="w-5 h-5" />}
+      {/* Announcements — only shown when API returns data */}
+      {announcements.length > 0 && (
+        <div className="grid gap-3">
+          {announcements.map((item) => {
+            const isOffer = item.type === 'offer' || item.type === 'promo';
+            return (
+              <div
+                key={item.id}
+                className={cn(
+                  'flex items-start gap-4 rounded-xl border p-4',
+                  isOffer
+                    ? 'border-purple-100 bg-gradient-to-r from-purple-50 to-white'
+                    : 'border-blue-100 bg-blue-50'
+                )}
+              >
+                <div
+                  className={cn(
+                    'shrink-0 rounded-lg p-2',
+                    isOffer ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'
+                  )}
+                >
+                  {isOffer ? <Tag className="h-5 w-5" /> : <Bell className="h-5 w-5" />}
+                </div>
+                <div>
+                  {item.title && (
+                    <h3
+                      className={cn(
+                        'text-sm font-bold',
+                        isOffer ? 'text-purple-900' : 'text-blue-900'
+                      )}
+                    >
+                      {item.title}
+                    </h3>
+                  )}
+                  {(item.message || item.body) && (
+                    <p
+                      className={cn(
+                        'mt-1 text-sm',
+                        isOffer ? 'text-purple-700' : 'text-blue-700'
+                      )}
+                    >
+                      {item.message || item.body}
+                    </p>
+                  )}
+                </div>
               </div>
-              <div>
-                <h3 className={cn("font-bold text-sm", promo.type === 'offer' ? "text-purple-900" : "text-blue-900")}>
-                  {promo.title}
-                </h3>
-                <p className={cn("text-sm mt-1", promo.type === 'offer' ? "text-purple-700" : "text-blue-700")}>
-                  {promo.description}
-                </p>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
+      {/* Locked app upsell */}
       {lockedApps.length > 0 && (
         <div className="rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 via-white to-orange-50 p-5 shadow-sm">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-amber-800">
-                <Sparkles className="w-3.5 h-3.5" />
-                Akses premium terkunci
+              <div className="inline-flex items-center gap-2 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-amber-800">
+                <Sparkles className="h-3.5 w-3.5" />
+                Akses terkunci
               </div>
-              <h3 className="mt-3 text-lg font-bold text-zinc-900">Buka aplikasi berbayar langsung dari dashboard</h3>
+              <h3 className="mt-3 text-lg font-bold text-zinc-900">
+                Buka {lockedApps[0].name}
+              </h3>
               <p className="mt-1 text-sm text-zinc-600">
-                {lockedApps[0].name} masih terkunci. Klik tombol aktivasi untuk melihat promo dan form pembayaran langsung.
+                Klik tombol aktivasi untuk melihat pilihan paket dan form pembayaran.
               </p>
             </div>
             <button
               onClick={() => handleOpenModal(lockedApps[0].name, ShoppingCart, lockedApps[0].slug)}
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-zinc-900 px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-zinc-800"
             >
-              Aktifkan {lockedApps[0].name} <ArrowRight className="w-4 h-4" />
+              Aktifkan <ArrowRight className="h-4 w-4" />
             </button>
           </div>
           {lockedApps[0].price > 0 && (
             <p className="mt-3 text-xs text-zinc-500">
-              Harga mulai dari Rp {lockedApps[0].price.toLocaleString('id-ID')} dan bisa mengikuti promo/konfirmasi owner.
+              Harga mulai dari Rp {lockedApps[0].price.toLocaleString('id-ID')}.
             </p>
           )}
         </div>
       )}
 
-      {/* Business Performance Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
-              <Users className="w-5 h-5" />
+      {/* Stats */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        {[
+          { label: 'Pengunjung Landing', value: stats.visitors.toLocaleString(), icon: Users, color: 'bg-blue-100 text-blue-600' },
+          { label: 'Transaksi Masuk', value: stats.sales.toLocaleString(), icon: ShoppingCart, color: 'bg-green-100 text-green-600' },
+          { label: 'Total Pendapatan', value: `Rp ${stats.revenue.toLocaleString('id-ID')}`, icon: DollarSign, color: 'bg-yellow-100 text-yellow-600' },
+        ].map((stat) => (
+          <div key={stat.label} className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+            <div className="mb-2 flex items-center gap-3">
+              <div className={`rounded-lg p-2 ${stat.color}`}>
+                <stat.icon className="h-5 w-5" />
+              </div>
+              <span className="text-sm font-medium text-zinc-500">{stat.label}</span>
             </div>
-            <span className="text-sm font-medium text-zinc-500">Total Visitors</span>
+            <p className="text-2xl font-bold text-zinc-900">{stat.value}</p>
           </div>
-          <p className="text-2xl font-bold text-zinc-900">{stats.visitors.toLocaleString()}</p>
-        </div>
-        
-        <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 bg-green-100 text-green-600 rounded-lg">
-              <ShoppingCart className="w-5 h-5" />
-            </div>
-            <span className="text-sm font-medium text-zinc-500">Total Sales</span>
-          </div>
-          <p className="text-2xl font-bold text-zinc-900">{stats.sales.toLocaleString()}</p>
-        </div>
-
-        <div className="bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 bg-yellow-100 text-yellow-600 rounded-lg">
-              <DollarSign className="w-5 h-5" />
-            </div>
-            <span className="text-sm font-medium text-zinc-500">Total Revenue</span>
-          </div>
-          <p className="text-2xl font-bold text-zinc-900">Rp {stats.revenue.toLocaleString('id-ID')}</p>
-        </div>
+        ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Purchase History */}
-        <div className="lg:col-span-2 bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-zinc-200 flex justify-between items-center">
-            <h3 className="font-bold text-zinc-900 flex items-center gap-2">
-              <Clock className="w-4 h-4" /> Riwayat Pembelian & Langganan
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+        {/* Transaction history */}
+        <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm lg:col-span-2">
+          <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-4">
+            <h3 className="flex items-center gap-2 font-bold text-zinc-900">
+              <Clock className="h-4 w-4" /> Riwayat Transaksi
             </h3>
-            <button className="text-sm text-zinc-500 hover:text-zinc-900">View All</button>
+            <Link to="/dashboard/payments" className="text-sm text-zinc-500 hover:text-zinc-900">
+              Lihat Semua
+            </Link>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="bg-zinc-50 border-b border-zinc-200">
+              <thead className="border-b border-zinc-200 bg-zinc-50">
                 <tr>
-                  <th className="px-6 py-3 font-medium text-zinc-500">Item</th>
-                  <th className="px-6 py-3 font-medium text-zinc-500">Date</th>
-                  <th className="px-6 py-3 font-medium text-zinc-500">Amount</th>
+                  <th className="px-6 py-3 font-medium text-zinc-500">Keterangan</th>
+                  <th className="px-6 py-3 font-medium text-zinc-500">Tanggal</th>
+                  <th className="px-6 py-3 font-medium text-zinc-500">Nominal</th>
                   <th className="px-6 py-3 font-medium text-zinc-500">Status</th>
-                  <th className="px-6 py-3 font-medium text-zinc-500">Next Billing</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100">
@@ -312,25 +359,30 @@ export default function DashboardHome() {
                   <tr key={item.id} className="hover:bg-zinc-50">
                     <td className="px-6 py-4 font-medium text-zinc-900">{item.item}</td>
                     <td className="px-6 py-4 text-zinc-500">{item.date}</td>
-                    <td className="px-6 py-4 font-mono text-zinc-600">
-                      {item.amount > 0 ? `Rp ${item.amount.toLocaleString('id-ID')}` : 'Free'}
+                    <td className={cn(
+                      'px-6 py-4 font-mono text-sm font-medium',
+                      item.direction === 'credit' ? 'text-emerald-700' : 'text-zinc-700'
+                    )}>
+                      {item.direction === 'credit' ? '+' : '-'}{' '}
+                      {item.amount > 0 ? `Rp ${item.amount.toLocaleString('id-ID')}` : '-'}
                     </td>
                     <td className="px-6 py-4">
                       <span className={cn(
-                        "px-2 py-1 rounded text-xs font-medium",
-                        item.status === 'Active' || item.status === 'Success' 
-                          ? "bg-green-100 text-green-700" 
-                          : "bg-zinc-100 text-zinc-600"
+                        'rounded px-2 py-1 text-xs font-medium',
+                        item.direction === 'credit'
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-zinc-100 text-zinc-600'
                       )}>
                         {item.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-zinc-500">{item.nextBilling}</td>
                   </tr>
                 ))}
                 {historyRows.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-6 py-10 text-center text-zinc-500">Belum ada riwayat transaksi.</td>
+                    <td colSpan={4} className="px-6 py-10 text-center text-zinc-500">
+                      Belum ada riwayat transaksi.
+                    </td>
                   </tr>
                 )}
               </tbody>
@@ -338,47 +390,53 @@ export default function DashboardHome() {
           </div>
         </div>
 
-        {/* Quick Actions / Wallet Info */}
+        {/* Auto-renewal card */}
         {gatewayStatus?.member_wallet_enabled && (
-        <div className="space-y-6">
-          <div className="bg-zinc-900 text-white p-6 rounded-xl shadow-lg relative overflow-hidden">
-            <div className="relative z-10">
-              <h3 className="font-bold text-lg mb-1">Auto-Renewal</h3>
-              <p className="text-zinc-400 text-sm mb-6">
-                Pastikan saldo wallet mencukupi untuk perpanjangan otomatis layanan Anda.
-              </p>
-              <div className="flex items-center justify-between bg-zinc-800 p-3 rounded-lg mb-4">
-                <span className="text-sm text-zinc-300">Status</span>
-                <span className="text-sm font-bold text-green-400 flex items-center gap-1">
-                  <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" /> Active
-                </span>
+          <div className="space-y-6">
+            <div className="relative overflow-hidden rounded-xl bg-zinc-900 p-6 text-white shadow-lg">
+              <div className="relative z-10">
+                <h3 className="text-lg font-bold">Perpanjangan Otomatis</h3>
+                <p className="mb-6 mt-1 text-sm text-zinc-400">
+                  Pastikan saldo mencukupi untuk perpanjangan layanan secara otomatis.
+                </p>
+                <div className="mb-4 flex items-center justify-between rounded-lg bg-zinc-800 p-3">
+                  <span className="text-sm text-zinc-300">Status</span>
+                  <span className="flex items-center gap-1 text-sm font-bold text-green-400">
+                    <div className="h-2 w-2 animate-pulse rounded-full bg-green-400" /> Aktif
+                  </span>
+                </div>
+                <div className="mb-4 space-y-1 text-xs text-zinc-300">
+                  <p>
+                    Langganan jatuh tempo:{' '}
+                    <strong className="text-white">{autoRenewInfo.dueCount}</strong>
+                  </p>
+                  <p>
+                    Top up minimum:{' '}
+                    <strong className="text-white">
+                      Rp {autoRenewInfo.minimumTopupRequired.toLocaleString('id-ID')}
+                    </strong>
+                  </p>
+                </div>
+                <button
+                  onClick={handleDeposit}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-yellow-400 py-3 font-bold text-black transition-colors hover:bg-yellow-500"
+                >
+                  <Plus className="h-4 w-4" /> Top Up Saldo
+                </button>
               </div>
-              <div className="text-xs text-zinc-300 mb-4 space-y-1">
-                <p>Due subscriptions: <strong>{autoRenewInfo.dueCount}</strong></p>
-                <p>Minimum topup required: <strong>Rp {autoRenewInfo.minimumTopupRequired.toLocaleString('id-ID')}</strong></p>
+              <div className="absolute -top-10 -right-10 h-32 w-32 rounded-full bg-yellow-400/10 blur-2xl" />
+              <div className="absolute bottom-0 right-0 p-4 opacity-10">
+                <CreditCard className="h-24 w-24" />
               </div>
-              <button 
-                onClick={handleDeposit}
-                className="w-full py-3 bg-yellow-400 text-black font-bold rounded-lg hover:bg-yellow-500 transition-colors flex items-center justify-center gap-2"
-              >
-                <Plus className="w-4 h-4" /> Top Up Wallet
-              </button>
-            </div>
-            {/* Decoration */}
-            <div className="absolute -top-10 -right-10 w-32 h-32 bg-yellow-400/10 rounded-full blur-2xl" />
-            <div className="absolute bottom-0 right-0 p-4 opacity-10">
-              <CreditCard className="w-24 h-24" />
             </div>
           </div>
-        </div>
         )}
       </div>
 
-      {/* Subscription Modal */}
       {selectedApp && (
-        <SubscriptionModal 
-          isOpen={isModalOpen} 
-          onClose={() => setIsModalOpen(false)} 
+        <SubscriptionModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
           appName={selectedApp.name}
           appSlug={selectedApp.slug}
           appIcon={selectedApp.icon}
@@ -388,9 +446,8 @@ export default function DashboardHome() {
         />
       )}
 
-      {/* Top Up Modal */}
       {gatewayStatus?.member_wallet_enabled && (
-        <TopUpModal 
+        <TopUpModal
           isOpen={isTopUpOpen}
           onClose={() => setIsTopUpOpen(false)}
           currentBalance={walletBalance}

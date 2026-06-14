@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { X, Plus, Minus, ShoppingCart, User, Star, Gift } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getPosTables, getPosProducts, getPosCategories, createPosOrder, searchPosMembers, createPosMember, calculateLoyaltyPoints, applyReward } from '@/lib/hellomApi';
@@ -100,12 +100,27 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
   const [newMemberName, setNewMemberName] = useState('');
   const [newMemberPhone, setNewMemberPhone] = useState('');
   const [newMemberEmail, setNewMemberEmail] = useState('');
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (isOpen) {
       loadData();
       resetForm();
+    } else {
+      // Cleanup when modal closes
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+      setMemberResults([]);
+      setIsSearching(false);
     }
+    
+    // Cleanup debounce timeout on unmount
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
   }, [isOpen]);
 
   const loadData = async () => {
@@ -128,6 +143,12 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
   };
 
   const resetForm = () => {
+    // Clear timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+      searchTimeoutRef.current = null;
+    }
+    
     setActiveTab('menu');
     setViewMode('grid');
     setSelectedTableId(null);
@@ -147,6 +168,7 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
     // Reset member states
     setMemberQuery('');
     setMemberResults([]);
+    setIsSearching(false);
     setSelectedMember(null);
     setAvailableRewards([]);
     setSelectedReward(null);
@@ -307,30 +329,78 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
     void refreshLoyalty();
   }, [selectedMember?.id, totalPrice]);
 
+  // Helper functions to safely get member fields (simplified - API field names are standard)
+  const getMemberName = (m: any) => m.name || 'Unknown';
+  const getMemberPhone = (m: any) => m.phone || '';
+  const getMemberEmail = (m: any) => m.email || '';
+  const getMemberPoints = (m: any) => m.total_points || 0;
+  const getMemberOrders = (m: any) => m.total_orders || 0;
+
   // Member search with debounce
-  const searchMember = async (query: string) => {
+  const searchMember = (query: string) => {
     setMemberQuery(query);
+    
+    // Clear previous timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
     if (query.length < 2) {
       setMemberResults([]);
       return;
     }
+
+    // Set loading state immediately for better UX
     setIsSearching(true);
-    try {
-      const res = await searchPosMembers(query);
-      setMemberResults(res.members || []);
-    } catch (err) {
-      console.error('Failed to search members:', err);
-      setMemberResults([]);
-    } finally {
-      setIsSearching(false);
-    }
+
+    // Debounce API call - wait 400ms before searching
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const res = await searchPosMembers({ q: query });
+        console.log('searchPosMembers FULL response:', JSON.stringify(res, null, 2)); // DEBUG FULL
+        
+        // API returns: { success: true, data: { members: [...] }, message: '...' }
+        let results: any[] = [];
+        
+        if (res.data && res.data.members && Array.isArray(res.data.members)) {
+          results = res.data.members;
+        } else if (Array.isArray(res)) {
+          results = res;
+        } else if (res.members && Array.isArray(res.members)) {
+          results = res.members;
+        }
+        
+        console.log('Found results:', results); // DEBUG
+        
+        // Sort results: exact match first, then partial matches
+        const sortedResults = results.sort((a: any, b: any) => {
+          const aName = a.name || '';
+          const bName = b.name || '';
+          const aExact = aName.toLowerCase() === query.toLowerCase() ? 0 : 1;
+          const bExact = bName.toLowerCase() === query.toLowerCase() ? 0 : 1;
+          if (aExact !== bExact) return aExact - bExact;
+          
+          // Then sort by total_orders (most frequent customers first)
+          return (b.total_orders || 0) - (a.total_orders || 0);
+        });
+
+        console.log('Sorted results:', sortedResults); // DEBUG
+        setMemberResults(sortedResults);
+      } catch (err) {
+        console.error('Failed to search members ERROR:', err); // DEBUG
+        setMemberResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 400);
   };
 
   // Select member and calculate loyalty
   const selectMember = async (member: any) => {
     setSelectedMember(member);
     setMemberQuery(member.name);
-    setMemberResults([]);
+    setMemberResults([]); // Clear results
+    setIsSearching(false); // Stop searching state
     await calculateLoyalty(member.id);
   };
 
@@ -427,9 +497,9 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-white md:items-center md:justify-center md:bg-white/20 md:backdrop-blur-md">
-      <div className="flex flex-col h-full w-full md:h-[90vh] md:w-[90vw] md:max-w-6xl md:rounded-2xl md:overflow-hidden bg-white">
+      <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-white md:h-[90vh] md:w-[90vw] md:max-w-6xl md:rounded-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-200 md:p-6">
+        <div className="flex flex-shrink-0 items-center justify-between border-b border-gray-200 p-4 md:p-6">
           <div className="flex items-center gap-4">
             <button
               onClick={() => setShowTableSelector(!showTableSelector)}
@@ -453,7 +523,7 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
 
         {/* Table Selector */}
         {showTableSelector && (
-          <div className="border-b border-gray-200 p-4">
+          <div className="flex-shrink-0 overflow-y-auto border-b border-gray-200 p-4 max-h-[70vh]">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900">Pilih Meja</h3>
               <button
@@ -535,7 +605,7 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
         )}
 
         {/* Mobile Tabs */}
-        <div className="flex md:hidden border-b border-gray-200">
+        <div className="flex flex-shrink-0 md:hidden border-b border-gray-200">
           <button
             onClick={() => setActiveTab('menu')}
             className={cn(
@@ -571,12 +641,12 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
           </div>
         )}
 
-        {/* Main Content */}
-        <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
+        {/* Main Content: Menu + Cart */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
           {/* Menu Panel */}
           <div className={cn(
-            'flex-1 overflow-y-auto',
-            activeTab === 'cart' ? 'hidden md:flex' : 'flex'
+            'flex-1 min-h-0 overflow-y-auto',
+            activeTab === 'cart' ? 'hidden md:block' : 'block'
           )}>
             <div className="p-4">
               {/* Categories */}
@@ -814,23 +884,23 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
 
           {/* Cart Panel */}
           <div className={cn(
-            'w-full md:w-80 lg:w-96 bg-gray-50 border-l border-gray-200',
+            'w-full md:w-80 lg:w-96 bg-gray-50 border-l border-gray-200 min-h-0 flex flex-col',
             activeTab === 'menu' ? 'hidden md:flex' : 'flex'
           )}>
-            <div className="flex flex-col h-full w-full">
-              {/* Cart Items */}
-              <div className="flex-1 overflow-y-auto p-4">
-                <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                  <ShoppingCart className="w-5 h-5" />
-                  Your Order Summary
-                </h4>
+            {/* Scrollable cart content: items + member + customer info + notes */}
+            <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
+              <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+                <ShoppingCart className="w-5 h-5" />
+                Your Order Summary
+              </h4>
 
-                {cart.length === 0 ? (
-                    <div className="text-center py-8">
-                      <div className="text-gray-400 mb-2">🛒</div>
-                      <p className="text-gray-500 text-sm">Keranjang masih kosong nih</p>
-                    </div>
-                ) : (
+              {cart.length === 0 ? (
+                <div className="text-center py-8">
+                  <div className="text-gray-400 mb-2">🛒</div>
+                  <p className="text-gray-500 text-sm">Keranjang masih kosong nih</p>
+                </div>
+              ) : (
+                <>
                   <div className="space-y-3">
                     {cart.map((item, index) => (
                       <div key={`${item.product.id}-${index}`} className="p-3 bg-white rounded-lg border border-gray-200">
@@ -850,21 +920,21 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
                               </div>
                             )}
                           </div>
-                           <div className="flex items-center gap-1 flex-shrink-0">
-                           <button
-                             onClick={() => updateQuantity(item.product.id, item.quantity - 1, item.addons)}
-                             className="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
-                           >
-                             <Minus className="w-4 h-4" />
-                           </button>
-                           <span className="w-8 text-center text-sm font-medium text-gray-900">{item.quantity}</span>
-                           <button
-                             onClick={() => updateQuantity(item.product.id, item.quantity + 1, item.addons)}
-                             className="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
-                           >
-                             <Plus className="w-4 h-4" />
-                           </button>
-                           </div>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <button
+                              onClick={() => updateQuantity(item.product.id, item.quantity - 1, item.addons)}
+                              className="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
+                            >
+                              <Minus className="w-4 h-4" />
+                            </button>
+                            <span className="w-8 text-center text-sm font-medium text-gray-900">{item.quantity}</span>
+                            <button
+                              onClick={() => updateQuantity(item.product.id, item.quantity + 1, item.addons)}
+                              className="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
+                            >
+                              <Plus className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
                         <div className="mt-2 flex justify-between items-center">
                           <span className="text-xs text-gray-500">
@@ -874,95 +944,121 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
                       </div>
                     ))}
                   </div>
-                )}
-              </div>
 
-              {/* Cart Footer */}
-              {cart.length > 0 && (
-                <div className="border-t border-gray-200 p-4 space-y-4">
-                  {/* Customer Information */}
-                  <div className="border border-gray-200 rounded-xl p-4 mb-4">
+                  {/* Member Information */}
+                  <div className="border border-gray-200 rounded-xl p-4 bg-gradient-to-br from-blue-50 to-transparent">
                     <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
-                      <User className="w-4 h-4" />
-                      Pelanggan (opsional)
+                      <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+                      Member
                     </h3>
 
                     {/* Search member */}
                     {!selectedMember ? (
                       <div className="relative">
-                        <input
-                          type="text"
-                          value={memberQuery}
-                          onChange={e => searchMember(e.target.value)}
-                          placeholder="Cari nama, nomor HP, atau email member..."
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-gray-900 text-sm focus:ring-2 focus:ring-amber-300 focus:border-amber-300"
-                        />
-                        {isSearching && (
-                          <div className="absolute right-3 top-2.5 text-gray-400 text-xs">
-                            Mencari...
-                          </div>
-                        )}
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={memberQuery}
+                            onChange={e => searchMember(e.target.value)}
+                            placeholder="Ketik nama atau nomor HP member..."
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-gray-900 text-sm focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
+                          />
+                          {isSearching && (
+                            <div className="absolute right-3 top-2.5">
+                              <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-300 border-t-blue-600"></div>
+                            </div>
+                          )}
+                          {memberQuery.length > 0 && !isSearching && (
+                            <button
+                              onClick={() => {
+                                setMemberQuery('');
+                                setMemberResults([]);
+                              }}
+                              className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
 
                         {/* Hasil pencarian */}
                         {memberResults.length > 0 && (
-                          <div className="absolute top-full left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 mt-1 overflow-hidden">
+                          <div className="absolute top-full left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-xl z-50 mt-1 overflow-hidden max-h-56 overflow-y-auto">
                             {memberResults.map(m => (
                               <button
                                 key={m.id}
                                 onClick={() => selectMember(m)}
-                                className="w-full text-left px-4 py-3 hover:bg-blue-50 transition border-b border-gray-100 last:border-0"
+                                className="w-full text-left px-3 py-2.5 hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-0 flex items-center gap-2.5"
                               >
-                                <div className="font-medium text-gray-900">
-                                  {m.name}
+                                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                  <span className="text-xs font-bold text-blue-600">
+                                    {getMemberName(m).charAt(0).toUpperCase()}
+                                  </span>
                                 </div>
-                                <div className="text-xs text-gray-500 flex gap-3 mt-0.5">
-                                  {m.phone && <span>📱 {m.phone}</span>}
-                                  <span>⭐ {m.total_points} poin</span>
-                                  <span>🛍️ {m.total_orders}x beli</span>
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-sm font-semibold text-gray-900 truncate leading-tight">
+                                    {getMemberName(m)}
+                                  </div>
+                                  <div className="text-xs text-gray-400 truncate leading-tight">
+                                    {getMemberPhone(m) || getMemberEmail(m) || '—'}
+                                  </div>
+                                </div>
+                                <div className="text-right flex-shrink-0">
+                                  <div className="text-xs font-bold text-blue-600">{getMemberPoints(m)} pts</div>
+                                  <div className="text-[10px] text-gray-400">{getMemberOrders(m)}x order</div>
                                 </div>
                               </button>
                             ))}
+                          </div>
+                        )}
 
-                            {/* Tombol daftar member baru */}
+                        {/* Tidak ada hasil */}
+                        {memberQuery.length >= 2 && memberResults.length === 0 && !isSearching && (
+                          <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-gray-700">
+                            <div className="font-medium mb-1">⚠️ Member tidak ditemukan</div>
+                            <div className="text-xs text-gray-600">
+                              Coba cek:
+                              <ul className="list-disc list-inside mt-1">
+                                <li>Pastikan spelling nama sudah benar</li>
+                                <li>Coba cari dengan nomor HP saja</li>
+                              </ul>
+                            </div>
                             <button
                               onClick={() => setShowRegisterMember(true)}
-                              className="w-full text-left px-4 py-3 bg-blue-50 text-blue-600 text-sm font-medium"
+                              className="mt-2 text-blue-600 text-xs font-semibold hover:underline"
                             >
                               + Daftarkan "{memberQuery}" sebagai member baru
                             </button>
                           </div>
                         )}
 
-                        {/* Tidak ada hasil */}
-                        {memberQuery.length >= 2 && memberResults.length === 0 && !isSearching && (
-                          <div className="mt-2 text-sm text-gray-500">
-                            Member tidak ditemukan.{' '}
-                            <button
-                              onClick={() => setShowRegisterMember(true)}
-                              className="text-blue-600 underline"
-                            >
-                              Daftarkan sebagai member baru?
-                            </button>
+                        {/* Hint ketika belum ada input */}
+                        {memberQuery.length === 0 && memberResults.length === 0 && (
+                          <div className="mt-2 text-xs text-gray-500 p-2 bg-gray-50 rounded">
+                            💡 Mulai ketik untuk mencari member atau buat member baru
                           </div>
                         )}
                       </div>
                     ) : (
                       /* Member terpilih */
-                      <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="font-semibold text-gray-900 flex items-center gap-2">
-                              <User className="w-4 h-4" />
-                              {selectedMember.name}
+                      <div className="bg-blue-100 border-2 border-blue-400 rounded-lg p-3">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="font-bold text-gray-900 flex items-center gap-2">
+                              <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                              {getMemberName(selectedMember)}
                             </div>
-                            <div className="text-xs text-gray-500 mt-0.5 flex gap-3">
-                              {selectedMember.phone && (
-                                <span>📱 {selectedMember.phone}</span>
+                            <div className="text-xs text-gray-600 mt-1.5 space-y-0.5">
+                              {getMemberPhone(selectedMember) && (
+                                <div>📱 {getMemberPhone(selectedMember)}</div>
                               )}
-                              <span className="text-blue-600 font-medium">
-                                ⭐ {selectedMember.total_points} poin
-                              </span>
-                              <span>🛍️ {selectedMember.total_orders}x beli</span>
+                              {getMemberEmail(selectedMember) && (
+                                <div>✉️ {getMemberEmail(selectedMember)}</div>
+                              )}
+                            </div>
+                            <div className="flex gap-3 mt-2 text-xs font-semibold">
+                              <div className="text-blue-600">⭐ {getMemberPoints(selectedMember)} poin</div>
+                              <div className="text-gray-600">🛍️ {getMemberOrders(selectedMember)}x transaksi</div>
                             </div>
                           </div>
                           <button
@@ -974,9 +1070,9 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
                               setDiscountAmount(0);
                               setPointsToEarn(0);
                             }}
-                            className="text-gray-400 hover:text-red-500 text-sm px-2 py-1 rounded"
+                            className="text-gray-400 hover:text-red-500 text-lg px-2 py-1 rounded transition"
                           >
-                            ✕ Ganti
+                            ✕
                           </button>
                         </div>
 
@@ -1029,32 +1125,9 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
                     )}
                   </div>
 
-                  {/* Ringkasan harga dengan diskon */}
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold text-gray-900">Total Bayar</span>
-                    <div className="text-right">
-                      {selectedReward && discountAmount > 0 ? (
-                        <div className="space-y-1">
-                          <div className="text-sm text-gray-500 line-through">
-                            Rp {totalPrice.toLocaleString('id-ID')}
-                          </div>
-                          <div className="font-bold text-gray-900 text-lg">
-                            Rp {finalAmount.toLocaleString('id-ID')}
-                          </div>
-                          <div className="text-xs text-green-600">
-                            Hemat Rp {discountAmount.toLocaleString('id-ID')}
-                          </div>
-                        </div>
-                      ) : (
-                        <span className="font-bold text-gray-900 text-lg">
-                          Rp {totalPrice.toLocaleString('id-ID')}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Customer Information */}
-                  <div className="space-y-3">
+                  {/* Customer Information - untuk non-member */}
+                  <div className="space-y-3 border-t border-gray-200 pt-4 mt-4">
+                    <div className="text-xs text-gray-500 mb-2">👤 Data Pelanggan (jika bukan member)</div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Nama Pelanggan <span className="text-gray-400">(opsional)</span>
@@ -1089,22 +1162,56 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
                     className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 text-sm focus:ring-2 focus:ring-amber-300 focus:border-amber-300 resize-none"
                   />
 
-                  <button
-                    onClick={handleCreateOrder}
-                    disabled={loading}
-                    className="w-full bg-[#111111] text-white py-3 px-4 rounded-lg font-medium hover:bg-[#2a241d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-base"
-                  >
-                    {loading ? 'Creating order...' : `Create Order • Rp ${totalPrice.toLocaleString('id-ID')}`}
-                  </button>
-                </div>
+                  {/* Spacer so last field isn't flush against sticky footer */}
+                  <div className="h-1" />
+                </>
               )}
             </div>
+
+            {/* Sticky footer: Total + Create Order button (always visible) */}
+            {cart.length > 0 && (
+              <div
+                className="flex-shrink-0 sticky bottom-0 border-t border-gray-200 bg-gray-50 p-4 space-y-3"
+                style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
+              >
+                <div className="flex justify-between items-center">
+                  <span className="font-semibold text-gray-900">Total Bayar</span>
+                  <div className="text-right">
+                    {selectedReward && discountAmount > 0 ? (
+                      <div className="space-y-1">
+                        <div className="text-sm text-gray-500 line-through">
+                          Rp {totalPrice.toLocaleString('id-ID')}
+                        </div>
+                        <div className="font-bold text-gray-900 text-lg">
+                          Rp {finalAmount.toLocaleString('id-ID')}
+                        </div>
+                        <div className="text-xs text-green-600">
+                          Hemat Rp {discountAmount.toLocaleString('id-ID')}
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="font-bold text-gray-900 text-lg">
+                        Rp {totalPrice.toLocaleString('id-ID')}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleCreateOrder}
+                  disabled={loading}
+                  className="w-full bg-[#111111] text-white py-3 px-4 rounded-lg font-medium hover:bg-[#2a241d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-base"
+                >
+                  {loading ? 'Creating order...' : `Create Order • Rp ${totalPrice.toLocaleString('id-ID')}`}
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Error Message */}
         {error && (
-          <div className="border-t border-gray-200 p-4 bg-red-50">
+          <div className="flex-shrink-0 border-t border-gray-200 p-4 bg-red-50">
             <p className="text-red-800 text-sm">{error}</p>
           </div>
         )}
@@ -1112,8 +1219,8 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
         {/* Add-on Selection Modal */}
         {showAddonModal && selectedProductForAddon && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/20 backdrop-blur-md">
-            <div className="bg-white rounded-xl max-w-md w-full mx-4 max-h-[90vh] overflow-hidden">
-              <div className="p-4 border-b border-gray-200">
+            <div className="bg-white rounded-xl max-w-md w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+              <div className="flex-shrink-0 p-4 border-b border-gray-200">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
                     {selectedProductForAddon.image_path ? (
@@ -1136,7 +1243,7 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-4 max-h-96">
+              <div className="flex-1 min-h-0 overflow-y-auto p-4">
                 {selectedProductForAddon.options.filter(opt => opt.is_active).map(option => (
                   <div key={option.id} className="mb-4">
                     <h4 className="font-medium text-gray-900 text-sm mb-2">
@@ -1192,7 +1299,7 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
                 ))}
               </div>
 
-              <div className="border-t border-gray-200 p-4">
+              <div className="flex-shrink-0 border-t border-gray-200 p-4">
                 <div className="flex gap-3">
                   <button
                     onClick={() => {

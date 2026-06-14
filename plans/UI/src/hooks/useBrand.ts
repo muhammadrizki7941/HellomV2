@@ -191,7 +191,15 @@ export async function fetchBrand(force = false): Promise<BrandSettings> {
       applyFavicon(brand);
       return brand;
     })
-    .catch(() => {
+    .catch((error) => {
+      // If we have a cached brand, use it instead of fallback
+      // Only return fallback if there's no cache at all
+      if (brandCache) {
+        console.warn('Brand fetch failed, using cached version:', error);
+        return brandCache;
+      }
+      
+      console.warn('Brand fetch failed and no cache available:', error);
       const fallback = normalizeBrand();
       brandCache = fallback;
       applyBrandVariables(fallback);

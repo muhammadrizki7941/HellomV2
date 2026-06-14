@@ -49,38 +49,39 @@ function CustomersPanel() {
 
       <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-zinc-100 text-sm">
+          <table className="w-full divide-y divide-zinc-100 text-sm">
             <thead className="bg-zinc-50 text-left text-xs font-bold uppercase tracking-wider text-zinc-500">
               <tr>
-                <th className="px-4 py-3">Waktu</th>
-                <th className="px-4 py-3">Nama</th>
-                <th className="px-4 py-3">Nomor HP</th>
-                <th className="px-4 py-3">Email</th>
-                <th className="px-4 py-3">Form</th>
-                <th className="px-4 py-3">Data Tambahan</th>
+                <th className="px-3 md:px-4 py-3 whitespace-nowrap">Waktu</th>
+                <th className="px-3 md:px-4 py-3 whitespace-nowrap">Nama</th>
+                <th className="px-3 md:px-4 py-3 whitespace-nowrap hidden sm:table-cell">Nomor HP</th>
+                <th className="px-3 md:px-4 py-3 whitespace-nowrap hidden md:table-cell">Email</th>
+                <th className="px-3 md:px-4 py-3 whitespace-nowrap hidden lg:table-cell">Form</th>
+                <th className="px-3 md:px-4 py-3 whitespace-nowrap hidden xl:table-cell">Data Tambahan</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100">
               {items.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-zinc-500">
+                  <td colSpan={6} className="px-3 md:px-4 py-10 text-center text-zinc-500">
                     {loading ? 'Memuat data...' : 'Belum ada data pelanggan landingpage.'}
                   </td>
                 </tr>
               ) : items.map((item) => {
                 const fields = item.fields && typeof item.fields === 'object' ? item.fields as Record<string, unknown> : {};
                 return (
-                  <tr key={item.id} className="align-top">
-                    <td className="whitespace-nowrap px-4 py-3 text-zinc-500">{item.created_at ? new Date(String(item.created_at)).toLocaleString('id-ID') : '-'}</td>
-                    <td className="px-4 py-3 font-semibold text-zinc-900">{item.name || fields.name || fields.nama || '-'}</td>
-                    <td className="px-4 py-3 text-zinc-700">{item.phone || fields.phone || fields.nomor_hp || '-'}</td>
-                    <td className="px-4 py-3 text-zinc-700">{item.email || fields.email || '-'}</td>
-                    <td className="px-4 py-3 text-zinc-700">{item.form_title || item.landing_page?.title || '-'}</td>
-                    <td className="px-4 py-3 text-zinc-600">
+                  <tr key={item.id} className="align-top hover:bg-zinc-50">
+                    <td className="whitespace-nowrap px-3 md:px-4 py-3 text-xs md:text-sm text-zinc-500">{item.created_at ? new Date(String(item.created_at)).toLocaleString('id-ID') : '-'}</td>
+                    <td className="px-3 md:px-4 py-3 text-xs md:text-sm font-semibold text-zinc-900">{item.name || fields.name || fields.nama || '-'}</td>
+                    <td className="px-3 md:px-4 py-3 text-xs md:text-sm text-zinc-700 hidden sm:table-cell">{item.phone || fields.phone || fields.nomor_hp || '-'}</td>
+                    <td className="px-3 md:px-4 py-3 text-xs md:text-sm text-zinc-700 hidden md:table-cell">{item.email || fields.email || '-'}</td>
+                    <td className="px-3 md:px-4 py-3 text-xs md:text-sm text-zinc-700 hidden lg:table-cell">{item.form_title || item.landing_page?.title || '-'}</td>
+                    <td className="px-3 md:px-4 py-3 text-xs md:text-sm text-zinc-600 hidden xl:table-cell">
                       <div className="max-w-md space-y-1">
-                        {Object.entries(fields).map(([key, value]) => (
-                          <div key={key}><span className="font-semibold">{key}:</span> {String(value)}</div>
+                        {Object.entries(fields).slice(0, 2).map(([key, value]) => (
+                          <div key={key}><span className="font-semibold">{key}:</span> {String(value).slice(0, 50)}</div>
                         ))}
+                        {Object.keys(fields).length > 2 && <div className="text-xs text-zinc-400">+{Object.keys(fields).length - 2} more</div>}
                       </div>
                     </td>
                   </tr>

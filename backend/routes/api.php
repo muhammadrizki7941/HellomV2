@@ -64,6 +64,8 @@ Route::prefix('v1/hellom')->name('api.v1.hellom.')->group(function () {
     Route::get('/public/products/categories', [PublicProductController::class, 'categories'])->name('public.products.categories');
     Route::get('/public/products/{slug}', [PublicProductController::class, 'show'])->name('public.products.show');
     Route::get('/pos/public/payment-methods/{tenantSlug}', [PosPaymentSettingController::class, 'publicSettings'])->name('pos.public.payment-methods');
+    Route::post('/pos/public/members/register', [PosMemberController::class, 'publicRegister'])->name('pos.public.members.register');
+    Route::get('/pos/public/members/lookup', [PosMemberController::class, 'publicLookup'])->name('pos.public.members.lookup');
     Route::post('/webhooks/xendit', [XenditWebhookController::class, 'handle'])->name('webhooks.xendit');
     Route::post('/webhooks/ipaymu', [IpaymuWebhookController::class, 'handle'])->name('webhooks.ipaymu');
     Route::post('/webhooks/doku', [DokuWebhookController::class, 'handle'])->name('webhooks.doku');

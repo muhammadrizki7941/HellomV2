@@ -98,7 +98,7 @@ export default function NotificationBell() {
       {isOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-          <div className="absolute right-0 top-12 z-50 w-96 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-xl">
+          <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[calc(100vw-2rem)] max-w-md md:w-96 md:fixed md:left-auto md:top-12 md:-translate-x-0 md:-translate-y-0 md:right-0 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-xl md:absolute">
             <div className="border-b border-zinc-100 p-4">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <h3 className="flex items-center gap-2 font-semibold text-zinc-900">

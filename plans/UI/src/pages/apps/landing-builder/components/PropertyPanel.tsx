@@ -31,8 +31,8 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
   }
 
   return (
-    <div className="p-6 pb-20 md:pb-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-4 md:p-6">
+      <div className="flex items-center justify-between mb-4 md:mb-6">
         <h3 className="text-sm font-bold text-zinc-900 uppercase tracking-wider">Edit Block</h3>
         <span className="text-xs px-2 py-1 bg-zinc-100 rounded text-zinc-500 font-mono">{selectedBlock.type}</span>
       </div>

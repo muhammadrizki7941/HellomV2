@@ -42,6 +42,16 @@ export default function PosOrders() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [currentPaymentOrder, setCurrentPaymentOrder] = useState<any>(null);
   const [listResetAt, setListResetAt] = useState(() => ensurePosOrderListResetAt());
+  const [showInfoBoxes, setShowInfoBoxes] = useState(true);
+
+  useEffect(() => {
+    // Auto-hide info boxes setelah 5 detik
+    const timer = setTimeout(() => {
+      setShowInfoBoxes(false);
+    }, 5000);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     void loadOrders();
@@ -224,8 +234,8 @@ export default function PosOrders() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
+    <div className="min-h-screen bg-gray-50 p-2 sm:p-4 lg:p-6">
+      <div className="mx-auto max-w-7xl space-y-4 sm:space-y-6">
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Order List</h1>
@@ -267,16 +277,18 @@ export default function PosOrders() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
-          <div className="flex items-start gap-2">
-            <Info className="mt-0.5 h-4 w-4 flex-none" />
-            <p>
-              Reset list hanya membersihkan tampilan order di frontend. Data order tetap tersimpan dan tetap bisa dipakai untuk laporan. Reset otomatis berjalan setiap hari pukul 06.00, dan reset terakhir tercatat pada {resetTimeLabel}.
-            </p>
+        {showInfoBoxes && (
+          <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+            <div className="flex items-start gap-2">
+              <Info className="mt-0.5 h-4 w-4 flex-none" />
+              <p>
+                Reset list hanya membersihkan tampilan order di frontend. Data order tetap tersimpan dan tetap bisa dipakai untuk laporan. Reset otomatis berjalan setiap hari pukul 06.00, dan reset terakhir tercatat pada {resetTimeLabel}.
+              </p>
+            </div>
           </div>
-        </div>
+        )}
 
-        {unfinishedOrdersCount > 0 && (
+        {showInfoBoxes && unfinishedOrdersCount > 0 && (
           <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 animate-pulse">
             <div className="mt-0.5 text-amber-600">
               <Clock className="h-5 w-5" />
@@ -337,121 +349,119 @@ export default function PosOrders() {
         )}
 
         <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+          {/* Header */}
+          <div className="border-b border-gray-100 bg-gray-50 px-4 py-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+              Daftar Pesanan
+            </span>
+          </div>
+
           {loading && (
             <div className="p-8 text-center">
-              <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-b-2 border-amber-400"></div>
+              <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-b-2 border-amber-400" />
               <p className="text-gray-600">Memuat pesanan...</p>
             </div>
           )}
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="hidden px-2 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500 md:px-4 md:py-3">
-                    Order ID
-                  </th>
-                  <th className="px-2 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500 md:px-4 md:py-3">
-                    Pelanggan
-                  </th>
-                  <th className="hidden px-2 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500 sm:table-cell md:px-4 md:py-3">
-                    Meja
-                  </th>
-                  <th className="hidden px-2 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500 md:table-cell md:px-4 md:py-3">
-                    Items
-                  </th>
-                  <th className="px-2 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500 md:px-4 md:py-3">
-                    Total
-                  </th>
-                  <th className="px-2 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500 md:px-4 md:py-3">
-                    Status
-                  </th>
-                  <th className="hidden px-2 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500 lg:table-cell md:px-4 md:py-3">
-                    Waktu
-                  </th>
-                  <th className="px-2 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500 md:px-4 md:py-3">
-                    Aksi
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {filteredOrders.map((order) => (
-                  <tr key={order.id} className={cn('hover:bg-gray-50', getRowBackgroundColor(order.status))}>
-                    <td className="hidden whitespace-nowrap px-2 py-3 text-sm font-medium text-gray-900 md:px-4 md:py-4">
-                      <div className="font-mono text-sm">#{order.order_number}</div>
-                      <div className="text-xs text-gray-500 sm:hidden">
-                        {order.table_label || order.service_type}
-                      </div>
-                    </td>
-                    <td className="whitespace-nowrap px-2 py-3 text-xs text-gray-900 md:px-4 md:py-4 md:text-sm">
-                      {order.customer_name || 'Walk-in'}
-                    </td>
-                    <td className="hidden whitespace-nowrap px-2 py-3 text-sm text-gray-700 sm:table-cell md:px-4 md:py-4">
+
+          <div className="divide-y divide-gray-100">
+            {filteredOrders.map((order) => (
+              <div
+                key={order.id}
+                className={cn(
+                  'px-4 py-3 transition-colors hover:bg-gray-50/60',
+                  getRowBackgroundColor(order.status)
+                )}
+              >
+                {/* ── Row 1: name + total ── */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="shrink-0 font-mono text-[10px] text-gray-400">
+                        #{order.order_number}
+                      </span>
+                      <span className="break-words text-sm font-semibold text-gray-900">
+                        {order.customer_name || 'Walk-in'}
+                      </span>
+                    </div>
+                    {/* Meja · items · waktu */}
+                    <p className="mt-0.5 truncate text-[11px] text-gray-500">
                       {order.table_label || order.service_type}
-                    </td>
-                    <td className="hidden whitespace-nowrap px-2 py-3 text-sm text-gray-700 md:table-cell md:px-4 md:py-4">
+                      {' · '}
                       {order.items_count} menu
-                    </td>
-                    <td className="whitespace-nowrap px-2 py-3 text-sm font-semibold text-gray-900 md:px-4 md:py-4">
-                      Rp {order.total_amount.toLocaleString('id-ID')}
-                    </td>
-                    <td className="whitespace-nowrap px-2 py-3 md:px-4 md:py-4">
-                      <div className="flex flex-col gap-1">
-                        <span className={cn('inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium', getStatusColor(order.status))}>
-                          {getStatusIcon(order.status)}
-                          <span className="ml-1">{getStatusText(order.status)}</span>
-                        </span>
-                        <PaymentBadge method={order.payment_method} status={order.payment_status} />
-                      </div>
-                    </td>
-                    <td className="hidden whitespace-nowrap px-2 py-3 text-sm text-gray-500 lg:table-cell md:px-4 md:py-4">
+                      {' · '}
                       {new Date(order.created_at).toLocaleString('id-ID', {
-                        month: 'short',
                         day: 'numeric',
+                        month: 'short',
                         hour: '2-digit',
                         minute: '2-digit',
                       })}
-                    </td>
-                    <td className="whitespace-nowrap px-2 py-3 text-sm text-gray-500 md:px-4 md:py-4">
-                      <div className="flex items-center gap-1">
-                        {order.payment_status !== 'paid' && (
-                          <button
-                            onClick={() => {
-                              setCurrentPaymentOrder(order);
-                              setShowPaymentModal(true);
-                            }}
-                            className="flex items-center gap-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm rounded-lg font-semibold transition"
-                          >
-                            💳 Bayar
-                          </button>
-                        )}
-                        <button
-                          onClick={() => {
-                            setReceiptOrderId(order.id);
-                            setShowReceiptModal(true);
-                          }}
-                          className="flex h-7 w-12 items-center justify-center rounded-lg bg-gray-100 text-xs text-gray-700 transition hover:bg-gray-200"
-                          title="Cetak Kwitansi"
-                        >
-                          Print
-                        </button>
-                        <select
-                          value={order.status}
-                          onChange={(e) => void handleStatusUpdate(order.id, e.target.value)}
-                          className="rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-900 focus:border-amber-300 focus:ring-2 focus:ring-amber-300"
-                        >
-                          <option value="new">New Order</option>
-                          <option value="accepted">Accept Order</option>
-                          <option value="preparing">Start Processing</option>
-                          <option value="prepared">Mark Ready</option>
-                          <option value="completed">Complete</option>
-                          <option value="cancelled">Cancel</option>
-                        </select>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </p>
+                  </div>
+                  {/* Total — top-right */}
+                  <span className="shrink-0 text-xs font-semibold text-gray-700">
+                    Rp {(order.final_amount ?? order.total_amount).toLocaleString('id-ID')}
+                  </span>
+                </div>
+
+                {/* ── Row 2: status badges ── */}
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                  <span
+                    className={cn(
+                      'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium',
+                      getStatusColor(order.status)
+                    )}
+                  >
+                    {getStatusIcon(order.status)}
+                    {getStatusText(order.status)}
+                  </span>
+                  <PaymentBadge method={order.payment_method} status={order.payment_status} />
+                </div>
+
+                {/* ── Row 3: action bar ── */}
+                <div className="mt-2.5 flex items-center gap-2 border-t border-gray-100 pt-2.5">
+                  {/* Bayar — kiri, hanya kalau belum bayar */}
+                  {order.payment_status !== 'paid' ? (
+                    <button
+                      onClick={() => {
+                        setCurrentPaymentOrder(order);
+                        setShowPaymentModal(true);
+                      }}
+                      className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-green-700"
+                    >
+                      💳 Bayar
+                    </button>
+                  ) : (
+                    <div className="flex-1" />
+                  )}
+
+                  {/* Print + Status — kanan */}
+                  <div className="ml-auto flex items-center gap-1.5">
+                    <button
+                      onClick={() => {
+                        setReceiptOrderId(order.id);
+                        setShowReceiptModal(true);
+                      }}
+                      title="Cetak kwitansi"
+                      className="flex h-7 w-7 items-center justify-center rounded-lg bg-gray-100 text-sm transition hover:bg-gray-200"
+                    >
+                      🖨️
+                    </button>
+                    <select
+                      value={order.status}
+                      onChange={(e) => void handleStatusUpdate(order.id, e.target.value)}
+                      className="rounded-lg border border-gray-200 bg-white py-1 pl-2 pr-6 text-xs text-gray-900 focus:border-amber-300 focus:ring-1 focus:ring-amber-300"
+                    >
+                      <option value="new">New</option>
+                      <option value="accepted">Accept</option>
+                      <option value="preparing">Proses</option>
+                      <option value="prepared">Siap</option>
+                      <option value="completed">Selesai</option>
+                      <option value="cancelled">Batal</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
