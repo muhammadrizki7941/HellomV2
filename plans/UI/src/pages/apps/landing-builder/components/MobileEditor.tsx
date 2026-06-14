@@ -65,7 +65,7 @@ export const MobileEditor: React.FC<MobileEditorProps> = ({
   const selectedBlock = blocks.find(b => b.id === selectedBlockId);
 
   return (
-    <div className="flex flex-col h-full bg-zinc-100 relative">
+    <div className="flex flex-col h-full bg-zinc-100 relative overflow-hidden">
       {/* Mobile Header */}
       <header className="h-14 bg-white border-b border-zinc-200 flex items-center justify-between px-4 shrink-0 z-20">
         <div className="flex items-center gap-2">

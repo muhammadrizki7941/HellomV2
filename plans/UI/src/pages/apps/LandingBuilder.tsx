@@ -143,15 +143,19 @@ export default function LandingBuilder() {
       </div>
 
       {/* Content */}
-      <div className="min-h-[600px]">
-        {activeTab === 'overview' ? (
-          <Overview onEdit={() => setActiveTab('editor')} />
-        ) : activeTab === 'editor' ? (
+      {activeTab === 'editor' ? (
+        <div className="-mx-4 md:mx-0 overflow-hidden" style={{ height: 'calc(100dvh - 8rem)' }}>
           <Editor />
-        ) : (
-          <CustomersPanel />
-        )}
-      </div>
+        </div>
+      ) : (
+        <div className="min-h-[600px]">
+          {activeTab === 'overview' ? (
+            <Overview onEdit={() => setActiveTab('editor')} />
+          ) : (
+            <CustomersPanel />
+          )}
+        </div>
+      )}
     </div>
   );
 }

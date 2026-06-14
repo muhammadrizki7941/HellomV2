@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   ShoppingCart, ArrowRight,
   DollarSign, Users, Wallet,
-  Plus, Bell, Clock, CreditCard, Sparkles, Tag
+  Plus, Clock, CreditCard, Sparkles,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import SubscriptionModal from '@/components/SubscriptionModal';
@@ -13,20 +13,11 @@ import {
   createWalletTopupSession,
   getAutoRenewPreview,
   getCatalogApps,
-  getConsumerNotifications,
   getLandingBuilderStats,
   getPaymentGatewayStatus,
   getWalletOverview,
   getWalletTransactions,
 } from '@/lib/hellomApi';
-
-type Announcement = {
-  id: number | string;
-  title?: string;
-  message?: string;
-  body?: string;
-  type?: string;
-};
 
 const txTypeLabel = (type: string) => {
   const map: Record<string, string> = {
@@ -60,18 +51,16 @@ export default function DashboardHome() {
   const [isTopUpOpen, setIsTopUpOpen] = useState(false);
   const [selectedApp, setSelectedApp] = useState<{ name: string; icon: any; slug?: string } | null>(null);
   const [lockedApps, setLockedApps] = useState<Array<{ slug: string; name: string; price: number }>>([]);
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
 
   const loadWallet = async () => {
     try {
-      const [overview, preview, landingStats, transactions, catalog, gateway, notifs] = await Promise.all([
+      const [overview, preview, landingStats, transactions, catalog, gateway] = await Promise.all([
         getWalletOverview(),
         getAutoRenewPreview({ days: 30, include_overdue: true, limit: 50 }),
         getLandingBuilderStats(),
         getWalletTransactions({ limit: 10 }),
         getCatalogApps().catch(() => ({ items: [] as any[] })),
         getPaymentGatewayStatus().catch(() => null),
-        getConsumerNotifications().catch(() => null),
       ]);
 
       setWalletBalance(overview.wallet.available_balance || 0);
@@ -123,15 +112,6 @@ export default function DashboardHome() {
             price: Number(item.cta?.recommended_plan?.price || 0),
           }))
       );
-
-      // Load real announcements from backend
-      if (notifs) {
-        const raw = notifs as any;
-        const list = Array.isArray(raw)
-          ? raw
-          : (raw?.data || raw?.notifications || raw?.items || []);
-        setAnnouncements(list as Announcement[]);
-      }
 
       setWalletError(null);
     } catch (loadError) {
@@ -229,57 +209,6 @@ export default function DashboardHome() {
       {gatewayStatus !== null && !gatewayStatus.member_wallet_enabled && (
         <div className="rounded-lg border border-amber-100 bg-amber-50 p-3 text-sm text-amber-800">
           Pembayaran saldo digital sedang tidak tersedia. Anda tetap bisa mengaktifkan aplikasi melalui pembayaran langsung.
-        </div>
-      )}
-
-      {/* Announcements — only shown when API returns data */}
-      {announcements.length > 0 && (
-        <div className="grid gap-3">
-          {announcements.map((item) => {
-            const isOffer = item.type === 'offer' || item.type === 'promo';
-            return (
-              <div
-                key={item.id}
-                className={cn(
-                  'flex items-start gap-4 rounded-xl border p-4',
-                  isOffer
-                    ? 'border-purple-100 bg-gradient-to-r from-purple-50 to-white'
-                    : 'border-blue-100 bg-blue-50'
-                )}
-              >
-                <div
-                  className={cn(
-                    'shrink-0 rounded-lg p-2',
-                    isOffer ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'
-                  )}
-                >
-                  {isOffer ? <Tag className="h-5 w-5" /> : <Bell className="h-5 w-5" />}
-                </div>
-                <div>
-                  {item.title && (
-                    <h3
-                      className={cn(
-                        'text-sm font-bold',
-                        isOffer ? 'text-purple-900' : 'text-blue-900'
-                      )}
-                    >
-                      {item.title}
-                    </h3>
-                  )}
-                  {(item.message || item.body) && (
-                    <p
-                      className={cn(
-                        'mt-1 text-sm',
-                        isOffer ? 'text-purple-700' : 'text-blue-700'
-                      )}
-                    >
-                      {item.message || item.body}
-                    </p>
-                  )}
-                </div>
-              </div>
-            );
-          })}
         </div>
       )}
 
