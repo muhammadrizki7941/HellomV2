@@ -161,10 +161,10 @@ class EntitlementController extends BaseApiController
                 'pos_provisioned_at' => $organization->pos_provisioned_at,
             ],
             'access' => [
-                'admin_url' => config('app.pos_base_url', 'http://127.0.0.1:3000') . "/pos/admin?sso_token={$ssoToken}",
-                'cashier_url' => config('app.pos_base_url', 'http://127.0.0.1:3000') . "/pos/cashier?sso_token={$ssoToken}",
-                'customer_url' => config('app.pos_base_url', 'http://127.0.0.1:3000') . "/pos",
-                'order_url' => config('app.pos_base_url', 'http://127.0.0.1:3000') . "/order",
+                'admin_url' => rtrim(config('app.url'), '/') . "/pos/admin?sso_token={$ssoToken}",
+                'cashier_url' => rtrim(config('app.url'), '/') . "/pos/cashier?sso_token={$ssoToken}",
+                'customer_url' => rtrim(config('app.url'), '/') . "/pos",
+                'order_url' => rtrim(config('app.url'), '/') . "/order",
                 'requires_legacy_admin_auth' => false, // SSO enabled
             ],
         ], 'POS access prepared with SSO');
