@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { 
+import {
   Plus, Settings, ChevronDown,
-  Sparkles, Eye, Globe, ArrowUp, ArrowDown, Trash2, MessageCircle
+  Sparkles, Eye, Globe, ArrowUp, ArrowDown, Trash2, MessageCircle, Save,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Block, BlockType, BlockStyles } from '../types';
@@ -52,69 +52,90 @@ export const MobileEditor: React.FC<MobileEditorProps> = ({
   onSave,
   onPublish,
   isSaving,
-  pageSettings
+  pageSettings,
 }) => {
   const [activeSheet, setActiveSheet] = useState<'none' | 'add' | 'edit'>('none');
 
   const handleAddBlock = (type: BlockType) => {
     addBlock(type);
     setActiveSheet('none');
-    // Scroll to bottom?
   };
 
-  const selectedBlock = blocks.find(b => b.id === selectedBlockId);
+  const selectedBlock = blocks.find((b) => b.id === selectedBlockId);
 
   return (
-    <div className="flex flex-col h-full bg-zinc-100 relative overflow-hidden">
-      {/* Mobile Header */}
-      <header className="h-14 bg-white border-b border-zinc-200 flex items-center justify-between px-4 shrink-0 z-20">
-        <div className="flex items-center gap-2">
-           <button 
-            onClick={() => setShowAiModal(true)}
-            className="p-2 text-purple-600 bg-purple-50 rounded-lg"
+    <div className="flex flex-col w-full h-full bg-zinc-100 overflow-hidden">
+      {/* Compact Mobile Toolbar */}
+      <header className="h-12 bg-white border-b border-zinc-200 flex items-center justify-between px-3 shrink-0 z-20">
+        {/* Left: AI */}
+        <button
+          onClick={() => setShowAiModal(true)}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 text-purple-600 bg-purple-50 rounded-lg text-xs font-semibold"
+        >
+          <Sparkles className="w-3.5 h-3.5" />
+          AI
+        </button>
+
+        {/* Right: actions */}
+        <div className="flex items-center gap-1">
+          <button
+            onClick={onSave}
+            disabled={isSaving}
+            title="Simpan"
+            className="flex items-center gap-1 px-2.5 py-1.5 bg-zinc-100 text-zinc-700 rounded-lg text-xs font-semibold disabled:opacity-50"
           >
-            <Sparkles className="w-5 h-5" />
+            <Save className="w-3.5 h-3.5" />
+            {isSaving ? '...' : 'Simpan'}
           </button>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={onSave} disabled={isSaving} className="p-2 bg-zinc-100 text-zinc-700 rounded-lg shadow-sm disabled:opacity-60">
-            Simpan
-          </button>
-          <button 
+          <button
             onClick={() => setIsPreview(!isPreview)}
-            className={cn("p-2 rounded-lg", isPreview ? "bg-zinc-100 text-zinc-900" : "text-zinc-500")}
+            title={isPreview ? 'Edit' : 'Preview'}
+            className={cn(
+              'p-2 rounded-lg',
+              isPreview ? 'bg-zinc-900 text-white' : 'text-zinc-500 hover:bg-zinc-100',
+            )}
           >
-            <Eye className="w-5 h-5" />
+            <Eye className="w-4 h-4" />
           </button>
-          <button 
+          <button
             onClick={() => setShowSettingsModal(true)}
-            className="p-2 text-zinc-500 hover:bg-zinc-50 rounded-lg"
+            title="Pengaturan"
+            className="p-2 text-zinc-500 hover:bg-zinc-100 rounded-lg"
           >
-            <Settings className="w-5 h-5" />
+            <Settings className="w-4 h-4" />
           </button>
-          <button onClick={onPublish} disabled={isSaving} className="p-2 bg-black text-white rounded-lg shadow-sm disabled:opacity-60">
-            <Globe className="w-5 h-5" />
+          <button
+            onClick={onPublish}
+            disabled={isSaving}
+            title="Publish"
+            className="p-2 bg-black text-white rounded-lg disabled:opacity-50"
+          >
+            <Globe className="w-4 h-4" />
           </button>
         </div>
       </header>
 
-      {/* Main Canvas Area */}
-      <main className="flex-1 overflow-y-auto relative pb-20" onClick={() => {
-        if (activeSheet === 'edit') setActiveSheet('none');
-      }}>
-        <div 
-          className="min-h-full bg-white shadow-sm relative"
+      {/* Canvas */}
+      <main
+        className="flex-1 overflow-y-auto overflow-x-hidden relative"
+        style={{ paddingBottom: isPreview ? 0 : '5rem' }}
+        onClick={() => {
+          if (activeSheet === 'edit') setActiveSheet('none');
+        }}
+      >
+        <div
+          className="min-h-full w-full bg-white relative"
           style={{ backgroundColor: activeTheme.colors.backgroundColor }}
         >
           {blocks.length === 0 ? (
-            <div className="h-[60vh] flex flex-col items-center justify-center text-zinc-400 p-8 text-center">
-              <Plus className="w-12 h-12 mb-4 opacity-20" />
-              <p>Tap "+" below to add your first block</p>
+            <div className="h-64 flex flex-col items-center justify-center text-zinc-400 p-6 text-center">
+              <Plus className="w-10 h-10 mb-3 opacity-20" />
+              <p className="text-sm">Tap tombol "+ Tambah" di bawah untuk mulai</p>
             </div>
           ) : (
             blocks.map((block, index) => (
-              <div 
-                key={block.id} 
+              <div
+                key={block.id}
                 onClick={(e) => {
                   e.stopPropagation();
                   if (!isPreview) {
@@ -123,73 +144,73 @@ export const MobileEditor: React.FC<MobileEditorProps> = ({
                   }
                 }}
                 className={cn(
-                  "relative transition-all",
-                  !isPreview && selectedBlockId === block.id && "ring-2 ring-yellow-400 z-10"
+                  'relative transition-all',
+                  !isPreview && selectedBlockId === block.id && 'ring-2 ring-yellow-400 ring-inset z-10',
                 )}
               >
-                {/* Block Actions Overlay (Mobile) */}
+                {/* Block action buttons */}
                 {!isPreview && selectedBlockId === block.id && (
                   <div className="absolute right-2 top-2 flex flex-col gap-1 z-20">
-                     <button 
-                        onClick={(e) => { e.stopPropagation(); moveBlock(index, 'up'); }}
-                        disabled={index === 0}
-                        className="p-2 bg-white shadow-md rounded-full text-zinc-600 disabled:opacity-30 border border-zinc-100"
-                      >
-                        <ArrowUp className="w-4 h-4" />
-                      </button>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); moveBlock(index, 'down'); }}
-                        disabled={index === blocks.length - 1}
-                        className="p-2 bg-white shadow-md rounded-full text-zinc-600 disabled:opacity-30 border border-zinc-100"
-                      >
-                        <ArrowDown className="w-4 h-4" />
-                      </button>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); deleteBlock(block.id); }}
-                        className="p-2 bg-white shadow-md rounded-full text-red-500 border border-zinc-100"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); moveBlock(index, 'up'); }}
+                      disabled={index === 0}
+                      className="w-8 h-8 flex items-center justify-center bg-white shadow-md rounded-full text-zinc-600 disabled:opacity-30 border border-zinc-100"
+                    >
+                      <ArrowUp className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); moveBlock(index, 'down'); }}
+                      disabled={index === blocks.length - 1}
+                      className="w-8 h-8 flex items-center justify-center bg-white shadow-md rounded-full text-zinc-600 disabled:opacity-30 border border-zinc-100"
+                    >
+                      <ArrowDown className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); deleteBlock(block.id); }}
+                      className="w-8 h-8 flex items-center justify-center bg-white shadow-md rounded-full text-red-500 border border-zinc-100"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 )}
-                
+
                 <BlockRenderer block={block} theme={activeTheme} />
               </div>
             ))
           )}
 
-          {/* Floating WhatsApp Widget */}
+          {/* Floating WhatsApp */}
           {pageSettings.showFloatingWhatsapp && (
-            <div className="absolute bottom-24 right-4 z-30">
-              <a 
+            <div className="absolute bottom-20 right-4 z-30">
+              <a
                 href={`https://wa.me/${pageSettings.whatsappNumber}?text=${encodeURIComponent(pageSettings.whatsappMessage)}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-center w-14 h-14 bg-green-500 text-white rounded-full shadow-2xl hover:scale-110 transition-transform animate-in zoom-in duration-300"
+                className="flex items-center justify-center w-12 h-12 bg-green-500 text-white rounded-full shadow-2xl"
               >
-                <MessageCircle className="w-8 h-8" />
+                <MessageCircle className="w-6 h-6" />
               </a>
             </div>
           )}
         </div>
       </main>
 
-      {/* Bottom Floating Action Bar */}
+      {/* Bottom Action Bar */}
       {!isPreview && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-4 z-30">
-          <button 
+        <div className="absolute bottom-0 left-0 right-0 z-30 bg-white border-t border-zinc-200 px-3 py-2 flex items-center gap-2 safe-area-inset-bottom">
+          <button
             onClick={() => setActiveSheet(activeSheet === 'add' ? 'none' : 'add')}
-            className="flex items-center gap-2 px-6 py-3 bg-zinc-900 text-white rounded-full shadow-xl hover:scale-105 transition-transform font-bold"
+            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-zinc-900 text-white rounded-xl text-sm font-bold"
           >
-            <Plus className="w-5 h-5" /> Add Block
+            <Plus className="w-4 h-4" /> Tambah Block
           </button>
-          
+
           {selectedBlockId && (
-            <button 
+            <button
               onClick={() => setActiveSheet(activeSheet === 'edit' ? 'none' : 'edit')}
-              className="flex items-center gap-2 px-6 py-3 bg-white text-zinc-900 border border-zinc-200 rounded-full shadow-xl hover:scale-105 transition-transform font-bold"
+              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-white text-zinc-900 border border-zinc-200 rounded-xl text-sm font-bold"
             >
-              <Settings className="w-5 h-5" /> Edit
+              <Settings className="w-4 h-4" /> Edit Block
             </button>
           )}
         </div>
@@ -198,11 +219,11 @@ export const MobileEditor: React.FC<MobileEditorProps> = ({
       {/* Bottom Sheet: Add Block */}
       {activeSheet === 'add' && (
         <>
-          <div className="fixed inset-0 bg-black/20 z-40" onClick={() => setActiveSheet('none')} />
-          <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl z-50 h-[85vh] max-h-[85vh] flex flex-col animate-in slide-in-from-bottom duration-300">
-            <div className="sticky top-0 bg-white border-b border-zinc-100 p-4 flex justify-between items-center shrink-0">
-              <h3 className="font-bold text-lg">Add New Block</h3>
-              <button onClick={() => setActiveSheet('none')} className="p-2 bg-zinc-100 rounded-full">
+          <div className="fixed inset-0 bg-black/30 z-40" onClick={() => setActiveSheet('none')} />
+          <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl z-50 h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100 shrink-0">
+              <h3 className="font-bold text-base">Tambah Block</h3>
+              <button onClick={() => setActiveSheet('none')} className="p-1.5 bg-zinc-100 rounded-full">
                 <ChevronDown className="w-5 h-5" />
               </button>
             </div>
@@ -216,16 +237,16 @@ export const MobileEditor: React.FC<MobileEditorProps> = ({
       {/* Bottom Sheet: Edit Block */}
       {activeSheet === 'edit' && selectedBlock && (
         <>
-          <div className="fixed inset-0 bg-black/20 z-40" onClick={() => setActiveSheet('none')} />
-          <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl z-50 h-[85vh] max-h-[85vh] flex flex-col animate-in slide-in-from-bottom duration-300">
-            <div className="sticky top-0 bg-white border-b border-zinc-100 p-4 flex justify-between items-center shrink-0">
-              <h3 className="font-bold text-lg">Edit {selectedBlock.type}</h3>
-              <button onClick={() => setActiveSheet('none')} className="p-2 bg-zinc-100 rounded-full">
+          <div className="fixed inset-0 bg-black/30 z-40" onClick={() => setActiveSheet('none')} />
+          <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl z-50 h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100 shrink-0">
+              <h3 className="font-bold text-base capitalize">Edit {selectedBlock.type}</h3>
+              <button onClick={() => setActiveSheet('none')} className="p-1.5 bg-zinc-100 rounded-full">
                 <ChevronDown className="w-5 h-5" />
               </button>
             </div>
             <div className="flex-1 overflow-y-auto">
-              <PropertyPanel 
+              <PropertyPanel
                 selectedBlock={selectedBlock}
                 activeTheme={activeTheme}
                 updateBlockContent={updateBlockContent}
@@ -233,20 +254,17 @@ export const MobileEditor: React.FC<MobileEditorProps> = ({
                 handleFileUpload={handleFileUpload}
               />
             </div>
-            <div className="sticky bottom-0 bg-white border-t border-zinc-100 p-4 flex gap-2 shrink-0">
-              <button 
+            <div className="px-4 py-3 border-t border-zinc-100 flex gap-2 shrink-0">
+              <button
                 onClick={() => setActiveSheet('none')}
-                className="flex-1 px-4 py-3 bg-zinc-100 text-zinc-700 rounded-lg font-semibold hover:bg-zinc-200"
+                className="flex-1 py-2.5 bg-zinc-100 text-zinc-700 rounded-xl text-sm font-semibold"
               >
-                Batal
+                Tutup
               </button>
-              <button 
-                onClick={() => {
-                  onSave();
-                  setActiveSheet('none');
-                }}
+              <button
+                onClick={() => { onSave(); setActiveSheet('none'); }}
                 disabled={isSaving}
-                className="flex-1 px-4 py-3 bg-black text-white rounded-lg font-semibold hover:bg-zinc-800 disabled:opacity-60"
+                className="flex-1 py-2.5 bg-black text-white rounded-xl text-sm font-semibold disabled:opacity-50"
               >
                 Simpan
               </button>

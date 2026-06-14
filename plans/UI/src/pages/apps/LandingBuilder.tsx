@@ -144,7 +144,12 @@ export default function LandingBuilder() {
 
       {/* Content */}
       {activeTab === 'editor' ? (
-        <div className="-mx-4 md:mx-0 overflow-hidden" style={{ height: 'calc(100dvh - 8rem)' }}>
+        /* Full-bleed on mobile: cancel DashboardLayout p-4 horizontally.
+           Height = viewport minus: mobile-header(80px) + tab-bar(~52px) + space-y-6(24px) + bottom-safe(~8px) */
+        <div
+          className="-mx-4 md:mx-0 overflow-hidden"
+          style={{ height: 'calc(100svh - 164px)' }}
+        >
           <Editor />
         </div>
       ) : (
