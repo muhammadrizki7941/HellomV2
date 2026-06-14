@@ -21,8 +21,10 @@ import {
   getImageUrl,
   getPaymentGatewayStatus,
   getPricingMatrix,
+  pollAppEntitlement,
   validatePromoCode,
 } from '@/lib/hellomApi';
+import GatewayPaymentFrame from '@/components/GatewayPaymentFrame';
 
 interface SubscriptionModalProps {
   isOpen: boolean;
@@ -187,6 +189,8 @@ export default function SubscriptionModal({ isOpen, onClose, appName, appSlug, a
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [selectedMethod, setSelectedMethod] = useState<ManualPaymentMethod | null>(null);
   const [checkoutStep, setCheckoutStep] = useState<CheckoutStep>('plan');
+  const [gatewayPaymentUrl, setGatewayPaymentUrl] = useState<string | null>(null);
+  const [gatewayPollSlug, setGatewayPollSlug] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) {
@@ -372,8 +376,8 @@ export default function SubscriptionModal({ isOpen, onClose, appName, appSlug, a
           onSuccess?.();
           return;
         } else if (checkout.payment.payment_url) {
-          window.location.href = checkout.payment.payment_url;
-          setSuccessMessage(`Payment link ${providerLabel} berhasil dibuat. Lanjutkan pembayaran di halaman pembayaran.`);
+          setGatewayPaymentUrl(checkout.payment.payment_url);
+          setGatewayPollSlug(resolvedSlug);
           onSuccess?.();
         } else {
           setSuccessMessage(`Checkout langsung sudah dibuat dan menunggu aktivasi link payment ${providerLabel}.`);
@@ -896,6 +900,26 @@ export default function SubscriptionModal({ isOpen, onClose, appName, appSlug, a
             </div>
           </div>
         </div>
+      )}
+
+      {/* Gateway payment iframe — renders above the modal via portal */}
+      {gatewayPaymentUrl && (
+        <GatewayPaymentFrame
+          paymentUrl={gatewayPaymentUrl}
+          title={`Pembayaran ${providerLabel}`}
+          onClose={() => setGatewayPaymentUrl(null)}
+          onPaid={() => {
+            setGatewayPaymentUrl(null);
+            setSuccessMessage('Pembayaran berhasil dikonfirmasi! Akses langganan kamu sudah aktif.');
+            setCheckoutStep('result');
+            onSuccess?.();
+          }}
+          pollFn={
+            gatewayPollSlug
+              ? () => pollAppEntitlement(gatewayPollSlug)
+              : undefined
+          }
+        />
       )}
     </div>
   );

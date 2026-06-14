@@ -11,6 +11,7 @@ import {
   Wallet,
 } from 'lucide-react';
 import SubscriptionModal from '@/components/SubscriptionModal';
+import GatewayPaymentFrame from '@/components/GatewayPaymentFrame';
 import {
   createWalletTopupSession,
   getCatalogApps,
@@ -18,6 +19,7 @@ import {
   getWalletOverview,
   getWalletTransactions,
   getPayoutPolicy,
+  pollWalletBalance,
   requestWithdrawal,
   walletTopupMock,
 } from '@/lib/hellomApi';
@@ -97,6 +99,8 @@ export default function Payments() {
   const [accountName, setAccountName] = useState('');
 
   const [selectedApp, setSelectedApp] = useState<{ name: string; slug: string } | null>(null);
+  const [gatewayPaymentUrl, setGatewayPaymentUrl] = useState<string | null>(null);
+  const [gatewayBalanceSnapshot, setGatewayBalanceSnapshot] = useState<number | null>(null);
 
   const lockedApps = useMemo(
     () => catalogApps.filter((item) => !item.entitlement.allowed),
@@ -215,9 +219,10 @@ export default function Payments() {
 
       const result = await createWalletTopupSession({ amount, channel: source });
       if (result.payment_url) {
-        window.open(result.payment_url, '_blank', 'noopener,noreferrer');
+        setGatewayBalanceSnapshot(availableBalance);
+        setGatewayPaymentUrl(result.payment_url as string);
       }
-      setSuccessMessage(`Halaman pembayaran untuk ${formatCurrency(amount)} berhasil dibuat. Saldo akan masuk otomatis setelah pembayaran sukses.`);
+      setSuccessMessage(`Sesi pembayaran dibuat. Selesaikan pembayaran untuk menambah saldo.`);
     } catch (topupError) {
       const message = topupError instanceof Error ? topupError.message : 'Top up gagal';
       setError(message);
@@ -682,6 +687,32 @@ export default function Payments() {
             void loadPage();
             setSelectedApp(null);
           }}
+        />
+      )}
+
+      {/* Gateway top-up iframe — stays inside Hellom */}
+      {gatewayPaymentUrl && (
+        <GatewayPaymentFrame
+          paymentUrl={gatewayPaymentUrl}
+          title="Top Up Saldo"
+          onClose={() => {
+            setGatewayPaymentUrl(null);
+            setGatewayBalanceSnapshot(null);
+          }}
+          onPaid={() => {
+            setGatewayPaymentUrl(null);
+            setGatewayBalanceSnapshot(null);
+            setSuccessMessage('Top up berhasil! Saldo kamu sudah bertambah.');
+            void loadPage();
+          }}
+          pollFn={
+            gatewayBalanceSnapshot !== null
+              ? async () => {
+                  const current = await pollWalletBalance();
+                  return current > (gatewayBalanceSnapshot ?? 0);
+                }
+              : undefined
+          }
         />
       )}
     </div>

@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { 
-  Wallet, ArrowRight, Banknote, 
-  Smartphone, CheckCircle, AlertCircle, X 
+import {
+  Wallet, ArrowRight, Banknote,
+  Smartphone, CheckCircle, AlertCircle, X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getPayoutPolicy } from '@/lib/hellomApi';
+import GatewayPaymentFrame from '@/components/GatewayPaymentFrame';
 
 interface TopUpModalProps {
   isOpen: boolean;
@@ -39,6 +40,7 @@ export default function TopUpModal({ isOpen, onClose, currentBalance, onSubmitTo
     channel: string;
     amount: number;
   } | null>(null);
+  const [showFrame, setShowFrame] = useState(false);
 
   if (!isOpen) return null;
 
@@ -71,7 +73,8 @@ export default function TopUpModal({ isOpen, onClose, currentBalance, onSubmitTo
     try {
       const result = await onSubmitTopUp({ amount, channel: method });
       setSuccessPayload(result);
-      setStep('success');
+      // Jump straight to iframe — skip the intermediate success step
+      setShowFrame(true);
     } catch (payError) {
       const message = payError instanceof Error ? payError.message : 'Top up gagal';
       setError(message);
@@ -86,6 +89,7 @@ export default function TopUpModal({ isOpen, onClose, currentBalance, onSubmitTo
     setEstimatedFee(null);
     setEstimatedNet(null);
     setSuccessPayload(null);
+    setShowFrame(false);
     setError(null);
     onClose();
   };
@@ -252,51 +256,46 @@ export default function TopUpModal({ isOpen, onClose, currentBalance, onSubmitTo
           </div>
         )}
 
-        {/* Step 3: Success */}
-        {step === 'success' && (
-          <div className="p-8 text-center space-y-6">
-            <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto animate-in zoom-in duration-300">
-              <CheckCircle className="w-10 h-10" />
+        {/* Step 3: Success — replaced by GatewayPaymentFrame, kept as fallback */}
+        {step === 'success' && !showFrame && successPayload && (
+          <div className="p-8 text-center space-y-5">
+            <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto">
+              <CheckCircle className="w-8 h-8" />
             </div>
             <div>
-              <h3 className="text-2xl font-bold text-zinc-900 mb-2">Instruksi Pembayaran Dibuat</h3>
-              <p className="text-zinc-500">
-                Link pembayaran Xendit untuk <strong>Rp {(successPayload?.amount ?? Number(amount || 0)).toLocaleString('id-ID')}</strong> sudah dibuka. Saldo wallet akan bertambah otomatis setelah pembayaran tervalidasi lewat webhook.
+              <h3 className="text-xl font-bold text-zinc-900 mb-1">Sesi Pembayaran Dibuat</h3>
+              <p className="text-sm text-zinc-500">
+                Klik tombol di bawah untuk membuka halaman pembayaran.
               </p>
             </div>
-            <div className="bg-zinc-50 p-4 rounded-xl border border-zinc-100 text-sm">
-              <div className="flex justify-between mb-2">
-                <span className="text-zinc-500">Reference</span>
-                <span className="font-mono font-bold text-zinc-900">{successPayload?.referenceId || '-'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-zinc-500">Channel</span>
-                <span className="font-medium uppercase text-zinc-900">{successPayload?.channel || method}</span>
-              </div>
-              <div className="mt-2 flex justify-between">
-                <span className="text-zinc-500">Date</span>
-                <span className="font-medium text-zinc-900">{new Date().toLocaleDateString('id-ID')}</span>
-              </div>
-            </div>
-            {successPayload?.paymentUrl && (
-              <a
-                href={successPayload.paymentUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block w-full rounded-xl border border-zinc-200 bg-white py-3 text-center font-bold text-zinc-900 transition-colors hover:bg-zinc-50"
-              >
-                Buka Halaman Pembayaran Xendit
-              </a>
-            )}
-            <button 
-              onClick={handleClose}
-              className="w-full py-3 bg-zinc-900 text-white font-bold rounded-xl hover:bg-zinc-800 transition-colors"
+            <button
+              onClick={() => setShowFrame(true)}
+              className="w-full py-3 bg-yellow-400 text-black font-bold rounded-xl hover:bg-yellow-500 transition-colors"
             >
-              Kembali ke Dashboard
+              Lanjut Pembayaran
+            </button>
+            <button onClick={handleClose} className="w-full py-2.5 text-sm text-zinc-500 hover:text-zinc-900">
+              Kembali nanti
             </button>
           </div>
         )}
       </div>
+
+      {/* Gateway iframe — opens above this modal */}
+      {showFrame && successPayload?.paymentUrl && (
+        <GatewayPaymentFrame
+          paymentUrl={successPayload.paymentUrl}
+          title={`Top Up Rp ${(successPayload.amount).toLocaleString('id-ID')}`}
+          onClose={() => {
+            setShowFrame(false);
+            setStep('success');
+          }}
+          onPaid={() => {
+            setShowFrame(false);
+            handleClose();
+          }}
+        />
+      )}
     </div>
   );
 }

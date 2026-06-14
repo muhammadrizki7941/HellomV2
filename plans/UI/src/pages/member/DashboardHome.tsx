@@ -151,9 +151,7 @@ export default function DashboardHome() {
       throw new Error('Halaman pembayaran tidak dapat dibuat. Coba lagi atau hubungi dukungan.');
     }
 
-    window.open(result.payment_url, '_blank', 'noopener,noreferrer');
-    await loadWallet();
-
+    // GatewayPaymentFrame inside TopUpModal handles the payment URL — no redirect needed
     return {
       referenceId: result.reference_id,
       paymentUrl: result.payment_url,
