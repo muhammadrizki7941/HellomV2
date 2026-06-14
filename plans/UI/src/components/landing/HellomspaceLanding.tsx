@@ -14,6 +14,7 @@ import {
   ShoppingCart,
   Sparkles,
   UserRound,
+  X,
   Zap,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
@@ -48,6 +49,8 @@ type Portfolio = {
   category?: string | null;
   thumbnail_url?: string | null;
   description?: string | null;
+  full_description?: string | null;
+  video_url?: string | null;
   client_name?: string | null;
   project_year?: string | null;
   project_url?: string | null;
@@ -194,6 +197,7 @@ export const HellomspaceLanding = ({ brand, logoSrc }: { brand: BrandSettings; l
   const [portfolios, setPortfolios] = useState<Portfolio[]>(fallbackPortfolios);
   const [content, setContent] = useState<LandingContent>({});
   const [activeFilter, setActiveFilter] = useState('All');
+  const [selectedPortfolio, setSelectedPortfolio] = useState<Portfolio | null>(null);
   const isAuthenticated = Boolean(getToken() && getSessionUser());
   const posAccessHref = isAuthenticated ? '/dashboard/apps/pos?subscribe=1' : '/login?app=pos&subscribe=1';
   const about = content.about || {};
@@ -367,15 +371,33 @@ export const HellomspaceLanding = ({ brand, logoSrc }: { brand: BrandSettings; l
               </div>
               <div className="mt-8 grid gap-4 lg:grid-cols-3">
                 {filteredPortfolios.slice(0, 6).map((item) => (
-                  <motion.article whileHover={{ y: -6 }} key={item.id} className="group overflow-hidden rounded-lg border border-white/[0.08] bg-white/[0.03] transition hover:border-[#F6B400]/50">
+                  <motion.article
+                    whileHover={{ y: -6 }}
+                    key={item.id}
+                    onClick={() => setSelectedPortfolio(item)}
+                    className="group cursor-pointer overflow-hidden rounded-lg border border-white/[0.08] bg-white/[0.03] transition hover:border-[#F6B400]/50"
+                  >
                     <div className="relative aspect-[1.65] overflow-hidden bg-[#0E0E11]">
-                      {item.thumbnail_url ? <img src={getImageUrl(item.thumbnail_url)} alt={item.title} className="h-full w-full object-cover transition duration-700 group-hover:scale-105" /> : <div className="h-full w-full bg-[radial-gradient(circle_at_35%_30%,rgba(246,180,0,.22),transparent_33%),linear-gradient(135deg,#131313,#050505)]" />}
+                      {item.thumbnail_url
+                        ? <img src={getImageUrl(item.thumbnail_url)} alt={item.title} className="h-full w-full object-cover transition duration-700 group-hover:scale-105" />
+                        : <div className="h-full w-full bg-[radial-gradient(circle_at_35%_30%,rgba(246,180,0,.22),transparent_33%),linear-gradient(135deg,#131313,#050505)]" />
+                      }
                       <div className="absolute inset-0 bg-gradient-to-t from-black via-black/15 to-transparent" />
-                      <ExternalLink className="absolute bottom-4 right-4 h-9 w-9 rounded-lg bg-black/55 p-2 text-white backdrop-blur" />
+                      {item.video_url && (
+                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="w-14 h-14 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm border border-white/30">
+                            <svg viewBox="0 0 24 24" className="w-6 h-6 text-white fill-white ml-1"><polygon points="5,3 19,12 5,21" /></svg>
+                          </div>
+                        </div>
+                      )}
+                      <ExternalLink className="absolute bottom-4 right-4 h-9 w-9 rounded-lg bg-black/55 p-2 text-white backdrop-blur opacity-0 group-hover:opacity-100 transition-opacity" />
                     </div>
                     <div className="p-5">
                       <h3 className="font-display text-lg">{item.title}</h3>
                       <p className="mt-1 text-sm text-[#8B8B90]">{item.category || item.description || 'Creator ecosystem project'}</p>
+                      {(item.client_name || item.project_year) && (
+                        <p className="mt-2 text-xs text-[#F6B400]/70">{[item.client_name, item.project_year].filter(Boolean).join(' · ')}</p>
+                      )}
                     </div>
                   </motion.article>
                 ))}
@@ -476,6 +498,103 @@ export const HellomspaceLanding = ({ brand, logoSrc }: { brand: BrandSettings; l
 
       <Footer brand={brand} logoSrc={logoSrc} />
       <MobileBottomNav isAuthenticated={isAuthenticated} />
+
+      {/* Portfolio Detail Modal */}
+      {selectedPortfolio && (() => {
+        const p = selectedPortfolio;
+        const ytId = p.video_url?.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]+)/)?.[1];
+        const vimeoId = p.video_url?.match(/vimeo\.com\/(\d+)/)?.[1];
+        return (
+          <div
+            className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm"
+            onClick={() => setSelectedPortfolio(null)}
+          >
+            <div
+              className="w-full max-w-3xl max-h-[95vh] overflow-y-auto bg-[#0E0E11] rounded-t-2xl sm:rounded-2xl border border-white/[0.08] shadow-2xl"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Close */}
+              <div className="sticky top-0 z-10 flex justify-end p-4 bg-[#0E0E11]/90 backdrop-blur-sm">
+                <button
+                  onClick={() => setSelectedPortfolio(null)}
+                  className="w-9 h-9 rounded-lg bg-white/[0.06] flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition"
+                  aria-label="Close"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Media */}
+              <div className="px-4 sm:px-6 -mt-4">
+                {ytId ? (
+                  <div className="aspect-video w-full rounded-xl overflow-hidden bg-black">
+                    <iframe
+                      src={`https://www.youtube.com/embed/${ytId}?autoplay=1&rel=0`}
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                      className="w-full h-full"
+                    />
+                  </div>
+                ) : vimeoId ? (
+                  <div className="aspect-video w-full rounded-xl overflow-hidden bg-black">
+                    <iframe
+                      src={`https://player.vimeo.com/video/${vimeoId}?autoplay=1`}
+                      allow="autoplay; fullscreen; picture-in-picture"
+                      allowFullScreen
+                      className="w-full h-full"
+                    />
+                  </div>
+                ) : p.video_url ? (
+                  <div className="aspect-video w-full rounded-xl overflow-hidden bg-black">
+                    <video src={p.video_url} controls autoPlay className="w-full h-full object-contain" poster={p.thumbnail_url ?? undefined} />
+                  </div>
+                ) : p.thumbnail_url ? (
+                  <div className="aspect-[1.65] w-full rounded-xl overflow-hidden bg-[#050505]">
+                    <img src={getImageUrl(p.thumbnail_url)} alt={p.title} className="w-full h-full object-cover" />
+                  </div>
+                ) : (
+                  <div className="aspect-[1.65] w-full rounded-xl bg-[radial-gradient(circle_at_35%_30%,rgba(246,180,0,.22),transparent_33%),linear-gradient(135deg,#131313,#050505)]" />
+                )}
+              </div>
+
+              {/* Details */}
+              <div className="p-6 sm:p-8">
+                {p.category && (
+                  <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#F6B400] mb-3">{p.category}</p>
+                )}
+                <h2 className="font-display text-2xl sm:text-3xl text-white leading-snug">{p.title}</h2>
+
+                {(p.client_name || p.project_year) && (
+                  <div className="mt-3 flex items-center gap-3 text-sm text-[#8B8B90]">
+                    {p.client_name && <span>Klien: <span className="text-white/80">{p.client_name}</span></span>}
+                    {p.client_name && p.project_year && <span className="text-white/20">·</span>}
+                    {p.project_year && <span>Tahun: <span className="text-white/80">{p.project_year}</span></span>}
+                  </div>
+                )}
+
+                {(p.full_description || p.description) && (
+                  <p className="mt-5 text-sm leading-7 text-[#B6B6B8] whitespace-pre-line">
+                    {p.full_description || p.description}
+                  </p>
+                )}
+
+                {p.project_url && (
+                  <div className="mt-8">
+                    <a
+                      href={p.project_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex h-12 items-center gap-3 rounded-lg bg-[#F6B400] px-7 text-sm font-bold text-black hover:bg-[#FFCC47] transition"
+                    >
+                      <ExternalLink className="w-4 h-4" /> Lihat Website
+                    </a>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };

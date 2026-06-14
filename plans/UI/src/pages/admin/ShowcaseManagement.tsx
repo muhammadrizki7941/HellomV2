@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Plus, X, Save, Trash2, AlertCircle, Film, Image, ExternalLink,
-  GripVertical, Eye, EyeOff, Upload, Loader2
+  Plus, X, Save, AlertCircle, Film, Image, ExternalLink,
+  GripVertical, Eye, EyeOff, Upload, Loader2, Star, Globe, Calendar, Play
 } from 'lucide-react';
 import {
   getAdminPortfolios, createAdminPortfolio, updateAdminPortfolio, deleteAdminPortfolio,
@@ -12,8 +12,19 @@ import {
 
 type Tab = 'portfolios' | 'clients';
 
-const INITIAL_PORTFOLIO: Omit<ShowcasePortfolio, 'id' | 'created_at'> = {
-  title: '', description: '', video_url: '', thumbnail_url: '', client_name: '', category: '', sort_order: 0, is_published: true,
+const INITIAL_PORTFOLIO = {
+  title: '',
+  description: '',
+  full_description: '',
+  video_url: '',
+  thumbnail_url: '',
+  client_name: '',
+  project_year: '',
+  project_url: '',
+  category: '',
+  sort_order: 0,
+  is_published: true,
+  is_featured: false,
 };
 
 const INITIAL_CLIENT: Omit<ShowcaseClient, 'id' | 'created_at'> = {
@@ -94,11 +105,20 @@ export default function ShowcaseManagement() {
   /* ─── Portfolio CRUD ─── */
   const openPortfolioModal = (item?: ShowcasePortfolio) => {
     if (item) {
-      setEditingPortfolioId(item.id);
+      setEditingPortfolioId(item.id as number);
       setPortfolioForm({
-        title: item.title, description: item.description || '', video_url: item.video_url,
-        thumbnail_url: item.thumbnail_url || '', client_name: item.client_name || '',
-        category: item.category || '', sort_order: item.sort_order, is_published: item.is_published,
+        title: (item.title as string) || '',
+        description: (item.description as string) || '',
+        full_description: (item.full_description as string) || '',
+        video_url: (item.video_url as string) || '',
+        thumbnail_url: (item.thumbnail_url as string) || '',
+        client_name: (item.client_name as string) || '',
+        project_year: (item.project_year as string) || '',
+        project_url: (item.project_url as string) || '',
+        category: (item.category as string) || '',
+        sort_order: (item.sort_order as number) || 0,
+        is_published: Boolean(item.is_published),
+        is_featured: Boolean(item.is_featured),
       });
     } else {
       setEditingPortfolioId(null);
@@ -209,7 +229,7 @@ export default function ShowcaseManagement() {
       {/* Tabs */}
       <div className="flex gap-1 bg-zinc-100 p-1 rounded-lg w-fit">
         <button onClick={() => setTab('portfolios')} className={`px-4 py-2 text-sm font-medium rounded-md transition-colors flex items-center gap-2 ${tab === 'portfolios' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500 hover:text-zinc-700'}`}>
-          <Film className="w-4 h-4" /> Portfolio Videos ({portfolios.length})
+          <Film className="w-4 h-4" /> Portfolio ({portfolios.length})
         </button>
         <button onClick={() => setTab('clients')} className={`px-4 py-2 text-sm font-medium rounded-md transition-colors flex items-center gap-2 ${tab === 'clients' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500 hover:text-zinc-700'}`}>
           <Image className="w-4 h-4" /> Trusted Clients ({clients.length})
@@ -240,30 +260,47 @@ export default function ShowcaseManagement() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               {portfolios.map(p => (
-                <div key={p.id} className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden group">
-                  {/* Video preview */}
+                <div key={p.id as number} className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden group">
+                  {/* Thumbnail / Video preview */}
                   <div className="relative aspect-video bg-zinc-100">
-                    {p.video_url ? (
-                      <video src={p.video_url} poster={p.thumbnail_url || undefined} className="w-full h-full object-cover" muted preload="metadata" />
+                    {(p.thumbnail_url as string) ? (
+                      <img src={p.thumbnail_url as string} alt={p.title as string} className="w-full h-full object-cover" />
+                    ) : (p.video_url as string) ? (
+                      <video src={p.video_url as string} className="w-full h-full object-cover" muted preload="metadata" />
                     ) : (
                       <div className="flex items-center justify-center h-full text-zinc-400"><Film className="w-8 h-8" /></div>
                     )}
-                    <div className="absolute top-2 right-2 flex gap-1">
-                      {p.is_published
+                    {(p.video_url as string) && (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="w-10 h-10 bg-black/50 rounded-full flex items-center justify-center backdrop-blur-sm">
+                          <Play className="w-4 h-4 text-white fill-white ml-0.5" />
+                        </div>
+                      </div>
+                    )}
+                    <div className="absolute top-2 right-2 flex flex-col gap-1 items-end">
+                      {(p.is_featured as boolean)
+                        ? <span className="px-2 py-0.5 bg-yellow-400 text-black text-[10px] font-bold rounded-full flex items-center gap-1"><Star className="w-3 h-3" /> Featured</span>
+                        : <span className="px-2 py-0.5 bg-zinc-800 text-zinc-300 text-[10px] font-bold rounded-full">Not Featured</span>
+                      }
+                      {(p.is_published as boolean)
                         ? <span className="px-2 py-0.5 bg-green-500 text-white text-[10px] font-bold rounded-full flex items-center gap-1"><Eye className="w-3 h-3" /> Live</span>
                         : <span className="px-2 py-0.5 bg-zinc-500 text-white text-[10px] font-bold rounded-full flex items-center gap-1"><EyeOff className="w-3 h-3" /> Draft</span>
                       }
                     </div>
                   </div>
                   <div className="p-4">
-                    <h3 className="font-bold text-zinc-900 truncate">{p.title}</h3>
-                    {p.client_name && <p className="text-xs text-zinc-500 mt-1">Klien: {p.client_name}</p>}
-                    {p.category && <span className="inline-block mt-2 px-2 py-0.5 text-[10px] font-medium bg-yellow-100 text-yellow-700 rounded-full">{p.category}</span>}
+                    <h3 className="font-bold text-zinc-900 truncate">{p.title as string}</h3>
+                    {(p.client_name as string) && <p className="text-xs text-zinc-500 mt-1">Klien: {p.client_name as string}</p>}
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
+                      {(p.category as string) && <span className="px-2 py-0.5 text-[10px] font-medium bg-yellow-100 text-yellow-700 rounded-full">{p.category as string}</span>}
+                      {(p.project_year as string) && <span className="px-2 py-0.5 text-[10px] font-medium bg-zinc-100 text-zinc-600 rounded-full flex items-center gap-1"><Calendar className="w-2.5 h-2.5" />{p.project_year as string}</span>}
+                      {(p.project_url as string) && <a href={p.project_url as string} target="_blank" rel="noopener noreferrer" className="px-2 py-0.5 text-[10px] font-medium bg-blue-50 text-blue-600 rounded-full flex items-center gap-1 hover:bg-blue-100"><Globe className="w-2.5 h-2.5" />Website</a>}
+                    </div>
                     <div className="flex items-center justify-between mt-3 pt-3 border-t border-zinc-100">
-                      <span className="text-xs text-zinc-400 flex items-center gap-1"><GripVertical className="w-3 h-3" /> #{p.sort_order}</span>
+                      <span className="text-xs text-zinc-400 flex items-center gap-1"><GripVertical className="w-3 h-3" /> #{p.sort_order as number}</span>
                       <div className="flex gap-2">
                         <button onClick={() => openPortfolioModal(p)} className="text-xs text-zinc-500 hover:text-zinc-900 font-medium">Edit</button>
-                        <button onClick={() => removePortfolio(p.id)} className="text-xs text-red-500 hover:text-red-700 font-medium">Delete</button>
+                        <button onClick={() => removePortfolio(p.id as number)} className="text-xs text-red-500 hover:text-red-700 font-medium">Delete</button>
                       </div>
                     </div>
                   </div>
@@ -414,8 +451,33 @@ export default function ShowcaseManagement() {
                 </div>
               </div>
 
-              {/* Sort + Publish */}
+              {/* Project URL + Year */}
               <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">
+                    <Globe className="w-3.5 h-3.5 inline mr-1" />Website / Project URL
+                  </label>
+                  <input type="url" placeholder="https://example.com" value={portfolioForm.project_url} onChange={e => setPortfolioForm(f => ({ ...f, project_url: e.target.value }))}
+                    className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">
+                    <Calendar className="w-3.5 h-3.5 inline mr-1" />Project Year
+                  </label>
+                  <input type="text" placeholder="2024" maxLength={4} value={portfolioForm.project_year} onChange={e => setPortfolioForm(f => ({ ...f, project_year: e.target.value }))}
+                    className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none" />
+                </div>
+              </div>
+
+              {/* Full Description */}
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">Full Description (opsional)</label>
+                <textarea rows={4} placeholder="Deskripsi lengkap proyek, teknologi yang dipakai, hasil yang dicapai, dll." value={portfolioForm.full_description} onChange={e => setPortfolioForm(f => ({ ...f, full_description: e.target.value }))}
+                  className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none" />
+              </div>
+
+              {/* Sort + Publish + Featured */}
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-zinc-700 mb-1">Sort Order</label>
                   <input type="number" value={portfolioForm.sort_order} onChange={e => setPortfolioForm(f => ({ ...f, sort_order: parseInt(e.target.value) || 0 }))}
@@ -428,6 +490,18 @@ export default function ShowcaseManagement() {
                     <span className="text-sm font-medium text-zinc-700">Published</span>
                   </label>
                 </div>
+                <div className="flex items-end pb-1">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={portfolioForm.is_featured} onChange={e => setPortfolioForm(f => ({ ...f, is_featured: e.target.checked }))}
+                      className="w-4 h-4 rounded border-zinc-300 text-yellow-500 focus:ring-yellow-400" />
+                    <span className="text-sm font-medium text-zinc-700 flex items-center gap-1"><Star className="w-3.5 h-3.5 text-yellow-500" /> Featured</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-lg bg-yellow-50 border border-yellow-200 text-xs text-yellow-800 flex items-start gap-2">
+                <Star className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-yellow-600" />
+                <span><strong>Featured</strong> wajib diaktifkan agar portfolio tampil di halaman landing publik. Item yang tidak Featured hanya tersimpan sebagai arsip.</span>
               </div>
 
               {/* Actions */}
