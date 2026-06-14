@@ -116,12 +116,10 @@ export default function PosMemberList() {
         created_at: new Date().toISOString(),
       };
 
-      const portalUrl = `${window.location.origin}/customer/${newMember.name || 'member'}/member`;
       const waMsg =
         `Halo ${memberForm.name.trim()}! 👋\n\n` +
-        `Kamu sudah terdaftar sebagai member kami. 🎉\n\n` +
-        `📱 Lihat poin & riwayat pesananmu:\n` +
-        `Masukkan nomor HP kamu di portal member kami.\n\n` +
+        `Selamat, kamu sudah terdaftar sebagai member kami! 🎉\n\n` +
+        `Tunjukkan nomor HP ini kepada kasir untuk mendapatkan poin di setiap transaksi.\n\n` +
         `Terima kasih sudah menjadi member! 🌟`;
 
       const waLink = buildWaLink(memberForm.phone.trim(), waMsg);
