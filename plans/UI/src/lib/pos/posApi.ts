@@ -277,36 +277,3 @@ export function createCustomerReservation(payload: {
     body: JSON.stringify(payload),
   });
 }
-
-// ─── Public POS Member (no auth — customer self-service) ───
-
-export type PosMemberInfo = {
-  id: number;
-  name: string;
-  phone: string;
-  email: string | null;
-  total_points: number;
-  redeemable_points: number;
-  total_orders: number;
-  total_spent: number;
-  tier: string;
-};
-
-export function lookupPublicPosMember(orgSlug: string, phone: string) {
-  return publicRequest<{ member: PosMemberInfo | null }>(
-    `/pos/public/members/lookup?org=${encodeURIComponent(orgSlug)}&phone=${encodeURIComponent(phone)}`
-  );
-}
-
-export function registerPublicPosMember(
-  orgSlug: string,
-  payload: { name: string; phone: string; email?: string }
-) {
-  return publicRequest<{ member: PosMemberInfo; created_member: boolean }>(
-    '/pos/public/members/register',
-    {
-      method: 'POST',
-      body: JSON.stringify({ org_slug: orgSlug, ...payload }),
-    }
-  );
-}

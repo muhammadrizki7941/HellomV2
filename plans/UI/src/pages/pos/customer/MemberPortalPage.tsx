@@ -11,7 +11,7 @@ import {
   User,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { registerPublicPosMember, lookupPublicPosMember } from '@/lib/pos/posApi';
+import { registerPublicPosMember, lookupPublicPosMember } from '@/lib/hellomApi';
 
 type ViewState = 'checking' | 'login' | 'register' | 'dashboard';
 
@@ -119,8 +119,9 @@ export default function MemberPortalPage() {
 
   const refreshFromServer = async (phone: string) => {
     try {
-      const res = await lookupPublicPosMember(slug, phone);
-      if (res.member) persistMember(res.member);
+      const res = (await lookupPublicPosMember(slug, phone)) as any;
+      const fresh: PosMemberSession = res?.member || res?.data?.member;
+      if (fresh) persistMember(fresh);
     } catch {
       // Gagal refresh — tetap tampilkan data cache
     }
@@ -136,9 +137,10 @@ export default function MemberPortalPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await lookupPublicPosMember(slug, loginPhone);
-      if (!res.member) throw new Error('Nomor HP tidak ditemukan.');
-      persistMember(res.member);
+      const res = (await lookupPublicPosMember(slug, loginPhone)) as any;
+      const found: PosMemberSession = res?.member || res?.data?.member;
+      if (!found) throw new Error('Nomor HP tidak ditemukan.');
+      persistMember(found);
       setView('dashboard');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Nomor HP tidak terdaftar sebagai member.';
@@ -153,12 +155,14 @@ export default function MemberPortalPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await registerPublicPosMember(slug, {
+      const res = (await registerPublicPosMember(slug, {
         name: regName,
         phone: regPhone,
         email: regEmail || undefined,
-      });
-      persistMember(res.member);
+      })) as any;
+      const created: PosMemberSession = res?.member || res?.data?.member;
+      if (!created) throw new Error('Pendaftaran gagal. Coba lagi.');
+      persistMember(created);
       setView('dashboard');
       setSuccessMsg('Pendaftaran berhasil! Selamat bergabung 🎉');
       setTimeout(() => setSuccessMsg(null), 4000);
