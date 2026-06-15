@@ -109,8 +109,8 @@ export default function PosAccess() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <a
-              href={payload.access.admin_url}
+            <Link
+              to={payload.access.admin_url}
               className="rounded-xl border border-zinc-200 bg-white p-5 hover:border-zinc-300 hover:shadow-sm transition"
             >
               <div className="inline-flex p-2 rounded-lg bg-zinc-100 text-zinc-800">
@@ -121,10 +121,10 @@ export default function PosAccess() {
               <p className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-zinc-900">
                 Buka Admin <ExternalLink className="w-4 h-4" />
               </p>
-            </a>
+            </Link>
 
-            <a
-              href={payload.access.cashier_url}
+            <Link
+              to={payload.access.cashier_url}
               className="rounded-xl border border-zinc-200 bg-white p-5 hover:border-zinc-300 hover:shadow-sm transition"
             >
               <div className="inline-flex p-2 rounded-lg bg-blue-100 text-blue-700">
@@ -135,7 +135,7 @@ export default function PosAccess() {
               <p className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-zinc-900">
                 Buka Cashier <ExternalLink className="w-4 h-4" />
               </p>
-            </a>
+            </Link>
 
             <Link
               to="/dashboard/apps/pos/customer"

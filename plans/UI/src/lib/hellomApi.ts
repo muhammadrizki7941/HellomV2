@@ -210,10 +210,10 @@ export function register(payload: {
   });
 }
 
-export function ssoLogin(payload: { provider: string; token: string }) {
+export function ssoLogin(ssoToken: string) {
   return apiRequest<{ token: string; user: unknown }>('/auth/sso-login', {
     method: 'POST',
-    body: payload,
+    body: { sso_token: ssoToken },
     token: null,
   });
 }
