@@ -68,7 +68,7 @@ class ShowcaseController extends BaseApiController
             'is_published' => ['boolean'],
             'is_featured' => ['boolean'],
         ]);
-        $validated['slug'] = $validated['slug'] ?: Str::slug($validated['title']);
+        $validated['slug'] = ($validated['slug'] ?? null) ?: Str::slug($validated['title']);
 
         $portfolio = ShowcasePortfolio::query()->create($validated);
 
