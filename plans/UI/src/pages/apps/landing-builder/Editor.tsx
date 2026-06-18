@@ -246,14 +246,21 @@ export default function LandingBuilder() {
     showFloatingWhatsapp: false
   });
 
-  // Mobile Detection
+  // Mobile / tablet detection.
+  // Use the touch-friendly editor for anything below a real desktop width (1024px),
+  // so large phones, phablets, foldables and tablets no longer get the cramped
+  // desktop editor. Listen to orientation changes too (landscape phones).
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    const checkMobile = () => setIsMobile(window.innerWidth < 1024);
     checkMobile();
     window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
+    window.addEventListener('orientationchange', checkMobile);
+    return () => {
+      window.removeEventListener('resize', checkMobile);
+      window.removeEventListener('orientationchange', checkMobile);
+    };
   }, []);
 
   useEffect(() => {

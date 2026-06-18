@@ -144,10 +144,12 @@ export default function LandingBuilder() {
 
       {/* Content */}
       {activeTab === 'editor' ? (
-        /* Full-bleed on mobile: cancel DashboardLayout p-4 horizontally.
+        /* Full-bleed on mobile/tablet: cancel DashboardLayout p-4 horizontally.
+           The dashboard uses the mobile chrome (fixed header + off-canvas sidebar, p-4)
+           up to the lg breakpoint, so the editor stays full-bleed up to lg too.
            Height = viewport minus: mobile-header(80px) + tab-bar(~52px) + space-y-6(24px) + bottom-safe(~8px) */
         <div
-          className="-mx-4 md:mx-0 overflow-hidden"
+          className="-mx-4 lg:mx-0 overflow-hidden"
           style={{ height: 'calc(100svh - 164px)' }}
         >
           <Editor />

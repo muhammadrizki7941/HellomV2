@@ -186,7 +186,7 @@ export default function DashboardLayout() {
   return (
     <div className="min-h-screen bg-zinc-50 flex font-sans text-zinc-900 selection:bg-yellow-400 selection:text-black">
       {/* Mobile Header */}
-      <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-white border-b border-zinc-200 flex items-center justify-between px-4 z-30">
+      <div className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-white border-b border-zinc-200 flex items-center justify-between px-4 z-30">
         <Link to="/" className="flex items-center gap-2">
           <img src={getBrandLogo(brand?.logo_url)} alt={brand?.app_name || BRAND_NAME} draggable={false} loading="lazy" className="w-8 h-8 rounded-lg object-cover border border-zinc-200" />
           <span className="text-xl font-bold tracking-tight">{brand?.app_name || BRAND_NAME}</span>
@@ -202,17 +202,17 @@ export default function DashboardLayout() {
       {/* Sidebar Overlay (Mobile) */}
       {isSidebarOpen && (
         <div 
-          className="fixed inset-0 bg-black/50 z-20 md:hidden"
+          className="fixed inset-0 bg-black/50 z-20 lg:hidden"
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
 
       {/* Sidebar */}
       <aside className={cn(
-        "fixed top-0 bottom-0 left-0 w-64 bg-white border-r border-zinc-200 flex flex-col z-30 transition-transform duration-300 ease-in-out md:translate-x-0 pt-16 md:pt-0",
+        "fixed top-0 bottom-0 left-0 w-64 bg-white border-r border-zinc-200 flex flex-col z-30 transition-transform duration-300 ease-in-out lg:translate-x-0 pt-16 lg:pt-0",
         isSidebarOpen ? "translate-x-0" : "-translate-x-full"
       )}>
-          <div className="hidden md:flex p-6 border-b border-zinc-100">
+          <div className="hidden lg:flex p-6 border-b border-zinc-100">
           <Link to="/" className="flex items-center gap-2">
             <img src={getBrandLogo(brand?.logo_url)} alt={brand?.app_name || BRAND_NAME} draggable={false} loading="lazy" className="w-8 h-8 rounded-lg object-cover border border-zinc-200" />
             <span className="text-xl font-bold tracking-tight">{brand?.app_name || BRAND_NAME}</span>
@@ -345,9 +345,9 @@ export default function DashboardLayout() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 md:ml-64 p-4 md:p-8 pt-20 md:pt-8 transition-all duration-300">
+      <main className="flex-1 lg:ml-64 p-4 lg:p-8 pt-20 lg:pt-8 transition-all duration-300">
         <div className="max-w-7xl mx-auto">
-          <div className="hidden md:flex mb-6 items-center justify-between rounded-3xl border border-zinc-200 bg-white px-5 py-4 shadow-sm">
+          <div className="hidden lg:flex mb-6 items-center justify-between rounded-3xl border border-zinc-200 bg-white px-5 py-4 shadow-sm">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Member Workspace</p>
               <p className="mt-1 text-sm text-zinc-700">Pantau pembelian, aplikasi aktif, dan notifikasi terbaru dari header atas ini.</p>

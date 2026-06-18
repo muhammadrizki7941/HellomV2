@@ -209,8 +209,17 @@ class AuthController extends BaseApiController
             organizationName: $organizationName,
         ));
 
-        // Create notification for new user registration
-        $this->notificationService->createNewUserNotif($user, 'Hellom Platform');
+        // Create notification for new user registration.
+        // The account is already committed at this point, so a failure here
+        // (e.g. realtime/email side-effects) must never turn a successful
+        // registration into a 500.
+        try {
+            $this->notificationService->createNewUserNotif($user, 'Hellom Platform');
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('createNewUserNotif failed after registration: ' . $e->getMessage(), [
+                'user_id' => $user->id,
+            ]);
+        }
 
         return $this->ok([
             'token' => $plainToken,
@@ -222,6 +231,10 @@ class AuthController extends BaseApiController
 
     private function seedDefaultCategories(Organization $org): void
     {
+        // POS scopes categories by the tenant SLUG (pos_tenant_slug ?? slug),
+        // and categories.tenant_id is a varchar holding that slug — not the id.
+        $tenantId = $org->pos_tenant_slug ?: $org->slug;
+
         $categories = [
             ['name' => 'Food', 'slug' => 'food', 'is_active' => true, 'sort_order' => 1],
             ['name' => 'Minuman', 'slug' => 'minuman', 'is_active' => true, 'sort_order' => 2],
@@ -229,13 +242,17 @@ class AuthController extends BaseApiController
         ];
 
         foreach ($categories as $category) {
-            \App\Models\Category::create([
-                'tenant_id' => $org->id,
-                'name' => $category['name'],
-                'slug' => $category['slug'],
-                'is_active' => $category['is_active'],
-                'sort_order' => $category['sort_order'],
-            ]);
+            \App\Models\Category::query()->firstOrCreate(
+                [
+                    'tenant_id' => $tenantId,
+                    'slug' => $category['slug'],
+                ],
+                [
+                    'name' => $category['name'],
+                    'is_active' => $category['is_active'],
+                    'sort_order' => $category['sort_order'],
+                ]
+            );
         }
     }
 
