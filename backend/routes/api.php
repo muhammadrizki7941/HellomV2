@@ -162,6 +162,8 @@ Route::prefix('v1/hellom')->name('api.v1.hellom.')->group(function () {
             Route::get('/products', [ConsumerProductController::class, 'index']);
             Route::get('/products/{slug}', [ConsumerProductController::class, 'show']);
             Route::post('/products/{id}/purchase', [ConsumerProductController::class, 'purchase']);
+            Route::get('/products/{id}/purchase/status', [ConsumerProductController::class, 'purchaseStatus']);
+            Route::post('/products/{id}/purchase/cancel', [ConsumerProductController::class, 'cancelPurchase']);
             Route::post('/products/{id}/download/{fileId}', [ConsumerProductController::class, 'download']);
             Route::get('/products/{id}/docs/{docId}/preview', [ConsumerProductController::class, 'previewDoc']);
             Route::get('/my-purchases', [ConsumerProductController::class, 'myPurchases']);

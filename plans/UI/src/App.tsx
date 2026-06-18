@@ -6,6 +6,10 @@ import LoginPage from '@/pages/auth/LoginPage';
 import RegisterPage from '@/pages/auth/RegisterPage';
 import ForgotPassword from '@/pages/auth/ForgotPassword';
 import ProdukPublicPage from '@/pages/produk/index';
+import FaqPage from '@/pages/public/FaqPage';
+import RefundPolicyPage from '@/pages/public/RefundPolicyPage';
+import TermsPage from '@/pages/public/TermsPage';
+import ContactPage from '@/pages/public/ContactPage';
 import DashboardLayout from '@/layouts/DashboardLayout';
 import DashboardHome from '@/pages/member/DashboardHome';
 import MemberProfile from '@/pages/member/MemberProfile';
@@ -74,6 +78,12 @@ export default function App() {
       <Route path="/customer/:organizationSlug/order/:tableToken/member" element={<MemberPortalPage />} />
 
       <Route path="/produk" element={<ProdukPublicPage />} />
+
+      {/* Legal & Info Pages (public) */}
+      <Route path="/faq" element={<FaqPage />} />
+      <Route path="/refund-policy" element={<RefundPolicyPage />} />
+      <Route path="/terms" element={<TermsPage />} />
+      <Route path="/contact" element={<ContactPage />} />
 
       {/* Member Routes (Protected) */}
       <Route path="/dashboard" element={<DashboardLayout />}>

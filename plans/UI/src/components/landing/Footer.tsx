@@ -1,6 +1,7 @@
 import type { BrandSettings } from '@/hooks/useBrand';
 import { Link } from 'react-router-dom';
 import { getSessionUser, getToken } from '@/lib/hellomApi';
+import { formatCompanyAddress } from '@/lib/companyInfo';
 
 interface FooterProps {
   brand: BrandSettings;
@@ -10,10 +11,11 @@ interface FooterProps {
 export const Footer = ({ brand, logoSrc }: FooterProps) => {
   const brandName = brand.app_name || brand.business_name || 'Hellom';
   const isAuthenticated = Boolean(getToken() && getSessionUser());
+  const companyAddress = formatCompanyAddress();
 
   return (
     <footer className="border-t border-white/5 bg-zinc-950 px-6 py-14">
-      <div className="mx-auto grid max-w-7xl gap-10 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
+      <div className="mx-auto grid max-w-7xl gap-10 md:grid-cols-[1.4fr_1fr_1fr_1fr_1.2fr]">
         <div>
           <Link to="/" className="flex items-center gap-3">
             {logoSrc ? (
@@ -55,21 +57,35 @@ export const Footer = ({ brand, logoSrc }: FooterProps) => {
         </div>
 
         <div>
+          <h4 className="text-sm font-bold uppercase tracking-wider text-white" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>Bantuan & Legal</h4>
+          <div className="mt-4 space-y-3 text-sm text-zinc-400">
+            <Link to="/faq" className="block hover:text-white">FAQ</Link>
+            <Link to="/refund-policy" className="block hover:text-white">Kebijakan Refund</Link>
+            <Link to="/terms" className="block hover:text-white">Syarat & Ketentuan</Link>
+            <Link to="/contact" className="block hover:text-white">Kontak</Link>
+          </div>
+        </div>
+
+        <div>
           <h4 className="text-sm font-bold uppercase tracking-wider text-white" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>Kontak</h4>
           <div className="mt-4 space-y-3 text-sm text-zinc-400">
-            {brand.support_email ? <div>{brand.support_email}</div> : <div>support@hellom.app</div>}
+            {brand.support_email ? (
+              <a href={`mailto:${brand.support_email}`} className="block hover:text-white">{brand.support_email}</a>
+            ) : <div>support@hellomspace.com</div>}
             {brand.support_phone ? <div>{brand.support_phone}</div> : <div>WhatsApp support aktif</div>}
-            <a href="#cta" className="block hover:text-white">Mulai konsultasi</a>
+            {companyAddress ? <div className="leading-relaxed">{companyAddress}</div> : null}
+            <Link to="/contact" className="block hover:text-white">Mulai konsultasi</Link>
           </div>
         </div>
       </div>
 
       <div className="mx-auto mt-10 flex max-w-7xl flex-col gap-3 border-t border-white/5 pt-6 text-xs text-zinc-500 md:flex-row md:items-center md:justify-between">
         <p>{brand.footer_text || '© 2026 Hellom. Digital products, SaaS, dan layanan untuk bisnis modern.'}</p>
-        <div className="flex gap-2">
-          <span className="rounded border border-white/10 px-3 py-1">Subscription</span>
-          <span className="rounded border border-white/10 px-3 py-1">One-time buy</span>
-          <span className="rounded border border-white/10 px-3 py-1">Lisensi fleksibel</span>
+        <div className="flex flex-wrap gap-4">
+          <Link to="/faq" className="hover:text-white">FAQ</Link>
+          <Link to="/refund-policy" className="hover:text-white">Refund</Link>
+          <Link to="/terms" className="hover:text-white">Syarat & Ketentuan</Link>
+          <Link to="/contact" className="hover:text-white">Kontak</Link>
         </div>
       </div>
     </footer>

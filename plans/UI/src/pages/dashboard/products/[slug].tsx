@@ -1,20 +1,28 @@
 import { type ReactElement, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import QRCode from 'qrcode';
 import {
+  AlertTriangle,
   CheckCircle,
+  Copy,
   CreditCard,
   Download,
   ExternalLink,
+  Loader2,
   Lock,
   MessageCircle,
+  QrCode,
   ShoppingBag,
+  XCircle,
 } from 'lucide-react';
 import {
+  cancelProductPurchase,
   downloadProductFile,
   fetchAuthorizedBlobUrl,
   getConsumerProductBySlug,
   getImageUrl,
   getPaymentGatewayStatus,
+  getProductPurchaseStatus,
   purchaseProduct,
 } from '@/lib/hellomApi';
 import useBrand from '@/hooks/useBrand';
@@ -54,6 +62,21 @@ type ProductDetail = {
   docs?: ProductDoc[];
 };
 
+type PaymentInstructions = {
+  provider?: string | null;
+  method?: string | null;
+  channel?: string | null;
+  channel_label?: string | null;
+  va_number?: string | null;
+  qr_string?: string | null;
+  qr_image_url?: string | null;
+  amount?: number | null;
+  fee?: number | null;
+  expires_at?: string | null;
+  reference_id?: string | null;
+  transaction_id?: string | null;
+};
+
 type Purchase = {
   id?: number;
   transaction_code?: string | null;
@@ -62,8 +85,22 @@ type Purchase = {
   payment_method?: string | null;
   payment_gateway?: string | null;
   checkout_url?: string | null;
+  payment_instructions?: PaymentInstructions | null;
   created_at?: string | null;
 };
+
+// Channels supported by the iPaymu direct-charge (in-dashboard) flow.
+const IPAYMU_CHANNELS: Array<{ key: string; label: string; type: 'qris' | 'va' }> = [
+  { key: 'qris', label: 'QRIS (semua e-wallet & m-banking)', type: 'qris' },
+  { key: 'bca', label: 'BCA Virtual Account', type: 'va' },
+  { key: 'bni', label: 'BNI Virtual Account', type: 'va' },
+  { key: 'bri', label: 'BRI Virtual Account', type: 'va' },
+  { key: 'mandiri', label: 'Mandiri Virtual Account', type: 'va' },
+  { key: 'permata', label: 'Permata Virtual Account', type: 'va' },
+  { key: 'cimb', label: 'CIMB Niaga Virtual Account', type: 'va' },
+  { key: 'indomaret', label: 'Indomaret (bayar di kasir)', type: 'va' },
+  { key: 'alfamart', label: 'Alfamart (bayar di kasir)', type: 'va' },
+];
 
 type ManualPaymentMethod = {
   key: string;
@@ -129,6 +166,7 @@ const purchaseStatusLabel = (status?: string | null) => {
   if (status === 'pending') return 'Menunggu Pembayaran';
   if (status === 'failed') return 'Pembayaran Gagal';
   if (status === 'refunded') return 'Refund';
+  if (status === 'cancelled') return 'Dibatalkan';
   return 'Belum Ada Transaksi';
 };
 
@@ -137,6 +175,7 @@ const purchaseStatusClass = (status?: string | null) => {
   if (status === 'pending') return 'border-amber-200 bg-amber-50 text-amber-800';
   if (status === 'failed') return 'border-rose-200 bg-rose-50 text-rose-700';
   if (status === 'refunded') return 'border-zinc-200 bg-zinc-100 text-zinc-600';
+  if (status === 'cancelled') return 'border-zinc-200 bg-zinc-100 text-zinc-600';
   return 'border-zinc-200 bg-zinc-50 text-zinc-600';
 };
 
@@ -182,6 +221,11 @@ export default function ProductSlugPage(): ReactElement {
   const [gatewayStatus, setGatewayStatus] = useState<GatewayStatus | null>(null);
   const [paymentFlow, setPaymentFlow] = useState<'gateway' | 'manual'>('gateway');
   const [manualMethod, setManualMethod] = useState('');
+  const [gatewayChannel, setGatewayChannel] = useState('qris');
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [agreedNoRefund, setAgreedNoRefund] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [docPreviewUrls, setDocPreviewUrls] = useState<Record<number, string>>({});
   const [checkoutStep, setCheckoutStep] = useState<CheckoutStep>('product');
 
@@ -286,6 +330,8 @@ export default function ProductSlugPage(): ReactElement {
   const isPendingGateway = isPending && purchase?.payment_gateway !== 'manual';
   const isFree = product?.type === 'free' || (product?.price || 0) === 0;
   const gatewayReady = Boolean(gatewayStatus?.is_ready);
+  const isIpaymu = gatewayStatus?.provider === 'ipaymu';
+  const gatewayInstructions = isPendingGateway ? purchase?.payment_instructions || null : null;
   const manualConfirmationEnabled = Boolean(gatewayStatus?.manual_confirmation?.enabled);
   const manualEnabled = manualConfirmationEnabled
     && Boolean(gatewayStatus?.manual_payment?.enabled)
@@ -335,6 +381,94 @@ export default function ProductSlugPage(): ReactElement {
     purchase?.payment_method,
   ]);
 
+  // Auto-poll the purchase status while a gateway payment is pending so the
+  // dashboard unlocks instantly once iPaymu confirms — without leaving the page.
+  useEffect(() => {
+    if (!product?.id) return;
+    const pending = purchase?.payment_status === 'pending'
+      && Boolean(purchase?.payment_gateway)
+      && purchase?.payment_gateway !== 'manual';
+    if (!pending) return;
+
+    let active = true;
+    const interval = window.setInterval(async () => {
+      try {
+        const res = (await getProductPurchaseStatus(product.id)) as {
+          payment_status?: string;
+          is_purchased?: boolean;
+        };
+        if (!active) return;
+        if (res.is_purchased || res.payment_status === 'paid') {
+          window.clearInterval(interval);
+          await loadDetail();
+        }
+      } catch {
+        // keep polling; webhook remains the source of truth
+      }
+    }, 5000);
+
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [product?.id, purchase?.payment_status, purchase?.payment_gateway]);
+
+  const handleCopy = async (field: string, value?: string | null) => {
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedField(field);
+      window.setTimeout(() => setCopiedField((current) => (current === field ? null : current)), 1500);
+    } catch {
+      // clipboard may be unavailable; ignore silently
+    }
+  };
+
+  // Render QRIS client-side from the raw QR string when the gateway does not
+  // return a ready-made QR image, so the code is always scannable.
+  useEffect(() => {
+    const qrString = gatewayInstructions?.qr_string || '';
+    const hasImage = Boolean(gatewayInstructions?.qr_image_url);
+    if (!qrString || hasImage) {
+      setQrDataUrl(null);
+      return;
+    }
+
+    let cancelled = false;
+    QRCode.toDataURL(qrString, { width: 280, margin: 1 })
+      .then((url) => {
+        if (!cancelled) setQrDataUrl(url);
+      })
+      .catch(() => {
+        if (!cancelled) setQrDataUrl(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [gatewayInstructions?.qr_string, gatewayInstructions?.qr_image_url]);
+
+  const handleCancelPurchase = async () => {
+    if (!product || cancelling) return;
+    if (!window.confirm('Batalkan pembelian ini? Instruksi pembayaran akan dihapus dan kamu bisa memesan ulang kapan saja.')) {
+      return;
+    }
+
+    setCancelling(true);
+    setError(null);
+
+    try {
+      await cancelProductPurchase(product.id);
+      setAgreedNoRefund(false);
+      setCheckoutStep('product');
+      await loadDetail();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Gagal membatalkan pembelian');
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   const whatsappUrl = useMemo(() => {
     const phone = normalizeWhatsAppNumber(brand.support_phone);
     if (!phone || !product) return '';
@@ -379,24 +513,39 @@ export default function ProductSlugPage(): ReactElement {
       setManualMethod(fallbackMethod);
     }
 
+    if (!isFree && !agreedNoRefund) {
+      setError('Mohon centang persetujuan bahwa pembelian bersifat final dan tidak dapat di-refund.');
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
 
     try {
       const resolvedManualMethod = manualMethod || manualMethods[0]?.key || '';
+      const useDirectGateway = !isFree && paymentFlow === 'gateway' && isIpaymu;
       const response = await purchaseProduct(product.id, {
         payment_flow: isFree ? undefined : paymentFlow,
         manual_payment_method: !isFree && paymentFlow === 'manual' ? resolvedManualMethod : undefined,
+        gateway_channel: useDirectGateway ? gatewayChannel : undefined,
       });
 
       const payload = response as {
         checkout_url?: string | null;
+        payment_instructions?: PaymentInstructions | null;
       };
 
       await loadDetail();
 
       if (payload.checkout_url) {
         window.location.href = payload.checkout_url;
+        return;
+      }
+
+      // Direct charge (VA/QRIS): stay in the dashboard and render instructions
+      // from the refreshed purchase. Polling will unlock once it is paid.
+      if (payload.payment_instructions) {
+        setCheckoutStep('confirm');
         return;
       }
 
@@ -418,13 +567,9 @@ export default function ProductSlugPage(): ReactElement {
     setError(null);
 
     try {
-      const response = await downloadProductFile(product.id, fileId);
-      const url = (response as { download_url?: string }).download_url;
-      if (url) {
-        window.open(url, '_blank', 'noopener');
-      }
+      await downloadProductFile(product.id, fileId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Gagal generate link download');
+      setError(err instanceof Error ? err.message : 'Gagal mengunduh file');
     } finally {
       setSubmitting(false);
     }
@@ -587,10 +732,35 @@ export default function ProductSlugPage(): ReactElement {
                           Pembayaran via {gatewayLabel(gatewayStatus?.provider)}
                         </div>
                         <p className="mt-1 text-sm text-zinc-600">
-                          Kamu akan diarahkan ke halaman pembayaran aman dan status diperbarui otomatis setelah berhasil.
+                          {isIpaymu
+                            ? 'Bayar langsung di halaman ini lewat QRIS atau Virtual Account — tanpa keluar dashboard. Status diperbarui otomatis.'
+                            : 'Kamu akan diarahkan ke halaman pembayaran aman dan status diperbarui otomatis setelah berhasil.'}
                         </p>
                       </div>
                     </label>
+                  )}
+
+                  {canUseGateway && paymentFlow === 'gateway' && isIpaymu && (
+                    <div className="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+                      <label htmlFor="gateway-channel" className="text-sm font-semibold text-zinc-900">
+                        Pilih metode pembayaran
+                      </label>
+                      <select
+                        id="gateway-channel"
+                        value={gatewayChannel}
+                        onChange={(event) => setGatewayChannel(event.target.value)}
+                        className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-3 text-sm text-zinc-900 outline-none focus:border-zinc-400"
+                      >
+                        {IPAYMU_CHANNELS.map((channel) => (
+                          <option key={channel.key} value={channel.key}>
+                            {channel.label}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-zinc-500">
+                        Pilih QRIS untuk bayar instan, atau Virtual Account untuk transfer m-banking / ATM.
+                      </p>
+                    </div>
                   )}
 
                   {canUseManual && (
@@ -680,6 +850,35 @@ export default function ProductSlugPage(): ReactElement {
             </div>
           )}
 
+          {!isPurchased && !isFree && !isPending && checkoutStep === 'confirm' && (
+            <div className="rounded-2xl border border-amber-300 bg-amber-50 p-5">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+                <div>
+                  <h2 className="text-sm font-semibold text-amber-900">Perhatian sebelum membayar</h2>
+                  <p className="mt-1 text-sm leading-relaxed text-amber-800">
+                    Pembelian produk digital bersifat <span className="font-semibold">final</span>. Setelah pembayaran
+                    berhasil, produk langsung aktif dan dapat diunduh, sehingga{' '}
+                    <span className="font-semibold">tidak dapat dibatalkan maupun di-refund</span> dengan alasan apa pun.
+                    Pastikan produk yang kamu pilih sudah benar. Selama pembayaran belum lunas, kamu masih bisa
+                    membatalkan transaksi ini.
+                  </p>
+                </div>
+              </div>
+              <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-amber-200 bg-white px-4 py-3">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={agreedNoRefund}
+                  onChange={(event) => setAgreedNoRefund(event.target.checked)}
+                />
+                <span className="text-sm text-zinc-700">
+                  Saya mengerti dan setuju bahwa pembelian ini tidak dapat di-refund.
+                </span>
+              </label>
+            </div>
+          )}
+
           {isPendingManual && activeManualMethod && (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
               <h2 className="text-sm font-semibold text-amber-900">Instruksi Pembayaran Manual</h2>
@@ -722,6 +921,105 @@ export default function ProductSlugPage(): ReactElement {
                   className="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm font-semibold text-zinc-700 hover:bg-zinc-50"
                 >
                   Refresh status
+                </button>
+              </div>
+            </div>
+          )}
+
+          {gatewayInstructions && (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin text-emerald-700" />
+                <h2 className="text-sm font-semibold text-emerald-900">
+                  Selesaikan Pembayaran — {gatewayInstructions.channel_label || gatewayLabel(gatewayStatus?.provider)}
+                </h2>
+              </div>
+              <p className="mt-2 text-sm text-emerald-800">
+                Halaman ini akan memperbarui status otomatis setelah pembayaran kamu diterima. Jangan tutup dulu ya.
+              </p>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-xl border border-emerald-200 bg-white px-4 py-3">
+                  <div className="text-xs uppercase tracking-wide text-zinc-400">Total Bayar</div>
+                  <div className="mt-1 text-lg font-bold text-zinc-900">
+                    {formatPrice(Number(gatewayInstructions.amount ?? purchase?.amount_paid ?? product.price ?? 0))}
+                  </div>
+                </div>
+                {gatewayInstructions.expires_at ? (
+                  <div className="rounded-xl border border-emerald-200 bg-white px-4 py-3">
+                    <div className="text-xs uppercase tracking-wide text-zinc-400">Bayar Sebelum</div>
+                    <div className="mt-1 text-sm font-semibold text-zinc-900">
+                      {new Date(gatewayInstructions.expires_at).toLocaleString('id-ID')}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
+              {gatewayInstructions.va_number ? (
+                <div className="mt-4 rounded-xl border border-emerald-200 bg-white p-4">
+                  <div className="text-xs uppercase tracking-wide text-zinc-400">Nomor Virtual Account</div>
+                  <div className="mt-2 flex items-center justify-between gap-3">
+                    <span className="text-xl font-bold tracking-wider text-zinc-900">{gatewayInstructions.va_number}</span>
+                    <button
+                      type="button"
+                      onClick={() => void handleCopy('va', gatewayInstructions.va_number)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      {copiedField === 'va' ? 'Tersalin' : 'Salin'}
+                    </button>
+                  </div>
+                  <p className="mt-3 text-sm text-zinc-600">
+                    Transfer tepat sesuai nominal ke nomor VA di atas melalui m-banking, internet banking, atau ATM.
+                  </p>
+                </div>
+              ) : null}
+
+              {(gatewayInstructions.qr_image_url || gatewayInstructions.qr_string) && !gatewayInstructions.va_number ? (
+                <div className="mt-4 rounded-xl border border-emerald-200 bg-white p-4 text-center">
+                  <div className="flex items-center justify-center gap-2 text-sm font-semibold text-zinc-900">
+                    <QrCode className="h-4 w-4" /> Scan QRIS untuk Membayar
+                  </div>
+                  {gatewayInstructions.qr_image_url ? (
+                    <img
+                      src={gatewayInstructions.qr_image_url}
+                      alt="QRIS"
+                      className="mx-auto mt-4 h-60 w-60 rounded-xl border border-zinc-200 object-contain"
+                    />
+                  ) : qrDataUrl ? (
+                    <img
+                      src={qrDataUrl}
+                      alt="QRIS"
+                      className="mx-auto mt-4 h-60 w-60 rounded-xl border border-zinc-200 object-contain"
+                    />
+                  ) : (
+                    <div className="mt-4 break-all rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-4 py-4 text-left text-xs text-zinc-600">
+                      {gatewayInstructions.qr_string}
+                    </div>
+                  )}
+                  <p className="mt-3 text-sm text-zinc-600">
+                    Buka aplikasi e-wallet atau m-banking apa pun, pilih bayar QRIS, lalu scan kode di atas.
+                  </p>
+                </div>
+              ) : null}
+
+              <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={() => void loadDetail()}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-300 bg-white px-4 py-3 text-sm font-semibold text-emerald-800 hover:bg-emerald-100"
+                >
+                  <CheckCircle className="h-4 w-4" />
+                  Saya sudah bayar — cek status
+                </button>
+                <button
+                  type="button"
+                  disabled={cancelling}
+                  onClick={() => void handleCancelPurchase()}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-4 py-3 text-sm font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-60"
+                >
+                  <XCircle className="h-4 w-4" />
+                  {cancelling ? 'Membatalkan...' : 'Batalkan pembelian'}
                 </button>
               </div>
             </div>
@@ -889,7 +1187,9 @@ export default function ProductSlugPage(): ReactElement {
                   <p className="mt-2 text-sm text-zinc-700">
                     {paymentFlow === 'manual'
                       ? `Setelah konfirmasi, kamu akan mendapat instruksi pembayaran via ${paymentMethodLabel(manualMethod, manualMethods)}.`
-                      : `Kamu akan diarahkan ke halaman pembayaran ${gatewayLabel(gatewayStatus?.provider)} dan status diperbarui otomatis.`}
+                      : isIpaymu
+                        ? `Setelah konfirmasi, instruksi ${IPAYMU_CHANNELS.find((channel) => channel.key === gatewayChannel)?.label || 'pembayaran'} akan tampil langsung di halaman ini.`
+                        : `Kamu akan diarahkan ke halaman pembayaran ${gatewayLabel(gatewayStatus?.provider)} dan status diperbarui otomatis.`}
                   </p>
                 </div>
               ) : null}
@@ -920,6 +1220,18 @@ export default function ProductSlugPage(): ReactElement {
               </button>
             ) : null}
 
+            {!isPurchased && isPendingGateway ? (
+              <button
+                type="button"
+                disabled={cancelling}
+                onClick={() => void handleCancelPurchase()}
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-4 py-3 text-sm font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-60"
+              >
+                <XCircle className="h-4 w-4" />
+                {cancelling ? 'Membatalkan...' : 'Batalkan pembelian'}
+              </button>
+            ) : null}
+
             {!isPurchased && isPendingManual && whatsappUrl ? (
               <a
                 href={whatsappUrl}
@@ -939,6 +1251,7 @@ export default function ProductSlugPage(): ReactElement {
                 submitting ||
                 product.type === 'subscription_locked' ||
                 (!isFree && paymentFlowOptions === 0) ||
+                (!isFree && checkoutStep === 'confirm' && !agreedNoRefund) ||
                 (isPending && purchase?.payment_gateway === 'manual')
               }
               onClick={handlePrimaryCheckoutAction}

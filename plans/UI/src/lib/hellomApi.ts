@@ -903,11 +903,53 @@ export function purchaseProduct(id: string | number, payload: Record<string, unk
   });
 }
 
-export function downloadProductFile(id: string | number, fileId: string | number) {
-  return apiRequest<Record<string, unknown>>(`/consumer/products/${id}/download/${fileId}`, {
+export function getProductPurchaseStatus(id: string | number) {
+  return apiRequest<Record<string, unknown>>(`/consumer/products/${id}/purchase/status`);
+}
+
+export function cancelProductPurchase(id: string | number) {
+  return apiRequest<Record<string, unknown>>(`/consumer/products/${id}/purchase/cancel`, {
     method: 'POST',
     body: {},
   });
+}
+
+export async function downloadProductFile(id: string | number, fileId: string | number): Promise<void> {
+  const token = getToken();
+  const response = await fetch(`${HELLOM_API_BASE}/consumer/products/${id}/download/${fileId}`, {
+    method: 'POST',
+    headers: {
+      Accept: '*/*',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+
+  if (!response.ok) {
+    let message = `HTTP ${response.status}`;
+    try {
+      const data = await response.json();
+      message = (data as { message?: string })?.message || message;
+    } catch {
+      // response was not JSON (e.g. the binary file itself) — keep status message
+    }
+    throw new Error(message);
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+
+  // Derive filename from Content-Disposition, fall back to a generic name.
+  const disposition = response.headers.get('Content-Disposition') || '';
+  const match = disposition.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
+  const filename = match ? decodeURIComponent(match[1]) : `product-${id}-file-${fileId}`;
+
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
 }
 
 export function getMyPurchases() {

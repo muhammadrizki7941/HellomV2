@@ -22,6 +22,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ProductController extends BaseApiController
 {
@@ -100,6 +101,7 @@ class ProductController extends BaseApiController
         $validated = $request->validate([
             'payment_flow' => ['nullable', 'in:manual,gateway'],
             'manual_payment_method' => ['nullable', 'string', 'max:50'],
+            'gateway_channel' => ['nullable', 'string', 'max:30'],
         ]);
 
         $product = DigitalProduct::query()->published()->findOrFail($id);
@@ -223,6 +225,42 @@ class ProductController extends BaseApiController
             return $this->fail('Gateway pembayaran belum siap.', ['code' => 'PAYMENT_GATEWAY_NOT_READY'], 422);
         }
 
+        // In-dashboard direct charge: render VA/QRIS inside Hellom instead of
+        // redirecting to the gateway's hosted page. Supported for iPaymu when a
+        // channel is chosen; other providers keep the hosted checkout fallback.
+        $gatewayChannel = strtolower(trim((string) ($validated['gateway_channel'] ?? '')));
+        if ($provider === 'ipaymu' && $gatewayChannel !== '') {
+            $purchase = $this->preparePurchase($user, $product, $existing);
+
+            try {
+                $instructions = $this->createIpaymuDirectCharge($purchase, $product, $user, $gatewayChannel);
+            } catch (\Throwable $exception) {
+                return $this->fail($exception->getMessage(), ['code' => 'PAYMENT_SESSION_FAILED'], 422);
+            }
+
+            $purchase->forceFill([
+                'payment_status' => 'pending',
+                'payment_gateway' => 'ipaymu',
+                'payment_method' => $gatewayChannel,
+                'gateway_ref' => (string) ($instructions['transaction_id'] ?? ''),
+                'checkout_url' => null,
+                'payment_instructions' => $instructions,
+                'paid_at' => null,
+            ])->save();
+
+            $notificationService->notifyConsumerPaymentPending($user, $purchase, $product->name);
+            $notificationService->notifyOwnerNewPayment($user, $purchase, $product);
+
+            return $this->ok([
+                'purchase_id' => $purchase->id,
+                'status' => $purchase->payment_status,
+                'payment_gateway' => $purchase->payment_gateway,
+                'payment_method' => $purchase->payment_method,
+                'checkout_url' => null,
+                'payment_instructions' => $instructions,
+            ], 'Instruksi pembayaran siap');
+        }
+
         $purchase = $this->preparePurchase($user, $product, $existing);
 
         try {
@@ -257,7 +295,7 @@ class ProductController extends BaseApiController
         ], 'Checkout gateway siap');
     }
 
-    public function download(Request $request, string $id, string $fileId): JsonResponse
+    public function download(Request $request, string $id, string $fileId): JsonResponse|StreamedResponse
     {
         $user = $request->user();
         if (!$user instanceof User) {
@@ -279,11 +317,9 @@ class ProductController extends BaseApiController
             ->firstOrFail();
 
         $disk = Storage::disk('local');
-        if (!method_exists($disk, 'temporaryUrl') && !$disk->providesTemporaryUrls()) {
-            return $this->fail('Download URL tidak tersedia', ['code' => 'TEMP_URL_UNSUPPORTED'], 422);
+        if (!$disk->exists($file->file_path)) {
+            return $this->fail('File tidak ditemukan', ['code' => 'FILE_NOT_FOUND'], 404);
         }
-
-        $url = $disk->temporaryUrl($file->file_path, now()->addMinutes(5));
 
         $purchase->forceFill([
             'download_count' => $purchase->download_count + 1,
@@ -292,10 +328,20 @@ class ProductController extends BaseApiController
 
         $purchase->product?->increment('total_downloads');
 
-        return $this->ok([
-            'download_url' => $url,
-            'expires_in' => 300,
-        ], 'Download URL generated');
+        // Stream the file directly through the API route. We deliberately avoid
+        // the local disk's route-based temporaryUrl(): production nginx serves
+        // every /storage/* request as a static file from storage/app/public, so
+        // a signed /storage/local/... URL never reaches PHP and 404s. The /api/*
+        // route is routed to PHP, so streaming here is the reliable path.
+        return $disk->download($file->file_path, $this->buildDownloadName($file));
+    }
+
+    private function buildDownloadName(DigitalProductFile $file): string
+    {
+        $extension = pathinfo($file->file_path, PATHINFO_EXTENSION);
+        $base = Str::slug((string) ($file->label ?: 'download')) ?: 'download';
+
+        return $extension !== '' ? "{$base}.{$extension}" : $base;
     }
 
     public function myPurchases(Request $request): JsonResponse
@@ -312,6 +358,87 @@ class ProductController extends BaseApiController
             ->get();
 
         return $this->ok($purchases, 'My purchases');
+    }
+
+    public function purchaseStatus(Request $request, string $id): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user instanceof User) {
+            return $this->fail('Unauthorized', ['code' => 'UNAUTHORIZED'], 401);
+        }
+
+        $purchase = ProductPurchase::query()
+            ->where('user_id', $user->id)
+            ->where('product_id', $id)
+            ->with('product')
+            ->first();
+
+        if (!$purchase) {
+            return $this->ok([
+                'payment_status' => null,
+                'is_purchased' => false,
+            ], 'Belum ada transaksi');
+        }
+
+        // Webhook is the source of truth, but actively confirm pending iPaymu
+        // charges so the dashboard unlocks instantly when the webhook lags.
+        if ($purchase->payment_status === 'pending'
+            && $purchase->payment_gateway === 'ipaymu'
+            && (string) $purchase->gateway_ref !== ''
+        ) {
+            $this->syncIpaymuPurchaseStatus($purchase);
+        }
+
+        return $this->ok([
+            'purchase_id' => $purchase->id,
+            'payment_status' => $purchase->payment_status,
+            'payment_gateway' => $purchase->payment_gateway,
+            'payment_method' => $purchase->payment_method,
+            'payment_instructions' => $purchase->payment_instructions,
+            'is_purchased' => $purchase->hasAccess(),
+        ], 'Status pembelian');
+    }
+
+    public function cancelPurchase(Request $request, string $id): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user instanceof User) {
+            return $this->fail('Unauthorized', ['code' => 'UNAUTHORIZED'], 401);
+        }
+
+        $purchase = ProductPurchase::query()
+            ->where('user_id', $user->id)
+            ->where('product_id', $id)
+            ->first();
+
+        if (!$purchase) {
+            return $this->fail('Tidak ada transaksi untuk dibatalkan.', ['code' => 'PURCHASE_NOT_FOUND'], 404);
+        }
+
+        // Paid purchases are final — no cancellation and no refund.
+        if ($purchase->payment_status === 'paid' || $purchase->hasAccess()) {
+            return $this->fail(
+                'Pembayaran sudah lunas sehingga tidak dapat dibatalkan dan tidak bisa di-refund.',
+                ['code' => 'PURCHASE_ALREADY_PAID'],
+                422
+            );
+        }
+
+        if ($purchase->payment_status !== 'pending') {
+            return $this->fail('Transaksi ini tidak sedang menunggu pembayaran.', ['code' => 'PURCHASE_NOT_PENDING'], 422);
+        }
+
+        $purchase->forceFill([
+            'payment_status' => 'cancelled',
+            'payment_instructions' => null,
+            'checkout_url' => null,
+            'paid_at' => null,
+        ])->save();
+
+        return $this->ok([
+            'purchase_id' => $purchase->id,
+            'payment_status' => $purchase->payment_status,
+        ], 'Pembelian dibatalkan');
     }
 
     public function previewDoc(Request $request, string $id, string $docId): Response
@@ -558,6 +685,126 @@ class ProductController extends BaseApiController
     private function buildCustomerReferenceId(User $user): string
     {
         return 'consumer_' . (int) $user->id;
+    }
+
+    /**
+     * Supported iPaymu direct-charge channels mapped to [paymentMethod, paymentChannel, label].
+     *
+     * @return array<string,array{0:string,1:string,2:string}>
+     */
+    private function ipaymuChannels(): array
+    {
+        return [
+            'qris' => ['qris', 'qris', 'QRIS'],
+            'bca' => ['va', 'bca', 'BCA Virtual Account'],
+            'bni' => ['va', 'bni', 'BNI Virtual Account'],
+            'bri' => ['va', 'bri', 'BRI Virtual Account'],
+            'mandiri' => ['va', 'mandiri', 'Mandiri Virtual Account'],
+            'permata' => ['va', 'permata', 'Permata Virtual Account'],
+            'cimb' => ['va', 'cimb', 'CIMB Niaga Virtual Account'],
+            'indomaret' => ['cstore', 'indomaret', 'Indomaret'],
+            'alfamart' => ['cstore', 'alfamart', 'Alfamart'],
+        ];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function createIpaymuDirectCharge(ProductPurchase $purchase, DigitalProduct $product, User $user, string $channelKey): array
+    {
+        $channels = $this->ipaymuChannels();
+        if (!isset($channels[$channelKey])) {
+            throw new \RuntimeException('Channel pembayaran iPaymu tidak didukung.');
+        }
+
+        [$method, $channel, $label] = $channels[$channelKey];
+
+        $response = app(IpaymuService::class)->createDirectPayment([
+            'name' => (string) ($user->name ?: 'Pelanggan Hellom'),
+            'phone' => $this->resolveBuyerPhone($user),
+            'email' => (string) $user->email,
+            'amount' => (int) $product->price,
+            'notifyUrl' => $this->ipaymuNotifyUrl([
+                'purpose' => 'product_purchase',
+                'purchase_id' => (int) $purchase->id,
+                'product_id' => (int) $product->id,
+                'user_id' => (int) $user->id,
+                'reference_id' => (string) $purchase->transaction_code,
+                'channel' => $channel,
+            ]),
+            'referenceId' => (string) $purchase->transaction_code,
+            'paymentMethod' => $method,
+            'paymentChannel' => $channel,
+            'comments' => "Pembelian {$product->name}",
+        ]);
+
+        $data = (array) (data_get($response, 'Data') ?: data_get($response, 'data') ?: []);
+        $status = (int) (data_get($response, 'Status') ?? data_get($response, 'status') ?? 0);
+        if ($status !== 200 && $data === []) {
+            throw new \RuntimeException((string) (data_get($response, 'Message') ?: data_get($response, 'message') ?: 'Gagal membuat pembayaran iPaymu.'));
+        }
+
+        $expiredRaw = (string) (data_get($data, 'Expired') ?: data_get($data, 'expired') ?: '');
+        $expiresAt = null;
+        if ($expiredRaw !== '') {
+            try {
+                $expiresAt = \Illuminate\Support\Carbon::parse($expiredRaw)->toIso8601String();
+            } catch (\Throwable) {
+                $expiresAt = null;
+            }
+        }
+
+        return array_filter([
+            'provider' => 'ipaymu',
+            'method' => $method,
+            'channel' => $channel,
+            'channel_label' => $label,
+            'va_number' => (string) (data_get($data, 'PaymentNo') ?: data_get($data, 'paymentNo') ?: ''),
+            'qr_string' => (string) (data_get($data, 'QrString') ?: data_get($data, 'qrString') ?: ''),
+            'qr_image_url' => (string) (data_get($data, 'QrImage') ?: data_get($data, 'qrImage') ?: data_get($data, 'QrTemplate') ?: ''),
+            'amount' => (int) (data_get($data, 'Total') ?: $product->price),
+            'fee' => (int) (data_get($data, 'Fee') ?: 0),
+            'expires_at' => $expiresAt,
+            'reference_id' => (string) $purchase->transaction_code,
+            'transaction_id' => (string) (data_get($data, 'TransactionId') ?: data_get($data, 'transactionId') ?: ''),
+            'session_id' => (string) (data_get($data, 'SessionId') ?: data_get($data, 'SessionID') ?: ''),
+        ], static fn ($value) => $value !== '' && $value !== null);
+    }
+
+    private function resolveBuyerPhone(User $user): string
+    {
+        $phone = preg_replace('/\D/', '', (string) ($user->phone ?? ''));
+
+        return is_string($phone) && $phone !== '' ? $phone : '081234567890';
+    }
+
+    /**
+     * Best-effort active confirmation for a pending iPaymu purchase. Only ever
+     * upgrades to paid; the webhook remains responsible for notifications.
+     */
+    private function syncIpaymuPurchaseStatus(ProductPurchase $purchase): void
+    {
+        try {
+            $response = app(IpaymuService::class)->checkTransaction((string) $purchase->gateway_ref);
+            $data = (array) (data_get($response, 'Data') ?: data_get($response, 'data') ?: []);
+
+            $statusCode = (string) (data_get($data, 'StatusCode') ?? data_get($data, 'statusCode') ?? '');
+            $statusText = strtolower(trim((string) (data_get($data, 'Status') ?: data_get($data, 'status') ?: '')));
+
+            $paid = $statusCode === '1'
+                || in_array($statusText, ['berhasil', 'success', 'successful', 'completed', 'paid', 'settlement', 'settled'], true);
+
+            if ($paid && $purchase->payment_status !== 'paid') {
+                $purchase->forceFill([
+                    'payment_status' => 'paid',
+                    'paid_at' => now(),
+                ])->save();
+
+                $purchase->product?->increment('total_purchases');
+            }
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
     }
 
     /**

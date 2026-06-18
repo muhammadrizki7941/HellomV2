@@ -20,6 +20,7 @@ class ProductPurchase extends Model
         'payment_gateway',
         'gateway_ref',
         'checkout_url',
+        'payment_instructions',
         'paid_at',
         'download_count',
         'last_downloaded_at',
@@ -27,6 +28,7 @@ class ProductPurchase extends Model
     ];
 
     protected $casts = [
+        'payment_instructions' => 'array',
         'paid_at' => 'datetime',
         'last_downloaded_at' => 'datetime',
         'expires_at' => 'datetime',

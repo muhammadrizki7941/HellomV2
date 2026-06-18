@@ -22,6 +22,31 @@ class IpaymuService
     }
 
     /**
+     * Create a direct charge (VA / QRIS) that returns payment instructions
+     * to render inside our own dashboard instead of redirecting out.
+     *
+     * @param array<string,mixed> $payload
+     * @return array<string,mixed>
+     */
+    public function createDirectPayment(array $payload): array
+    {
+        return $this->request('POST', '/api/v2/payment/direct', $payload);
+    }
+
+    /**
+     * Best-effort active status lookup for a transaction so we can confirm
+     * a payment even if the webhook is delayed.
+     *
+     * @return array<string,mixed>
+     */
+    public function checkTransaction(int|string $transactionId): array
+    {
+        return $this->request('POST', '/api/v2/transaction', [
+            'transactionId' => $transactionId,
+        ]);
+    }
+
+    /**
      * @param array<string,mixed> $payload
      * @return array<string,mixed>
      */
