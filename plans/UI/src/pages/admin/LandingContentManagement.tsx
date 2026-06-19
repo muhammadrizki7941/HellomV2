@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type React from 'react';
-import { FileText, Loader2, Plus, Save, Sparkles, Trash2 } from 'lucide-react';
+import { Loader2, Plus, Save, Sparkles, Trash2 } from 'lucide-react';
 import {
   createAdminLandingArticle,
   createAdminLandingService,
@@ -10,13 +10,14 @@ import {
   updateAdminLandingAbout,
   updateAdminLandingArticle,
   updateAdminLandingService,
+  uploadShowcaseMedia,
 } from '@/lib/hellomApi';
+import ArticleManager from '@/components/admin/ArticleManager';
 
 type Tab = 'about' | 'services' | 'articles';
 type Item = Record<string, unknown> & { id?: number };
 
 const emptyService = { title: '', slug: '', icon: 'Sparkles', short_description: '', long_description: '', featured_image: '', sort_order: 0, is_active: true };
-const emptyArticle = { title: '', slug: '', thumbnail: '', excerpt: '', content: '', category: '', published_at: '', read_time: 5, is_featured: false, is_active: true };
 
 export default function LandingContentManagement() {
   const [tab, setTab] = useState<Tab>('about');
@@ -78,6 +79,11 @@ export default function LandingContentManagement() {
   const setField = (setter: (items: Item[]) => void, items: Item[], index: number, key: string, value: unknown) => {
     setter(items.map((item, current) => current === index ? { ...item, [key]: value } : item));
   };
+
+  const uploadImage = useCallback(async (file: File) => {
+    const res = (await uploadShowcaseMedia(file)) as { url?: string; path?: string };
+    return String(res.url || res.path || '');
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -157,25 +163,12 @@ export default function LandingContentManagement() {
       )}
 
       {tab === 'articles' && !loading && (
-        <CrudList
-          icon={<FileText className="h-5 w-5" />}
-          items={articles}
-          emptyItem={emptyArticle}
-          setItems={setArticles}
+        <ArticleManager
+          articles={articles}
+          setArticles={setArticles}
           onSave={saveArticle}
           onDelete={async (id) => { await deleteAdminLandingArticle(id); await load(); }}
-          render={(item, index) => (
-            <div className="grid gap-3 md:grid-cols-2">
-              <Field label="Title" value={String(item.title || '')} onChange={(value) => setField(setArticles, articles, index, 'title', value)} />
-              <Field label="Slug" value={String(item.slug || '')} onChange={(value) => setField(setArticles, articles, index, 'slug', value)} />
-              <Field label="Category" value={String(item.category || '')} onChange={(value) => setField(setArticles, articles, index, 'category', value)} />
-              <Field label="Thumbnail URL" value={String(item.thumbnail || '')} onChange={(value) => setField(setArticles, articles, index, 'thumbnail', value)} />
-              <Field label="Published At" type="datetime-local" value={String(item.published_at || '').slice(0, 16)} onChange={(value) => setField(setArticles, articles, index, 'published_at', value)} />
-              <Field label="Read Time" type="number" value={String(item.read_time || 5)} onChange={(value) => setField(setArticles, articles, index, 'read_time', Number(value))} />
-              <Textarea label="Excerpt" value={String(item.excerpt || '')} onChange={(value) => setField(setArticles, articles, index, 'excerpt', value)} />
-              <Textarea label="Content" value={String(item.content || '')} onChange={(value) => setField(setArticles, articles, index, 'content', value)} />
-            </div>
-          )}
+          uploadImage={uploadImage}
         />
       )}
     </div>
@@ -235,3 +228,4 @@ function Textarea({ label, value, onChange }: { label: string; value: string; on
     </label>
   );
 }
+

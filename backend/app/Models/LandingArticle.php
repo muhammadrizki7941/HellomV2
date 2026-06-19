@@ -9,6 +9,11 @@ class LandingArticle extends Model
     protected $fillable = [
         'title',
         'slug',
+        'meta_title',
+        'meta_description',
+        'meta_keywords',
+        'og_image',
+        'author',
         'thumbnail',
         'content',
         'excerpt',

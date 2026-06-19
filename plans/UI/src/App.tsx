@@ -10,6 +10,8 @@ import FaqPage from '@/pages/public/FaqPage';
 import RefundPolicyPage from '@/pages/public/RefundPolicyPage';
 import TermsPage from '@/pages/public/TermsPage';
 import ContactPage from '@/pages/public/ContactPage';
+import InsightsPage from '@/pages/public/InsightsPage';
+import InsightDetailPage from '@/pages/public/InsightDetailPage';
 import DashboardLayout from '@/layouts/DashboardLayout';
 import DashboardHome from '@/pages/member/DashboardHome';
 import MemberProfile from '@/pages/member/MemberProfile';
@@ -84,6 +86,8 @@ export default function App() {
       <Route path="/refund-policy" element={<RefundPolicyPage />} />
       <Route path="/terms" element={<TermsPage />} />
       <Route path="/contact" element={<ContactPage />} />
+      <Route path="/insights" element={<InsightsPage />} />
+      <Route path="/insights/:slug" element={<InsightDetailPage />} />
 
       {/* Member Routes (Protected) */}
       <Route path="/dashboard" element={<DashboardLayout />}>

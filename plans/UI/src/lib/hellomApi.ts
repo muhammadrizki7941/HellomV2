@@ -1381,6 +1381,20 @@ export function getPublicLandingContent() {
   return publicApiRequest<LandingContent>('/public/landing-content');
 }
 
+export function getPublicInsights(params?: { page?: number; per_page?: number; q?: string; category?: string }) {
+  const qs = new URLSearchParams();
+  if (params?.page) qs.set('page', String(params.page));
+  if (params?.per_page) qs.set('per_page', String(params.per_page));
+  if (params?.q) qs.set('q', params.q);
+  if (params?.category) qs.set('category', params.category);
+  const suffix = qs.toString() ? `?${qs.toString()}` : '';
+  return publicApiRequest<Record<string, unknown>>(`/public/insights${suffix}`);
+}
+
+export function getPublicInsightBySlug(slug: string) {
+  return publicApiRequest<Record<string, unknown>>(`/public/insights/${encodeURIComponent(slug)}`);
+}
+
 export function getAdminLandingContent() {
   return apiRequest<LandingContent>('/admin/landing-content');
 }
@@ -1429,6 +1443,20 @@ export function updateAdminLandingArticle(articleId: number, payload: Record<str
 export function deleteAdminLandingArticle(articleId: number) {
   return apiRequest<Record<string, unknown>>(`/admin/landing-content/articles/${articleId}`, {
     method: 'DELETE',
+  });
+}
+
+export function aiAssistArticle(payload: {
+  mode: 'draft' | 'improve' | 'seo' | 'excerpt' | 'ideas';
+  title?: string;
+  content?: string;
+  keywords?: string;
+  tone?: string;
+  category?: string;
+}) {
+  return apiRequest<{ result?: string; fields?: Record<string, string> }>('/admin/landing-content/articles/ai-assist', {
+    method: 'POST',
+    body: payload,
   });
 }
 

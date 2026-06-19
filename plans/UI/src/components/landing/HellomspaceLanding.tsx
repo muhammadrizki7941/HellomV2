@@ -30,6 +30,7 @@ import {
   getToken,
 } from '@/lib/hellomApi';
 import { savePendingCheckoutIntent } from '@/lib/checkoutIntent';
+import { COMPANY_INFO, formatCompanyAddress } from '@/lib/companyInfo';
 
 type Product = {
   id: number;
@@ -467,20 +468,30 @@ export const HellomspaceLanding = ({ brand, logoSrc }: { brand: BrandSettings; l
           </div>
           <div className="px-5 py-16 md:px-10 lg:px-16">
             <div className="space-y-5">
-              {articles.slice(0, 4).map((article) => (
-                <article key={article.id} className="grid grid-cols-[112px_1fr] gap-5">
-                  <div className="aspect-[1.35] overflow-hidden rounded-lg bg-[#0E0E11]">
-                    {article.thumbnail ? <img src={getImageUrl(article.thumbnail)} alt={article.title} className="h-full w-full object-cover" /> : <div className="h-full w-full bg-[radial-gradient(circle_at_45%_20%,rgba(246,180,0,.24),transparent_35%),#111]" />}
-                  </div>
-                  <div>
-                    <p className="text-xs text-[#F6B400]">{formatDate(article.published_at)}</p>
-                    <h3 className="mt-2 text-base leading-6 text-white">{article.title}</h3>
-                    <p className="mt-2 text-xs text-[#8B8B90]">{article.read_time || 5} min read</p>
-                  </div>
-                </article>
-              ))}
+              {articles.slice(0, 4).map((article) => {
+                const card = (
+                  <article className="grid grid-cols-[112px_1fr] gap-5">
+                    <div className="aspect-[1.35] overflow-hidden rounded-lg bg-[#0E0E11]">
+                      {article.thumbnail ? <img src={getImageUrl(article.thumbnail)} alt={article.title} className="h-full w-full object-cover" /> : <div className="h-full w-full bg-[radial-gradient(circle_at_45%_20%,rgba(246,180,0,.24),transparent_35%),#111]" />}
+                    </div>
+                    <div>
+                      <p className="text-xs text-[#F6B400]">{formatDate(article.published_at)}</p>
+                      <h3 className="mt-2 text-base leading-6 text-white">{article.title}</h3>
+                      <p className="mt-2 text-xs text-[#8B8B90]">{article.read_time || 5} min read</p>
+                    </div>
+                  </article>
+                );
+
+                return article.slug ? (
+                  <Link key={article.id} to={`/insights/${article.slug}`} className="block transition hover:opacity-90">
+                    {card}
+                  </Link>
+                ) : (
+                  <div key={article.id}>{card}</div>
+                );
+              })}
             </div>
-            <a href="#contact" className="mt-9 inline-flex h-12 items-center gap-4 rounded-lg border border-[#F6B400]/35 px-7 text-sm font-bold transition hover:bg-[#F6B400]/10">Lihat semua artikel <ArrowRight className="h-4 w-4 text-[#F6B400]" /></a>
+            <Link to="/insights" className="mt-9 inline-flex h-12 items-center gap-4 rounded-lg border border-[#F6B400]/35 px-7 text-sm font-bold transition hover:bg-[#F6B400]/10">Lihat semua artikel <ArrowRight className="h-4 w-4 text-[#F6B400]" /></Link>
           </div>
         </section>
 
@@ -636,21 +647,36 @@ const Navbar = ({ brand, logoSrc, isAuthenticated }: { brand: BrandSettings; log
 
 const Footer = ({ brand, logoSrc }: { brand: BrandSettings; logoSrc: string | null }) => {
   const name = brand.app_name || brand.business_name || 'Hellom';
+  const email = brand.support_email || COMPANY_INFO.fallbackEmail;
+  const phone = brand.support_phone || COMPANY_INFO.fallbackPhone;
+  const address = formatCompanyAddress();
   return (
     <footer className="relative z-10 border-t border-white/[0.08] px-5 py-10 md:px-10 lg:px-16">
-      <div className="mx-auto flex max-w-[1500px] flex-col justify-between gap-8 md:flex-row md:items-center">
-        <div>
-          {logoSrc ? <img src={logoSrc} alt={name} className="h-8 w-auto object-contain" /> : <p className="text-2xl font-black">Hell<span className="text-[#F6B400]">om</span></p>}
-          <p className="mt-3 text-sm text-[#8B8B90]">Your Creative Business Partner</p>
+      <div className="mx-auto max-w-[1500px] space-y-8">
+        <div className="flex flex-col justify-between gap-8 md:flex-row md:items-start">
+          <div>
+            {logoSrc ? <img src={logoSrc} alt={name} className="h-8 w-auto object-contain" /> : <p className="text-2xl font-black">Hell<span className="text-[#F6B400]">om</span></p>}
+            <p className="mt-3 text-sm text-[#8B8B90]">Your Creative Business Partner</p>
+            {address ? <p className="mt-2 max-w-xs text-xs leading-relaxed text-[#8B8B90]">{address}</p> : null}
+          </div>
+          <div className="flex flex-wrap gap-5 text-sm text-[#8B8B90]">
+            <a href="#about" className="hover:text-white">About</a>
+            <a href="#portfolio" className="hover:text-white">Portfolio</a>
+            <Link to="/produk" className="hover:text-white">Products</Link>
+            <Link to="/insights" className="hover:text-white">Insights</Link>
+            <a href={`mailto:${email}`} className="hover:text-white">{email}</a>
+            {phone ? <span>{phone}</span> : null}
+          </div>
         </div>
-        <div className="flex flex-wrap gap-5 text-sm text-[#8B8B90]">
-          <a href="#about">About</a>
-          <a href="#portfolio">Portfolio</a>
-          <Link to="/produk">Products</Link>
-          <a href="mailto:hello@hellomspace.com">hello@hellomspace.com</a>
-          <span>Indonesia</span>
+        <div className="flex flex-col items-center justify-between gap-4 border-t border-white/[0.08] pt-6 md:flex-row">
+          <div className="flex flex-wrap gap-5 text-xs text-[#8B8B90]">
+            <Link to="/faq" className="hover:text-white">FAQ</Link>
+            <Link to="/refund-policy" className="hover:text-white">Kebijakan Refund</Link>
+            <Link to="/terms" className="hover:text-white">Syarat &amp; Ketentuan</Link>
+            <Link to="/contact" className="hover:text-white">Kontak</Link>
+          </div>
+          <p className="text-xs text-[#8B8B90]">© {new Date().getFullYear()} {name}.</p>
         </div>
-        <p className="text-xs text-[#8B8B90]">© {new Date().getFullYear()} Muhammad Rizki.</p>
       </div>
     </footer>
   );

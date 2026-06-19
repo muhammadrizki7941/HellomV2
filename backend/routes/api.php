@@ -58,6 +58,8 @@ Route::prefix('v1/hellom')->name('api.v1.hellom.')->group(function () {
     Route::get('/public/showcase/portfolios', [ShowcaseController::class, 'publicPortfolios'])->name('public.showcase.portfolios');
     Route::get('/public/showcase/clients', [ShowcaseController::class, 'publicClients'])->name('public.showcase.clients');
     Route::get('/public/landing-content', [LandingContentController::class, 'publicContent'])->name('public.landing_content');
+    Route::get('/public/insights', [LandingContentController::class, 'publicArticles'])->name('public.insights.index');
+    Route::get('/public/insights/{slug}', [LandingContentController::class, 'publicArticle'])->name('public.insights.show');
     Route::get('/public/brand', [BrandSettingController::class, 'publicShow'])->name('public.brand');
     Route::get('/public/banners', [BannerController::class, 'publicIndex'])->name('public.banners.index');
     Route::get('/public/products', [PublicProductController::class, 'index'])->name('public.products.index');
@@ -451,6 +453,7 @@ Route::post('/pos/orders/{orderId}/payment', [HellomOrderController::class, 'con
             Route::post('/landing-content/services', [LandingContentController::class, 'storeService'])->name('landing_content.services.store');
             Route::put('/landing-content/services/{id}', [LandingContentController::class, 'updateService'])->name('landing_content.services.update');
             Route::delete('/landing-content/services/{id}', [LandingContentController::class, 'destroyService'])->name('landing_content.services.destroy');
+            Route::post('/landing-content/articles/ai-assist', [LandingContentController::class, 'aiAssist'])->name('landing_content.articles.ai_assist');
             Route::post('/landing-content/articles', [LandingContentController::class, 'storeArticle'])->name('landing_content.articles.store');
             Route::put('/landing-content/articles/{id}', [LandingContentController::class, 'updateArticle'])->name('landing_content.articles.update');
             Route::delete('/landing-content/articles/{id}', [LandingContentController::class, 'destroyArticle'])->name('landing_content.articles.destroy');
