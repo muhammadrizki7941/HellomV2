@@ -743,6 +743,10 @@ class OrganizationTeamController extends BaseApiController
             $organization->users()->attach((int) $user->id, ['role' => (string) $invitation->role]);
         }
 
+        // Bind to the invited POS staff record (cashier invites) so the account
+        // is recognised as POS staff and locked to its assigned outlet.
+        \App\Models\PosStaff::linkInvitedUser($invitation->pos_staff_id, (int) $user->id);
+
         $invitation->forceFill([
             'status' => OrganizationTeamInvitation::STATUS_ACCEPTED,
             'accepted_at' => now(),

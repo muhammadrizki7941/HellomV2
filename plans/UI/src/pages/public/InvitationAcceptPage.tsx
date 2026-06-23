@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, KeyRound, LogIn, XCircle } from 'lucide-react';
-import { acceptOrganizationInvitation, getAuthMe, getToken, setSession } from '@/lib/hellomApi';
+import { acceptOrganizationInvitation, getAuthMe, getToken, setSession, setActiveOutletId } from '@/lib/hellomApi';
 import { BRAND_LOGO_PATH, BRAND_NAME } from '@/lib/branding';
 
 export default function InvitationAcceptPage() {
@@ -47,8 +47,14 @@ export default function InvitationAcceptPage() {
       }
 
       setSuccessMessage(`Berhasil bergabung ke organisasi ${accepted.organization.name}.`);
+      const posAccess = (me as { pos_access?: { is_cashier?: boolean; outlet_id?: number | null } } | null)?.pos_access;
       setTimeout(() => {
-        navigate('/dashboard/profile', { replace: true });
+        if (posAccess?.is_cashier) {
+          if (posAccess.outlet_id) setActiveOutletId(posAccess.outlet_id);
+          navigate('/pos/orders', { replace: true });
+        } else {
+          navigate('/dashboard/profile', { replace: true });
+        }
       }, 1000);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Gagal menerima invitation';

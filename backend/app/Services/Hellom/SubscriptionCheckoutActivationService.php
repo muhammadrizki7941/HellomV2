@@ -5,9 +5,12 @@ namespace App\Services\Hellom;
 use App\Http\Controllers\Api\V1\Hellom\InvoiceController;
 use App\Models\CheckoutIntent;
 use App\Models\Entitlement;
+use App\Models\Invoice;
 use App\Models\Plan;
 use App\Models\PlatformFinanceLedger;
 use App\Models\Subscription;
+use App\Models\User;
+use App\Services\NotificationService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -15,7 +18,90 @@ class SubscriptionCheckoutActivationService
 {
     public function __construct(
         private readonly PosProvisioningService $posProvisioningService,
+        private readonly NotificationService $notificationService,
     ) {
+    }
+
+    /**
+     * Confirm a gateway (iPaymu/Xendit/DOKU) checkout once payment is verified.
+     * Used by both the provider webhook and the manual reconcile endpoint, so
+     * activation works even when the inbound webhook can't reach the server.
+     *
+     * @param array<string,mixed> $gatewayMeta transaction_id, session_id, invoice_id, ...
+     * @return bool true if this call newly activated the checkout
+     */
+    public function confirmGatewayCheckout(CheckoutIntent $intent, array $gatewayMeta, string $providerLabel): bool
+    {
+        $intent->loadMissing(['subscription.plan', 'app', 'plan', 'user']);
+        $providerKey = strtolower(preg_replace('/[^a-z0-9]+/i', '', $providerLabel) ?: 'gateway');
+
+        if (in_array((string) $intent->status, ['confirmed', 'paid'], true)) {
+            $this->ensureActiveAccessForConfirmedCheckout($intent);
+
+            return false;
+        }
+
+        $meta = array_filter($gatewayMeta, fn ($value) => $value !== null && $value !== '' && $value !== 0);
+
+        DB::transaction(function () use ($intent, $meta, $providerKey, $providerLabel): void {
+            $now = now();
+
+            $intentMeta = is_array($intent->metadata) ? $intent->metadata : [];
+            $intentMeta[$providerKey] = array_merge($intentMeta[$providerKey] ?? [], $meta);
+            $intentMeta['activated_at'] = $now->toISOString();
+            $intent->forceFill(['status' => 'confirmed', 'metadata' => $intentMeta])->save();
+
+            $subscription = $intent->subscription;
+            if ($subscription instanceof Subscription) {
+                $subMeta = is_array($subscription->metadata) ? $subscription->metadata : [];
+                $subMeta['activation_source'] = $providerKey . '_payment';
+                $subMeta[$providerKey] = array_merge($subMeta[$providerKey] ?? [], $meta);
+
+                $subscription->forceFill([
+                    'status' => 'active',
+                    'starts_at' => $now,
+                    'ends_at' => $this->resolveSubscriptionEndAt($subscription->plan ?? $intent->plan, $now),
+                    'metadata' => $subMeta,
+                ])->save();
+            }
+
+            $this->upsertActiveEntitlement($intent, $now);
+
+            $invoiceId = (int) ($meta['invoice_id'] ?? 0);
+            if ($invoiceId > 0) {
+                $invoice = Invoice::query()->find($invoiceId);
+                if ($invoice instanceof Invoice) {
+                    $invoiceMeta = is_array($invoice->metadata) ? $invoice->metadata : [];
+                    $invoiceMeta[$providerKey] = array_merge($invoiceMeta[$providerKey] ?? [], $meta);
+                    $invoice->forceFill(['status' => 'paid', 'paid_at' => $now, 'metadata' => $invoiceMeta])->save();
+                }
+            }
+
+            if ((int) $intent->amount > 0) {
+                PlatformFinanceLedger::recordRevenue(
+                    $providerKey . '_subscription_payment',
+                    (int) $intent->amount,
+                    (int) $intent->organization_id,
+                    'checkout_intents',
+                    (int) $intent->id,
+                    'Subscription payment confirmed via ' . $providerLabel
+                );
+            }
+
+            $this->ensurePosProvisioning($intent);
+        });
+
+        // In-app notifications: owner success + consumer activation.
+        $this->notificationService->createGatewayPaymentSuccessNotif($intent, $providerLabel);
+        if ($intent->user instanceof User) {
+            $productName = (string) ($intent->app?->name ?? 'Aplikasi');
+            $this->notificationService->notifyConsumerPaymentSuccess($intent->user, $intent, $productName);
+            if ($intent->subscription instanceof Subscription) {
+                $this->notificationService->notifyConsumerAccessActivated($intent->user, $intent->subscription, $productName);
+            }
+        }
+
+        return true;
     }
 
     public function approveManualCheckout(CheckoutIntent $intent): CheckoutIntent

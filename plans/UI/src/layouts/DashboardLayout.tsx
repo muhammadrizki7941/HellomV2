@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Outlet, NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Layout, ShoppingCart, LogOut, User, CreditCard, Menu, X, Lock, Settings, Sparkles, ArrowRight, Grid, Package } from 'lucide-react';
+import { LayoutDashboard, Layout, ShoppingCart, LogOut, User, CreditCard, Menu, X, Lock, Settings, Sparkles, ArrowRight, Grid, Package, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { clearSession, getAuthMe, getMemberDashboardCards, getPaymentGatewayStatus, getSessionEventName, getSessionUser, getToken, logout, setSession } from '@/lib/hellomApi';
 import { BRAND_LOGO_PATH, BRAND_NAME, getBrandLogo } from '@/lib/branding';
@@ -43,6 +43,7 @@ export default function DashboardLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isDesktopCollapsed, setIsDesktopCollapsed] = useState(false);
   const [apps, setApps] = useState<DashboardApp[]>(FALLBACK_APPS);
   const [userName, setUserName] = useState('Member User');
   const [userEmail, setUserEmail] = useState('member@hellom.id');
@@ -209,14 +210,22 @@ export default function DashboardLayout() {
 
       {/* Sidebar */}
       <aside className={cn(
-        "fixed top-0 bottom-0 left-0 w-64 bg-white border-r border-zinc-200 flex flex-col z-30 transition-transform duration-300 ease-in-out lg:translate-x-0 pt-16 lg:pt-0",
-        isSidebarOpen ? "translate-x-0" : "-translate-x-full"
+        "fixed top-0 bottom-0 left-0 w-64 bg-white border-r border-zinc-200 flex flex-col z-30 transition-transform duration-300 ease-in-out pt-16 lg:pt-0",
+        isSidebarOpen ? "translate-x-0" : "-translate-x-full",
+        isDesktopCollapsed ? "lg:-translate-x-full" : "lg:translate-x-0"
       )}>
-          <div className="hidden lg:flex p-6 border-b border-zinc-100">
+          <div className="hidden lg:flex p-6 border-b border-zinc-100 items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
             <img src={getBrandLogo(brand?.logo_url)} alt={brand?.app_name || BRAND_NAME} draggable={false} loading="lazy" className="w-8 h-8 rounded-lg object-cover border border-zinc-200" />
             <span className="text-xl font-bold tracking-tight">{brand?.app_name || BRAND_NAME}</span>
           </Link>
+          <button
+            onClick={() => setIsDesktopCollapsed(true)}
+            title="Sembunyikan menu"
+            className="p-1.5 rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 transition-colors"
+          >
+            <PanelLeftClose className="w-5 h-5" />
+          </button>
         </div>
         
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
@@ -345,12 +354,24 @@ export default function DashboardLayout() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 lg:ml-64 p-4 lg:p-8 pt-20 lg:pt-8 transition-all duration-300">
-        <div className="max-w-7xl mx-auto">
+      <main className={cn(
+        "flex-1 p-4 lg:p-8 pt-20 lg:pt-8 transition-all duration-300",
+        isDesktopCollapsed ? "lg:ml-0" : "lg:ml-64"
+      )}>
+        <div className={cn("mx-auto transition-all duration-300", isDesktopCollapsed ? "max-w-none" : "max-w-7xl")}>
           <div className="hidden lg:flex mb-6 items-center justify-between rounded-3xl border border-zinc-200 bg-white px-5 py-4 shadow-sm">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Member Workspace</p>
-              <p className="mt-1 text-sm text-zinc-700">Pantau pembelian, aplikasi aktif, dan notifikasi terbaru dari header atas ini.</p>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setIsDesktopCollapsed((v) => !v)}
+                title={isDesktopCollapsed ? 'Tampilkan menu' : 'Sembunyikan menu'}
+                className="p-2 rounded-lg text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 transition-colors"
+              >
+                {isDesktopCollapsed ? <PanelLeftOpen className="w-5 h-5" /> : <PanelLeftClose className="w-5 h-5" />}
+              </button>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Member Workspace</p>
+                <p className="mt-1 text-sm text-zinc-700">Pantau pembelian, aplikasi aktif, dan notifikasi terbaru dari header atas ini.</p>
+              </div>
             </div>
             <div className="flex items-center gap-4">
               <NotificationBell />

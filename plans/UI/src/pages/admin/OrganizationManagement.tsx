@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Building2, Search, Eye, RefreshCw, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getAdminOrganizations, getOrganizationDetail, overrideEntitlement } from '@/lib/hellomApi';
+import { getAdminOrganizations, getOrganizationDetail, overrideEntitlement, updateOrganizationOutletLimit } from '@/lib/hellomApi';
 
 type Organization = {
   id: number;
@@ -11,6 +11,7 @@ type Organization = {
   status: string;
   users_count: number;
   created_at: string;
+  max_outlets_override?: number | null;
 };
 
 type Entitlement = {
@@ -38,6 +39,24 @@ export default function OrganizationManagement() {
   const [selectedOrg, setSelectedOrg] = useState<Organization | null>(null);
   const [orgDetail, setOrgDetail] = useState<{ organization: Organization; entitlements: Entitlement[] } | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [outletOverride, setOutletOverride] = useState('');
+  const [outletSaving, setOutletSaving] = useState(false);
+  const [outletMessage, setOutletMessage] = useState<string | null>(null);
+
+  const saveOutletOverride = async () => {
+    if (!orgDetail) return;
+    setOutletSaving(true);
+    setOutletMessage(null);
+    try {
+      const value = outletOverride.trim() === '' ? null : Math.max(1, Number(outletOverride));
+      await updateOrganizationOutletLimit(orgDetail.organization.id, value);
+      setOutletMessage(value === null ? 'Override dihapus — pakai batas paket.' : `Batas outlet di-set ke ${value}.`);
+    } catch (err) {
+      setOutletMessage(err instanceof Error ? err.message : 'Gagal menyimpan batas outlet');
+    } finally {
+      setOutletSaving(false);
+    }
+  };
 
   const loadOrganizations = async () => {
     setLoading(true);
@@ -60,8 +79,10 @@ export default function OrganizationManagement() {
     setSelectedOrg(org);
     setDetailLoading(true);
     try {
-      const result = await getOrganizationDetail(org.id);
-      setOrgDetail(result as { organization: Organization; entitlements: Entitlement[] });
+      const result = await getOrganizationDetail(org.id) as { organization: Organization; entitlements: Entitlement[] };
+      setOrgDetail(result);
+      setOutletOverride(result.organization.max_outlets_override != null ? String(result.organization.max_outlets_override) : '');
+      setOutletMessage(null);
     } catch (err) {
       setError('Failed to load organization detail');
     } finally {
@@ -241,6 +262,31 @@ export default function OrganizationManagement() {
                       ))}
                     </div>
                   )}
+
+                  <div className="border-t border-zinc-200 pt-4">
+                    <h4 className="font-medium text-zinc-900">Batas Outlet (POS)</h4>
+                    <p className="mt-1 text-sm text-zinc-500">
+                      Override batas jumlah outlet untuk organisasi ini. Kosongkan untuk memakai batas dari paket POS-nya.
+                    </p>
+                    <div className="mt-3 flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={1}
+                        value={outletOverride}
+                        onChange={(e) => setOutletOverride(e.target.value)}
+                        placeholder="Pakai batas paket"
+                        className="w-44 rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-amber-400"
+                      />
+                      <button
+                        onClick={() => void saveOutletOverride()}
+                        disabled={outletSaving}
+                        className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-60"
+                      >
+                        {outletSaving ? 'Menyimpan…' : 'Simpan'}
+                      </button>
+                    </div>
+                    {outletMessage && <p className="mt-2 text-xs text-zinc-600">{outletMessage}</p>}
+                  </div>
                 </div>
               ) : (
                 <p className="text-center text-zinc-500">Failed to load details</p>

@@ -754,14 +754,28 @@ class ProductController extends BaseApiController
             }
         }
 
+        $paymentNo = (string) (data_get($data, 'PaymentNo') ?: data_get($data, 'paymentNo') ?: '');
+        $qrString = (string) (data_get($data, 'QrString') ?: data_get($data, 'qrString') ?: '');
+        $qrImage = (string) (data_get($data, 'QrImage') ?: data_get($data, 'qrImage') ?: data_get($data, 'QrTemplate') ?: '');
+
+        // For QRIS the EMVCo payload may arrive in PaymentNo rather than QrString.
+        // Treat it as the QR string (never a VA number) so the client renders a
+        // scannable QR code instead of an unscannable, overflowing text blob.
+        if ($method === 'qris') {
+            if ($qrString === '' && $paymentNo !== '') {
+                $qrString = $paymentNo;
+            }
+            $paymentNo = '';
+        }
+
         return array_filter([
             'provider' => 'ipaymu',
             'method' => $method,
             'channel' => $channel,
             'channel_label' => $label,
-            'va_number' => (string) (data_get($data, 'PaymentNo') ?: data_get($data, 'paymentNo') ?: ''),
-            'qr_string' => (string) (data_get($data, 'QrString') ?: data_get($data, 'qrString') ?: ''),
-            'qr_image_url' => (string) (data_get($data, 'QrImage') ?: data_get($data, 'qrImage') ?: data_get($data, 'QrTemplate') ?: ''),
+            'va_number' => $paymentNo,
+            'qr_string' => $qrString,
+            'qr_image_url' => $qrImage,
             'amount' => (int) (data_get($data, 'Total') ?: $product->price),
             'fee' => (int) (data_get($data, 'Fee') ?: 0),
             'expires_at' => $expiresAt,

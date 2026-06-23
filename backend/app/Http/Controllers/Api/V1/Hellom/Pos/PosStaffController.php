@@ -2,12 +2,16 @@
 
 namespace App\Http\Controllers\Api\V1\Hellom\Pos;
 
+use App\Mail\OrganizationTeamInvitationMail;
 use App\Models\Order;
+use App\Models\Organization;
+use App\Models\OrganizationTeamInvitation;
 use App\Models\PosStaff;
 use App\Models\PosStaffAttendance;
 use App\Models\PosStaffCashLog;
 use App\Models\PosStaffShift;
 use App\Models\User;
+use App\Services\Hellom\PlatformMailService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -30,7 +34,7 @@ class PosStaffController extends BasePosController
     public function index(Request $request): JsonResponse
     {
         $org = $this->getOrg($request);
-        $tenantSlug = $this->getTenantSlug($org);
+        $tenantSlug = $this->getActiveTenantSlug($request, $org);
         $today = now()->startOfDay();
         $endOfToday = now()->endOfDay();
 
@@ -172,7 +176,8 @@ class PosStaffController extends BasePosController
     public function store(Request $request): JsonResponse
     {
         $org = $this->getOrg($request);
-        $tenantSlug = $this->getTenantSlug($org);
+        $tenantSlug = $this->getActiveTenantSlug($request, $org);
+        $outletId = $request->attributes->get('posOutletId');
         $validated = $request->validate([
             'name' => 'required|string|max:100',
             'email' => 'nullable|email|max:120',
@@ -194,6 +199,7 @@ class PosStaffController extends BasePosController
 
         $staff = PosStaff::create([
             'tenant_id' => $tenantSlug,
+            'outlet_id' => $outletId ? (int) $outletId : null,
             'organization_id' => $org->id,
             'linked_user_id' => $linkedUserId,
             'name' => trim($validated['name']),
@@ -215,10 +221,135 @@ class PosStaffController extends BasePosController
         ], 'Staff created', 201);
     }
 
+    /**
+     * Invite a staff member to get a login (email + set password) scoped to this
+     * staff's outlet. On accept/register they become an org member with the
+     * `cashier` pivot role and are linked back to this PosStaff record.
+     */
+    public function inviteLogin(Request $request, int $staffId): JsonResponse
+    {
+        $org = $this->getOrg($request);
+        if (!$org instanceof Organization) {
+            return $this->error('Organisasi tidak ditemukan', 'NO_ORGANIZATION', null, 403);
+        }
+
+        if (!$this->isOrgOwner($request, $org)) {
+            return $this->error('Hanya owner/admin yang bisa mengundang login staff', 'INSUFFICIENT_ROLE', null, 403);
+        }
+
+        $tenantSlug = $this->getActiveTenantSlug($request, $org);
+        $staff = PosStaff::query()
+            ->where('tenant_id', $tenantSlug)
+            ->where('organization_id', $org->id)
+            ->find($staffId);
+
+        if (!$staff instanceof PosStaff) {
+            return $this->error('Staff tidak ditemukan untuk outlet ini', 'STAFF_NOT_FOUND', null, 404);
+        }
+
+        $validated = $request->validate([
+            'email' => ['nullable', 'email', 'max:255'],
+            'expires_in_days' => ['nullable', 'integer', 'min:1', 'max:30'],
+        ]);
+
+        $email = strtolower(trim((string) ($validated['email'] ?? $staff->email ?? '')));
+        if ($email === '') {
+            return $this->error('Email staff wajib diisi untuk mengundang login', 'STAFF_EMAIL_REQUIRED', null, 422);
+        }
+
+        if ($staff->linked_user_id) {
+            return $this->error('Staff ini sudah tertaut ke akun login', 'STAFF_ALREADY_LINKED', null, 409);
+        }
+
+        // Keep the staff email in sync so future actions match the invited address.
+        if ((string) $staff->email !== $email) {
+            $staff->forceFill(['email' => $email])->save();
+        }
+
+        $existingUser = User::query()->where('email', $email)->first();
+        if ($existingUser instanceof User) {
+            $isMember = $org->users()->where('users.id', $existingUser->id)->exists();
+            $belongsToOther = $existingUser->organizations()
+                ->where('organizations.id', '!=', $org->id)
+                ->exists();
+
+            if (!$isMember && $belongsToOther) {
+                return $this->error('Akun email ini sudah terhubung ke organisasi lain', 'USER_HAS_OTHER_ORGANIZATION', null, 409);
+            }
+
+            if ($isMember) {
+                // Already part of the org — link immediately, no email needed.
+                PosStaff::linkInvitedUser($staff->id, (int) $existingUser->id);
+
+                return $this->success([
+                    'linked' => true,
+                    'staff' => $this->serializeStaff($staff->fresh('linkedUser'), collect(), null, null, null, null),
+                ], 'Akun sudah menjadi anggota organisasi dan langsung ditautkan ke staff');
+            }
+        }
+
+        $expiresInDays = (int) ($validated['expires_in_days'] ?? 7);
+        $plainToken = Str::random(48);
+
+        $invitation = OrganizationTeamInvitation::query()
+            ->where('organization_id', (int) $org->id)
+            ->where('email', $email)
+            ->where('status', OrganizationTeamInvitation::STATUS_PENDING)
+            ->latest('id')
+            ->first();
+
+        $attributes = [
+            'role' => 'cashier',
+            'pos_staff_id' => (int) $staff->id,
+            'token_hash' => hash('sha256', $plainToken),
+            'invited_by_user_id' => (int) $request->user()->id,
+            'status' => OrganizationTeamInvitation::STATUS_PENDING,
+            'expires_at' => now()->addDays($expiresInDays),
+        ];
+
+        if ($invitation instanceof OrganizationTeamInvitation) {
+            $invitation->forceFill($attributes)->save();
+        } else {
+            $invitation = OrganizationTeamInvitation::query()->create(array_merge($attributes, [
+                'organization_id' => (int) $org->id,
+                'email' => $email,
+            ]));
+        }
+
+        $delivery = $this->sendStaffInvitationEmail($org, $invitation, $plainToken);
+
+        return $this->success([
+            'linked' => false,
+            'invitation' => [
+                'id' => (int) $invitation->id,
+                'email' => (string) $invitation->email,
+                'role' => (string) $invitation->role,
+                'status' => (string) $invitation->status,
+                'expires_at' => $invitation->expires_at,
+            ],
+            'email_delivery' => $delivery,
+            'staff' => $this->serializeStaff($staff->fresh('linkedUser'), collect(), null, null, null, null),
+        ], 'Undangan login dikirim ke email staff', 201);
+    }
+
+    private function sendStaffInvitationEmail(Organization $organization, OrganizationTeamInvitation $invitation, string $plainToken): array
+    {
+        $appBase = trim((string) config('app.frontend_url', env('FRONTEND_URL', 'http://localhost:3000/hellom')));
+        $registerUrl = rtrim($appBase, '/') . '/register?inviteToken=' . urlencode($plainToken);
+
+        return app(PlatformMailService::class)->sendTo($invitation->email, new OrganizationTeamInvitationMail(
+            organizationName: (string) $organization->name,
+            role: (string) $invitation->role,
+            token: $plainToken,
+            registerUrl: $registerUrl,
+            expiresAt: $invitation->expires_at,
+        ));
+    }
+
     public function update(Request $request, int $staffId): JsonResponse
     {
         $org = $this->getOrg($request);
-        $tenantSlug = $this->getTenantSlug($org);
+        $tenantSlug = $this->getActiveTenantSlug($request, $org);
         $staff = PosStaff::query()
             ->where('tenant_id', $tenantSlug)
             ->findOrFail($staffId);

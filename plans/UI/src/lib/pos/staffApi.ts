@@ -1,4 +1,4 @@
-import { HELLOM_API_BASE, getToken } from '@/lib/hellomApi';
+import { HELLOM_API_BASE, getToken, getActiveOutletId } from '@/lib/hellomApi';
 
 type ApiEnvelope<T> = {
   success: boolean;
@@ -144,12 +144,16 @@ export type PosStaffDashboard = {
 
 async function staffRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getToken();
+  const activeOutletId = getActiveOutletId();
   const response = await fetch(`${HELLOM_API_BASE}${path}`, {
     ...init,
     headers: {
       Accept: 'application/json',
       ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      // Scope staff management to the active outlet so each outlet keeps its own
+      // team (without this the backend falls back to the primary outlet).
+      ...(activeOutletId ? { 'X-Outlet-Id': activeOutletId } : {}),
       ...(init?.headers ?? {}),
     },
   });
@@ -206,6 +210,21 @@ export function updatePosStaff(
 export function deletePosStaff(staffId: number) {
   return staffRequest<null>(`/pos/staff/${staffId}`, {
     method: 'DELETE',
+  });
+}
+
+export function invitePosStaffLogin(
+  staffId: number,
+  payload?: { email?: string; expires_in_days?: number }
+) {
+  return staffRequest<{
+    linked: boolean;
+    invitation?: { id: number; email: string; role: string; status: string; expires_at: string | null };
+    email_delivery?: unknown;
+    staff: PosStaffItem;
+  }>(`/pos/staff/${staffId}/invite-login`, {
+    method: 'POST',
+    body: JSON.stringify(payload || {}),
   });
 }
 

@@ -37,7 +37,12 @@ class PosProvisioningService
 
             ProductPurchaseSettingSeeder::createDefaultsForOrganization((int) $organization->id);
 
-            return $organization->fresh();
+            $organization = $organization->fresh() ?: $organization;
+
+            // Make sure the organization has its primary outlet (multi-outlet foundation).
+            app(\App\Services\OutletService::class)->ensurePrimaryOutlet($organization);
+
+            return $organization;
         });
     }
 

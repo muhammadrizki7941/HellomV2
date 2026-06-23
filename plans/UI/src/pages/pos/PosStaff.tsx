@@ -8,6 +8,7 @@ import {
   Clock3,
   Download,
   Edit2,
+  Mail,
   MapPin,
   Plus,
   QrCode,
@@ -28,6 +29,7 @@ import {
   createPosStaff,
   createPosStaffShift,
   deletePosStaff,
+  invitePosStaffLogin,
   downloadPosStaffExport,
   getPosStaffDashboard,
   markLeavePosStaff,
@@ -45,6 +47,7 @@ import {
   updatePosStaff,
   updatePosStaffShift,
 } from '@/lib/pos/staffApi';
+import { getPosOutlets, getActiveOutletId, setActiveOutletId, type PosOutlet } from '@/lib/hellomApi';
 
 type ScanMode = 'check_in' | 'check_out';
 
@@ -229,9 +232,26 @@ export default function PosStaff() {
 
   const currentMonth = new Date().toISOString().slice(0, 7);
 
+  const [outlets, setOutlets] = useState<PosOutlet[]>([]);
+  const activeOutletId = getActiveOutletId();
+  // What the backend effectively scopes to: the active outlet, else the primary.
+  const selectedOutletValue =
+    activeOutletId ?? String(outlets.find((o) => o.is_primary)?.id ?? outlets[0]?.id ?? '');
+
   useEffect(() => {
     void loadDashboard();
+    getPosOutlets()
+      .then((res) => setOutlets(res.outlets || []))
+      .catch(() => setOutlets([]));
   }, []);
+
+  // Switching the managed outlet re-scopes the whole page (list + new staff) via
+  // the X-Outlet-Id header, so each outlet keeps its own team.
+  function handleOutletChange(outletId: string) {
+    if (!outletId || outletId === (activeOutletId ?? '')) return;
+    setActiveOutletId(outletId);
+    window.location.reload();
+  }
 
   useEffect(() => {
     if (!showScannerModal) {
@@ -574,6 +594,31 @@ export default function PosStaff() {
     });
   }
 
+  async function handleInviteLogin(member: PosStaffItem) {
+    if (member.linked_user_id) {
+      alert(`${member.name} sudah punya akun login (${member.linked_user_name || 'tertaut'}).`);
+      return;
+    }
+
+    let email = member.email || '';
+    if (!email) {
+      email = (prompt(`Email untuk undangan login ${member.name}:`) || '').trim();
+      if (!email) return;
+    }
+
+    await withBusy(`invite-${member.id}`, async () => {
+      const res = await invitePosStaffLogin(member.id, { email });
+      if (res.linked) {
+        alert(`Akun ${email} sudah jadi anggota organisasi dan langsung ditautkan ke ${member.name}.`);
+      } else {
+        alert(`Undangan login dikirim ke ${email}. Kasir tinggal set password lewat link, lalu langsung masuk POS outlet ini.`);
+      }
+      await loadDashboard();
+    }).catch((err) => {
+      alert(err instanceof Error ? err.message : 'Gagal mengirim undangan login');
+    });
+  }
+
   async function handleCheckIn(member: PosStaffItem) {
     const locationLabel = prompt('Lokasi check-in (opsional). Contoh: Kasir depan / QR meja depan') || undefined;
     await withBusy(`checkin-${member.id}`, async () => {
@@ -692,6 +737,24 @@ export default function PosStaff() {
                   Satu panel ringan untuk owner dan admin: atur role, pantau shift hari ini, cek performa kasir, dan rekap absensi bulanan yang siap dibuka di Excel.
                 </p>
               </div>
+
+              {outlets.length > 1 && (
+                <div className="flex flex-col gap-1 rounded-2xl border border-[#e6d8b2] bg-white/70 p-3 sm:max-w-md">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-[#8b6f18]">Outlet yang dikelola</label>
+                  <select
+                    value={selectedOutletValue}
+                    onChange={(event) => handleOutletChange(event.target.value)}
+                    className="rounded-xl border border-[#eadfbe] bg-white px-3 py-2 text-sm font-semibold text-[#1d1914] outline-none focus:border-amber-300 focus:ring-2 focus:ring-amber-100"
+                  >
+                    {outlets.map((outlet) => (
+                      <option key={outlet.id} value={String(outlet.id)}>
+                        {outlet.name}{outlet.is_primary ? ' (Utama)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-[#8d806c]">Staff & undangan login yang dibuat di sini terikat ke outlet ini. Pindah outlet untuk kelola timnya masing-masing.</p>
+                </div>
+              )}
             </div>
 
             <div className="flex flex-wrap gap-3">
@@ -986,6 +1049,13 @@ export default function PosStaff() {
                           label="QR Staff"
                           icon={QrCode}
                           onClick={() => void openQrModal(member)}
+                        />
+                        <ActionButton
+                          label={member.linked_user_id ? 'Akun tertaut' : 'Undang login'}
+                          icon={Mail}
+                          disabled={Boolean(member.linked_user_id)}
+                          loading={busyKey === `invite-${member.id}`}
+                          onClick={() => void handleInviteLogin(member)}
                         />
                         <ActionButton
                           label="Check-in"

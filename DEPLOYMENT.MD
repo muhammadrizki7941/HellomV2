@@ -423,3 +423,25 @@ pm2 save
 - [ ] Buat script deploy otomatis `scripts/deploy.sh`
 - [ ] Tambah Nginx block `no-cache` untuk `sw.js` di server production
 - [ ] Jalankan `php artisan migrate` setelah deploy (tabel `pos_members` harus ada)
+
+
+**REAL HOW TO PUSH DEPLOY
+Sekarang di VPS jalankan:
+
+
+cd /www/wwwroot/hellomspace.com
+
+# Pull commit terbaru (gitignore fix)
+git pull origin main
+
+# Build ulang UI
+cd plans/UI
+npm run build
+Setelah ini selesai, white screen akan hilang dan semua perubahan POS/ForgotPassword/LandingBuilder akan tampil benar.
+
+Mulai sekarang, setiap deploy cukup:
+
+
+git pull origin main
+cd plans/UI && npm run build
+index.html dan JS/CSS tidak lagi ikut git, jadi tidak akan ada konflik hash antara git dan build.

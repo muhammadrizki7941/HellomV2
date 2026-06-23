@@ -50,6 +50,7 @@ type AdminPlanItem = {
   features?: unknown;
   billing_cycles?: string[] | null;
   duration_days?: number | null;
+  max_outlets?: number | null;
   is_visible?: boolean;
   is_recommended?: boolean;
   sort_order?: number;
@@ -83,6 +84,7 @@ type PlanFormState = {
   billingMonthly: boolean;
   billingYearly: boolean;
   duration_days: string;
+  max_outlets: string;
   is_visible: boolean;
   is_recommended: boolean;
   sort_order: number;
@@ -114,6 +116,7 @@ const INITIAL_PLAN_FORM: PlanFormState = {
   billingMonthly: true,
   billingYearly: false,
   duration_days: '30',
+  max_outlets: '1',
   is_visible: true,
   is_recommended: false,
   sort_order: 0,
@@ -278,6 +281,7 @@ export default function AppManagement() {
         billingMonthly: Boolean(plan.billing_cycles?.includes('monthly')) || (plan.type === 'subscription' && !plan.billing_cycles?.length),
         billingYearly: Boolean(plan.billing_cycles?.includes('yearly')),
         duration_days: plan.duration_days ? String(plan.duration_days) : '',
+        max_outlets: plan.max_outlets ? String(plan.max_outlets) : '1',
         is_visible: plan.is_visible ?? true,
         is_recommended: Boolean(plan.is_recommended),
         sort_order: Number(plan.sort_order || 0),
@@ -341,6 +345,7 @@ export default function AppManagement() {
         features: featuresTextToArray(planForm.featuresText),
         billing_cycles: billingCycles,
         duration_days: planForm.duration_days ? Number(planForm.duration_days) : null,
+        max_outlets: planForm.max_outlets ? Number(planForm.max_outlets) : 1,
         is_visible: planForm.is_visible,
         is_recommended: planForm.is_recommended,
         sort_order: planForm.sort_order,
@@ -905,6 +910,19 @@ export default function AppManagement() {
                     className="w-full rounded-2xl border border-zinc-300 px-4 py-3 text-zinc-900 outline-none transition focus:border-amber-400"
                     placeholder="30 untuk bulanan, 365 untuk tahunan, kosong untuk lifetime"
                   />
+                </label>
+
+                <label className="space-y-2 text-sm">
+                  <span className="font-medium text-zinc-700">Maksimal outlet (POS)</span>
+                  <input
+                    type="number"
+                    min="1"
+                    value={planForm.max_outlets}
+                    onChange={(event) => setPlanForm((current) => ({ ...current, max_outlets: event.target.value }))}
+                    className="w-full rounded-2xl border border-zinc-300 px-4 py-3 text-zinc-900 outline-none transition focus:border-amber-400"
+                    placeholder="Jumlah outlet/cabang yang boleh dibuat"
+                  />
+                  <span className="block text-xs text-zinc-500">Berlaku untuk paket POS. Mis. 1 = single outlet, 3 = sampai 3 cabang.</span>
                 </label>
               </div>
 

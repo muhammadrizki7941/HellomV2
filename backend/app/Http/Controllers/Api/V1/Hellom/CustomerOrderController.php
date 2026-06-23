@@ -8,6 +8,7 @@ use App\Models\DiningTable;
 use App\Models\Organization;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\Outlet;
 use App\Models\PaymentSetting;
 use App\Models\PosPaymentSetting;
 use App\Models\PosLoyaltySetting;
@@ -33,7 +34,7 @@ class CustomerOrderController extends BaseApiController
         return $this->menuResponse($table, $tableToken);
     }
 
-    public function getOrganizationMenu(string $organizationSlug): JsonResponse
+    public function getOrganizationMenu(string $organizationSlug, Request $request): JsonResponse
     {
         $organization = Organization::query()
             ->where('slug', $organizationSlug)
@@ -43,14 +44,79 @@ class CustomerOrderController extends BaseApiController
             return $this->fail('Organization not found', [], 404);
         }
 
-        $tenantId = (string) ($organization->pos_tenant_slug ?: $organization->slug);
+        // Resolve the chosen outlet (?outlet=slug|id), defaulting to the primary outlet.
+        $tenantId = $this->resolveOutletTenantSlug($organization, $request->query('outlet'));
         $table = $this->resolvePublicEntryTable($tenantId);
 
         if (!$table) {
-            return $this->fail('Belum ada meja aktif untuk halaman customer publik organisasi ini.', [], 404);
+            return $this->fail('Belum ada meja aktif untuk outlet ini.', [], 404);
         }
 
         return $this->menuResponse($table, (string) $table->public_id, true);
+    }
+
+    /**
+     * Public list of an organization's active outlets so the self-order page can
+     * let the customer pick a branch (each has its own address & menu).
+     */
+    public function getOrganizationOutlets(string $organizationSlug): JsonResponse
+    {
+        $organization = Organization::query()
+            ->where('slug', $organizationSlug)
+            ->first();
+
+        if (!$organization) {
+            return $this->fail('Organization not found', [], 404);
+        }
+
+        $outlets = Outlet::query()
+            ->where('organization_id', $organization->id)
+            ->where('is_active', true)
+            ->orderByDesc('is_primary')
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get()
+            ->map(fn (Outlet $outlet) => [
+                'id' => $outlet->id,
+                'slug' => $outlet->slug,
+                'name' => $outlet->name,
+                'address' => $outlet->address,
+                'phone' => $outlet->phone,
+                'is_primary' => (bool) $outlet->is_primary,
+            ])
+            ->values();
+
+        return $this->ok([
+            'organization' => [
+                'slug' => $organization->slug,
+                'name' => $organization->name,
+            ],
+            'outlets' => $outlets,
+        ], 'Outlets retrieved successfully');
+    }
+
+    private function resolveOutletTenantSlug(Organization $organization, ?string $outletParam): string
+    {
+        if ($outletParam !== null && $outletParam !== '') {
+            $query = Outlet::query()
+                ->where('organization_id', $organization->id)
+                ->where('is_active', true);
+
+            $outlet = is_numeric($outletParam)
+                ? (clone $query)->where('id', (int) $outletParam)->first()
+                : (clone $query)->where('slug', $outletParam)->first();
+
+            if ($outlet && !empty($outlet->tenant_slug)) {
+                return (string) $outlet->tenant_slug;
+            }
+        }
+
+        $primary = Outlet::query()
+            ->where('organization_id', $organization->id)
+            ->where('is_primary', true)
+            ->first();
+
+        return (string) ($primary?->tenant_slug ?: $organization->pos_tenant_slug ?: $organization->slug);
     }
 
     public function createOrder(Request $request): JsonResponse
@@ -268,6 +334,7 @@ class CustomerOrderController extends BaseApiController
     private function menuResponse(DiningTable $table, string $tableToken, bool $preferOrganizationRoot = false): JsonResponse
     {
         $tenantId = (string) $table->tenant_id;
+        $outlet = $this->resolveOutlet($tenantId);
 
         $products = Product::withoutGlobalScope('tenant')
             ->where('tenant_id', $tenantId)
@@ -321,6 +388,14 @@ class CustomerOrderController extends BaseApiController
                     'tenant_slug' => $tenantId,
                     'organization_slug' => $this->resolveOrganizationSlug($tenantId),
                 ],
+                'outlet' => $outlet ? [
+                    'id' => $outlet->id,
+                    'slug' => $outlet->slug,
+                    'name' => $outlet->name,
+                    'address' => $outlet->address,
+                    'phone' => $outlet->phone,
+                    'is_primary' => (bool) $outlet->is_primary,
+                ] : null,
                 'categories' => $categoriesWithProducts,
                 'experience' => $this->buildCustomerExperience($table, $tableToken, $preferOrganizationRoot),
             ],
@@ -332,6 +407,7 @@ class CustomerOrderController extends BaseApiController
     {
         $tenantId = $table->tenant_id;
         $organization = $this->resolveOrganization($tenantId);
+        $outlet = $this->resolveOutlet($tenantId);
         $brand = BrandSetting::current();
         $recentCompletedCutoff = now()->subMinutes(5);
 
@@ -381,7 +457,7 @@ class CustomerOrderController extends BaseApiController
         $posPaymentSetting = PosPaymentSetting::query()
             ->where('tenant_id', $tenantId)
             ->first();
-        $whatsappNumber = $organization?->phone ?: ($brand?->whatsapp ?: $brand?->phone);
+        $whatsappNumber = $outlet?->phone ?: ($organization?->phone ?: ($brand?->whatsapp ?: $brand?->phone));
         $organizationSlug = $organization?->slug;
         $customerRoot = $preferOrganizationRoot && $organizationSlug
             ? url('/customer/' . $organizationSlug)
@@ -394,9 +470,9 @@ class CustomerOrderController extends BaseApiController
                 'business_name' => $organization?->name ?: ($brand?->business_name ?: 'Self Order'),
                 'tagline' => $organization?->description ?: ($brand?->tagline ?: 'Selamat datang, pilih menu favorit Anda lalu kirim langsung ke dapur.'),
                 'about' => $organization?->description ?: $brand?->about,
-                'phone' => $organization?->phone ?: $brand?->phone,
-                'whatsapp' => $organization?->phone ?: $brand?->whatsapp,
-                'address' => $organization?->address ?: $brand?->address,
+                'phone' => $outlet?->phone ?: ($organization?->phone ?: $brand?->phone),
+                'whatsapp' => $outlet?->phone ?: ($organization?->phone ?: $brand?->whatsapp),
+                'address' => $outlet?->address ?: ($organization?->address ?: $brand?->address),
                 'instagram' => $brand?->instagram,
                 'website' => $organization?->website ?: $brand?->website,
                 'primary_color' => $brand?->primary_color ?: '#0f172a',
@@ -417,6 +493,14 @@ class CustomerOrderController extends BaseApiController
                     'user_ratings_total' => (int) ($ratingData['user_ratings_total'] ?? 0),
                 ] : null),
             ],
+            'outlet' => $outlet ? [
+                'id' => $outlet->id,
+                'slug' => $outlet->slug,
+                'name' => $outlet->name,
+                'address' => $outlet->address,
+                'phone' => $outlet->phone,
+                'is_primary' => (bool) $outlet->is_primary,
+            ] : null,
             'routes' => [
                 'legacy_order' => url('/order?table=' . $tableToken),
                 'promo' => $customerRoot . '#promo',
@@ -499,14 +583,26 @@ class CustomerOrderController extends BaseApiController
         ];
     }
 
+    private function resolveOutlet(string $tenantId): ?Outlet
+    {
+        return Outlet::query()->where('tenant_slug', $tenantId)->first();
+    }
+
     private function resolveOrganization(string $tenantId): ?Organization
     {
-        return Organization::query()
+        $organization = Organization::query()
             ->where(function ($query) use ($tenantId) {
                 $query->where('pos_tenant_slug', $tenantId)
                     ->orWhere('slug', $tenantId);
             })
             ->first();
+
+        if ($organization) {
+            return $organization;
+        }
+
+        // Secondary outlets carry their own tenant_slug — resolve org via the outlet.
+        return $this->resolveOutlet($tenantId)?->organization;
     }
 
     private function resolveOrganizationSlug(string $tenantId): ?string

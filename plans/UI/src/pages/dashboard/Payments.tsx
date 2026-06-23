@@ -20,6 +20,7 @@ import {
   getWalletTransactions,
   getPayoutPolicy,
   pollWalletBalance,
+  reconcileCheckout,
   requestWithdrawal,
   walletTopupMock,
 } from '@/lib/hellomApi';
@@ -139,6 +140,36 @@ export default function Payments() {
 
   useEffect(() => {
     void loadPage();
+  }, []);
+
+  // Handle the browser return from an iPaymu gateway redirect: verify + activate
+  // without relying on the inbound webhook (which can't reach local/sandbox servers).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('ipaymu_return') !== '1') return;
+
+    const intent = params.get('intent');
+    const cancelled = params.get('cancel') === '1';
+    const trxId = params.get('trx_id') || params.get('transaction_id') || params.get('tid') || undefined;
+    window.history.replaceState({}, '', '/dashboard/payments');
+
+    if (cancelled || !intent) {
+      if (cancelled) setError('Pembayaran dibatalkan.');
+      return;
+    }
+
+    setSuccessMessage('Memeriksa status pembayaran...');
+    reconcileCheckout(intent, trxId)
+      .then((res) => {
+        setSuccessMessage(
+          res.active
+            ? 'Pembayaran berhasil dikonfirmasi! Akses aplikasi sudah aktif.'
+            : 'Pembayaran sedang diproses. Akses akan aktif begitu pembayaran terkonfirmasi.'
+        );
+        void loadPage();
+      })
+      .catch(() => setError('Gagal memverifikasi pembayaran. Silakan muat ulang halaman.'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

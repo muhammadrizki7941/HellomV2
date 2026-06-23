@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode, type JSX } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   ArrowRight,
   ChevronLeft,
@@ -30,6 +30,8 @@ import {
   createCustomerOrder,
   getCustomerMenu,
   getCustomerMenuByOrganization,
+  getCustomerOrganizationOutlets,
+  type CustomerOutlet,
   type PosCustomerExperiencePayload,
   type PosMenuCategory,
   type PosMenuProduct,
@@ -476,6 +478,9 @@ const PaymentSelector = ({
 
 export default function OrderPage() {
   const { organizationSlug, tableToken } = useParams<{ organizationSlug?: string; tableToken?: string }>();
+  const [searchParams] = useSearchParams();
+  const outletParam = searchParams.get('outlet');
+  const [outletChoices, setOutletChoices] = useState<CustomerOutlet[] | null>(null);
   const navigate = useNavigate();
   const { brand } = useBrand();
   const [resolvedTableToken, setResolvedTableToken] = useState<string>(tableToken || '');
@@ -530,9 +535,25 @@ export default function OrderPage() {
 
       try {
         setLoading(true);
+
+        // Organization entry with multiple outlets → let the customer pick a branch first.
+        if (organizationSlug && !tableToken && !outletParam) {
+          try {
+            const outletsRes = await getCustomerOrganizationOutlets(organizationSlug);
+            if ((outletsRes.outlets?.length ?? 0) > 1) {
+              setOutletChoices(outletsRes.outlets);
+              setLoading(false);
+              return;
+            }
+          } catch {
+            // Fall through to default (primary outlet) menu.
+          }
+        }
+        setOutletChoices(null);
+
         const data = tableToken
           ? await getCustomerMenu(tableToken)
-          : await getCustomerMenuByOrganization(organizationSlug as string);
+          : await getCustomerMenuByOrganization(organizationSlug as string, outletParam);
         const resolvedSlug = data.table.organization_slug || organizationSlug || null;
         const nextTableToken = data.table.public_id || tableToken || '';
 
@@ -559,7 +580,7 @@ export default function OrderPage() {
     }
 
     void loadMenu();
-  }, [navigate, organizationSlug, tableToken]);
+  }, [navigate, organizationSlug, tableToken, outletParam]);
 
   const loadPaymentMethods = async (slug: string) => {
     try {
@@ -874,6 +895,37 @@ export default function OrderPage() {
       setReservationSubmitting(false);
     }
   };
+
+  if (outletChoices && organizationSlug && !tableToken && !outletParam) {
+    return (
+      <div className="min-h-screen bg-[#FFFFFF] text-[#1A1A1A]">
+        <div className="mx-auto max-w-[430px] px-4 py-8">
+          <h1 className="text-xl font-bold">Pilih Outlet / Cabang</h1>
+          <p className="mt-1 mb-5 text-sm text-zinc-500">Pilih cabang yang ingin Anda pesan. Menu & lokasi tiap cabang bisa berbeda.</p>
+          <div className="space-y-3">
+            {outletChoices.map((o) => (
+              <button
+                key={o.id}
+                type="button"
+                onClick={() => navigate(`/customer/${organizationSlug}?outlet=${encodeURIComponent(o.slug)}`)}
+                className="flex w-full items-start gap-3 rounded-2xl border border-zinc-200 bg-white p-4 text-left shadow-sm transition hover:border-amber-400 hover:shadow"
+              >
+                <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-600">🏪</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-semibold">
+                    {o.name}
+                    {o.is_primary && <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">Utama</span>}
+                  </span>
+                  {o.address && <span className="mt-0.5 block text-sm text-zinc-500">{o.address}</span>}
+                  {o.phone && <span className="block text-xs text-zinc-400">{o.phone}</span>}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

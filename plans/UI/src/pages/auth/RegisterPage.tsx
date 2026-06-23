@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
-import { register, setSession } from '@/lib/hellomApi';
+import { register, setSession, setActiveOutletId } from '@/lib/hellomApi';
 import useBrand from '@/hooks/useBrand';
 import { AuthLayout } from '@/components/auth';
 import { continuePendingCheckoutAfterAuth } from '@/lib/checkoutIntent';
@@ -46,6 +46,14 @@ export default function RegisterPage() {
       });
 
       setSession(result.token, result.user);
+
+      // POS cashiers (registered via invite link) land straight in POS.
+      const posAccess = (result.user as { pos_access?: { is_cashier?: boolean; outlet_id?: number | null } } | null)?.pos_access;
+      if (posAccess?.is_cashier) {
+        if (posAccess.outlet_id) setActiveOutletId(posAccess.outlet_id);
+        navigate('/pos/orders');
+        return;
+      }
 
       try {
         const continuedCheckout = await continuePendingCheckoutAfterAuth(navigate);

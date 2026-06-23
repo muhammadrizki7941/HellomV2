@@ -1,7 +1,7 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
-import { login, setSession } from '@/lib/hellomApi';
+import { login, setSession, setActiveOutletId } from '@/lib/hellomApi';
 import useBrand from '@/hooks/useBrand';
 import { AuthLayout } from '@/components/auth';
 import { continuePendingCheckoutAfterAuth } from '@/lib/checkoutIntent';
@@ -59,6 +59,13 @@ export default function LoginPage() {
       const inviteToken = (searchParams.get('inviteToken') || '').trim();
       if (inviteToken) {
         navigate(`/invitation/accept?token=${encodeURIComponent(inviteToken)}`);
+        return;
+      }
+      // POS cashiers land straight in POS, locked to their assigned outlet.
+      const posAccess = (result.user as { pos_access?: { is_cashier?: boolean; outlet_id?: number | null } } | null)?.pos_access;
+      if (posAccess?.is_cashier) {
+        if (posAccess.outlet_id) setActiveOutletId(posAccess.outlet_id);
+        navigate('/pos/orders');
         return;
       }
       const role = (result.user as { role?: string } | null)?.role;

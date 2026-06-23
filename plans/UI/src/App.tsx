@@ -40,6 +40,7 @@ import AdminProductEdit from '@/pages/admin/products/[id]/edit';
 import AdminProductPurchases from '@/pages/admin/products/purchases';
 import PosAdmin from '@/pages/pos/PosAdmin';
 import PosAdminDashboard from '@/pages/pos/PosAdminDashboard';
+import PosOutlets from '@/pages/pos/PosOutlets';
 import PosOrders from '@/pages/pos/PosOrders';
 import PosMenu from '@/pages/pos/PosMenu';
 import PosTables from '@/pages/pos/PosTables';
@@ -111,6 +112,7 @@ export default function App() {
         <Route path="admin" element={<PosAdmin />} />
         <Route path="cashier" element={<PosAdmin />} />
         <Route path="admin-dashboard" element={<PosAdminDashboard />} />
+        <Route path="outlets" element={<PosOutlets />} />
         <Route path="orders" element={<PosOrders />} />
         <Route path="menu" element={<PosMenu />} />
         <Route path="tables" element={<PosTables />} />

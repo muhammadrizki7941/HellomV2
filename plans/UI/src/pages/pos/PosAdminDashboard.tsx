@@ -172,16 +172,29 @@ function statusTone(status: string) {
   }
 }
 
+type OutletBreakdownRow = {
+  outlet_id: number;
+  name: string;
+  is_primary: boolean;
+  total_orders: number;
+  total_revenue: number;
+};
+
 export default function PosAdminDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
+  // Owner-only cross-outlet aggregate view.
+  const [isOwner, setIsOwner] = useState(false);
+  const [scopeAll, setScopeAll] = useState(false);
+  const [outletBreakdown, setOutletBreakdown] = useState<OutletBreakdownRow[]>([]);
 
-  const loadDashboard = async () => {
+  const loadDashboard = async (scopeAllArg = scopeAll) => {
     setIsLoading(true);
     setError(null);
 
     try {
+      const scope = scopeAllArg ? 'all' : undefined;
       const [
         todayReport,
         monthReport,
@@ -191,14 +204,19 @@ export default function PosAdminDashboard() {
         productsResponse,
         tablesResponse,
       ] = await Promise.all([
-        getPosReportSummary({ start_date: today, end_date: today }),
-        getPosReportSummary({ start_date: monthStart, end_date: today }),
-        getPosReportDaily({ start_date: last7DaysStart, end_date: today }),
-        getPosReportProducts({ start_date: monthStart, end_date: today, limit: 5 }),
+        getPosReportSummary({ start_date: today, end_date: today, scope }),
+        getPosReportSummary({ start_date: monthStart, end_date: today, scope }),
+        getPosReportDaily({ start_date: last7DaysStart, end_date: today, scope }),
+        getPosReportProducts({ start_date: monthStart, end_date: today, limit: 5, scope }),
         getPosOrders(),
         getPosProducts(),
         getPosTables(),
       ]);
+
+      setIsOwner(Boolean((monthReport as any).is_owner));
+      setOutletBreakdown(
+        Array.isArray((monthReport as any).outlet_breakdown) ? (monthReport as any).outlet_breakdown : []
+      );
 
       setDashboard({
         todaySummary: todayReport.summary,
@@ -222,8 +240,9 @@ export default function PosAdminDashboard() {
   };
 
   useEffect(() => {
-    loadDashboard();
-  }, []);
+    loadDashboard(scopeAll);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scopeAll]);
 
   const activeOrders = useMemo(
     () => dashboard?.orders.filter((order) => ACTIVE_ORDER_STATUSES.includes(order.status)) ?? [],
@@ -271,7 +290,7 @@ export default function PosAdminDashboard() {
         <p className="text-lg font-semibold text-rose-800">Dashboard belum bisa dimuat</p>
         <p className="mt-2 text-sm text-rose-700">{error ?? 'Terjadi kesalahan yang tidak diketahui.'}</p>
         <button
-          onClick={loadDashboard}
+          onClick={() => loadDashboard()}
           className="mt-5 rounded-xl bg-rose-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-800"
         >
           Coba lagi
@@ -282,6 +301,31 @@ export default function PosAdminDashboard() {
 
   return (
     <div className="space-y-6">
+      {isOwner && (
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-3">
+          <span className="text-sm font-semibold text-amber-900">Tampilan ringkasan:</span>
+          <div className="inline-flex rounded-xl border border-amber-300 bg-white p-1">
+            <button
+              onClick={() => setScopeAll(false)}
+              className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${!scopeAll ? 'bg-amber-400 text-[#111111]' : 'text-amber-700'}`}
+            >
+              Outlet Aktif
+            </button>
+            <button
+              onClick={() => setScopeAll(true)}
+              className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${scopeAll ? 'bg-amber-400 text-[#111111]' : 'text-amber-700'}`}
+            >
+              Semua Outlet
+            </button>
+          </div>
+          <span className="text-xs text-amber-700">
+            {scopeAll
+              ? 'Penjualan & tren menggabungkan semua outlet. Widget operasional (order berjalan, produk, meja) tetap mengikuti outlet aktif.'
+              : 'Hanya outlet yang sedang aktif. Pilih "Semua Outlet" untuk gabungan semua cabang.'}
+          </span>
+        </div>
+      )}
+
       <section className="overflow-hidden rounded-[28px] bg-zinc-950 text-white">
         <div className="grid gap-6 px-6 py-7 lg:grid-cols-[1.7fr_1fr] lg:px-8">
           <div className="space-y-4">
@@ -347,6 +391,67 @@ export default function PosAdminDashboard() {
           </div>
         </div>
       </section>
+
+      {scopeAll && outletBreakdown.length > 0 && (() => {
+        const grandRevenue = outletBreakdown.reduce((s, o) => s + (o.total_revenue || 0), 0);
+        const grandOrders = outletBreakdown.reduce((s, o) => s + (o.total_orders || 0), 0);
+        const ranked = [...outletBreakdown].sort((a, b) => (b.total_revenue || 0) - (a.total_revenue || 0));
+        return (
+          <section className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
+            <h2 className="text-lg font-bold text-zinc-900">Ringkasan per Outlet</h2>
+            <p className="mb-4 text-sm text-zinc-500">Penjualan semua cabang bulan ini ({dashboard.monthSummary.total_orders} order selesai).</p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-zinc-100 text-left text-zinc-500">
+                    <th className="py-2 pr-3 font-medium">Outlet</th>
+                    <th className="py-2 px-3 font-medium text-right">Pesanan</th>
+                    <th className="py-2 px-3 font-medium text-right">Pendapatan</th>
+                    <th className="py-2 px-3 font-medium text-right">Rata-rata/Order</th>
+                    <th className="py-2 pl-3 font-medium text-right">Kontribusi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ranked.map((o) => {
+                    const revenue = o.total_revenue || 0;
+                    const orders = o.total_orders || 0;
+                    const aov = orders > 0 ? Math.round(revenue / orders) : 0;
+                    const share = grandRevenue > 0 ? Math.round((revenue / grandRevenue) * 100) : 0;
+                    return (
+                      <tr key={o.outlet_id} className="border-b border-zinc-50 last:border-0">
+                        <td className="py-2.5 pr-3 font-medium text-zinc-900">
+                          {o.name}
+                          {o.is_primary && <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">Utama</span>}
+                        </td>
+                        <td className="py-2.5 px-3 text-right text-zinc-700">{orders}</td>
+                        <td className="py-2.5 px-3 text-right font-semibold text-zinc-900">{formatCurrency(revenue)}</td>
+                        <td className="py-2.5 px-3 text-right text-zinc-700">{formatCurrency(aov)}</td>
+                        <td className="py-2.5 pl-3 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <div className="hidden h-1.5 w-16 overflow-hidden rounded-full bg-zinc-100 sm:block">
+                              <div className="h-full rounded-full bg-amber-400" style={{ width: `${share}%` }} />
+                            </div>
+                            <span className="font-medium text-zinc-700">{share}%</span>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t border-zinc-200 font-semibold text-zinc-900">
+                    <td className="py-2.5 pr-3">Total semua outlet</td>
+                    <td className="py-2.5 px-3 text-right">{grandOrders}</td>
+                    <td className="py-2.5 px-3 text-right">{formatCurrency(grandRevenue)}</td>
+                    <td className="py-2.5 px-3 text-right">{formatCurrency(grandOrders > 0 ? Math.round(grandRevenue / grandOrders) : 0)}</td>
+                    <td className="py-2.5 pl-3 text-right">100%</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </section>
+        );
+      })()}
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard

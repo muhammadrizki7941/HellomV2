@@ -1,4 +1,4 @@
-const CACHE = 'hellom-pos-v3';
+const CACHE = 'hellom-pos-v4';
 const SHELL = '/';
 const STATIC_EXT = /\.(js|css|png|jpg|jpeg|webp|gif|svg|ico|woff2?|ttf|eot)(\?.*)?$/;
 
@@ -34,7 +34,12 @@ self.addEventListener('fetch', (e) => {
     e.respondWith(
       caches.match(request).then((cached) => {
         const fromNetwork = fetch(request).then((res) => {
-          if (res.ok) caches.open(CACHE).then((c) => c.put(request, res.clone()));
+          // Clone synchronously, before the body is handed to the page — otherwise
+          // res.clone() inside the async cache.put throws "body is already used".
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put(request, copy));
+          }
           return res;
         });
         return cached ?? fromNetwork;
@@ -48,7 +53,10 @@ self.addEventListener('fetch', (e) => {
     e.respondWith(
       fetch(request)
         .then((res) => {
-          if (res.ok) caches.open(CACHE).then((c) => c.put(request, res.clone()));
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put(request, copy));
+          }
           return res;
         })
         .catch(async () => {

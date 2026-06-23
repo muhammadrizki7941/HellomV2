@@ -8,6 +8,7 @@ use App\Models\Entitlement;
 use App\Models\ApiToken;
 use App\Models\Organization;
 use App\Models\Plan;
+use App\Models\PosStaff;
 use App\Models\User;
 use App\Models\OrganizationTeamInvitation;
 use App\Services\NotificationService;
@@ -162,6 +163,10 @@ class AuthController extends BaseApiController
 
                 $organization->users()->attach($user->id, ['role' => (string) $invitation->role]);
                 $user->forceFill(['current_organization_id' => $organization->id])->save();
+
+                // Bind the new account to its POS staff record (cashier invites),
+                // so it lands directly in POS scoped to the assigned outlet.
+                PosStaff::linkInvitedUser($invitation->pos_staff_id, (int) $user->id);
 
                 $invitation->forceFill([
                     'status' => OrganizationTeamInvitation::STATUS_ACCEPTED,
@@ -440,6 +445,53 @@ class AuthController extends BaseApiController
                 'status' => $organization->status,
                 'role' => (string) ($organization->pivot->role ?? 'member'),
             ])->values()->all(),
+            'pos_access' => $this->posAccessPayload($user),
+        ];
+    }
+
+    /**
+     * POS access context used by the SPA to auto-route cashiers straight into
+     * POS and lock them to their assigned outlet. Returns is_cashier=false for
+     * owners/admins (they route normally and can switch outlets).
+     */
+    private function posAccessPayload(User $user): array
+    {
+        $organization = $user->currentOrganization;
+        if (!$organization instanceof Organization) {
+            return ['is_cashier' => false];
+        }
+
+        $isPlatform = in_array((string) $user->role, ['super_admin', 'tenant_admin'], true);
+        $membership = $user->organizations()
+            ->where('organizations.id', (int) $organization->id)
+            ->first();
+        $pivotRole = (string) ($membership?->pivot?->role ?? '');
+        $isManager = $isPlatform || in_array($pivotRole, ['owner', 'admin', 'super_admin'], true);
+
+        if ($isManager) {
+            return ['is_cashier' => false];
+        }
+
+        $staff = PosStaff::query()
+            ->where('organization_id', (int) $organization->id)
+            ->where('linked_user_id', (int) $user->id)
+            ->where('employment_status', 'active')
+            ->orderByDesc('id')
+            ->first();
+
+        if (!$staff instanceof PosStaff) {
+            return ['is_cashier' => false];
+        }
+
+        $outlet = $staff->resolveBoundOutlet();
+
+        return [
+            'is_cashier' => true,
+            'pos_role' => (string) $staff->role,
+            'permissions' => is_array($staff->permissions) ? $staff->permissions : [],
+            'outlet_id' => $outlet?->id,
+            'outlet_name' => $outlet?->name,
+            'tenant_slug' => (string) ($outlet?->tenant_slug ?? $staff->tenant_id),
         ];
     }
 

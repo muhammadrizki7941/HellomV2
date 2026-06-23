@@ -20,6 +20,7 @@ class Organization extends Model
         'pos_tenant_slug',
         'pos_tenant_name',
         'pos_provisioned_at',
+        'max_outlets_override',
         'logo_path',
         'banner_path',
         'address',
@@ -33,7 +34,18 @@ class Organization extends Model
     {
         return [
             'pos_provisioned_at' => 'datetime',
+            'max_outlets_override' => 'integer',
         ];
+    }
+
+    public function outlets(): HasMany
+    {
+        return $this->hasMany(Outlet::class)->orderBy('sort_order')->orderBy('id');
+    }
+
+    public function primaryOutlet(): HasOne
+    {
+        return $this->hasOne(Outlet::class)->where('is_primary', true);
     }
 
     public function users(): BelongsToMany

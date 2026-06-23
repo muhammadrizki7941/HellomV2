@@ -1,18 +1,20 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { 
-  ShoppingCart, CheckCircle, XCircle, Loader2, 
+import {
+  ShoppingCart, CheckCircle, XCircle, Loader2,
   ArrowRight, Star, Menu, X, FileText, Upload,
-  Facebook, Instagram, Music2, AtSign, MessageCircle
+  Facebook, Instagram, Music2, AtSign, MessageCircle,
+  Quote, Check, ChevronDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { checkoutConfirmMock, checkoutIntentMock, getPublicLandingByDomain, getPublicLandingPage, getPublicLandingPageByOrganization, getToken, submitLandingCustomer } from '@/lib/hellomApi';
 import { THEMES } from '@/pages/apps/landing-builder/constants';
+import { BLOCK_TYPES, BlockType } from '@/pages/apps/landing-builder/types';
 
-// --- Types (Should be shared, but defining here for speed) ---
+// --- Types ---
 interface Block {
   id: string;
-  type: 'hero' | 'features' | 'content' | 'cta' | 'gallery' | 'testimonials' | 'product' | 'banner' | 'video' | 'text' | 'image' | 'pdf' | 'social' | 'form';
+  type: BlockType;
   content: any;
   styles?: any;
 }
@@ -386,6 +388,189 @@ const RenderForm = ({
   );
 };
 
+const RenderButton = ({ content, styles, pageSettings }: { content: any, styles?: any, pageSettings: { whatsappNumber: string; whatsappMessage: string } }) => {
+  const align = content.align || 'center';
+  const justify = align === 'left' ? 'justify-start' : align === 'right' ? 'justify-end' : 'justify-center';
+  const href = content.actionType === 'whatsapp'
+    ? buildWhatsappUrl(content.whatsappNumber || pageSettings.whatsappNumber, content.whatsappMessage || pageSettings.whatsappMessage)
+    : content.linkUrl || '#';
+  return (
+    <section className="py-10 px-6" style={{ backgroundColor: styles?.backgroundColor, color: styles?.textColor }}>
+      <div className={`flex ${justify}`}>
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 rounded-xl px-7 py-3.5 font-bold transition-transform hover:scale-105"
+          style={{ backgroundColor: styles?.buttonColor, color: styles?.buttonTextColor }}
+        >
+          {content.actionType === 'whatsapp' && <MessageCircle className="w-5 h-5" />}
+          {content.text || 'Klik di Sini'}
+          {content.actionType !== 'whatsapp' && <ArrowRight className="w-5 h-5" />}
+        </a>
+      </div>
+    </section>
+  );
+};
+
+const RenderDivider = ({ content, styles }: { content: any, styles?: any }) => (
+  <section className="py-8 px-6" style={{ backgroundColor: styles?.backgroundColor }}>
+    <div className="mx-auto" style={{ width: `${content.width ?? 100}%` }}>
+      <hr style={{ borderTopStyle: content.style || 'solid', borderTopWidth: `${content.thickness ?? 1}px`, borderColor: styles?.textColor, opacity: 0.35 }} />
+    </div>
+  </section>
+);
+
+const RenderTestimonials = ({ content, styles }: { content: any, styles?: any }) => (
+  <section className="py-20 px-6" style={{ backgroundColor: styles?.backgroundColor, color: styles?.textColor }}>
+    <div className="max-w-6xl mx-auto">
+      {content.title && <h2 className="text-3xl font-bold text-center mb-12">{content.title}</h2>}
+      <div className="grid md:grid-cols-3 gap-6">
+        {(content.items || []).map((item: any, i: number) => (
+          <div key={i} className="p-6 rounded-2xl bg-white border border-zinc-100 shadow-sm text-left">
+            <Quote className="w-7 h-7 mb-4 text-zinc-300" />
+            <p className="leading-relaxed text-zinc-700 mb-4">{item.text}</p>
+            <div className="flex gap-1 mb-3">
+              {Array.from({ length: 5 }).map((_, s) => (
+                <Star key={s} className={`w-4 h-4 ${s < (item.rating ?? 5) ? 'fill-yellow-400 text-yellow-400' : 'text-zinc-300'}`} />
+              ))}
+            </div>
+            <p className="font-bold text-zinc-900">{item.name}</p>
+            {item.role && <p className="text-sm text-zinc-500">{item.role}</p>}
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+);
+
+const RenderFaq = ({ content, styles }: { content: any, styles?: any }) => {
+  const [open, setOpen] = useState<number | null>(0);
+  return (
+    <section className="py-20 px-6" style={{ backgroundColor: styles?.backgroundColor, color: styles?.textColor }}>
+      <div className="max-w-2xl mx-auto">
+        {content.title && <h2 className="text-3xl font-bold text-center mb-10">{content.title}</h2>}
+        <div className="space-y-3">
+          {(content.items || []).map((item: any, i: number) => (
+            <div key={i} className="rounded-xl border border-zinc-200 bg-white overflow-hidden">
+              <button
+                onClick={() => setOpen(open === i ? null : i)}
+                className="flex w-full items-center justify-between px-5 py-4 text-left font-semibold text-zinc-900"
+              >
+                <span>{item.q}</span>
+                <ChevronDown className={`w-5 h-5 shrink-0 text-zinc-400 transition-transform ${open === i ? 'rotate-180' : ''}`} />
+              </button>
+              {open === i && <div className="px-5 pb-4 text-zinc-600">{item.a}</div>}
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+};
+
+const RenderList = ({ content, styles }: { content: any, styles?: any }) => (
+  <section className="py-16 px-6" style={{ backgroundColor: styles?.backgroundColor, color: styles?.textColor }}>
+    <div className="max-w-2xl mx-auto">
+      {content.title && <h2 className="text-3xl font-bold text-center mb-8">{content.title}</h2>}
+      <ul className="space-y-4">
+        {(content.items || []).map((item: any, i: number) => (
+          <li key={i} className="flex items-start gap-3">
+            <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: (styles?.accentColor || '#16a34a') + '22', color: styles?.accentColor || '#16a34a' }}>
+              <Check className="w-3.5 h-3.5" />
+            </span>
+            <span className="text-lg opacity-90">{item.text}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </section>
+);
+
+const RenderSlider = ({ content, styles }: { content: any, styles?: any }) => {
+  const images: any[] = content.images || [];
+  const [index, setIndex] = useState(0);
+  useEffect(() => {
+    if (!content.autoplay || images.length <= 1) return;
+    const timer = setInterval(() => setIndex((i) => (i + 1) % images.length), 4000);
+    return () => clearInterval(timer);
+  }, [content.autoplay, images.length]);
+
+  if (images.length === 0) return null;
+  const current = images[Math.min(index, images.length - 1)];
+  return (
+    <section className="py-16 px-6" style={{ backgroundColor: styles?.backgroundColor, color: styles?.textColor }}>
+      <div className="max-w-4xl mx-auto">
+        <div className="relative aspect-video w-full overflow-hidden rounded-2xl bg-black/10">
+          {current?.url && <img src={current.url} alt={current.caption || 'Slide'} className="h-full w-full object-cover" />}
+          {images.length > 1 && (
+            <>
+              <button onClick={() => setIndex((i) => (i - 1 + images.length) % images.length)} className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-white/80 p-2 shadow hover:bg-white">
+                <ArrowRight className="w-5 h-5 rotate-180 text-zinc-800" />
+              </button>
+              <button onClick={() => setIndex((i) => (i + 1) % images.length)} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-white/80 p-2 shadow hover:bg-white">
+                <ArrowRight className="w-5 h-5 text-zinc-800" />
+              </button>
+            </>
+          )}
+        </div>
+        {current?.caption && <p className="mt-3 text-center text-sm opacity-60">{current.caption}</p>}
+        <div className="mt-4 flex justify-center gap-1.5">
+          {images.map((_, i) => (
+            <button key={i} onClick={() => setIndex(i)} className={`h-2 rounded-full transition-all ${i === index ? 'w-6 bg-zinc-800' : 'w-2 bg-zinc-300'}`} />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+};
+
+const RenderCountdown = ({ content, styles }: { content: any, styles?: any }) => {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const diff = Math.max(0, new Date(content.targetDate).getTime() - now);
+  const parts = [
+    { label: 'Hari', value: Math.floor(diff / 86400000) },
+    { label: 'Jam', value: Math.floor((diff % 86400000) / 3600000) },
+    { label: 'Menit', value: Math.floor((diff % 3600000) / 60000) },
+    { label: 'Detik', value: Math.floor((diff % 60000) / 1000) },
+  ];
+  return (
+    <section className="py-20 px-6 text-center" style={{ backgroundColor: styles?.backgroundColor, color: styles?.textColor }}>
+      {content.title && <h2 className="text-3xl font-bold mb-2">{content.title}</h2>}
+      {content.subtitle && <p className="opacity-80 mb-8">{content.subtitle}</p>}
+      <div className="flex justify-center gap-3 sm:gap-4">
+        {parts.map((part) => (
+          <div key={part.label} className="flex flex-col items-center">
+            <div className="flex h-16 w-16 sm:h-24 sm:w-24 items-center justify-center rounded-2xl text-2xl sm:text-4xl font-bold" style={{ backgroundColor: styles?.buttonColor, color: styles?.buttonTextColor }}>
+              {String(part.value).padStart(2, '0')}
+            </div>
+            <span className="mt-2 text-sm opacity-70">{part.label}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+};
+
+const RenderGif = ({ content, styles }: { content: any, styles?: any }) => (
+  <section className="py-16 px-6 text-center" style={{ backgroundColor: styles?.backgroundColor, color: styles?.textColor }}>
+    <div className="mx-auto max-w-3xl">
+      {content.gifUrl && <img src={content.gifUrl} alt={content.caption || 'GIF'} className="mx-auto rounded-2xl shadow-sm" />}
+      {content.caption && <p className="mt-4 text-sm opacity-60 italic">{content.caption}</p>}
+    </div>
+  </section>
+);
+
+const RenderHtml = ({ content, styles }: { content: any, styles?: any }) => (
+  <section className="py-12 px-6" style={{ backgroundColor: styles?.backgroundColor, color: styles?.textColor }}>
+    <div className="mx-auto max-w-3xl" dangerouslySetInnerHTML={{ __html: content.html || '' }} />
+  </section>
+);
+
 // --- Main Public Page Component ---
 
 export default function PublicPage() {
@@ -434,7 +619,7 @@ export default function PublicPage() {
 
         const mappedBlocks: Block[] = (landingPayload.blocks || []).map((block) => ({
           id: String(block.id),
-        type: (['hero', 'features', 'content', 'cta', 'gallery', 'testimonials', 'product', 'banner', 'video', 'text', 'image', 'pdf', 'social', 'form'].includes(block.block_type)
+          type: (BLOCK_TYPES.includes(block.block_type as BlockType)
             ? block.block_type
             : 'content') as Block['type'],
           content: block.content || {},
@@ -554,6 +739,15 @@ export default function PublicPage() {
           case 'pdf': return <RenderPdf key={block.id} content={block.content} styles={mergedStyles} onBuy={handleBuy} />;
           case 'social': return <RenderSocial key={block.id} content={block.content} styles={mergedStyles} />;
           case 'form': return <RenderForm key={block.id} block={block} pageId={pageId} styles={mergedStyles} />;
+          case 'button': return <RenderButton key={block.id} content={block.content} styles={mergedStyles} pageSettings={pageSettings} />;
+          case 'divider': return <RenderDivider key={block.id} content={block.content} styles={mergedStyles} />;
+          case 'testimonials': return <RenderTestimonials key={block.id} content={block.content} styles={mergedStyles} />;
+          case 'faq': return <RenderFaq key={block.id} content={block.content} styles={mergedStyles} />;
+          case 'list': return <RenderList key={block.id} content={block.content} styles={mergedStyles} />;
+          case 'slider': return <RenderSlider key={block.id} content={block.content} styles={mergedStyles} />;
+          case 'countdown': return <RenderCountdown key={block.id} content={block.content} styles={mergedStyles} />;
+          case 'gif': return <RenderGif key={block.id} content={block.content} styles={mergedStyles} />;
+          case 'html': return <RenderHtml key={block.id} content={block.content} styles={mergedStyles} />;
           default: return null;
         }
       })}

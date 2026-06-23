@@ -1,4 +1,25 @@
-export type BlockType = 'hero' | 'features' | 'cta' | 'content' | 'banner' | 'product' | 'video' | 'text' | 'image' | 'pdf' | 'social' | 'form';
+export type BlockType =
+  | 'hero'
+  | 'features'
+  | 'cta'
+  | 'content'
+  | 'banner'
+  | 'product'
+  | 'video'
+  | 'text'
+  | 'image'
+  | 'pdf'
+  | 'social'
+  | 'form'
+  | 'button'
+  | 'divider'
+  | 'testimonials'
+  | 'faq'
+  | 'list'
+  | 'slider'
+  | 'countdown'
+  | 'gif'
+  | 'html';
 
 export interface BlockStyles {
   backgroundColor?: string;
@@ -16,3 +37,29 @@ export interface Block {
   content: Record<string, any>;
   styles?: BlockStyles;
 }
+
+// All block types known to the builder. Used for save/load whitelists so adding
+// a new block in one place keeps editor + public renderer in sync.
+export const BLOCK_TYPES: BlockType[] = [
+  'hero',
+  'features',
+  'cta',
+  'content',
+  'banner',
+  'product',
+  'video',
+  'text',
+  'image',
+  'pdf',
+  'social',
+  'form',
+  'button',
+  'divider',
+  'testimonials',
+  'faq',
+  'list',
+  'slider',
+  'countdown',
+  'gif',
+  'html',
+];

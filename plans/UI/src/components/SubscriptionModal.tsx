@@ -22,6 +22,7 @@ import {
   getPaymentGatewayStatus,
   getPricingMatrix,
   pollAppEntitlement,
+  reconcileCheckout,
   validatePromoCode,
 } from '@/lib/hellomApi';
 import GatewayPaymentFrame from '@/components/GatewayPaymentFrame';
@@ -45,10 +46,18 @@ type MatrixPlan = {
   features?: unknown;
   billing_cycles?: string[] | null;
   duration_days?: number | null;
+  max_outlets?: number | null;
   is_recommended?: boolean;
   sort_order?: number;
   is_current: boolean;
 };
+
+function outletQuotaLabel(maxOutlets?: number | null): string {
+  const n = Number(maxOutlets ?? 1);
+  if (n <= 1) return '1 outlet (single cabang)';
+  if (n >= 999) return 'Outlet tidak terbatas';
+  return `Hingga ${n} outlet/cabang`;
+}
 
 type PromoPreview = {
   code: string;
@@ -146,13 +155,15 @@ function resolvePeriod(plan: MatrixPlan) {
   return '/month';
 }
 
-function planMeta(plan: MatrixPlan, index: number, hasConfiguredRecommendation: boolean) {
+function planMeta(plan: MatrixPlan, index: number, hasConfiguredRecommendation: boolean, isPos = false) {
   const configuredFeatures = normalizeFeatureList(plan.features);
+  // For POS, surface the outlet quota as the first feature so buyers see what they pay for.
+  const withOutlet = (list: string[]) => (isPos ? [outletQuotaLabel(plan.max_outlets), ...list] : list);
 
   if (plan.type === 'free') {
     return {
       description: plan.description || 'Aktifkan paket gratis untuk membuka akses aplikasi secara instan.',
-      features: configuredFeatures.length ? configuredFeatures : ['Full app access', 'Biaya Rp 0', 'Aktif langsung'],
+      features: withOutlet(configuredFeatures.length ? configuredFeatures : ['Full app access', 'Biaya Rp 0', 'Aktif langsung']),
       icon: Zap,
       color: 'bg-zinc-100 text-zinc-900',
       popular: Boolean(plan.is_recommended) || (!hasConfiguredRecommendation && index === 0),
@@ -162,7 +173,7 @@ function planMeta(plan: MatrixPlan, index: number, hasConfiguredRecommendation: 
 
   return {
     description: plan.description || 'Paket berbayar untuk operasional aplikasi dan aktivasi fitur premium.',
-    features: configuredFeatures.length ? configuredFeatures : ['Full app access', 'Wallet recharge & auto-renew', 'Pembayaran langsung mengikuti setting owner'],
+    features: withOutlet(configuredFeatures.length ? configuredFeatures : ['Full app access', 'Wallet recharge & auto-renew', 'Pembayaran langsung mengikuti setting owner']),
     icon: index === 0 ? Star : Crown,
     color: index === 0 ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700',
     popular: Boolean(plan.is_recommended) || (!hasConfiguredRecommendation && index === 0),
@@ -191,6 +202,7 @@ export default function SubscriptionModal({ isOpen, onClose, appName, appSlug, a
   const [checkoutStep, setCheckoutStep] = useState<CheckoutStep>('plan');
   const [gatewayPaymentUrl, setGatewayPaymentUrl] = useState<string | null>(null);
   const [gatewayPollSlug, setGatewayPollSlug] = useState<string | null>(null);
+  const [gatewayIntentToken, setGatewayIntentToken] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) {
@@ -266,9 +278,10 @@ export default function SubscriptionModal({ isOpen, onClose, appName, appSlug, a
   const decoratedPlans = useMemo(
     () => {
       const hasConfiguredRecommendation = plans.some((plan) => Boolean(plan.is_recommended));
-      return plans.map((plan, index) => ({ plan, meta: planMeta(plan, index, hasConfiguredRecommendation) }));
+      const isPos = resolvedSlug === 'pos';
+      return plans.map((plan, index) => ({ plan, meta: planMeta(plan, index, hasConfiguredRecommendation, isPos) }));
     },
-    [plans]
+    [plans, resolvedSlug]
   );
 
   const selectedPlan = useMemo(
@@ -378,6 +391,7 @@ export default function SubscriptionModal({ isOpen, onClose, appName, appSlug, a
         } else if (checkout.payment.payment_url) {
           setGatewayPaymentUrl(checkout.payment.payment_url);
           setGatewayPollSlug(resolvedSlug);
+          setGatewayIntentToken((checkout as any).checkout_intent?.intent_token || null);
           onSuccess?.();
         } else {
           setSuccessMessage(`Checkout langsung sudah dibuat dan menunggu aktivasi link payment ${providerLabel}.`);
@@ -915,9 +929,21 @@ export default function SubscriptionModal({ isOpen, onClose, appName, appSlug, a
             onSuccess?.();
           }}
           pollFn={
-            gatewayPollSlug
-              ? () => pollAppEntitlement(gatewayPollSlug)
-              : undefined
+            gatewayIntentToken
+              // Reconcile server-side (verifies payment with iPaymu + activates), so it works
+              // even when the inbound webhook can't reach the server (local/sandbox).
+              ? async () => {
+                  try {
+                    const res = await reconcileCheckout(gatewayIntentToken);
+                    if (res.active) return true;
+                  } catch {
+                    // ignore and fall back to entitlement check
+                  }
+                  return gatewayPollSlug ? pollAppEntitlement(gatewayPollSlug) : false;
+                }
+              : gatewayPollSlug
+                ? () => pollAppEntitlement(gatewayPollSlug)
+                : undefined
           }
         />
       )}

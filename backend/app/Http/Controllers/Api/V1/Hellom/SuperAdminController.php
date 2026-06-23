@@ -149,6 +149,29 @@ class SuperAdminController extends BaseApiController
         return $this->ok(['id' => $org->id, 'status' => 'active'], __('hellom.org_reactivated'));
     }
 
+    /**
+     * Per-organization outlet quota override (exception above the plan's max_outlets).
+     * Null clears the override so the plan limit applies again.
+     */
+    public function updateOrganizationOutletLimit(Request $request, int $organizationId): JsonResponse
+    {
+        $org = Organization::query()->find($organizationId);
+        if (!$org) {
+            return $this->fail('Organization not found', ['code' => 'NOT_FOUND'], 404);
+        }
+
+        $validated = $request->validate([
+            'max_outlets_override' => ['nullable', 'integer', 'min:1'],
+        ]);
+
+        $old = ['max_outlets_override' => $org->max_outlets_override];
+        $org->update(['max_outlets_override' => $validated['max_outlets_override'] ?? null]);
+
+        $this->audit($request, 'organization.outlet_limit', 'Organization', $organizationId, $old, $validated);
+
+        return $this->ok($org->fresh(), 'Outlet limit updated');
+    }
+
     // ─── User Management ───
 
     public function listUsers(Request $request): JsonResponse
@@ -497,6 +520,7 @@ class SuperAdminController extends BaseApiController
             'billing_cycles' => ['nullable', 'array'],
             'billing_cycles.*' => ['string', 'in:monthly,yearly'],
             'duration_days' => ['nullable', 'integer'],
+            'max_outlets' => ['nullable', 'integer', 'min:1'],
             'is_visible' => ['nullable', 'boolean'],
             'is_recommended' => ['nullable', 'boolean'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
@@ -525,6 +549,7 @@ class SuperAdminController extends BaseApiController
             'billing_cycles' => ['nullable', 'array'],
             'billing_cycles.*' => ['string', 'in:monthly,yearly'],
             'duration_days' => ['nullable', 'integer'],
+            'max_outlets' => ['nullable', 'integer', 'min:1'],
             'is_visible' => ['nullable', 'boolean'],
             'is_recommended' => ['nullable', 'boolean'],
             'sort_order' => ['nullable', 'integer', 'min:0'],

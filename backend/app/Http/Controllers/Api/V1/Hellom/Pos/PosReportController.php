@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\BaseApiController;
 use App\Models\Organization;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\Outlet;
 use App\Services\Pos\PosReportExcelExporter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -14,11 +15,44 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class PosReportController extends BasePosController
 {
+    /**
+     * Resolve which outlet(s) a report covers.
+     * - scope=all (owner only) → every outlet of the organization (aggregate).
+     * - otherwise → just the active outlet.
+     */
+    private function reportScope(Request $request, Organization $org): array
+    {
+        $wantsAll = in_array((string) $request->input('scope'), ['all', 'aggregate'], true);
+
+        if ($wantsAll && $this->isOrgOwner($request, $org)) {
+            $outlets = Outlet::query()
+                ->where('organization_id', $org->id)
+                ->orderByDesc('is_primary')
+                ->orderBy('sort_order')
+                ->orderBy('id')
+                ->get();
+
+            $slugs = $outlets->pluck('tenant_slug')->filter()->values()->all();
+            if (empty($slugs)) {
+                $slugs = [$this->getActiveTenantSlug($request, $org)];
+            }
+
+            return ['slugs' => $slugs, 'aggregate' => true, 'outlets' => $outlets, 'is_owner' => true];
+        }
+
+        return [
+            'slugs' => [$this->getActiveTenantSlug($request, $org)],
+            'aggregate' => false,
+            'outlets' => collect(),
+            'is_owner' => $this->isOrgOwner($request, $org),
+        ];
+    }
 
     public function summary(Request $request): JsonResponse
     {
         $org = $this->getOrg($request);
-        $tenantSlug = $this->getTenantSlug($org);
+        $scope = $this->reportScope($request, $org);
+        $slugs = $scope['slugs'];
 
         // Filter tanggal
         $startDate = $request->input('start_date')
@@ -31,7 +65,7 @@ class PosReportController extends BasePosController
 
         // Base query — hanya order COMPLETED
         $baseQuery = Order::withoutGlobalScope('tenant')
-            ->where('tenant_id', $tenantSlug)
+            ->whereIn('tenant_id', $slugs)
             ->where('status', 'completed')
             ->whereBetween('created_at', [$startDate, $endDate]);
 
@@ -41,7 +75,7 @@ class PosReportController extends BasePosController
         $prevEnd = $startDate->copy()->subDay()->endOfDay();
 
         $prevQuery = Order::withoutGlobalScope('tenant')
-            ->where('tenant_id', $tenantSlug)
+            ->whereIn('tenant_id', $slugs)
             ->where('status', 'completed')
             ->whereBetween('created_at', [$prevStart, $prevEnd]);
 
@@ -50,9 +84,9 @@ class PosReportController extends BasePosController
         $totalOrders = $baseQuery->count();
         $avgOrderValue = $totalOrders > 0
             ? round($totalRevenue / $totalOrders) : 0;
-        $totalItems = OrderItem::whereHas('order', function($q) use ($tenantSlug, $startDate, $endDate) {
+        $totalItems = OrderItem::whereHas('order', function($q) use ($slugs, $startDate, $endDate) {
             $q->withoutGlobalScope('tenant')
-              ->where('tenant_id', $tenantSlug)
+              ->whereIn('tenant_id', $slugs)
               ->where('status', 'completed')
               ->whereBetween('created_at', [$startDate, $endDate]);
         })->sum('qty');
@@ -70,7 +104,7 @@ class PosReportController extends BasePosController
 
         // Breakdown per metode pembayaran
         $paymentBreakdown = Order::withoutGlobalScope('tenant')
-            ->where('tenant_id', $tenantSlug)
+            ->whereIn('tenant_id', $slugs)
             ->where('status', 'completed')
             ->whereBetween('created_at', [$startDate, $endDate])
             ->selectRaw('payment_method, COUNT(*) as count, SUM(total_amount) as total')
@@ -79,7 +113,7 @@ class PosReportController extends BasePosController
 
         // Breakdown dine_in vs takeaway
         $serviceBreakdown = Order::withoutGlobalScope('tenant')
-            ->where('tenant_id', $tenantSlug)
+            ->whereIn('tenant_id', $slugs)
             ->where('status', 'completed')
             ->whereBetween('created_at', [$startDate, $endDate])
             ->selectRaw('service_type, COUNT(*) as count, SUM(total_amount) as total')
@@ -88,7 +122,7 @@ class PosReportController extends BasePosController
 
         // Jam tersibuk (peak hours)
         $peakHours = Order::withoutGlobalScope('tenant')
-            ->where('tenant_id', $tenantSlug)
+            ->whereIn('tenant_id', $slugs)
             ->where('status', 'completed')
             ->whereBetween('created_at', [$startDate, $endDate])
             ->selectRaw('HOUR(created_at) as hour, COUNT(*) as count, SUM(total_amount) as total')
@@ -97,9 +131,35 @@ class PosReportController extends BasePosController
             ->limit(5)
             ->get();
 
+        // Per-outlet breakdown (owner aggregate view only) — revenue & orders per cabang.
+        $outletBreakdown = [];
+        if ($scope['aggregate']) {
+            $rows = Order::withoutGlobalScope('tenant')
+                ->whereIn('tenant_id', $slugs)
+                ->where('status', 'completed')
+                ->whereBetween('created_at', [$startDate, $endDate])
+                ->selectRaw('tenant_id, COUNT(*) as orders_count, SUM(total_amount) as revenue')
+                ->groupBy('tenant_id')
+                ->get()
+                ->keyBy('tenant_id');
+
+            foreach ($scope['outlets'] as $outlet) {
+                $row = $rows->get($outlet->tenant_slug);
+                $outletBreakdown[] = [
+                    'outlet_id'     => $outlet->id,
+                    'name'          => $outlet->name,
+                    'is_primary'    => (bool) $outlet->is_primary,
+                    'total_orders'  => $row ? (int) $row->orders_count : 0,
+                    'total_revenue' => $row ? (int) $row->revenue : 0,
+                ];
+            }
+        }
+
         return response()->json([
             'success' => true,
             'data' => [
+                'scope'    => $scope['aggregate'] ? 'all_outlets' : 'single_outlet',
+                'is_owner' => (bool) $scope['is_owner'],
                 'period' => [
                     'start' => $startDate->format('Y-m-d'),
                     'end'   => $endDate->format('Y-m-d'),
@@ -116,6 +176,7 @@ class PosReportController extends BasePosController
                 'payment_breakdown'  => $paymentBreakdown,
                 'service_breakdown'  => $serviceBreakdown,
                 'peak_hours'         => $peakHours,
+                'outlet_breakdown'   => $outletBreakdown,
             ],
             'message' => 'Laporan berhasil dimuat',
         ]);
@@ -124,7 +185,7 @@ class PosReportController extends BasePosController
     public function products(Request $request): JsonResponse
     {
         $org = $this->getOrg($request);
-        $tenantSlug = $this->getTenantSlug($org);
+        $slugs = $this->reportScope($request, $org)['slugs'];
 
         $startDate = $request->input('start_date')
             ? Carbon::parse($request->input('start_date'))->startOfDay()
@@ -139,7 +200,7 @@ class PosReportController extends BasePosController
         // Produk terlaris berdasarkan qty terjual
         $topProducts = OrderItem::query()
             ->join('orders', 'orders.id', '=', 'order_items.order_id')
-            ->where('orders.tenant_id', $tenantSlug)
+            ->whereIn('orders.tenant_id', $slugs)
             ->where('orders.status', 'completed')
             ->whereBetween('orders.created_at', [$startDate, $endDate])
             ->selectRaw('
@@ -160,7 +221,7 @@ class PosReportController extends BasePosController
             ->join('orders', 'orders.id', '=', 'order_items.order_id')
             ->join('products', 'products.id', '=', 'order_items.product_id')
             ->join('categories', 'categories.id', '=', 'products.category_id')
-            ->where('orders.tenant_id', $tenantSlug)
+            ->whereIn('orders.tenant_id', $slugs)
             ->where('orders.status', 'completed')
             ->whereBetween('orders.created_at', [$startDate, $endDate])
             ->selectRaw('
@@ -190,7 +251,7 @@ class PosReportController extends BasePosController
     public function daily(Request $request): JsonResponse
     {
         $org = $this->getOrg($request);
-        $tenantSlug = $this->getTenantSlug($org);
+        $slugs = $this->reportScope($request, $org)['slugs'];
 
         $startDate = $request->input('start_date')
             ? Carbon::parse($request->input('start_date'))->startOfDay()
@@ -201,7 +262,7 @@ class PosReportController extends BasePosController
             : Carbon::today()->endOfDay();
 
         $dailyData = Order::withoutGlobalScope('tenant')
-            ->where('tenant_id', $tenantSlug)
+            ->whereIn('tenant_id', $slugs)
             ->where('status', 'completed')
             ->whereBetween('created_at', [$startDate, $endDate])
             ->selectRaw('
@@ -242,13 +303,13 @@ class PosReportController extends BasePosController
     public function export(Request $request, PosReportExcelExporter $exporter): BinaryFileResponse
     {
         $org = $this->getOrg($request);
-        $tenantSlug = $this->getTenantSlug($org);
+        $slugs = $this->reportScope($request, $org)['slugs'];
 
         $startDate = Carbon::parse($request->input('start_date', today()))->startOfDay();
         $endDate = Carbon::parse($request->input('end_date', today()))->endOfDay();
 
         $orders = Order::withoutGlobalScope('tenant')
-            ->where('tenant_id', $tenantSlug)
+            ->whereIn('tenant_id', $slugs)
             ->where('status', 'completed')
             ->whereBetween('created_at', [$startDate, $endDate])
             ->with(['items', 'table'])

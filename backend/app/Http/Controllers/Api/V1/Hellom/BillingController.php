@@ -18,6 +18,7 @@ use App\Mail\HellomCheckoutStatusMail;
 use App\Services\Hellom\DokuService;
 use App\Services\Hellom\DokuSettingsService;
 use App\Services\Hellom\IpaymuService;
+use App\Services\Hellom\SubscriptionCheckoutActivationService;
 use App\Services\Hellom\IpaymuSettingsService;
 use App\Services\Hellom\ManualPaymentSettingsService;
 use App\Services\Hellom\PaymentGatewaySettingsService;
@@ -504,6 +505,10 @@ class BillingController extends BaseApiController
                             'invoice_id' => (int) ($invoice?->id ?? 0),
                             'reference_id' => (string) $intent->intent_token,
                         ]),
+                        // Browser redirect back to the app so we can reconcile even when the
+                        // server-to-server webhook can't reach us (e.g. local/sandbox).
+                        'returnUrl' => $this->checkoutReturnUrl($request, (string) $intent->intent_token),
+                        'cancelUrl' => $this->checkoutReturnUrl($request, (string) $intent->intent_token, true),
                     ]);
 
                     $paymentUrl = (string) (data_get($session, 'Data.Url') ?: data_get($session, 'Url') ?: '');
@@ -1828,6 +1833,74 @@ class BillingController extends BaseApiController
         ], 'Billing history');
     }
 
+    /**
+     * Reconcile a gateway checkout without relying on the inbound webhook:
+     * verify the payment directly with iPaymu, then activate access + notify owner.
+     * Safe to call repeatedly (idempotent) — used by polling and the return redirect.
+     */
+    public function reconcileCheckout(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'intent_token' => ['required', 'string'],
+            'transaction_id' => ['nullable', 'string'],
+        ]);
+
+        $intent = CheckoutIntent::query()
+            ->with(['subscription.plan', 'app', 'plan', 'user'])
+            ->where('intent_token', (string) $validated['intent_token'])
+            ->first();
+
+        if (!$intent instanceof CheckoutIntent) {
+            return $this->fail('Checkout tidak ditemukan.', ['code' => 'NOT_FOUND'], 404);
+        }
+
+        $user = $request->user();
+        if ($user && (int) $intent->user_id > 0 && (int) $intent->user_id !== (int) $user->id) {
+            return $this->fail('Tidak diizinkan.', ['code' => 'FORBIDDEN'], 403);
+        }
+
+        $activator = app(SubscriptionCheckoutActivationService::class);
+
+        if (in_array((string) $intent->status, ['confirmed', 'paid'], true)) {
+            $activator->ensureActiveAccessForConfirmedCheckout($intent);
+
+            return $this->ok(['active' => true, 'status' => 'confirmed'], 'Akses sudah aktif.');
+        }
+
+        $meta = is_array($intent->metadata) ? $intent->metadata : [];
+        $ipaymuMeta = is_array($meta['ipaymu'] ?? null) ? $meta['ipaymu'] : [];
+        $transactionId = trim((string) ($validated['transaction_id'] ?? ''))
+            ?: trim((string) ($ipaymuMeta['transaction_id'] ?? ''))
+            ?: trim((string) ($ipaymuMeta['payment_session_id'] ?? ''));
+
+        if ($transactionId === '') {
+            return $this->ok(['active' => false, 'status' => 'pending'], 'Menunggu pembayaran.');
+        }
+
+        try {
+            $result = $this->ipaymu()->checkTransaction($transactionId);
+            $data = (array) ($result['Data'] ?? $result['data'] ?? []);
+            $statusCode = $data['Status'] ?? $data['StatusCode'] ?? null;
+            $statusDesc = strtolower((string) ($data['StatusDesc'] ?? $data['StatusDescription'] ?? ''));
+            $paid = (int) $statusCode === 1
+                || in_array($statusDesc, ['berhasil', 'success', 'paid', 'settled', 'settlement'], true);
+
+            if ($paid) {
+                $activator->confirmGatewayCheckout($intent, [
+                    'transaction_id' => $transactionId,
+                    'invoice_id' => (int) ($meta['invoice_id'] ?? 0),
+                    'reconciled' => true,
+                ], 'iPaymu');
+
+                return $this->ok(['active' => true, 'status' => 'confirmed'], 'Pembayaran dikonfirmasi.');
+            }
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
+
+        return $this->ok(['active' => false, 'status' => 'pending'], 'Menunggu konfirmasi pembayaran.');
+    }
+
     public function checkoutIntentMock(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -2387,6 +2460,21 @@ class BillingController extends BaseApiController
         ], fn ($value) => $value !== '' && $value !== 0);
 
         return url($this->providerWebhookPath('ipaymu')) . '?' . http_build_query($query);
+    }
+
+    /**
+     * Browser return URL for the SPA after a gateway redirect. Uses the request
+     * Origin (the dashboard) so the redirect reaches the user's app even on localhost.
+     */
+    private function checkoutReturnUrl(Request $request, string $intentToken, bool $cancel = false): string
+    {
+        $base = rtrim((string) ($request->headers->get('Origin') ?: config('app.url')), '/');
+        $params = ['ipaymu_return' => 1, 'intent' => $intentToken];
+        if ($cancel) {
+            $params['cancel'] = 1;
+        }
+
+        return $base . '/dashboard/payments?' . http_build_query($params);
     }
 
     private function dokuNotifyUrl(): string

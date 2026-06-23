@@ -1,7 +1,8 @@
 import React from 'react';
 import {
   FileText, Upload,
-  Facebook, Instagram, Music2, AtSign, ShoppingBag, MessageCircle
+  Facebook, Instagram, Music2, AtSign, ShoppingBag, MessageCircle,
+  Star, Quote, Check, ChevronDown, ArrowRight
 } from 'lucide-react';
 import { Block, BlockStyles } from '../types';
 
@@ -276,6 +277,159 @@ const SocialBlock = ({ content, styles }: { content: any, styles: any }) => (
   </div>
 );
 
+const ButtonBlock = ({ content, styles }: { content: any, styles: any }) => {
+  const align = content.align || 'center';
+  const justify = align === 'left' ? 'justify-start' : align === 'right' ? 'justify-end' : 'justify-center';
+  return (
+    <div className={`${styles.padding} px-4 sm:px-8`} style={styles.container}>
+      <div className={`flex ${justify}`}>
+        <span
+          className="inline-flex items-center gap-2 px-6 py-3 text-sm sm:text-base font-bold rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+          style={styles.button}
+        >
+          {content.actionType === 'whatsapp' && <MessageCircle className="w-4 h-4" />}
+          {content.text || 'Klik di Sini'}
+          {content.actionType !== 'whatsapp' && <ArrowRight className="w-4 h-4" />}
+        </span>
+      </div>
+    </div>
+  );
+};
+
+const DividerBlock = ({ content, styles }: { content: any, styles: any }) => (
+  <div className={`${styles.padding} px-4 sm:px-8`} style={{ backgroundColor: styles.container.backgroundColor }}>
+    <div className="mx-auto" style={{ width: `${content.width ?? 100}%` }}>
+      <hr
+        style={{
+          borderTopStyle: content.style || 'solid',
+          borderTopWidth: `${content.thickness ?? 1}px`,
+          borderColor: styles.container.color,
+          opacity: 0.35,
+        }}
+      />
+    </div>
+  </div>
+);
+
+const TestimonialsBlock = ({ content, styles }: { content: any, styles: any }) => (
+  <div className={`${styles.padding} px-4 sm:px-8 border-b border-white/10`} style={styles.container}>
+    {content.title && <h2 className="text-xl sm:text-3xl font-bold mb-6 sm:mb-10">{content.title}</h2>}
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6 max-w-6xl mx-auto text-left">
+      {(content.items || []).map((item: any, idx: number) => (
+        <div key={idx} className="p-4 sm:p-6 rounded-xl border border-black/5 shadow-sm bg-white/60 backdrop-blur-sm">
+          <Quote className="w-6 h-6 mb-3 opacity-30" />
+          <p className="text-sm sm:text-base opacity-90 mb-4">{item.text}</p>
+          <div className="flex items-center gap-1 mb-2">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Star key={i} className={`w-4 h-4 ${i < (item.rating ?? 5) ? 'fill-yellow-400 text-yellow-400' : 'text-zinc-300'}`} />
+            ))}
+          </div>
+          <p className="text-sm font-bold">{item.name}</p>
+          {item.role && <p className="text-xs opacity-60">{item.role}</p>}
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+const FaqBlock = ({ content, styles }: { content: any, styles: any }) => (
+  <div className={`${styles.padding} px-4 sm:px-8 border-b border-white/10`} style={styles.container}>
+    {content.title && <h2 className="text-xl sm:text-3xl font-bold mb-6 sm:mb-10">{content.title}</h2>}
+    <div className="max-w-2xl mx-auto text-left space-y-3">
+      {(content.items || []).map((item: any, idx: number) => (
+        <div key={idx} className="rounded-xl border border-black/10 bg-white/60 backdrop-blur-sm overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 font-semibold text-sm sm:text-base">
+            <span>{item.q}</span>
+            <ChevronDown className="w-4 h-4 opacity-50" />
+          </div>
+          <div className="px-4 pb-3 text-sm opacity-80">{item.a}</div>
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+const ListBlock = ({ content, styles }: { content: any, styles: any }) => (
+  <div className={`${styles.padding} px-4 sm:px-8`} style={styles.container}>
+    {content.title && <h2 className="text-xl sm:text-3xl font-bold mb-6">{content.title}</h2>}
+    <ul className="max-w-2xl mx-auto text-left space-y-3">
+      {(content.items || []).map((item: any, idx: number) => (
+        <li key={idx} className="flex items-start gap-3">
+          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: styles.accent.color + '22', color: styles.accent.color }}>
+            <Check className="w-3 h-3" />
+          </span>
+          <span className="text-sm sm:text-base opacity-90">{item.text}</span>
+        </li>
+      ))}
+    </ul>
+  </div>
+);
+
+const SliderBlock = ({ content, styles }: { content: any, styles: any }) => {
+  const images = content.images || [];
+  const first = images[0];
+  return (
+    <div className={`${styles.padding} px-4 sm:px-8`} style={styles.container}>
+      <div className="max-w-4xl mx-auto">
+        <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-black/10">
+          {first?.url && <img src={first.url} alt={first.caption || 'Slide'} className="h-full w-full object-cover" />}
+        </div>
+        <div className="mt-3 flex justify-center gap-1.5">
+          {images.map((_: any, idx: number) => (
+            <span key={idx} className={`h-2 rounded-full ${idx === 0 ? 'w-5' : 'w-2'} `} style={{ backgroundColor: idx === 0 ? styles.accent.color : styles.container.color + '40' }} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const formatCountdownParts = (target: string) => {
+  const diff = Math.max(0, new Date(target).getTime() - Date.now());
+  const days = Math.floor(diff / 86400000);
+  const hours = Math.floor((diff % 86400000) / 3600000);
+  const minutes = Math.floor((diff % 3600000) / 60000);
+  const seconds = Math.floor((diff % 60000) / 1000);
+  return [
+    { label: 'Hari', value: days },
+    { label: 'Jam', value: hours },
+    { label: 'Menit', value: minutes },
+    { label: 'Detik', value: seconds },
+  ];
+};
+
+const CountdownBlock = ({ content, styles }: { content: any, styles: any }) => (
+  <div className={`${styles.padding} px-4 sm:px-8`} style={styles.container}>
+    {content.title && <h2 className="text-xl sm:text-3xl font-bold mb-2">{content.title}</h2>}
+    {content.subtitle && <p className="text-sm sm:text-base opacity-80 mb-6">{content.subtitle}</p>}
+    <div className="flex justify-center gap-3 sm:gap-4">
+      {formatCountdownParts(content.targetDate).map((part) => (
+        <div key={part.label} className="flex flex-col items-center">
+          <div className="flex h-14 w-14 sm:h-20 sm:w-20 items-center justify-center rounded-xl text-xl sm:text-3xl font-bold" style={styles.button}>
+            {String(part.value).padStart(2, '0')}
+          </div>
+          <span className="mt-2 text-xs sm:text-sm opacity-70">{part.label}</span>
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+const GifBlock = ({ content, styles }: { content: any, styles: any }) => (
+  <div className={`${styles.padding} px-4 sm:px-8`} style={styles.container}>
+    <div className="max-w-3xl mx-auto">
+      {content.gifUrl && <img src={content.gifUrl} alt={content.caption || 'GIF'} className="mx-auto rounded-xl shadow-sm" />}
+      {content.caption && <p className="mt-3 text-xs sm:text-sm opacity-60 italic">{content.caption}</p>}
+    </div>
+  </div>
+);
+
+const HtmlBlock = ({ content, styles }: { content: any, styles: any }) => (
+  <div className={`${styles.padding} px-4 sm:px-8`} style={styles.container}>
+    <div className="max-w-3xl mx-auto" dangerouslySetInnerHTML={{ __html: content.html || '' }} />
+  </div>
+);
+
 export const BlockRenderer = ({ block, theme }: { block: Block, theme: any }) => {
   const styles = useBlockStyles(block.styles, theme);
 
@@ -292,6 +446,15 @@ export const BlockRenderer = ({ block, theme }: { block: Block, theme: any }) =>
     case 'pdf': return <PdfBlock content={block.content} styles={styles} />;
     case 'social': return <SocialBlock content={block.content} styles={styles} />;
     case 'form': return <FormBlock content={block.content} styles={styles} />;
+    case 'button': return <ButtonBlock content={block.content} styles={styles} />;
+    case 'divider': return <DividerBlock content={block.content} styles={styles} />;
+    case 'testimonials': return <TestimonialsBlock content={block.content} styles={styles} />;
+    case 'faq': return <FaqBlock content={block.content} styles={styles} />;
+    case 'list': return <ListBlock content={block.content} styles={styles} />;
+    case 'slider': return <SliderBlock content={block.content} styles={styles} />;
+    case 'countdown': return <CountdownBlock content={block.content} styles={styles} />;
+    case 'gif': return <GifBlock content={block.content} styles={styles} />;
+    case 'html': return <HtmlBlock content={block.content} styles={styles} />;
     default: return null;
   }
 };

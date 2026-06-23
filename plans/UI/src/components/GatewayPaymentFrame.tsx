@@ -1,6 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CheckCircle, ExternalLink, Loader2, RefreshCw, X } from 'lucide-react';
+
+// Gateways that refuse to be embedded in an iframe (X-Frame-Options / CSP frame-ancestors).
+// For these we skip the iframe and send the user straight to the hosted payment page.
+const NON_EMBEDDABLE_HOSTS = ['ipaymu.com'];
 
 interface GatewayPaymentFrameProps {
   paymentUrl: string;
@@ -26,6 +30,16 @@ export default function GatewayPaymentFrame({
   const [pollCount, setPollCount] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Some gateways (e.g. iPaymu) block iframe embedding — open them in a new tab instead.
+  const isBlockedGateway = useMemo(() => {
+    try {
+      const host = new URL(paymentUrl).hostname.toLowerCase();
+      return NON_EMBEDDABLE_HOSTS.some((domain) => host === domain || host.endsWith(`.${domain}`) || host.includes(domain));
+    } catch {
+      return false;
+    }
+  }, [paymentUrl]);
 
   // ── Polling ──────────────────────────────────────────────────────────────
   const runPoll = useCallback(async () => {
@@ -122,7 +136,7 @@ export default function GatewayPaymentFrame({
         )}
 
         {/* Loading overlay */}
-        {!iframeReady && !timedOut && !isPaid && (
+        {!iframeReady && !timedOut && !isPaid && !isBlockedGateway && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-zinc-100">
             <Loader2 className="h-8 w-8 animate-spin text-zinc-400" />
             <p className="text-sm text-zinc-500">Memuat halaman pembayaran...</p>
@@ -130,16 +144,17 @@ export default function GatewayPaymentFrame({
         )}
 
         {/* Timeout / blocked fallback */}
-        {timedOut && !iframeReady && !isPaid && (
+        {(timedOut || isBlockedGateway) && !iframeReady && !isPaid && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-5 bg-zinc-50 p-8 text-center">
-            <div className="text-5xl">🔒</div>
+            <div className="text-5xl">{isBlockedGateway ? '💳' : '🔒'}</div>
             <div>
               <h3 className="text-lg font-bold text-zinc-900">
-                Halaman pembayaran tidak bisa dimuat di sini
+                {isBlockedGateway ? 'Lanjutkan pembayaran di halaman gateway' : 'Halaman pembayaran tidak bisa dimuat di sini'}
               </h3>
               <p className="mt-2 text-sm text-zinc-600">
-                Gateway pembayaran ini memblokir embedding.
-                Buka di browser untuk menyelesaikan pembayaran — kami tetap memantau statusnya di latar belakang.
+                {isBlockedGateway
+                  ? 'Demi keamanan, gateway ini membuka pembayaran di tab terpisah. Klik tombol di bawah untuk membayar — status pembayaran tetap kami pantau otomatis di sini.'
+                  : 'Gateway pembayaran ini memblokir embedding. Buka di browser untuk menyelesaikan pembayaran — kami tetap memantau statusnya di latar belakang.'}
               </p>
             </div>
             <a
@@ -159,8 +174,8 @@ export default function GatewayPaymentFrame({
           </div>
         )}
 
-        {/* The iframe */}
-        {!isPaid && (
+        {/* The iframe (skipped for gateways that block embedding) */}
+        {!isPaid && !isBlockedGateway && (
           <iframe
             src={paymentUrl}
             className="h-full w-full border-0"

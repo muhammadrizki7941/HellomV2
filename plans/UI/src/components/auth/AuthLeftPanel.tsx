@@ -53,35 +53,6 @@ export const AuthLeftPanel = ({ brand, logoSrc, variant }: AuthLeftPanelProps) =
       <div className="hidden lg:block">
         <PromoBanner items={items} variant={variant} />
       </div>
-
-      <div className="flex items-center gap-3">
-        {logoSrc ? (
-          <img src={logoSrc} alt={brand.app_name} className="h-10 w-auto" />
-        ) : (
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#FACC15] text-sm font-bold text-[#111111]">
-            {brand.app_name.slice(0, 2).toUpperCase()}
-          </div>
-        )}
-        <div>
-          <p className="text-xs uppercase tracking-[0.3em] text-[#F6B400]">Hellom Ecosystem</p>
-          <p className="text-sm font-semibold text-white">Creator-led digital system</p>
-        </div>
-      </div>
-
-      <div className="space-y-4">
-        <p className="max-w-xl text-sm text-white/70 sm:text-base">
-          Masuk atau daftar untuk mengakses dashboard, POS payment, produk digital, dan sistem bisnis yang dibangun dalam ekosistem Hellom.
-        </p>
-      </div>
-
-      <div className="flex flex-wrap gap-2 lg:hidden">
-        {highlightItems.map((item) => (
-          <span key={item.title} className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/80">
-            {item.title}
-          </span>
-        ))}
-      </div>
-
       <div className="hidden lg:grid grid-cols-2 gap-4">
         {highlightItems.map((item) => (
           <div key={item.title} className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4">

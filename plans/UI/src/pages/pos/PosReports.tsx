@@ -39,6 +39,10 @@ const PosReports = () => {
   const [topCategories, setTopCategories] = useState([]);
   const [peakHours, setPeakHours] = useState([]);
   const [chartMode, setChartMode] = useState<'revenue'|'orders'>('revenue');
+  // Owner-only cross-outlet aggregate view
+  const [isOwner, setIsOwner] = useState(false);
+  const [scopeAll, setScopeAll] = useState(false);
+  const [outletBreakdown, setOutletBreakdown] = useState<any[]>([]);
 
   // Set preset tanggal
   const handlePreset = (p: string) => {
@@ -77,10 +81,11 @@ const PosReports = () => {
     try {
       const params = `start_date=${startDate}&end_date=${endDate}`;
 
+      const scope = scopeAll ? 'all' : undefined;
       const [summaryRes, dailyRes, productsRes] = await Promise.all([
-        getPosReportSummary({ start_date: startDate, end_date: endDate }),
-        getPosReportDaily({ start_date: startDate, end_date: endDate }),
-        getPosReportProducts({ start_date: startDate, end_date: endDate }),
+        getPosReportSummary({ start_date: startDate, end_date: endDate, scope }),
+        getPosReportDaily({ start_date: startDate, end_date: endDate, scope }),
+        getPosReportProducts({ start_date: startDate, end_date: endDate, scope }),
       ]);
 
       setSummary(summaryRes.summary);
@@ -88,6 +93,8 @@ const PosReports = () => {
       setTopProducts(productsRes.top_products);
       setTopCategories(productsRes.top_categories);
       setPeakHours(summaryRes.peak_hours);
+      setIsOwner(Boolean(summaryRes.is_owner));
+      setOutletBreakdown(Array.isArray(summaryRes.outlet_breakdown) ? summaryRes.outlet_breakdown : []);
 
     } catch (err) {
       console.error('Gagal load laporan:', err);
@@ -119,7 +126,8 @@ const PosReports = () => {
 
   useEffect(() => {
     loadReports();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scopeAll]);
 
   // Kartu ringkasan
   const SummaryCard = ({ icon, label, value, change, color }) => (
@@ -164,6 +172,28 @@ const PosReports = () => {
           {isExporting ? 'Mengekspor...' : 'Export Excel'}
         </button>
       </div>
+
+      {/* OWNER-ONLY: scope toggle (semua outlet vs outlet aktif) */}
+      {isOwner && (
+        <div className="mb-6 flex flex-wrap items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-3">
+          <span className="text-sm font-semibold text-amber-900">Tampilan laporan:</span>
+          <div className="inline-flex rounded-xl border border-amber-300 bg-white p-1">
+            <button
+              onClick={() => setScopeAll(false)}
+              className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${!scopeAll ? 'bg-amber-400 text-[#111111]' : 'text-amber-700'}`}
+            >
+              Outlet Aktif
+            </button>
+            <button
+              onClick={() => setScopeAll(true)}
+              className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${scopeAll ? 'bg-amber-400 text-[#111111]' : 'text-amber-700'}`}
+            >
+              Semua Outlet
+            </button>
+          </div>
+          <span className="text-xs text-amber-700">Hanya pemilik organisasi yang bisa melihat gabungan semua outlet.</span>
+        </div>
+      )}
 
       {/* FILTER BAR */}
       <div className="bg-white rounded-2xl p-4 shadow-sm
@@ -261,6 +291,68 @@ const PosReports = () => {
               color="bg-purple-50"
             />
           </div>
+
+          {/* RINCIAN PER OUTLET (owner aggregate) */}
+          {scopeAll && outletBreakdown.length > 0 && (() => {
+            const grandRevenue = outletBreakdown.reduce((sum, o) => sum + (o.total_revenue || 0), 0);
+            const grandOrders = outletBreakdown.reduce((sum, o) => sum + (o.total_orders || 0), 0);
+            const ranked = [...outletBreakdown].sort((a, b) => (b.total_revenue || 0) - (a.total_revenue || 0));
+            return (
+              <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 mb-6">
+                <h2 className="text-lg font-bold text-gray-900 mb-1">Rincian per Outlet</h2>
+                <p className="mb-4 text-sm text-gray-500">Perbandingan penjualan semua cabang untuk periode terpilih.</p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-gray-500 border-b border-gray-100">
+                        <th className="py-2 pr-3 font-medium">Outlet</th>
+                        <th className="py-2 px-3 font-medium text-right">Pesanan</th>
+                        <th className="py-2 px-3 font-medium text-right">Pendapatan</th>
+                        <th className="py-2 px-3 font-medium text-right">Rata-rata/Order</th>
+                        <th className="py-2 pl-3 font-medium text-right">Kontribusi</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ranked.map((o) => {
+                        const revenue = o.total_revenue || 0;
+                        const orders = o.total_orders || 0;
+                        const aov = orders > 0 ? Math.round(revenue / orders) : 0;
+                        const share = grandRevenue > 0 ? Math.round((revenue / grandRevenue) * 100) : 0;
+                        return (
+                          <tr key={o.outlet_id} className="border-b border-gray-50 last:border-0">
+                            <td className="py-2.5 pr-3 font-medium text-gray-900">
+                              {o.name}
+                              {o.is_primary && <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">Utama</span>}
+                            </td>
+                            <td className="py-2.5 px-3 text-right text-gray-700">{orders}</td>
+                            <td className="py-2.5 px-3 text-right font-semibold text-gray-900">{formatRp(revenue)}</td>
+                            <td className="py-2.5 px-3 text-right text-gray-700">{formatRp(aov)}</td>
+                            <td className="py-2.5 pl-3 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <div className="hidden h-1.5 w-16 overflow-hidden rounded-full bg-gray-100 sm:block">
+                                  <div className="h-full rounded-full bg-amber-400" style={{ width: `${share}%` }} />
+                                </div>
+                                <span className="font-medium text-gray-700">{share}%</span>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t border-gray-200 font-semibold text-gray-900">
+                        <td className="py-2.5 pr-3">Total semua outlet</td>
+                        <td className="py-2.5 px-3 text-right">{grandOrders}</td>
+                        <td className="py-2.5 px-3 text-right">{formatRp(grandRevenue)}</td>
+                        <td className="py-2.5 px-3 text-right">{formatRp(grandOrders > 0 ? Math.round(grandRevenue / grandOrders) : 0)}</td>
+                        <td className="py-2.5 pl-3 text-right">100%</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* GRAFIK HARIAN */}
           <div className="bg-white rounded-2xl p-5 shadow-sm

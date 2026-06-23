@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { nanoid } from 'nanoid';
 import { arrayMove } from '@dnd-kit/sortable';
 import { THEMES, defaultContent } from './constants';
-import { Block, BlockType, BlockStyles } from './types';
+import { Block, BlockType, BlockStyles, BLOCK_TYPES } from './types';
+import { LanguageProvider } from './i18n';
 import {
   createLandingPage,
   createLandingPageBlock,
@@ -323,7 +324,7 @@ export default function LandingBuilder() {
         if ((blocksResult.items || []).length > 0) {
           const mappedBlocks: Block[] = blocksResult.items.map((row) => ({
             id: String(row.id),
-            type: (['hero', 'features', 'cta', 'content', 'banner', 'product', 'video', 'text', 'image', 'pdf', 'social', 'form'].includes(row.block_type)
+            type: (BLOCK_TYPES.includes(row.block_type as BlockType)
               ? row.block_type
               : 'content') as BlockType,
             content: row.content || {},
@@ -398,18 +399,28 @@ export default function LandingBuilder() {
     }, 2000);
   };
 
-  const addBlock = (type: BlockType) => {
+  const createBlock = (type: BlockType): Block => {
     const defaultBlockContent = { ...defaultContent[type] };
     const content = type === 'product' || type === 'pdf'
       ? ensureProductCheckoutContent(defaultBlockContent as Record<string, unknown>)
       : defaultBlockContent;
+    return { id: nanoid(), type, content };
+  };
 
-    const newBlock: Block = {
-      id: nanoid(),
-      type,
-      content,
-    };
+  const addBlock = (type: BlockType) => {
+    const newBlock = createBlock(type);
     setBlocks([...blocks, newBlock]);
+    setSelectedBlockId(newBlock.id);
+  };
+
+  const addBlockAt = (type: BlockType, index: number) => {
+    const newBlock = createBlock(type);
+    setBlocks((prev) => {
+      const next = [...prev];
+      const safeIndex = Math.max(0, Math.min(index, next.length));
+      next.splice(safeIndex, 0, newBlock);
+      return next;
+    });
     setSelectedBlockId(newBlock.id);
   };
 
@@ -537,7 +548,7 @@ export default function LandingBuilder() {
   };
 
   return (
-    <>
+    <LanguageProvider>
       {saveError && (
         <div className="mb-3 p-3 rounded-lg bg-red-50 border border-red-100 text-sm text-red-600">{saveError}</div>
       )}
@@ -575,6 +586,7 @@ export default function LandingBuilder() {
           setActiveThemeId={setActiveThemeId}
           THEMES={THEMES}
           addBlock={addBlock}
+          addBlockAt={addBlockAt}
           updateBlockContent={updateBlockContent}
           updateBlockStyles={updateBlockStyles}
           reorderBlocks={reorderBlocks}
@@ -600,12 +612,12 @@ export default function LandingBuilder() {
         setPrompt={setAiPrompt}
       />
 
-      <SettingsModal 
+      <SettingsModal
         isOpen={showSettingsModal}
         onClose={() => setShowSettingsModal(false)}
         settings={pageSettings}
         setSettings={setPageSettings}
       />
-    </>
+    </LanguageProvider>
   );
 }

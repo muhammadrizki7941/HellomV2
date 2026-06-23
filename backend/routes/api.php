@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\V1\Hellom\OrderController as HellomOrderController;
 use App\Http\Controllers\Api\V1\Hellom\Pos\PosOrderController;
 use App\Http\Controllers\Api\V1\Hellom\Pos\PosCategoryController;
 use App\Http\Controllers\Api\V1\Hellom\Pos\PosProductController;
+use App\Http\Controllers\Api\V1\Hellom\Pos\PosOutletController;
 use App\Http\Controllers\Api\V1\Hellom\Pos\PosTableController;
 use App\Http\Controllers\Api\V1\Hellom\Pos\PosReportController;
 use App\Http\Controllers\Api\V1\Hellom\Pos\PosMemberController;
@@ -81,6 +82,7 @@ Route::prefix('v1/hellom')->name('api.v1.hellom.')->group(function () {
 
     // Public — customer self-order (scan QR, no login needed)
     Route::get('/pos/customer/menu/{tableToken}', [CustomerOrderController::class, 'getMenu']);
+    Route::get('/pos/customer/organization/{organizationSlug}/outlets', [CustomerOrderController::class, 'getOrganizationOutlets']);
     Route::get('/pos/customer/organization/{organizationSlug}/menu', [CustomerOrderController::class, 'getOrganizationMenu']);
     Route::post('/pos/customer/order', [CustomerOrderController::class, 'createOrder']);
     Route::get('/pos/customer/order/{orderNumber}', [CustomerOrderController::class, 'getOrderStatus']);
@@ -143,6 +145,7 @@ Route::prefix('v1/hellom')->name('api.v1.hellom.')->group(function () {
         Route::get('/billing/gateway-status', [BillingController::class, 'gatewayStatus'])->name('billing.gateway_status');
         Route::get('/billing/runtime-config', [BillingController::class, 'checkoutRuntimeConfig'])->name('billing.runtime_config');
         Route::post('/billing/checkout-start', [BillingController::class, 'checkoutStart'])->name('billing.checkout_start');
+        Route::post('/billing/checkout-reconcile', [BillingController::class, 'reconcileCheckout'])->name('billing.checkout_reconcile');
         Route::post('/billing/subscriptions/{subscriptionId}/renew-mock', [BillingController::class, 'renewSubscriptionMock'])->name('billing.subscriptions.renew_mock');
         Route::post('/billing/subscriptions/{subscriptionId}/renew-wallet', [BillingController::class, 'renewSubscriptionWallet'])->name('billing.subscriptions.renew_wallet');
         Route::post('/billing/subscriptions/{subscriptionId}/auto-renew-wallet', [BillingController::class, 'setSubscriptionWalletAutoRenew'])->name('billing.subscriptions.auto_renew_wallet');
@@ -302,6 +305,12 @@ Route::prefix('v1/hellom')->name('api.v1.hellom.')->group(function () {
 
         // ─── POS Routes ───
         Route::middleware(['canUseApp:pos', 'App\Http\Middleware\Api\InjectPosContext'])->group(function () {
+            // Outlet management (multi-outlet per organization)
+            Route::get('/pos/outlets', [PosOutletController::class, 'index']);
+            Route::post('/pos/outlets', [PosOutletController::class, 'store']);
+            Route::patch('/pos/outlets/{outletId}', [PosOutletController::class, 'update']);
+            Route::delete('/pos/outlets/{outletId}', [PosOutletController::class, 'destroy']);
+
             Route::get('/pos/orders', [PosOrderController::class, 'index']);
             Route::post('/pos/orders', [PosOrderController::class, 'store']);
             Route::patch('/pos/orders/{orderId}/status', [PosOrderController::class, 'updateStatus']);
@@ -371,6 +380,7 @@ Route::post('/pos/orders/{orderId}/payment', [HellomOrderController::class, 'con
                 Route::post('/', [PosStaffController::class, 'store']);
                 Route::post('/attendance/scan', [PosStaffController::class, 'scanAttendanceQr']);
                 Route::put('/{staffId}', [PosStaffController::class, 'update']);
+                Route::post('/{staffId}/invite-login', [PosStaffController::class, 'inviteLogin']);
                 Route::delete('/{staffId}', [PosStaffController::class, 'destroy']);
                 Route::get('/{staffId}/attendance-qr', [PosStaffController::class, 'showAttendanceQr']);
                 Route::post('/{staffId}/attendance-qr/regenerate', [PosStaffController::class, 'regenerateAttendanceQr']);
@@ -398,6 +408,7 @@ Route::post('/pos/orders/{orderId}/payment', [HellomOrderController::class, 'con
             Route::get('/organizations/{organizationId}', [SuperAdminController::class, 'showOrganization'])->name('organizations.show');
             Route::post('/organizations/{organizationId}/suspend', [SuperAdminController::class, 'suspendOrganization'])->name('organizations.suspend');
             Route::post('/organizations/{organizationId}/reactivate', [SuperAdminController::class, 'reactivateOrganization'])->name('organizations.reactivate');
+            Route::patch('/organizations/{organizationId}/outlet-limit', [SuperAdminController::class, 'updateOrganizationOutletLimit'])->name('organizations.outlet_limit');
 
             Route::get('/users', [SuperAdminController::class, 'listUsers'])->name('users.index');
             Route::get('/users/{userId}', [SuperAdminController::class, 'showUser'])->name('users.show');

@@ -18,6 +18,29 @@ const USER_KEY = 'hellom_user';
 const LEGACY_TOKEN_KEY = 'token';
 const LEGACY_USER_KEY = 'user';
 const SESSION_EVENT_NAME = 'hellom-session-changed';
+const ACTIVE_OUTLET_KEY = 'hellom_active_outlet_id';
+const ACTIVE_OUTLET_EVENT_NAME = 'hellom-active-outlet-changed';
+
+// Active POS outlet — sent as X-Outlet-Id on every authenticated request so the
+// backend scopes POS data (orders, products, reports, staff…) to that outlet.
+export function getActiveOutletId(): string | null {
+  if (typeof window === 'undefined') return null;
+  return window.localStorage.getItem(ACTIVE_OUTLET_KEY);
+}
+
+export function setActiveOutletId(outletId: string | number | null): void {
+  if (typeof window === 'undefined') return;
+  if (outletId === null || outletId === '') {
+    window.localStorage.removeItem(ACTIVE_OUTLET_KEY);
+  } else {
+    window.localStorage.setItem(ACTIVE_OUTLET_KEY, String(outletId));
+  }
+  window.dispatchEvent(new CustomEvent(ACTIVE_OUTLET_EVENT_NAME));
+}
+
+export function getActiveOutletEventName(): string {
+  return ACTIVE_OUTLET_EVENT_NAME;
+}
 
 export const getImageUrl = (path: string | null | undefined): string => {
   if (!path) return '';
@@ -62,6 +85,7 @@ async function apiRequest<T>(
   const token = options?.token ?? getToken();
   const autoLogout = options?.autoLogout ?? (path === '/auth/me' || path === '/auth/logout');
   const isFormData = options?.body instanceof FormData;
+  const activeOutletId = getActiveOutletId();
 
   const response = await fetch(`${HELLOM_API_BASE}${path}`, {
     method: options?.method ?? 'GET',
@@ -69,6 +93,7 @@ async function apiRequest<T>(
       Accept: 'application/json',
       ...(!isFormData && options?.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(activeOutletId ? { 'X-Outlet-Id': activeOutletId } : {}),
     },
     body: options?.body !== undefined
       ? (isFormData ? (options.body as BodyInit) : JSON.stringify(options.body))
@@ -174,6 +199,26 @@ export function getSessionUser<T = unknown>(): T | null {
   }
 }
 
+export interface PosAccess {
+  is_cashier: boolean;
+  pos_role?: 'admin' | 'cashier';
+  permissions?: Record<string, boolean>;
+  outlet_id?: number | null;
+  outlet_name?: string | null;
+  tenant_slug?: string | null;
+}
+
+/** POS access context for the logged-in user (cashier lock + assigned outlet). */
+export function getSessionPosAccess(): PosAccess | null {
+  const user = getSessionUser<{ pos_access?: PosAccess }>();
+  return user?.pos_access ?? null;
+}
+
+/** True when the current account is a POS cashier locked to a single outlet. */
+export function isPosCashier(): boolean {
+  return getSessionPosAccess()?.is_cashier === true;
+}
+
 export function clearSession(): void {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
@@ -233,6 +278,7 @@ export function getAuthMe() {
     role: string;
     current_organization: { id: number; name: string; slug: string; status: string } | null;
     organizations: Array<{ id: number; name: string; slug: string; status: string; role: string }>;
+    pos_access?: PosAccess;
   }>('/auth/me');
 }
 
@@ -337,6 +383,13 @@ export function getOrganizationDetail(organizationId: number) {
   return apiRequest<Record<string, unknown>>(`/admin/organizations/${organizationId}`);
 }
 
+export function updateOrganizationOutletLimit(organizationId: number, maxOutletsOverride: number | null) {
+  return apiRequest<Record<string, unknown>>(`/admin/organizations/${organizationId}/outlet-limit`, {
+    method: 'PATCH',
+    body: { max_outlets_override: maxOutletsOverride },
+  });
+}
+
 // ─── Dashboard Cards ───
 
 export function getMemberDashboardCards() {
@@ -387,6 +440,17 @@ export function checkoutStart(payload: Record<string, unknown>) {
   return apiRequest<Record<string, unknown>>('/billing/checkout-start', {
     method: 'POST',
     body: payload,
+  });
+}
+
+/**
+ * Confirm a gateway checkout without waiting for the inbound webhook — the server
+ * verifies the payment with iPaymu and activates access. Returns { active, status }.
+ */
+export function reconcileCheckout(intentToken: string, transactionId?: string | null) {
+  return apiRequest<{ active: boolean; status: string }>('/billing/checkout-reconcile', {
+    method: 'POST',
+    body: { intent_token: intentToken, transaction_id: transactionId || undefined },
   });
 }
 
@@ -1172,6 +1236,50 @@ export function deletePosProduct(productId: number) {
   });
 }
 
+// ─── POS Outlets (multi-outlet) ───
+
+export type PosOutlet = {
+  id: number;
+  organization_id: number;
+  name: string;
+  slug: string;
+  tenant_slug: string | null;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  description: string | null;
+  is_primary: boolean;
+  is_active: boolean;
+};
+
+export type PosOutletListResponse = {
+  outlets: PosOutlet[];
+  active_outlet_id: number | string | null;
+  meta: { used: number; max_outlets: number; can_add: boolean };
+};
+
+export function getPosOutlets() {
+  return apiRequest<PosOutletListResponse>('/pos/outlets');
+}
+
+export function createPosOutlet(payload: { name: string; address?: string; phone?: string; email?: string; description?: string }) {
+  return apiRequest<{ outlet: PosOutlet }>('/pos/outlets', { method: 'POST', body: payload });
+}
+
+export function updatePosOutlet(outletId: number | string, payload: Record<string, unknown>) {
+  return apiRequest<{ outlet: PosOutlet }>(`/pos/outlets/${outletId}`, { method: 'PATCH', body: payload });
+}
+
+export function deletePosOutlet(outletId: number | string) {
+  return apiRequest<null>(`/pos/outlets/${outletId}`, { method: 'DELETE' });
+}
+
+export function getPublicOrganizationOutlets(organizationSlug: string) {
+  return publicApiRequest<{ organization: { slug: string; name: string }; outlets: PosOutlet[] }>(
+    `/pos/customer/organization/${organizationSlug}/outlets`
+  );
+}
+
 export function getPosOrders() {
   return apiRequest<Record<string, unknown>>('/pos/orders');
 }
@@ -1325,16 +1433,25 @@ export function updatePosExperienceReservationStatus(reservationId: number, payl
   });
 }
 
-export function getPosReportSummary() {
-  return apiRequest<Record<string, unknown>>('/pos/reports/summary');
+type ReportParams = Record<string, string | number | undefined>;
+
+function toReportQuery(params?: ReportParams): string {
+  if (!params) return '';
+  const entries = Object.entries(params).filter(([, v]) => v !== undefined && v !== '');
+  if (!entries.length) return '';
+  return '?' + new URLSearchParams(entries.map(([k, v]) => [k, String(v)])).toString();
 }
 
-export function getPosReportProducts() {
-  return apiRequest<Record<string, unknown>>('/pos/reports/products');
+export function getPosReportSummary(params?: ReportParams) {
+  return apiRequest<Record<string, unknown>>(`/pos/reports/summary${toReportQuery(params)}`);
 }
 
-export function getPosReportDaily() {
-  return apiRequest<Record<string, unknown>>('/pos/reports/daily');
+export function getPosReportProducts(params?: ReportParams) {
+  return apiRequest<Record<string, unknown>>(`/pos/reports/products${toReportQuery(params)}`);
+}
+
+export function getPosReportDaily(params?: ReportParams) {
+  return apiRequest<Record<string, unknown>>(`/pos/reports/daily${toReportQuery(params)}`);
 }
 
 export function exportPosReport() {

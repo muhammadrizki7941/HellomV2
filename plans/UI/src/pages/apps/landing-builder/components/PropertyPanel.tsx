@@ -1,10 +1,11 @@
-import React from 'react';
-import { 
-  Palette, Upload, Trash2, Link as LinkIcon, 
+import React, { useState } from 'react';
+import {
+  Palette, Upload, Trash2, Link as LinkIcon,
   Facebook, Instagram, Music2, AtSign, MousePointer2,
   AlignLeft, AlignCenter, AlignRight, LayoutTemplate, Plus, MessageCircle
 } from 'lucide-react';
 import { Block, BlockStyles } from '../types';
+import { useLang } from '../i18n';
 
 interface PropertyPanelProps {
   selectedBlock: Block | undefined;
@@ -14,6 +15,8 @@ interface PropertyPanelProps {
   handleFileUpload: (e: React.ChangeEvent<HTMLInputElement>, fieldName: string, isStyle?: boolean) => void;
 }
 
+const inputClass = 'w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none';
+
 export const PropertyPanel: React.FC<PropertyPanelProps> = ({
   selectedBlock,
   activeTheme,
@@ -21,46 +24,71 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
   updateBlockStyles,
   handleFileUpload
 }) => {
+  const { t } = useLang();
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
   if (!selectedBlock) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-zinc-400 p-8 text-center h-full">
         <MousePointer2 className="w-12 h-12 mb-4 opacity-20" />
-        <p className="text-sm">Pilih block di canvas untuk mengedit properti</p>
+        <p className="text-sm">{t('pp.empty')}</p>
       </div>
     );
   }
 
+  const block = selectedBlock;
+  const patch = (changes: Record<string, any>) => updateBlockContent(block.id, { ...block.content, ...changes });
+
+  const MAX_SLIDER_IMAGE_BYTES = 1024 * 1024; // 1 MB
+  const uploadSliderImage = (idx: number, file: File | undefined) => {
+    if (!file) return;
+    if (file.size > MAX_SLIDER_IMAGE_BYTES) {
+      setUploadError(t('pp.slider.tooLarge'));
+      return;
+    }
+    setUploadError(null);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const url = ev.target?.result as string;
+      const images = [...(block.content.images || [])];
+      images[idx] = { ...images[idx], url };
+      patch({ images });
+    };
+    reader.readAsDataURL(file);
+  };
+  const hasButtonColor = block.content.buttonText !== undefined
+    || ['product', 'button', 'countdown'].includes(block.type);
+
   return (
     <div className="p-4 md:p-6">
       <div className="flex items-center justify-between mb-4 md:mb-6">
-        <h3 className="text-sm font-bold text-zinc-900 uppercase tracking-wider">Edit Block</h3>
-        <span className="text-xs px-2 py-1 bg-zinc-100 rounded text-zinc-500 font-mono">{selectedBlock.type}</span>
+        <h3 className="text-sm font-bold text-zinc-900 uppercase tracking-wider">{t('pp.editBlock')}</h3>
+        <span className="text-xs px-2 py-1 bg-zinc-100 rounded text-zinc-500 font-mono">{block.type}</span>
       </div>
 
       {/* --- STYLE EDITOR SECTION --- */}
       <div className="mb-8 p-4 bg-zinc-50 rounded-xl border border-zinc-200 space-y-6">
-        
         {/* Layout Settings */}
         <div className="space-y-4">
           <div className="flex items-center gap-2 mb-2">
             <LayoutTemplate className="w-4 h-4 text-zinc-500" />
-            <h4 className="text-xs font-bold text-zinc-700 uppercase">Layout</h4>
+            <h4 className="text-xs font-bold text-zinc-700 uppercase">{t('pp.layout')}</h4>
           </div>
 
           {/* Padding Y */}
           <div className="space-y-2">
-            <label className="text-xs font-medium text-zinc-600">Vertical Padding</label>
+            <label className="text-xs font-medium text-zinc-600">{t('pp.padding')}</label>
             <div className="grid grid-cols-3 gap-2">
               {[
-                { label: 'Small', value: 'py-8' },
-                { label: 'Medium', value: 'py-16' },
-                { label: 'Large', value: 'py-24' }
+                { label: t('pp.small'), value: 'py-8' },
+                { label: t('pp.medium'), value: 'py-16' },
+                { label: t('pp.large'), value: 'py-24' }
               ].map((opt) => (
                 <button
                   key={opt.value}
-                  onClick={() => updateBlockStyles(selectedBlock.id, { paddingY: opt.value })}
+                  onClick={() => updateBlockStyles(block.id, { paddingY: opt.value })}
                   className={`px-2 py-1.5 text-xs rounded border transition-all ${
-                    (selectedBlock.styles?.paddingY || 'py-16') === opt.value
+                    (block.styles?.paddingY || 'py-16') === opt.value
                       ? 'bg-zinc-900 text-white border-zinc-900'
                       : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-300'
                   }`}
@@ -73,7 +101,7 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
 
           {/* Text Align */}
           <div className="space-y-2">
-            <label className="text-xs font-medium text-zinc-600">Text Alignment</label>
+            <label className="text-xs font-medium text-zinc-600">{t('pp.textAlign')}</label>
             <div className="flex bg-white rounded-lg border border-zinc-200 p-1 w-fit">
               {[
                 { icon: AlignLeft, value: 'left' },
@@ -82,9 +110,9 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
               ].map((opt) => (
                 <button
                   key={opt.value}
-                  onClick={() => updateBlockStyles(selectedBlock.id, { textAlign: opt.value as any })}
+                  onClick={() => updateBlockStyles(block.id, { textAlign: opt.value as any })}
                   className={`p-1.5 rounded transition-all ${
-                    (selectedBlock.styles?.textAlign || 'center') === opt.value
+                    (block.styles?.textAlign || 'center') === opt.value
                       ? 'bg-zinc-100 text-zinc-900'
                       : 'text-zinc-400 hover:text-zinc-600'
                   }`}
@@ -102,23 +130,23 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
         <div className="space-y-4">
           <div className="flex items-center gap-2 mb-2">
             <Palette className="w-4 h-4 text-zinc-500" />
-            <h4 className="text-xs font-bold text-zinc-700 uppercase">Colors</h4>
+            <h4 className="text-xs font-bold text-zinc-700 uppercase">{t('pp.colors')}</h4>
           </div>
-          
+
           {/* Background Color */}
           <div className="space-y-2">
-            <label className="text-xs font-medium text-zinc-600">Background Color</label>
+            <label className="text-xs font-medium text-zinc-600">{t('pp.bgColor')}</label>
             <div className="flex gap-2">
-              <input 
-                type="color" 
-                value={selectedBlock.styles?.backgroundColor || activeTheme.colors.backgroundColor}
-                onChange={(e) => updateBlockStyles(selectedBlock.id, { backgroundColor: e.target.value })}
+              <input
+                type="color"
+                value={block.styles?.backgroundColor || activeTheme.colors.backgroundColor}
+                onChange={(e) => updateBlockStyles(block.id, { backgroundColor: e.target.value })}
                 className="w-8 h-8 rounded cursor-pointer border-0 p-0"
               />
-              <input 
-                type="text" 
-                value={selectedBlock.styles?.backgroundColor || activeTheme.colors.backgroundColor}
-                onChange={(e) => updateBlockStyles(selectedBlock.id, { backgroundColor: e.target.value })}
+              <input
+                type="text"
+                value={block.styles?.backgroundColor || activeTheme.colors.backgroundColor}
+                onChange={(e) => updateBlockStyles(block.id, { backgroundColor: e.target.value })}
                 className="flex-1 px-2 py-1 text-xs border border-zinc-300 rounded"
               />
             </div>
@@ -126,38 +154,38 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
 
           {/* Text Color */}
           <div className="space-y-2">
-            <label className="text-xs font-medium text-zinc-600">Text Color</label>
+            <label className="text-xs font-medium text-zinc-600">{t('pp.textColor')}</label>
             <div className="flex gap-2">
-              <input 
-                type="color" 
-                value={selectedBlock.styles?.textColor || activeTheme.colors.textColor}
-                onChange={(e) => updateBlockStyles(selectedBlock.id, { textColor: e.target.value })}
+              <input
+                type="color"
+                value={block.styles?.textColor || activeTheme.colors.textColor}
+                onChange={(e) => updateBlockStyles(block.id, { textColor: e.target.value })}
                 className="w-8 h-8 rounded cursor-pointer border-0 p-0"
               />
-              <input 
-                type="text" 
-                value={selectedBlock.styles?.textColor || activeTheme.colors.textColor}
-                onChange={(e) => updateBlockStyles(selectedBlock.id, { textColor: e.target.value })}
+              <input
+                type="text"
+                value={block.styles?.textColor || activeTheme.colors.textColor}
+                onChange={(e) => updateBlockStyles(block.id, { textColor: e.target.value })}
                 className="flex-1 px-2 py-1 text-xs border border-zinc-300 rounded"
               />
             </div>
           </div>
 
           {/* Button Color (if applicable) */}
-          {(selectedBlock.content.buttonText || selectedBlock.type === 'product') && (
+          {hasButtonColor && (
             <div className="space-y-2">
-              <label className="text-xs font-medium text-zinc-600">Button Color</label>
+              <label className="text-xs font-medium text-zinc-600">{t('pp.buttonColor')}</label>
               <div className="flex gap-2">
-                <input 
-                  type="color" 
-                  value={selectedBlock.styles?.buttonColor || activeTheme.colors.buttonColor}
-                  onChange={(e) => updateBlockStyles(selectedBlock.id, { buttonColor: e.target.value })}
+                <input
+                  type="color"
+                  value={block.styles?.buttonColor || activeTheme.colors.buttonColor}
+                  onChange={(e) => updateBlockStyles(block.id, { buttonColor: e.target.value })}
                   className="w-8 h-8 rounded cursor-pointer border-0 p-0"
                 />
-                <input 
-                  type="text" 
-                  value={selectedBlock.styles?.buttonColor || activeTheme.colors.buttonColor}
-                  onChange={(e) => updateBlockStyles(selectedBlock.id, { buttonColor: e.target.value })}
+                <input
+                  type="text"
+                  value={block.styles?.buttonColor || activeTheme.colors.buttonColor}
+                  onChange={(e) => updateBlockStyles(block.id, { buttonColor: e.target.value })}
                   className="flex-1 px-2 py-1 text-xs border border-zinc-300 rounded"
                 />
               </div>
@@ -166,23 +194,18 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
 
           {/* Background Image Upload */}
           <div className="space-y-2">
-            <label className="text-xs font-medium text-zinc-600">Background Image</label>
+            <label className="text-xs font-medium text-zinc-600">{t('pp.bgImage')}</label>
             <div className="flex items-center gap-2">
               <label className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-white border border-zinc-300 rounded-lg cursor-pointer hover:bg-zinc-50 text-xs text-zinc-600">
                 <Upload className="w-3 h-3" />
-                {selectedBlock.styles?.backgroundImage ? 'Change Image' : 'Upload Image'}
-                <input 
-                  type="file" 
-                  className="hidden" 
-                  accept="image/*"
-                  onChange={(e) => handleFileUpload(e, 'backgroundImage', true)}
-                />
+                {block.styles?.backgroundImage ? t('pp.changeImage') : t('pp.uploadImage')}
+                <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, 'backgroundImage', true)} />
               </label>
-              {selectedBlock.styles?.backgroundImage && (
-                <button 
-                  onClick={() => updateBlockStyles(selectedBlock.id, { backgroundImage: undefined })}
+              {block.styles?.backgroundImage && (
+                <button
+                  onClick={() => updateBlockStyles(block.id, { backgroundImage: undefined })}
                   className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
-                  title="Remove Background Image"
+                  title={t('pp.removeBgImage')}
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -194,219 +217,253 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
 
       <div className="space-y-6">
         {/* Common Fields */}
-        {selectedBlock.content.title !== undefined && (
+        {block.content.title !== undefined && (
           <div className="space-y-2">
-            <label className="text-xs font-bold text-zinc-700">Title</label>
-            <input 
-              type="text" 
-              value={selectedBlock.content.title}
-              onChange={(e) => updateBlockContent(selectedBlock.id, { ...selectedBlock.content, title: e.target.value })}
-              className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none"
-            />
+            <label className="text-xs font-bold text-zinc-700">{t('pp.title')}</label>
+            <input type="text" value={block.content.title} onChange={(e) => patch({ title: e.target.value })} className={inputClass} />
           </div>
         )}
 
-        {selectedBlock.content.subtitle !== undefined && (
+        {block.content.subtitle !== undefined && (
           <div className="space-y-2">
-            <label className="text-xs font-bold text-zinc-700">Subtitle</label>
-            <textarea 
-              value={selectedBlock.content.subtitle}
-              onChange={(e) => updateBlockContent(selectedBlock.id, { ...selectedBlock.content, subtitle: e.target.value })}
-              rows={3}
-              className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none resize-none"
-            />
+            <label className="text-xs font-bold text-zinc-700">{t('pp.subtitle')}</label>
+            <textarea value={block.content.subtitle} onChange={(e) => patch({ subtitle: e.target.value })} rows={3} className={`${inputClass} resize-none`} />
           </div>
         )}
 
-        {selectedBlock.content.body !== undefined && (
+        {block.content.body !== undefined && (
           <div className="space-y-2">
-            <label className="text-xs font-bold text-zinc-700">Body Text</label>
-            <textarea 
-              value={selectedBlock.content.body}
-              onChange={(e) => updateBlockContent(selectedBlock.id, { ...selectedBlock.content, body: e.target.value })}
-              rows={6}
-              className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none resize-none"
-            />
+            <label className="text-xs font-bold text-zinc-700">{t('pp.body')}</label>
+            <textarea value={block.content.body} onChange={(e) => patch({ body: e.target.value })} rows={6} className={`${inputClass} resize-none`} />
           </div>
         )}
 
         {/* Image Upload Field */}
-        {selectedBlock.content.imageUrl !== undefined && selectedBlock.type !== 'banner' && (
+        {block.content.imageUrl !== undefined && block.type !== 'banner' && (
           <div className="space-y-2">
-            <label className="text-xs font-bold text-zinc-700">Image</label>
+            <label className="text-xs font-bold text-zinc-700">{t('pp.image')}</label>
             <div className="flex items-center gap-2">
-              <input 
-                type="text" 
-                value={selectedBlock.content.imageUrl}
-                onChange={(e) => updateBlockContent(selectedBlock.id, { ...selectedBlock.content, imageUrl: e.target.value })}
-                className="flex-1 px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none"
-                placeholder="https://..."
-              />
+              <input type="text" value={block.content.imageUrl} onChange={(e) => patch({ imageUrl: e.target.value })} className={inputClass} placeholder="https://..." />
               <label className="p-2 bg-zinc-100 border border-zinc-200 rounded-lg cursor-pointer hover:bg-zinc-200">
                 <Upload className="w-4 h-4 text-zinc-600" />
-                <input 
-                  type="file" 
-                  className="hidden" 
-                  accept="image/*"
-                  onChange={(e) => handleFileUpload(e, 'imageUrl')}
-                />
+                <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, 'imageUrl')} />
               </label>
             </div>
-            {selectedBlock.content.imageUrl && (
-              <img src={selectedBlock.content.imageUrl} alt="Preview" className="w-full h-32 object-cover rounded-lg border border-zinc-200 mt-2" />
+            {block.content.imageUrl && (
+              <img src={block.content.imageUrl} alt="Preview" className="w-full h-32 object-cover rounded-lg border border-zinc-200 mt-2" />
             )}
           </div>
         )}
 
-        {/* Banner Image is handled differently (Background) */}
-        {selectedBlock.type === 'banner' && (
-            <div className="space-y-2">
-            <label className="text-xs font-bold text-zinc-700">Banner Image</label>
+        {/* Caption (image/gif) */}
+        {block.content.caption !== undefined && (
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-zinc-700">{t('pp.caption')}</label>
+            <input type="text" value={block.content.caption} onChange={(e) => patch({ caption: e.target.value })} className={inputClass} />
+          </div>
+        )}
+
+        {/* Banner Image */}
+        {block.type === 'banner' && (
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-zinc-700">{t('pp.bannerImage')}</label>
             <div className="flex items-center gap-2">
-              <input 
-                type="text" 
-                value={selectedBlock.content.imageUrl}
-                onChange={(e) => updateBlockContent(selectedBlock.id, { ...selectedBlock.content, imageUrl: e.target.value })}
-                className="flex-1 px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none"
-                placeholder="https://..."
-              />
+              <input type="text" value={block.content.imageUrl} onChange={(e) => patch({ imageUrl: e.target.value })} className={inputClass} placeholder="https://..." />
               <label className="p-2 bg-zinc-100 border border-zinc-200 rounded-lg cursor-pointer hover:bg-zinc-200">
                 <Upload className="w-4 h-4 text-zinc-600" />
-                <input 
-                  type="file" 
-                  className="hidden" 
-                  accept="image/*"
-                  onChange={(e) => handleFileUpload(e, 'imageUrl')}
-                />
+                <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, 'imageUrl')} />
               </label>
             </div>
           </div>
         )}
 
-        {/* PDF Upload Field */}
-        {selectedBlock.content.fileUrl !== undefined && (
+        {/* GIF block */}
+        {block.type === 'gif' && (
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-zinc-700">{t('pp.gif.url')}</label>
+            <div className="flex items-center gap-2">
+              <input type="text" value={block.content.gifUrl} onChange={(e) => patch({ gifUrl: e.target.value })} className={inputClass} placeholder="https://...giphy.com/...gif" />
+              <label className="p-2 bg-zinc-100 border border-zinc-200 rounded-lg cursor-pointer hover:bg-zinc-200">
+                <Upload className="w-4 h-4 text-zinc-600" />
+                <input type="file" className="hidden" accept="image/gif,image/*" onChange={(e) => handleFileUpload(e, 'gifUrl')} />
+              </label>
+            </div>
+            {block.content.gifUrl && <img src={block.content.gifUrl} alt="GIF" className="w-full h-32 object-contain rounded-lg border border-zinc-200 mt-2 bg-zinc-50" />}
+          </div>
+        )}
+
+        {/* HTML block */}
+        {block.type === 'html' && (
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-zinc-700">{t('pp.html.code')}</label>
+            <textarea value={block.content.html} onChange={(e) => patch({ html: e.target.value })} rows={8} className={`${inputClass} resize-none font-mono text-xs`} />
+            <p className="text-[10px] text-amber-600">{t('pp.html.hint')}</p>
+          </div>
+        )}
+
+        {/* Button block */}
+        {block.type === 'button' && (
           <div className="space-y-4">
             <div className="space-y-2">
-              <label className="text-xs font-bold text-zinc-700">PDF File</label>
+              <label className="text-xs font-bold text-zinc-700">{t('pp.buttonText')}</label>
+              <input type="text" value={block.content.text} onChange={(e) => patch({ text: e.target.value })} className={inputClass} />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-zinc-700">{t('pp.button.align')}</label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { value: 'left', label: t('pp.align.left') },
+                  { value: 'center', label: t('pp.align.center') },
+                  { value: 'right', label: t('pp.align.right') },
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => patch({ align: opt.value })}
+                    className={`px-2 py-1.5 text-xs rounded border ${(block.content.align || 'center') === opt.value ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-600 border-zinc-200'}`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-zinc-700">{t('pp.cta.type')}</label>
+              <select value={block.content.actionType || 'link'} onChange={(e) => patch({ actionType: e.target.value })} className={inputClass}>
+                <option value="link">{t('pp.cta.link')}</option>
+                <option value="whatsapp">{t('pp.cta.wa')}</option>
+              </select>
+            </div>
+            {(block.content.actionType || 'link') === 'whatsapp' ? (
+              <>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-zinc-700">{t('pp.cta.waNumber')}</label>
+                  <input type="text" value={block.content.whatsappNumber || ''} onChange={(e) => patch({ whatsappNumber: e.target.value })} className={inputClass} placeholder="628123456789" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-zinc-700">{t('pp.cta.waMessage')}</label>
+                  <textarea value={block.content.whatsappMessage || ''} onChange={(e) => patch({ whatsappMessage: e.target.value })} rows={2} className={`${inputClass} resize-none`} />
+                </div>
+              </>
+            ) : (
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-zinc-700">{t('pp.cta.linkUrl')}</label>
+                <input type="text" value={block.content.linkUrl || ''} onChange={(e) => patch({ linkUrl: e.target.value })} className={inputClass} placeholder="https://..." />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Divider block */}
+        {block.type === 'divider' && (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-zinc-700">{t('pp.divider.style')}</label>
+              <select value={block.content.style || 'solid'} onChange={(e) => patch({ style: e.target.value })} className={inputClass}>
+                <option value="solid">{t('pp.divider.solid')}</option>
+                <option value="dashed">{t('pp.divider.dashed')}</option>
+                <option value="dotted">{t('pp.divider.dotted')}</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-zinc-700">{t('pp.divider.thickness')}</label>
+              <input type="number" min={1} max={20} value={block.content.thickness ?? 1} onChange={(e) => patch({ thickness: Number(e.target.value) })} className={inputClass} />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-zinc-700">{t('pp.divider.width')}</label>
+              <input type="number" min={10} max={100} value={block.content.width ?? 100} onChange={(e) => patch({ width: Number(e.target.value) })} className={inputClass} />
+            </div>
+          </div>
+        )}
+
+        {/* Countdown block */}
+        {block.type === 'countdown' && (
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-zinc-700">{t('pp.countdown.target')}</label>
+            <input
+              type="datetime-local"
+              value={toLocalInput(block.content.targetDate)}
+              onChange={(e) => patch({ targetDate: e.target.value ? new Date(e.target.value).toISOString() : block.content.targetDate })}
+              className={inputClass}
+            />
+            <p className="text-[10px] text-zinc-500">{t('pp.countdown.hint')}</p>
+          </div>
+        )}
+
+        {/* PDF Upload Field */}
+        {block.content.fileUrl !== undefined && (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-zinc-700">{t('pp.pdf.file')}</label>
               <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={selectedBlock.content.fileUrl}
-                  onChange={(e) => updateBlockContent(selectedBlock.id, { ...selectedBlock.content, fileUrl: e.target.value })}
-                  className="flex-1 px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none"
-                  placeholder="https://..."
-                />
+                <input type="text" value={block.content.fileUrl} onChange={(e) => patch({ fileUrl: e.target.value })} className={inputClass} placeholder="https://..." />
                 <label className="p-2 bg-zinc-100 border border-zinc-200 rounded-lg cursor-pointer hover:bg-zinc-200">
                   <Upload className="w-4 h-4 text-zinc-600" />
-                  <input
-                    type="file"
-                    className="hidden"
-                    accept="application/pdf"
-                    onChange={(e) => handleFileUpload(e, 'fileUrl')}
-                  />
+                  <input type="file" className="hidden" accept="application/pdf" onChange={(e) => handleFileUpload(e, 'fileUrl')} />
                 </label>
               </div>
-              {selectedBlock.content.fileName && (
-                <p className="text-xs text-zinc-500 mt-1">Selected: {selectedBlock.content.fileName}</p>
-              )}
+              {block.content.fileName && <p className="text-xs text-zinc-500 mt-1">{block.content.fileName}</p>}
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-bold text-zinc-700">Akses Katalog</label>
-              <select
-                value={selectedBlock.content.accessType || 'free'}
-                onChange={(e) => updateBlockContent(selectedBlock.id, { ...selectedBlock.content, accessType: e.target.value })}
-                className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none"
-              >
-                <option value="free">Gratis - user langsung download</option>
-                <option value="paid">Berbayar - user checkout dulu</option>
+              <label className="text-xs font-bold text-zinc-700">{t('pp.pdf.access')}</label>
+              <select value={block.content.accessType || 'free'} onChange={(e) => patch({ accessType: e.target.value })} className={inputClass}>
+                <option value="free">{t('pp.pdf.free')}</option>
+                <option value="paid">{t('pp.pdf.paid')}</option>
               </select>
             </div>
 
-            {selectedBlock.content.accessType === 'paid' && (
+            {block.content.accessType === 'paid' && (
               <div className="space-y-2">
-                <label className="text-xs font-bold text-zinc-700">Harga Katalog</label>
-                <input
-                  type="text"
-                  value={selectedBlock.content.price || ''}
-                  onChange={(e) => updateBlockContent(selectedBlock.id, { ...selectedBlock.content, price: e.target.value })}
-                  className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none"
-                  placeholder="Rp 49.000"
-                />
+                <label className="text-xs font-bold text-zinc-700">{t('pp.pdf.price')}</label>
+                <input type="text" value={block.content.price || ''} onChange={(e) => patch({ price: e.target.value })} className={inputClass} placeholder="Rp 49.000" />
               </div>
             )}
           </div>
         )}
 
         {/* Product Specific Fields */}
-        {selectedBlock.type === 'product' && (
+        {block.type === 'product' && (
           <>
             <div className="space-y-2">
-              <label className="text-xs font-bold text-zinc-700">Product Name</label>
-              <input 
-                type="text" 
-                value={selectedBlock.content.name}
-                onChange={(e) => updateBlockContent(selectedBlock.id, { ...selectedBlock.content, name: e.target.value })}
-                className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none"
-              />
+              <label className="text-xs font-bold text-zinc-700">{t('pp.product.name')}</label>
+              <input type="text" value={block.content.name} onChange={(e) => patch({ name: e.target.value })} className={inputClass} />
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-bold text-zinc-700">Price</label>
-              <input 
-                type="text" 
-                value={selectedBlock.content.price}
-                onChange={(e) => updateBlockContent(selectedBlock.id, { ...selectedBlock.content, price: e.target.value })}
-                className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none"
-              />
+              <label className="text-xs font-bold text-zinc-700">{t('pp.product.price')}</label>
+              <input type="text" value={block.content.price} onChange={(e) => patch({ price: e.target.value })} className={inputClass} />
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-bold text-zinc-700">Description</label>
-              <textarea 
-                value={selectedBlock.content.description}
-                onChange={(e) => updateBlockContent(selectedBlock.id, { ...selectedBlock.content, description: e.target.value })}
-                rows={3}
-                className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none resize-none"
-              />
+              <label className="text-xs font-bold text-zinc-700">{t('pp.product.desc')}</label>
+              <textarea value={block.content.description} onChange={(e) => patch({ description: e.target.value })} rows={3} className={`${inputClass} resize-none`} />
             </div>
-            
-            {/* Payment Method Selection */}
+
             <div className="space-y-2">
-              <label className="text-xs font-bold text-zinc-700">Payment Action</label>
-              <select
-                value={selectedBlock.content.paymentType || 'link'}
-                onChange={(e) => updateBlockContent(selectedBlock.id, { ...selectedBlock.content, paymentType: e.target.value })}
-                className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none"
-              >
+              <label className="text-xs font-bold text-zinc-700">{t('pp.product.payment')}</label>
+              <select value={block.content.paymentType || 'link'} onChange={(e) => patch({ paymentType: e.target.value })} className={inputClass}>
                 <option value="link">Direct Link (External)</option>
                 <option value="whatsapp">WhatsApp Checkout</option>
                 <option value="gateway">Payment Gateway (Auto)</option>
               </select>
             </div>
 
-            {selectedBlock.content.paymentType === 'whatsapp' && (
+            {block.content.paymentType === 'whatsapp' && (
               <div className="p-3 bg-green-50 rounded-lg border border-green-100 text-xs text-green-800">
                 Button will open WhatsApp with a pre-filled message. Configure your number in <strong>Payments</strong> settings.
               </div>
             )}
 
-            {selectedBlock.content.paymentType === 'gateway' && (
+            {block.content.paymentType === 'gateway' && (
               <div className="p-3 bg-blue-50 rounded-lg border border-blue-100 text-xs text-blue-800">
                 Button will open the automated checkout modal. Funds will be deposited to your Wallet.
               </div>
             )}
 
-            {(!selectedBlock.content.paymentType || selectedBlock.content.paymentType === 'link') && (
+            {(!block.content.paymentType || block.content.paymentType === 'link') && (
               <div className="space-y-2">
-                <label className="text-xs font-bold text-zinc-700">External Link URL</label>
+                <label className="text-xs font-bold text-zinc-700">{t('pp.product.linkUrl')}</label>
                 <div className="flex items-center gap-2">
                   <LinkIcon className="w-4 h-4 text-zinc-400" />
-                  <input 
-                    type="text" 
-                    value={selectedBlock.content.productUrl}
-                    onChange={(e) => updateBlockContent(selectedBlock.id, { ...selectedBlock.content, productUrl: e.target.value })}
-                    className="flex-1 px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none"
-                    placeholder="https://..."
-                  />
+                  <input type="text" value={block.content.productUrl} onChange={(e) => patch({ productUrl: e.target.value })} className={inputClass} placeholder="https://..." />
                 </div>
               </div>
             )}
@@ -414,180 +471,102 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
         )}
 
         {/* Social Specific Fields */}
-        {selectedBlock.type === 'social' && (
+        {block.type === 'social' && (
           <div className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-zinc-700 flex items-center gap-2">
-                <Facebook className="w-4 h-4 text-blue-600" /> Facebook URL
-              </label>
-              <input 
-                type="text" 
-                value={selectedBlock.content.facebook}
-                onChange={(e) => updateBlockContent(selectedBlock.id, { ...selectedBlock.content, facebook: e.target.value })}
-                className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none"
-                placeholder="https://facebook.com/..."
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-zinc-700 flex items-center gap-2">
-                <Instagram className="w-4 h-4 text-pink-600" /> Instagram URL
-              </label>
-              <input 
-                type="text" 
-                value={selectedBlock.content.instagram}
-                onChange={(e) => updateBlockContent(selectedBlock.id, { ...selectedBlock.content, instagram: e.target.value })}
-                className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none"
-                placeholder="https://instagram.com/..."
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-zinc-700 flex items-center gap-2">
-                <Music2 className="w-4 h-4 text-black" /> TikTok URL
-              </label>
-              <input 
-                type="text" 
-                value={selectedBlock.content.tiktok}
-                onChange={(e) => updateBlockContent(selectedBlock.id, { ...selectedBlock.content, tiktok: e.target.value })}
-                className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none"
-                placeholder="https://tiktok.com/@..."
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-zinc-700 flex items-center gap-2">
-                <AtSign className="w-4 h-4 text-black" /> Threads URL
-              </label>
-              <input 
-                type="text" 
-                value={selectedBlock.content.threads}
-                onChange={(e) => updateBlockContent(selectedBlock.id, { ...selectedBlock.content, threads: e.target.value })}
-                className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none"
-                placeholder="https://threads.net/@..."
-              />
-            </div>
+            {[
+              { key: 'facebook', icon: Facebook, color: 'text-blue-600', label: 'Facebook URL', ph: 'https://facebook.com/...' },
+              { key: 'instagram', icon: Instagram, color: 'text-pink-600', label: 'Instagram URL', ph: 'https://instagram.com/...' },
+              { key: 'tiktok', icon: Music2, color: 'text-black', label: 'TikTok URL', ph: 'https://tiktok.com/@...' },
+              { key: 'threads', icon: AtSign, color: 'text-black', label: 'Threads URL', ph: 'https://threads.net/@...' },
+            ].map(({ key, icon: Icon, color, label, ph }) => (
+              <div key={key} className="space-y-2">
+                <label className="text-xs font-bold text-zinc-700 flex items-center gap-2">
+                  <Icon className={`w-4 h-4 ${color}`} /> {label}
+                </label>
+                <input type="text" value={block.content[key] || ''} onChange={(e) => patch({ [key]: e.target.value })} className={inputClass} placeholder={ph} />
+              </div>
+            ))}
           </div>
         )}
 
         {/* Video Specific Fields */}
-        {selectedBlock.type === 'video' && (
+        {block.type === 'video' && (
           <div className="space-y-2">
-            <label className="text-xs font-bold text-zinc-700">Video Embed URL</label>
-            <input 
-              type="text" 
-              value={selectedBlock.content.videoUrl}
-              onChange={(e) => updateBlockContent(selectedBlock.id, { ...selectedBlock.content, videoUrl: e.target.value })}
-              className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none"
-              placeholder="https://www.youtube.com/embed/..."
-            />
-            <p className="text-xs text-zinc-500">Gunakan link embed YouTube/Vimeo.</p>
+            <label className="text-xs font-bold text-zinc-700">{t('pp.video.url')}</label>
+            <input type="text" value={block.content.videoUrl} onChange={(e) => patch({ videoUrl: e.target.value })} className={inputClass} placeholder="https://www.youtube.com/embed/..." />
+            <p className="text-xs text-zinc-500">{t('pp.video.hint')}</p>
           </div>
         )}
 
-        {selectedBlock.content.buttonText !== undefined && (
+        {block.content.buttonText !== undefined && (
           <div className="space-y-2">
-            <label className="text-xs font-bold text-zinc-700">Button Text</label>
-            <input 
-              type="text" 
-              value={selectedBlock.content.buttonText}
-              onChange={(e) => updateBlockContent(selectedBlock.id, { ...selectedBlock.content, buttonText: e.target.value })}
-              className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none"
-            />
+            <label className="text-xs font-bold text-zinc-700">{t('pp.buttonText')}</label>
+            <input type="text" value={block.content.buttonText} onChange={(e) => patch({ buttonText: e.target.value })} className={inputClass} />
           </div>
         )}
 
-        {selectedBlock.type === 'cta' && (
+        {block.type === 'cta' && (
           <div className="space-y-4 p-3 rounded-xl bg-green-50 border border-green-100">
             <div className="flex items-center gap-2 text-xs font-bold text-green-800 uppercase">
-              <MessageCircle className="w-4 h-4" /> CTA Action
+              <MessageCircle className="w-4 h-4" /> {t('pp.cta.action')}
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-bold text-zinc-700">Action Type</label>
-              <select
-                value={selectedBlock.content.actionType || 'whatsapp'}
-                onChange={(e) => updateBlockContent(selectedBlock.id, { ...selectedBlock.content, actionType: e.target.value })}
-                className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-green-400 focus:border-green-400 outline-none"
-              >
-                <option value="whatsapp">Redirect ke WhatsApp</option>
-                <option value="link">Buka link custom</option>
+              <label className="text-xs font-bold text-zinc-700">{t('pp.cta.type')}</label>
+              <select value={block.content.actionType || 'whatsapp'} onChange={(e) => patch({ actionType: e.target.value })} className={inputClass}>
+                <option value="whatsapp">{t('pp.cta.wa')}</option>
+                <option value="link">{t('pp.cta.link')}</option>
               </select>
             </div>
-            {(selectedBlock.content.actionType || 'whatsapp') === 'whatsapp' ? (
+            {(block.content.actionType || 'whatsapp') === 'whatsapp' ? (
               <>
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-zinc-700">Nomor WhatsApp Organisasi</label>
-                  <input
-                    type="text"
-                    value={selectedBlock.content.whatsappNumber || ''}
-                    onChange={(e) => updateBlockContent(selectedBlock.id, { ...selectedBlock.content, whatsappNumber: e.target.value })}
-                    className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-green-400 focus:border-green-400 outline-none"
-                    placeholder="628123456789"
-                  />
-                  <p className="text-[10px] text-zinc-500">Gunakan format internasional, contoh 62812...</p>
+                  <label className="text-xs font-bold text-zinc-700">{t('pp.cta.waNumber')}</label>
+                  <input type="text" value={block.content.whatsappNumber || ''} onChange={(e) => patch({ whatsappNumber: e.target.value })} className={inputClass} placeholder="628123456789" />
+                  <p className="text-[10px] text-zinc-500">Format: 62812...</p>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-zinc-700">Pesan WhatsApp</label>
-                  <textarea
-                    value={selectedBlock.content.whatsappMessage || ''}
-                    onChange={(e) => updateBlockContent(selectedBlock.id, { ...selectedBlock.content, whatsappMessage: e.target.value })}
-                    rows={3}
-                    className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-green-400 focus:border-green-400 outline-none resize-none"
-                  />
+                  <label className="text-xs font-bold text-zinc-700">{t('pp.cta.waMessage')}</label>
+                  <textarea value={block.content.whatsappMessage || ''} onChange={(e) => patch({ whatsappMessage: e.target.value })} rows={3} className={`${inputClass} resize-none`} />
                 </div>
               </>
             ) : (
               <div className="space-y-2">
-                <label className="text-xs font-bold text-zinc-700">Link URL</label>
-                <input
-                  type="text"
-                  value={selectedBlock.content.linkUrl || ''}
-                  onChange={(e) => updateBlockContent(selectedBlock.id, { ...selectedBlock.content, linkUrl: e.target.value })}
-                  className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-green-400 focus:border-green-400 outline-none"
-                  placeholder="https://..."
-                />
+                <label className="text-xs font-bold text-zinc-700">{t('pp.cta.linkUrl')}</label>
+                <input type="text" value={block.content.linkUrl || ''} onChange={(e) => patch({ linkUrl: e.target.value })} className={inputClass} placeholder="https://..." />
               </div>
             )}
           </div>
         )}
 
-        {selectedBlock.type === 'form' && (
+        {/* Form fields editor */}
+        {block.type === 'form' && (
           <div className="space-y-4 pt-4 border-t border-zinc-100">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-zinc-700">Form Fields</label>
+              <label className="text-xs font-bold text-zinc-700">{t('pp.form.fields')}</label>
               <button
-                onClick={() => {
-                  const fieldId = `field_${Date.now()}`;
-                  updateBlockContent(selectedBlock.id, {
-                    ...selectedBlock.content,
-                    fields: [
-                      ...(selectedBlock.content.fields || []),
-                      { id: fieldId, label: 'Field Baru', type: 'text', required: false }
-                    ],
-                  });
-                }}
+                onClick={() => patch({ fields: [...(block.content.fields || []), { id: `field_${Date.now()}`, label: 'Field Baru', type: 'text', required: false }] })}
                 className="inline-flex items-center gap-1 px-2 py-1 text-xs font-bold rounded-lg bg-zinc-900 text-white"
               >
-                <Plus className="w-3 h-3" /> Tambah
+                <Plus className="w-3 h-3" /> {t('pp.add')}
               </button>
             </div>
-            {(selectedBlock.content.fields || []).map((field: any, idx: number) => (
+            {(block.content.fields || []).map((field: any, idx: number) => (
               <div key={field.id || idx} className="p-3 bg-zinc-50 rounded-lg border border-zinc-200 space-y-3">
                 <div className="flex justify-between gap-2">
                   <input
                     type="text"
                     value={field.label || ''}
                     onChange={(e) => {
-                      const fields = [...(selectedBlock.content.fields || [])];
+                      const fields = [...(block.content.fields || [])];
                       fields[idx] = { ...field, label: e.target.value };
-                      updateBlockContent(selectedBlock.id, { ...selectedBlock.content, fields });
+                      patch({ fields });
                     }}
                     className="flex-1 px-2 py-1 border border-zinc-300 rounded text-sm"
-                    placeholder="Label field"
+                    placeholder={t('pp.form.fieldLabel')}
                   />
                   {!field.system && (
                     <button
-                      onClick={() => {
-                        const fields = (selectedBlock.content.fields || []).filter((_: any, index: number) => index !== idx);
-                        updateBlockContent(selectedBlock.id, { ...selectedBlock.content, fields });
-                      }}
+                      onClick={() => patch({ fields: (block.content.fields || []).filter((_: any, i: number) => i !== idx) })}
                       className="p-2 text-red-500 hover:bg-red-50 rounded"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -598,9 +577,9 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
                   <select
                     value={field.type || 'text'}
                     onChange={(e) => {
-                      const fields = [...(selectedBlock.content.fields || [])];
+                      const fields = [...(block.content.fields || [])];
                       fields[idx] = { ...field, type: e.target.value };
-                      updateBlockContent(selectedBlock.id, { ...selectedBlock.content, fields });
+                      patch({ fields });
                     }}
                     className="px-2 py-1 border border-zinc-300 rounded text-sm"
                   >
@@ -615,51 +594,59 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
                       type="checkbox"
                       checked={!!field.required}
                       onChange={(e) => {
-                        const fields = [...(selectedBlock.content.fields || [])];
+                        const fields = [...(block.content.fields || [])];
                         fields[idx] = { ...field, required: e.target.checked };
-                        updateBlockContent(selectedBlock.id, { ...selectedBlock.content, fields });
+                        patch({ fields });
                       }}
                     />
-                    Wajib diisi
+                    {t('pp.form.required')}
                   </label>
                 </div>
               </div>
             ))}
             <div className="space-y-2">
-              <label className="text-xs font-bold text-zinc-700">Success Message</label>
-              <textarea
-                value={selectedBlock.content.successMessage || ''}
-                onChange={(e) => updateBlockContent(selectedBlock.id, { ...selectedBlock.content, successMessage: e.target.value })}
-                rows={2}
-                className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none resize-none"
-              />
+              <label className="text-xs font-bold text-zinc-700">{t('pp.form.success')}</label>
+              <textarea value={block.content.successMessage || ''} onChange={(e) => patch({ successMessage: e.target.value })} rows={2} className={`${inputClass} resize-none`} />
             </div>
           </div>
         )}
 
-        {/* Features Specific Editor */}
-        {selectedBlock.type === 'features' && (
+        {/* Features items editor */}
+        {block.type === 'features' && (
           <div className="space-y-4 pt-4 border-t border-zinc-100">
-            <label className="text-xs font-bold text-zinc-700">Feature Items</label>
-            {selectedBlock.content.items.map((item: any, idx: number) => (
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-zinc-700">{t('pp.features.items')}</label>
+              <button
+                onClick={() => patch({ items: [...(block.content.items || []), { title: 'Fitur Baru', desc: 'Deskripsi singkat.' }] })}
+                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-bold rounded-lg bg-zinc-900 text-white"
+              >
+                <Plus className="w-3 h-3" /> {t('pp.add')}
+              </button>
+            </div>
+            {(block.content.items || []).map((item: any, idx: number) => (
               <div key={idx} className="p-3 bg-zinc-50 rounded-lg border border-zinc-200 space-y-3">
-                <input 
-                  type="text" 
-                  value={item.title}
-                  onChange={(e) => {
-                    const newItems = [...selectedBlock.content.items];
-                    newItems[idx].title = e.target.value;
-                    updateBlockContent(selectedBlock.id, { ...selectedBlock.content, items: newItems });
-                  }}
-                  className="w-full px-2 py-1 border border-zinc-300 rounded text-sm"
-                  placeholder="Feature Title"
-                />
-                <textarea 
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={item.title}
+                    onChange={(e) => {
+                      const items = [...block.content.items];
+                      items[idx] = { ...item, title: e.target.value };
+                      patch({ items });
+                    }}
+                    className="flex-1 px-2 py-1 border border-zinc-300 rounded text-sm"
+                    placeholder="Feature Title"
+                  />
+                  <button onClick={() => patch({ items: block.content.items.filter((_: any, i: number) => i !== idx) })} className="p-2 text-red-500 hover:bg-red-50 rounded">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+                <textarea
                   value={item.desc}
                   onChange={(e) => {
-                    const newItems = [...selectedBlock.content.items];
-                    newItems[idx].desc = e.target.value;
-                    updateBlockContent(selectedBlock.id, { ...selectedBlock.content, items: newItems });
+                    const items = [...block.content.items];
+                    items[idx] = { ...item, desc: e.target.value };
+                    patch({ items });
                   }}
                   rows={2}
                   className="w-full px-2 py-1 border border-zinc-300 rounded text-sm resize-none"
@@ -669,7 +656,186 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
             ))}
           </div>
         )}
+
+        {/* Testimonials editor */}
+        {block.type === 'testimonials' && (
+          <div className="space-y-4 pt-4 border-t border-zinc-100">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-zinc-700">{t('pp.testi.items')}</label>
+              <button
+                onClick={() => patch({ items: [...(block.content.items || []), { name: 'Nama', role: '', text: 'Testimoni...', rating: 5 }] })}
+                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-bold rounded-lg bg-zinc-900 text-white"
+              >
+                <Plus className="w-3 h-3" /> {t('pp.add')}
+              </button>
+            </div>
+            {(block.content.items || []).map((item: any, idx: number) => {
+              const setItem = (changes: Record<string, any>) => {
+                const items = [...(block.content.items || [])];
+                items[idx] = { ...item, ...changes };
+                patch({ items });
+              };
+              return (
+                <div key={idx} className="p-3 bg-zinc-50 rounded-lg border border-zinc-200 space-y-2">
+                  <div className="flex gap-2">
+                    <input type="text" value={item.name || ''} onChange={(e) => setItem({ name: e.target.value })} className="flex-1 px-2 py-1 border border-zinc-300 rounded text-sm" placeholder={t('pp.testi.name')} />
+                    <button onClick={() => patch({ items: (block.content.items || []).filter((_: any, i: number) => i !== idx) })} className="p-2 text-red-500 hover:bg-red-50 rounded">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <input type="text" value={item.role || ''} onChange={(e) => setItem({ role: e.target.value })} className="w-full px-2 py-1 border border-zinc-300 rounded text-sm" placeholder={t('pp.testi.role')} />
+                  <textarea value={item.text || ''} onChange={(e) => setItem({ text: e.target.value })} rows={2} className="w-full px-2 py-1 border border-zinc-300 rounded text-sm resize-none" placeholder={t('pp.testi.text')} />
+                  <div className="space-y-1">
+                    <label className="text-[11px] text-zinc-500">{t('pp.testi.rating')}</label>
+                    <input type="number" min={1} max={5} value={item.rating ?? 5} onChange={(e) => setItem({ rating: Number(e.target.value) })} className="w-full px-2 py-1 border border-zinc-300 rounded text-sm" />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* FAQ editor */}
+        {block.type === 'faq' && (
+          <div className="space-y-4 pt-4 border-t border-zinc-100">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-zinc-700">{t('pp.faq.items')}</label>
+              <button
+                onClick={() => patch({ items: [...(block.content.items || []), { q: 'Pertanyaan baru?', a: 'Jawaban...' }] })}
+                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-bold rounded-lg bg-zinc-900 text-white"
+              >
+                <Plus className="w-3 h-3" /> {t('pp.add')}
+              </button>
+            </div>
+            {(block.content.items || []).map((item: any, idx: number) => {
+              const setItem = (changes: Record<string, any>) => {
+                const items = [...(block.content.items || [])];
+                items[idx] = { ...item, ...changes };
+                patch({ items });
+              };
+              return (
+                <div key={idx} className="p-3 bg-zinc-50 rounded-lg border border-zinc-200 space-y-2">
+                  <div className="flex gap-2">
+                    <input type="text" value={item.q || ''} onChange={(e) => setItem({ q: e.target.value })} className="flex-1 px-2 py-1 border border-zinc-300 rounded text-sm" placeholder={t('pp.faq.q')} />
+                    <button onClick={() => patch({ items: (block.content.items || []).filter((_: any, i: number) => i !== idx) })} className="p-2 text-red-500 hover:bg-red-50 rounded">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <textarea value={item.a || ''} onChange={(e) => setItem({ a: e.target.value })} rows={2} className="w-full px-2 py-1 border border-zinc-300 rounded text-sm resize-none" placeholder={t('pp.faq.a')} />
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* List editor */}
+        {block.type === 'list' && (
+          <div className="space-y-4 pt-4 border-t border-zinc-100">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-zinc-700">{t('pp.list.items')}</label>
+              <button
+                onClick={() => patch({ items: [...(block.content.items || []), { text: 'Item baru' }] })}
+                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-bold rounded-lg bg-zinc-900 text-white"
+              >
+                <Plus className="w-3 h-3" /> {t('pp.add')}
+              </button>
+            </div>
+            {(block.content.items || []).map((item: any, idx: number) => (
+              <div key={idx} className="flex gap-2">
+                <input
+                  type="text"
+                  value={item.text || ''}
+                  onChange={(e) => {
+                    const items = [...(block.content.items || [])];
+                    items[idx] = { ...item, text: e.target.value };
+                    patch({ items });
+                  }}
+                  className="flex-1 px-2 py-1 border border-zinc-300 rounded text-sm"
+                  placeholder={t('pp.list.text')}
+                />
+                <button onClick={() => patch({ items: (block.content.items || []).filter((_: any, i: number) => i !== idx) })} className="p-2 text-red-500 hover:bg-red-50 rounded">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Slider editor */}
+        {block.type === 'slider' && (
+          <div className="space-y-4 pt-4 border-t border-zinc-100">
+            <label className="flex items-center gap-2 text-xs font-bold text-zinc-700">
+              <input type="checkbox" checked={!!block.content.autoplay} onChange={(e) => patch({ autoplay: e.target.checked })} />
+              {t('pp.slider.autoplay')}
+            </label>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-zinc-700">{t('pp.slider.images')}</label>
+              <button
+                onClick={() => patch({ images: [...(block.content.images || []), { url: 'https://picsum.photos/seed/new/1200/600', caption: '' }] })}
+                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-bold rounded-lg bg-zinc-900 text-white"
+              >
+                <Plus className="w-3 h-3" /> {t('pp.add')}
+              </button>
+            </div>
+            {uploadError && (
+              <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">{uploadError}</p>
+            )}
+            {(block.content.images || []).map((img: any, idx: number) => (
+              <div key={idx} className="p-3 bg-zinc-50 rounded-lg border border-zinc-200 space-y-2">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={img.url || ''}
+                    onChange={(e) => {
+                      const images = [...(block.content.images || [])];
+                      images[idx] = { ...img, url: e.target.value };
+                      patch({ images });
+                    }}
+                    className="flex-1 px-2 py-1 border border-zinc-300 rounded text-sm"
+                    placeholder={t('pp.slider.imageUrl')}
+                  />
+                  <label className="p-2 bg-zinc-100 border border-zinc-200 rounded cursor-pointer hover:bg-zinc-200" title={t('pp.slider.upload')}>
+                    <Upload className="w-4 h-4 text-zinc-600" />
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept="image/*"
+                      onChange={(e) => { uploadSliderImage(idx, e.target.files?.[0]); e.target.value = ''; }}
+                    />
+                  </label>
+                  <button onClick={() => patch({ images: (block.content.images || []).filter((_: any, i: number) => i !== idx) })} className="p-2 text-red-500 hover:bg-red-50 rounded">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+                {img.url && (
+                  <img src={img.url} alt={img.caption || `Slide ${idx + 1}`} className="w-full h-24 object-cover rounded border border-zinc-200" />
+                )}
+                <input
+                  type="text"
+                  value={img.caption || ''}
+                  onChange={(e) => {
+                    const images = [...(block.content.images || [])];
+                    images[idx] = { ...img, caption: e.target.value };
+                    patch({ images });
+                  }}
+                  className="w-full px-2 py-1 border border-zinc-300 rounded text-sm"
+                  placeholder={t('pp.caption')}
+                />
+              </div>
+            ))}
+            <p className="text-[11px] text-zinc-400">{t('pp.slider.uploadHint')}</p>
+          </div>
+        )}
       </div>
     </div>
   );
 };
+
+// Convert ISO string to value usable by <input type="datetime-local"> (local time, no seconds).
+function toLocalInput(iso: string | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}

@@ -17,4 +17,37 @@ abstract class BasePosController extends BaseApiController
     {
         return (string) ($org->pos_tenant_slug ?? $org->slug);
     }
+
+    /**
+     * Tenant slug of the active outlet (set by InjectPosContext), falling back to
+     * the organization's primary slug. This is what per-outlet POS data scopes by.
+     */
+    protected function getActiveTenantSlug(Request $request, Organization $org): string
+    {
+        return (string) ($request->attributes->get('posTenantSlug') ?: $this->getTenantSlug($org));
+    }
+
+    /**
+     * Whether the current user is the organization owner ("boss") — the only role
+     * allowed to view aggregated, cross-outlet reports.
+     */
+    protected function isOrgOwner(Request $request, Organization $org): bool
+    {
+        $user = $request->user();
+        if (!$user) {
+            return false;
+        }
+
+        if (method_exists($user, 'isAdmin') && $user->isAdmin()) {
+            return true;
+        }
+
+        $membership = $user->organizations()
+            ->where('organizations.id', $org->id)
+            ->first();
+
+        $role = (string) ($membership?->pivot?->role ?? '');
+
+        return in_array($role, ['owner', 'admin'], true);
+    }
 }

@@ -19,6 +19,7 @@ class OrganizationTeamInvitation extends Model
         'organization_id',
         'email',
         'role',
+        'pos_staff_id',
         'token_hash',
         'invited_by_user_id',
         'status',
@@ -35,7 +36,13 @@ class OrganizationTeamInvitation extends Model
             'organization_id' => 'integer',
             'invited_by_user_id' => 'integer',
             'accepted_by_user_id' => 'integer',
+            'pos_staff_id' => 'integer',
         ];
+    }
+
+    public function posStaff(): BelongsTo
+    {
+        return $this->belongsTo(PosStaff::class, 'pos_staff_id');
     }
 
     public function organization(): BelongsTo

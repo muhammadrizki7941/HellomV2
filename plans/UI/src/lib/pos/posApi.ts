@@ -190,8 +190,24 @@ export function getCustomerMenu(tableToken: string) {
   return publicRequest<PosMenuPayload>(`/pos/customer/menu/${tableToken}`);
 }
 
-export function getCustomerMenuByOrganization(organizationSlug: string) {
-  return publicRequest<PosMenuPayload>(`/pos/customer/organization/${encodeURIComponent(organizationSlug)}/menu`);
+export function getCustomerMenuByOrganization(organizationSlug: string, outletSlug?: string | null) {
+  const qs = outletSlug ? `?outlet=${encodeURIComponent(outletSlug)}` : '';
+  return publicRequest<PosMenuPayload>(`/pos/customer/organization/${encodeURIComponent(organizationSlug)}/menu${qs}`);
+}
+
+export type CustomerOutlet = {
+  id: number;
+  slug: string;
+  name: string;
+  address: string | null;
+  phone: string | null;
+  is_primary: boolean;
+};
+
+export function getCustomerOrganizationOutlets(organizationSlug: string) {
+  return publicRequest<{ organization: { slug: string; name: string }; outlets: CustomerOutlet[] }>(
+    `/pos/customer/organization/${encodeURIComponent(organizationSlug)}/outlets`
+  );
 }
 
 export function createCustomerOrder(payload: {

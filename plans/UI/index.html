@@ -19,16 +19,28 @@
 
     <title>Hellom POS</title>
 
-    <!-- Service Worker registration -->
-    <script>
+    <!-- Service Worker registration (production only) -->
+    <script type="module">
       if ('serviceWorker' in navigator) {
-        window.addEventListener('load', function () {
+        if (import.meta.env.PROD) {
+          window.addEventListener('load', function () {
+            navigator.serviceWorker
+              .register('/sw.js', { scope: '/' })
+              .catch(function (err) {
+                console.warn('[SW] Registration failed:', err);
+              });
+          });
+        } else {
+          // Dev: never let a stale service worker serve cached bundles — it breaks
+          // Vite HMR and can freeze the app on old code. Unregister + purge caches.
           navigator.serviceWorker
-            .register('/sw.js', { scope: '/' })
-            .catch(function (err) {
-              console.warn('[SW] Registration failed:', err);
-            });
-        });
+            .getRegistrations()
+            .then(function (regs) { regs.forEach(function (r) { r.unregister(); }); })
+            .catch(function () {});
+          if (window.caches) {
+            caches.keys().then(function (keys) { keys.forEach(function (k) { caches.delete(k); }); }).catch(function () {});
+          }
+        }
       }
     </script>
   </head>

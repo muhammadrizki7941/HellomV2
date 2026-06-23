@@ -128,5 +128,62 @@ export const defaultContent: Record<BlockType, any> = {
       { id: "phone", label: "Nomor HP", type: "tel", required: true, system: true },
       { id: "email", label: "Email", type: "email", required: false, system: true }
     ]
+  },
+  button: {
+    text: "Klik di Sini",
+    actionType: "link", // 'link' | 'whatsapp'
+    linkUrl: "#",
+    whatsappNumber: "",
+    whatsappMessage: "Halo, saya tertarik dengan penawaran Anda.",
+    align: "center" // 'left' | 'center' | 'right'
+  },
+  divider: {
+    style: "solid", // 'solid' | 'dashed' | 'dotted'
+    thickness: 1,
+    width: 100 // percent
+  },
+  testimonials: {
+    title: "Apa Kata Pelanggan?",
+    items: [
+      { name: "Sarah W.", role: "Pembeli", text: "Pelayanan cepat dan produknya sesuai ekspektasi. Recommended!", rating: 5 },
+      { name: "Budi P.", role: "Pelanggan Setia", text: "Sudah langganan dari lama, kualitasnya konsisten dan harganya pas.", rating: 5 },
+      { name: "Dewi A.", role: "Reseller", text: "Tim support ramah dan responsif. Bikin nyaman belanja.", rating: 4 }
+    ]
+  },
+  faq: {
+    title: "Pertanyaan yang Sering Diajukan",
+    items: [
+      { q: "Bagaimana cara memesan?", a: "Klik tombol pesan, isi data, lalu lakukan pembayaran sesuai instruksi." },
+      { q: "Berapa lama pengiriman?", a: "Estimasi 1-3 hari kerja tergantung lokasi tujuan." },
+      { q: "Apakah bisa refund?", a: "Bisa, sesuai dengan syarat dan ketentuan yang berlaku." }
+    ]
+  },
+  list: {
+    title: "Yang Anda Dapatkan",
+    items: [
+      { text: "Akses penuh tanpa batas waktu" },
+      { text: "Update gratis selamanya" },
+      { text: "Dukungan prioritas 24/7" }
+    ]
+  },
+  slider: {
+    autoplay: true,
+    images: [
+      { url: "https://picsum.photos/seed/slide1/1200/600", caption: "" },
+      { url: "https://picsum.photos/seed/slide2/1200/600", caption: "" },
+      { url: "https://picsum.photos/seed/slide3/1200/600", caption: "" }
+    ]
+  },
+  countdown: {
+    title: "Promo Berakhir Dalam",
+    subtitle: "Jangan sampai kehabisan, segera ambil penawaran ini!",
+    targetDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+  },
+  gif: {
+    gifUrl: "https://media.giphy.com/media/3o7TKsQ8gqVrUqmXSU/giphy.gif",
+    caption: "Caption GIF opsional"
+  },
+  html: {
+    html: "<div style=\"text-align:center;padding:24px;\">\n  <h3>Blok HTML Kustom</h3>\n  <p>Tempel kode HTML Anda di sini.</p>\n</div>"
   }
 };

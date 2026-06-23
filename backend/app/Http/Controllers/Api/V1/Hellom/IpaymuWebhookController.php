@@ -172,90 +172,16 @@ class IpaymuWebhookController extends BaseApiController
             return;
         }
 
-        if (in_array((string) $intent->status, ['confirmed', 'paid'], true)) {
-            app(SubscriptionCheckoutActivationService::class)->ensureActiveAccessForConfirmedCheckout($intent);
+        // Shared activation (correct plan duration, entitlement, POS provisioning, in-app notifications).
+        $newlyConfirmed = app(SubscriptionCheckoutActivationService::class)->confirmGatewayCheckout($intent, [
+            'transaction_id' => $transactionId,
+            'session_id' => $sessionId,
+            'invoice_id' => (int) ($metadata['invoice_id'] ?? 0),
+        ], 'iPaymu');
 
-            return;
+        if ($newlyConfirmed) {
+            $this->sendCheckoutEmails($intent->loadMissing(['subscription.organization.users', 'app', 'plan', 'user']));
         }
-
-        DB::transaction(function () use ($intent, $metadata, $transactionId, $sessionId): void {
-            $now = now();
-            $intentMeta = is_array($intent->metadata) ? $intent->metadata : [];
-            $intentMeta['ipaymu'] = array_filter([
-                'transaction_id' => $transactionId,
-                'session_id' => $sessionId,
-            ]);
-            $intentMeta['activated_at'] = $now->toISOString();
-
-            $intent->forceFill([
-                'status' => 'confirmed',
-                'metadata' => $intentMeta,
-            ])->save();
-
-            $subscription = $intent->subscription;
-            if ($subscription instanceof Subscription) {
-                $subscriptionMeta = is_array($subscription->metadata) ? $subscription->metadata : [];
-                $subscriptionMeta['activation_source'] = 'ipaymu_payment';
-                $subscriptionMeta['ipaymu'] = array_filter([
-                    'transaction_id' => $transactionId,
-                    'session_id' => $sessionId,
-                ]);
-
-                $subscription->forceFill([
-                    'status' => 'active',
-                    'starts_at' => $now,
-                    'ends_at' => $now->copy()->addMonth(),
-                    'metadata' => $subscriptionMeta,
-                ])->save();
-            }
-
-            Entitlement::query()->updateOrCreate(
-                [
-                    'organization_id' => (int) $intent->organization_id,
-                    'app_id' => (int) $intent->app_id,
-                ],
-                [
-                    'plan_id' => (int) $intent->plan_id,
-                    'status' => 'active',
-                    'starts_at' => $now,
-                    'ends_at' => null,
-                ]
-            );
-
-            $invoiceId = (int) ($metadata['invoice_id'] ?? 0);
-            if ($invoiceId > 0) {
-                $invoice = Invoice::query()->find($invoiceId);
-                if ($invoice instanceof Invoice) {
-                    $invoiceMeta = is_array($invoice->metadata) ? $invoice->metadata : [];
-                    $invoiceMeta['ipaymu'] = array_filter([
-                        'transaction_id' => $transactionId,
-                        'session_id' => $sessionId,
-                    ]);
-                    $invoice->forceFill([
-                        'status' => 'paid',
-                        'paid_at' => $now,
-                        'metadata' => $invoiceMeta,
-                    ])->save();
-                }
-            }
-
-            if ((int) $intent->amount > 0) {
-                \App\Models\PlatformFinanceLedger::recordRevenue(
-                    'ipaymu_subscription_payment',
-                    (int) $intent->amount,
-                    (int) $intent->organization_id,
-                    'checkout_intents',
-                    (int) $intent->id,
-                    'Subscription payment confirmed by iPaymu webhook'
-                );
-            }
-
-            if ((string) ($intent->app?->slug ?? '') === 'pos') {
-                app(PosProvisioningService::class)->ensureProvisionedForPos((int) $intent->organization_id);
-            }
-
-            $this->sendSuccessNotifications($intent);
-        });
     }
 
     /**
@@ -423,17 +349,8 @@ class IpaymuWebhookController extends BaseApiController
         return false;
     }
 
-    private function sendSuccessNotifications(CheckoutIntent $intent): void
+    private function sendCheckoutEmails(CheckoutIntent $intent): void
     {
-        $this->notificationService->createGatewayPaymentSuccessNotif($intent, 'iPaymu');
-        if ($intent->user instanceof \App\Models\User) {
-            $productName = (string) ($intent->app?->name ?? 'Aplikasi');
-            $this->notificationService->notifyConsumerPaymentSuccess($intent->user, $intent, $productName);
-            if ($intent->subscription instanceof Subscription) {
-                $this->notificationService->notifyConsumerAccessActivated($intent->user, $intent->subscription, $productName);
-            }
-        }
-
         $subscription = $intent->subscription?->loadMissing(['organization.users']);
         if (!$subscription instanceof Subscription || !$subscription->organization) {
             return;
