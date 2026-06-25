@@ -350,7 +350,7 @@ export const HellomspaceLanding = ({ brand, logoSrc }: { brand: BrandSettings; l
               <motion.p variants={fadeUp} className="mt-5 font-serif text-2xl italic text-[var(--text)] md:text-3xl">
                 Your Creative Business Partner
               </motion.p>
-              <motion.p variants={fadeUp} className="mt-6 max-w-xl text-sm leading-8 text-[var(--muted)] md:text-base">
+              <motion.p variants={fadeUp} className="mt-6 max-w-md text-pretty text-sm leading-7 text-[var(--muted)] md:max-w-xl md:text-base md:leading-8">
                 Saya membantu bisnis dan kreator membangun brand, sistem, dan produk digital yang estetik, fungsional, dan berdampak.
               </motion.p>
               <motion.div variants={fadeUp} className="mt-9 flex flex-col gap-4 sm:flex-row">
