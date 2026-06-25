@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { BarChart3, Globe, ArrowUpRight, Users, MousePointer2, AlertCircle } from 'lucide-react';
+import { BarChart3, Globe, ArrowUpRight, Users, MousePointer2, AlertCircle, Copy, Check } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { getLandingBuilderPageStats, getLandingBuilderPerformance, getLandingBuilderStats, getSessionUser } from '@/lib/hellomApi';
 
 export default function Overview({ onEdit }: { onEdit: () => void }) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
   const [stats, setStats] = useState({ published_count: 0, views_count: 0, first_published_page: null as null | { id: number; title: string; slug: string } });
   const [performance, setPerformance] = useState({ total_pages: 0, total_views: 0, average_views_per_page: 0, top_page: null as null | { id: number; title: string; slug: string; status: string; views_count: number } });
   const [pageSeries, setPageSeries] = useState<Array<{ views_count: number }>>([]);
@@ -35,8 +37,30 @@ export default function Overview({ onEdit }: { onEdit: () => void }) {
     if (!orgSlug || (!performance.top_page?.slug && !stats.first_published_page?.slug)) {
       return '#';
     }
-    return `/p/landingpage/${orgSlug}`;
+    return `/${orgSlug}`;
   }, [orgSlug, performance.top_page?.slug, stats.first_published_page?.slug]);
+
+  const isPublished = openPublicLink !== '#';
+  const shareUrl = isPublished ? `${window.location.origin}${openPublicLink}` : '';
+
+  const copyShareLink = async () => {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+    } catch {
+      const textarea = document.createElement('textarea');
+      textarea.value = shareUrl;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      try { document.execCommand('copy'); } catch { /* ignore */ }
+      document.body.removeChild(textarea);
+    }
+    setLinkCopied(true);
+    window.setTimeout(() => setLinkCopied(false), 2000);
+  };
 
   const trendSeries = pageSeries.slice(0, 15);
   const maxViews = Math.max(1, ...trendSeries.map((row) => row.views_count || 0));
@@ -50,14 +74,30 @@ export default function Overview({ onEdit }: { onEdit: () => void }) {
           <p className="text-zinc-600">Pantau performa halaman landing Anda.</p>
         </div>
         <div className="flex gap-3 w-full md:w-auto">
-          <a 
+          {isPublished && (
+            <button
+              onClick={() => void copyShareLink()}
+              title={shareUrl}
+              className={cn(
+                'flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 font-medium rounded-lg border transition-colors',
+                linkCopied
+                  ? 'bg-green-600 border-green-600 text-white'
+                  : 'bg-white border-zinc-200 text-zinc-600 hover:border-zinc-300',
+              )}
+            >
+              {linkCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              <span className="hidden sm:inline">{linkCopied ? 'Tersalin!' : 'Salin Link'}</span>
+              <span className="sm:hidden">{linkCopied ? 'Tersalin' : 'Salin'}</span>
+            </button>
+          )}
+          <a
             href={openPublicLink}
             target="_blank"
             className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-white border border-zinc-200 text-zinc-600 font-medium rounded-lg hover:border-zinc-300 transition-colors"
           >
             <Globe className="w-4 h-4" /> <span className="hidden sm:inline">Buka Halaman</span><span className="sm:hidden">Buka</span>
           </a>
-          <button 
+          <button
             onClick={onEdit}
             className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-black text-white font-bold rounded-lg hover:bg-zinc-800 transition-colors shadow-sm"
           >

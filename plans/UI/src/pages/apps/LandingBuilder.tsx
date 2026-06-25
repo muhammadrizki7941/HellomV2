@@ -4,6 +4,7 @@ import Editor from './landing-builder/Editor';
 import { Layout, BarChart3, Users, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getLandingPageCustomers } from '@/lib/hellomApi';
+import { useEditorChrome } from '@/contexts/editorChrome';
 
 function CustomersPanel() {
   const [items, setItems] = useState<Array<Record<string, any>>>([]);
@@ -97,11 +98,23 @@ function CustomersPanel() {
 
 export default function LandingBuilder() {
   const [activeTab, setActiveTab] = useState<'overview' | 'editor' | 'customers'>('overview');
+  const { chromeHidden, setChromeHidden } = useEditorChrome();
+
+  // Auto-hide the dashboard chrome (mobile header + these tabs) while editing,
+  // so the editor gets the full screen. Restore it when leaving the editor.
+  // chromeHidden only has a visible effect on mobile widths.
+  useEffect(() => {
+    setChromeHidden(activeTab === 'editor');
+    return () => setChromeHidden(false);
+  }, [activeTab, setChromeHidden]);
 
   return (
-    <div className="space-y-6">
+    <div className={cn(chromeHidden ? "space-y-0 lg:space-y-6" : "space-y-6")}>
       {/* App Header & Tabs */}
-      <div className="flex items-center justify-between border-b border-zinc-200 pb-1">
+      <div className={cn(
+        "items-center justify-between border-b border-zinc-200 pb-1",
+        chromeHidden ? "hidden lg:flex" : "flex"
+      )}>
         <div className="flex gap-6">
           <button
             onClick={() => setActiveTab('overview')}
@@ -149,8 +162,14 @@ export default function LandingBuilder() {
            up to the lg breakpoint, so the editor stays full-bleed up to lg too.
            Height = viewport minus: mobile-header(80px) + tab-bar(~52px) + space-y-6(24px) + bottom-safe(~8px) */
         <div
-          className="-mx-4 lg:mx-0 overflow-hidden"
-          style={{ height: 'calc(100svh - 164px)' }}
+          className={cn(
+            "-mx-4 lg:mx-0 overflow-hidden",
+            // When chrome is hidden the mobile header + tabs are gone, so the
+            // editor can fill almost the whole screen. Desktop height is unchanged.
+            chromeHidden
+              ? "h-[calc(100svh-16px)] lg:h-[calc(100svh-164px)]"
+              : "h-[calc(100svh-164px)]"
+          )}
         >
           <Editor />
         </div>

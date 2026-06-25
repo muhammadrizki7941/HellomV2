@@ -10,6 +10,7 @@ use App\Models\ProductPurchase;
 use App\Models\Subscription;
 use App\Mail\HellomCheckoutStatusMail;
 use App\Services\Hellom\DokuSettingsService;
+use App\Services\Hellom\LandingSaleService;
 use App\Services\Hellom\PlatformMailService;
 use App\Services\Hellom\PosProvisioningService;
 use App\Services\Hellom\SubscriptionCheckoutActivationService;
@@ -54,6 +55,27 @@ class DokuWebhookController extends BaseApiController
 
         try {
             $invoiceNumber = (string) ($order['invoice_number'] ?? '');
+
+            // Landing-page product sale (invoice number == order reference "lps_...")
+            if (str_starts_with($invoiceNumber, 'lps_')) {
+                if (in_array($status, ['SUCCESS', 'PAID'], true)) {
+                    app(LandingSaleService::class)->settlePaidOrderByReference($invoiceNumber, [
+                        'provider' => 'doku',
+                        'gateway_ref' => (string) ($payment['token_id'] ?? $invoiceNumber),
+                    ]);
+                } elseif (in_array($status, ['EXPIRED', 'FAILED', 'CANCELLED'], true)) {
+                    app(LandingSaleService::class)->markFailedByReference($invoiceNumber);
+                }
+
+                $paymentEvent->forceFill([
+                    'status' => 'processed',
+                    'processed_at' => now(),
+                    'error_message' => null,
+                ])->save();
+
+                return $this->ok(['status' => 'processed', 'provider' => 'doku'], 'DOKU webhook processed');
+            }
+
             $orderAdditional = is_array($order['additional_info'] ?? null) ? $order['additional_info'] : [];
             $productPurchase = $this->resolveProductPurchase($invoiceNumber, $orderAdditional);
 

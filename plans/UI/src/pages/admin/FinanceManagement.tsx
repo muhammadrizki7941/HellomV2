@@ -4,6 +4,7 @@ import {
   Search, AlertCircle, RefreshCw, ReceiptText
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import PayoutKycReview from './PayoutKycReview';
 import {
   approveAdminManualCheckout,
   approveWithdrawal,
@@ -276,7 +277,7 @@ export default function FinanceManagement() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-zinc-900">Finance Management</h1>
-          <p className="text-zinc-500">Owner bisa memproses payout queue dan approval langganan manual dari sini.</p>
+          <p className="text-zinc-500">Owner bisa memproses payout queue, verifikasi KTP penjual, dan approval langganan manual dari sini.</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           {(['pending', 'processing', 'failed'] as QueueStatus[]).map((status) => (
@@ -299,6 +300,8 @@ export default function FinanceManagement() {
           </button>
         </div>
       </div>
+
+      <PayoutKycReview />
 
       <div className="grid sm:grid-cols-4 gap-4">
         <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4">

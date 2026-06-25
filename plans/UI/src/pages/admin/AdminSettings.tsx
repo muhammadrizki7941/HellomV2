@@ -64,6 +64,7 @@ export default function AdminSettings() {
     active_provider: ProviderKey;
     checkout_mode: CheckoutMode;
     member_wallet_enabled: boolean;
+    sale_commission_percent: number;
     providers: {
       xendit: ProviderCard & {
         secret_key_masked: string | null;
@@ -87,6 +88,7 @@ export default function AdminSettings() {
     active_provider: 'xendit',
     checkout_mode: 'manual_confirmation',
     member_wallet_enabled: false,
+    sale_commission_percent: 5,
     providers: {
       xendit: {
         provider: 'xendit',
@@ -142,7 +144,14 @@ export default function AdminSettings() {
     api_key: '',
     callback_token: '',
     is_production: false,
+    payment_methods: ['qris', 'va', 'cstore', 'cc'] as string[],
   });
+  const ipaymuAvailableMethods: Record<string, string> = {
+    qris: 'QRIS',
+    va: 'Virtual Account / Transfer Bank',
+    cstore: 'Gerai Retail (Indomaret/Alfamart)',
+    cc: 'Kartu Kredit',
+  };
   const [dokuForm, setDokuForm] = useState({
     client_id: '',
     secret_key: '',
@@ -238,6 +247,7 @@ export default function AdminSettings() {
         active_provider: config.active_provider,
         checkout_mode: config.checkout_mode,
         member_wallet_enabled: config.member_wallet_enabled,
+        sale_commission_percent: Number(config.sale_commission_percent ?? 5),
         providers: config.providers,
         manual_payment: manualConfig || undefined,
       });
@@ -252,6 +262,9 @@ export default function AdminSettings() {
         api_key: '',
         callback_token: '',
         is_production: config.providers.ipaymu.mode === 'production',
+        payment_methods: Array.isArray(config.providers.ipaymu.payment_methods) && config.providers.ipaymu.payment_methods.length > 0
+          ? config.providers.ipaymu.payment_methods
+          : ['qris', 'va', 'cstore', 'cc'],
       });
       setDokuForm({
         client_id: '',
@@ -318,6 +331,7 @@ export default function AdminSettings() {
         active_provider: paymentConfig.active_provider,
         checkout_mode: paymentConfig.checkout_mode,
         member_wallet_enabled: paymentConfig.member_wallet_enabled,
+        sale_commission_percent: paymentConfig.sale_commission_percent,
       });
 
       const providerLabel = result.active_provider === 'ipaymu' ? 'iPaymu' : result.active_provider === 'doku' ? 'DOKU' : 'Xendit';
@@ -348,6 +362,7 @@ export default function AdminSettings() {
               api_key: ipaymuForm.api_key || undefined,
               callback_token: ipaymuForm.callback_token || undefined,
               is_production: ipaymuForm.is_production,
+              payment_methods: ipaymuForm.payment_methods,
             }
           : provider === 'doku'
             ? {
@@ -447,7 +462,7 @@ export default function AdminSettings() {
     setStatusMessage(null);
     try {
       await resetIpaymuGatewayConfig();
-      setIpaymuForm({ va: '', api_key: '', callback_token: '', is_production: false });
+      setIpaymuForm({ va: '', api_key: '', callback_token: '', is_production: false, payment_methods: ['qris', 'va', 'cstore', 'cc'] });
       setStatusMessage('Konfigurasi iPaymu berhasil direset.');
       await loadPayment();
     } catch (resetError) {
@@ -619,6 +634,31 @@ export default function AdminSettings() {
                 />
                 Gunakan environment production
               </label>
+
+              <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                <p className="text-sm font-semibold text-zinc-800">Metode pembayaran aktif</p>
+                <p className="mt-1 text-xs text-zinc-500">Centang metode yang ingin ditampilkan ke pembeli. Matikan Virtual Account jika biayanya mahal — pembeli hanya akan melihat metode yang aktif. QRIS selalu disarankan aktif.</p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {Object.entries(ipaymuAvailableMethods).map(([key, label]) => {
+                    const checked = ipaymuForm.payment_methods.includes(key);
+                    return (
+                      <label key={key} className={`flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-sm cursor-pointer ${checked ? 'border-zinc-900 bg-white' : 'border-zinc-200 bg-white/60 text-zinc-500'}`}>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(event) => setIpaymuForm((current) => {
+                            const set = new Set(current.payment_methods);
+                            if (event.target.checked) set.add(key); else set.delete(key);
+                            const next = Array.from(set);
+                            return { ...current, payment_methods: next.length > 0 ? next : ['qris'] };
+                          })}
+                        />
+                        <span className="font-medium text-zinc-800">{label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
             </>
           ) : isDoku ? (
             <>
@@ -883,6 +923,29 @@ export default function AdminSettings() {
                     onChange={(event) => setPaymentConfig((current) => ({ ...current, member_wallet_enabled: event.target.checked }))}
                   />
                   {paymentConfig.member_wallet_enabled ? 'Ditampilkan' : 'Disembunyikan'}
+                </label>
+              </div>
+            </div>
+
+            <div className="mt-5 rounded-3xl border border-zinc-200 bg-zinc-50 p-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex-1">
+                  <p className="font-semibold text-zinc-900">Komisi penjualan landing page</p>
+                  <p className="mt-1 text-sm text-zinc-600">
+                    Persentase yang dipotong Hellom dari setiap penjualan produk di landing page member. Sisanya masuk ke Saldo Penjualan member.
+                  </p>
+                </div>
+                <label className="inline-flex items-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 py-2.5">
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.5}
+                    value={paymentConfig.sale_commission_percent}
+                    onChange={(event) => setPaymentConfig((current) => ({ ...current, sale_commission_percent: Number(event.target.value) }))}
+                    className="w-20 text-right text-lg font-bold text-zinc-900 outline-none"
+                  />
+                  <span className="text-sm font-semibold text-zinc-500">%</span>
                 </label>
               </div>
             </div>

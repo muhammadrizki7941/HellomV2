@@ -12,6 +12,15 @@ class IpaymuSettingsService
     private const API_KEY = 'hellom_ipaymu_api_key';
     private const CALLBACK_TOKEN = 'hellom_ipaymu_callback_token';
     private const IS_PRODUCTION = 'hellom_ipaymu_is_production';
+    private const PAYMENT_METHODS = 'hellom_ipaymu_payment_methods';
+
+    /** iPaymu payment methods the super admin can toggle (value => label). */
+    public const AVAILABLE_METHODS = [
+        'qris' => 'QRIS',
+        'va' => 'Virtual Account / Transfer Bank',
+        'cstore' => 'Gerai Retail (Indomaret/Alfamart)',
+        'cc' => 'Kartu Kredit',
+    ];
 
     /**
      * @return array{
@@ -20,7 +29,8 @@ class IpaymuSettingsService
      *   callback_token:string,
      *   is_production:bool,
      *   mode:string,
-     *   is_ready:bool
+     *   is_ready:bool,
+     *   payment_methods:array<int,string>
      * }
      */
     public function getConfig(): array
@@ -44,7 +54,44 @@ class IpaymuSettingsService
             'is_production' => (bool) $isProduction,
             'mode' => $isProduction ? 'production' : 'sandbox',
             'is_ready' => $va !== '' && $apiKey !== '' && $callbackToken !== '',
+            'payment_methods' => $this->readPaymentMethods(),
         ];
+    }
+
+    /** Enabled iPaymu payment channels (e.g. ['qris']). Falls back to all if unset/empty. */
+    public function enabledPaymentMethods(): array
+    {
+        $methods = $this->readPaymentMethods();
+
+        return $methods === [] ? array_keys(self::AVAILABLE_METHODS) : $methods;
+    }
+
+    /** @return array<int,string> */
+    private function readPaymentMethods(): array
+    {
+        $raw = (string) SystemSetting::get(self::PAYMENT_METHODS, '');
+        if ($raw === '') {
+            // Default: all methods enabled (preserves prior behaviour).
+            return array_keys(self::AVAILABLE_METHODS);
+        }
+
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded)) {
+            return array_keys(self::AVAILABLE_METHODS);
+        }
+
+        return array_values(array_filter(
+            array_map('strval', $decoded),
+            fn (string $m) => array_key_exists($m, self::AVAILABLE_METHODS)
+        ));
+    }
+
+    private function sanitizePaymentMethods(array $methods): array
+    {
+        return array_values(array_unique(array_filter(
+            array_map('strval', $methods),
+            fn (string $m) => array_key_exists($m, self::AVAILABLE_METHODS)
+        )));
     }
 
     /**
@@ -95,6 +142,18 @@ class IpaymuSettingsService
         if (array_key_exists('is_production', $payload) && $payload['is_production'] !== null) {
             $current['is_production'] = (bool) $payload['is_production'];
             SystemSetting::set(self::IS_PRODUCTION, $current['is_production'] ? '1' : '0');
+        }
+
+        if (array_key_exists('payment_methods', $payload) && is_array($payload['payment_methods'])) {
+            $methods = $this->sanitizePaymentMethods($payload['payment_methods']);
+            // Never store an empty set (would block all payments) — keep QRIS as a safe floor.
+            if ($methods === []) {
+                $methods = ['qris'];
+            }
+            SystemSetting::set(self::PAYMENT_METHODS, json_encode(array_values($methods)));
+            $current['payment_methods'] = $methods;
+        } else {
+            $current['payment_methods'] = $this->readPaymentMethods();
         }
 
         $current['mode'] = $current['is_production'] ? 'production' : 'sandbox';
@@ -149,6 +208,8 @@ class IpaymuSettingsService
             'va_masked' => $this->maskValue($config['va']),
             'api_key_masked' => $this->maskValue($config['api_key']),
             'callback_token_masked' => $this->maskValue($config['callback_token']),
+            'payment_methods' => $config['payment_methods'],
+            'available_payment_methods' => self::AVAILABLE_METHODS,
         ];
     }
 

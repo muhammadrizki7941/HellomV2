@@ -5,6 +5,21 @@ return [
         'webhook_secret' => env('MOCK_PAYMENT_WEBHOOK_SECRET', 'dev_mock_webhook_secret'),
     ],
 
+    // Platform-level policy for landing-page product sales + seller wallet payouts.
+    'platform' => [
+        // Commission Hellom keeps from each landing-page product sale, in percent.
+        // The remainder is credited to the seller's wallet as pending balance.
+        'sale_commission_percent' => (float) env('PLATFORM_SALE_COMMISSION_PERCENT', 5),
+    ],
+
+    'wallet' => [
+        // Minimum amount (IDR) a seller may request to withdraw.
+        'min_withdrawal' => (int) env('WALLET_MIN_WITHDRAWAL', 100000),
+        // Delay before a sale's pending balance is released to available balance.
+        // Hours are added then rolled forward to skip Sat/Sun (weekday-only payouts).
+        'settlement_delay_hours' => (int) env('WALLET_SETTLEMENT_DELAY_HOURS', 24),
+    ],
+
     'providers' => [
         'midtrans' => [
             // Set these in .env

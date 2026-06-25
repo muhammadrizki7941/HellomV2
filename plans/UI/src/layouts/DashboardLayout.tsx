@@ -7,6 +7,7 @@ import { BRAND_LOGO_PATH, BRAND_NAME, getBrandLogo } from '@/lib/branding';
 import { fetchBrand, BrandSettings } from '@/hooks/useBrand';
 import SubscriptionModal from '@/components/SubscriptionModal';
 import NotificationBell from '@/components/consumer/NotificationBell';
+import { EditorChromeContext } from '@/contexts/editorChrome';
 
 type DashboardApp = {
   id: string;
@@ -44,6 +45,8 @@ export default function DashboardLayout() {
   const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isDesktopCollapsed, setIsDesktopCollapsed] = useState(false);
+  // When an editor requests an immersive canvas, hide the mobile chrome.
+  const [chromeHidden, setChromeHidden] = useState(false);
   const [apps, setApps] = useState<DashboardApp[]>(FALLBACK_APPS);
   const [userName, setUserName] = useState('Member User');
   const [userEmail, setUserEmail] = useState('member@hellom.id');
@@ -185,9 +188,13 @@ export default function DashboardLayout() {
   };
 
   return (
+    <EditorChromeContext.Provider value={{ chromeHidden, setChromeHidden }}>
     <div className="min-h-screen bg-zinc-50 flex font-sans text-zinc-900 selection:bg-yellow-400 selection:text-black">
       {/* Mobile Header */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-white border-b border-zinc-200 flex items-center justify-between px-4 z-30">
+      <div className={cn(
+        "lg:hidden fixed top-0 left-0 right-0 h-16 bg-white border-b border-zinc-200 flex items-center justify-between px-4 z-30",
+        chromeHidden && "hidden"
+      )}>
         <Link to="/" className="flex items-center gap-2">
           <img src={getBrandLogo(brand?.logo_url)} alt={brand?.app_name || BRAND_NAME} draggable={false} loading="lazy" className="w-8 h-8 rounded-lg object-cover border border-zinc-200" />
           <span className="text-xl font-bold tracking-tight">{brand?.app_name || BRAND_NAME}</span>
@@ -355,7 +362,8 @@ export default function DashboardLayout() {
 
       {/* Main Content */}
       <main className={cn(
-        "flex-1 p-4 lg:p-8 pt-20 lg:pt-8 transition-all duration-300",
+        "flex-1 min-w-0 overflow-x-clip p-4 lg:p-8 lg:pt-8 transition-all duration-300",
+        chromeHidden ? "pt-0" : "pt-20",
         isDesktopCollapsed ? "lg:ml-0" : "lg:ml-64"
       )}>
         <div className={cn("mx-auto transition-all duration-300", isDesktopCollapsed ? "max-w-none" : "max-w-7xl")}>
@@ -440,5 +448,6 @@ export default function DashboardLayout() {
         />
       )}
     </div>
+    </EditorChromeContext.Provider>
   );
 }

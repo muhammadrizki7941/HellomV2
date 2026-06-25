@@ -519,6 +519,37 @@ export function requestWithdrawal(payload: Record<string, unknown>) {
   });
 }
 
+// ─── Payout / KYC profile (KTP + bank) ───
+
+export function getPayoutProfile() {
+  return apiRequest<Record<string, unknown>>('/payout-profile');
+}
+
+export function submitPayoutProfile(formData: FormData) {
+  return apiRequest<Record<string, unknown>>('/payout-profile', {
+    method: 'POST',
+    body: formData,
+  });
+}
+
+export function getAdminPayoutProfiles(status: string = 'pending') {
+  return apiRequest<Record<string, unknown>>(`/admin/payout-profiles?status=${encodeURIComponent(status)}`);
+}
+
+export function approvePayoutProfile(profileId: number, notes?: string) {
+  return apiRequest<Record<string, unknown>>(`/admin/payout-profiles/${profileId}/approve`, {
+    method: 'POST',
+    body: { notes },
+  });
+}
+
+export function rejectPayoutProfile(profileId: number, notes: string) {
+  return apiRequest<Record<string, unknown>>(`/admin/payout-profiles/${profileId}/reject`, {
+    method: 'POST',
+    body: { notes },
+  });
+}
+
 export function getAutoRenewPreview(query: { days?: number; limit?: number; include_overdue?: boolean } = {}) {
   const params = new URLSearchParams();
   if (query.days) params.set('days', String(query.days));
@@ -856,6 +887,27 @@ export function submitLandingCustomer(landingPageId: string | number, payload: R
     method: 'POST',
     body: payload,
   });
+}
+
+/** Public buyer checkout for a landing-page product/PDF — returns { payment_url }. */
+export function createLandingOrder(organizationSlug: string, payload: {
+  block_id: string | number;
+  buyer_name: string;
+  buyer_email: string;
+  buyer_phone?: string;
+}) {
+  return publicApiRequest<Record<string, unknown>>(`/public/landingpage/${encodeURIComponent(organizationSlug)}/orders`, {
+    method: 'POST',
+    body: payload,
+  });
+}
+
+export function getLandingOrderDownload(token: string) {
+  return publicApiRequest<Record<string, unknown>>(`/public/landingpage/orders/${encodeURIComponent(token)}/download`);
+}
+
+export function getLandingOrderStatus(reference: string) {
+  return publicApiRequest<Record<string, unknown>>(`/public/landingpage/orders/${encodeURIComponent(reference)}/status`);
 }
 
 export function getLandingPageCustomers(pageId?: string | number) {

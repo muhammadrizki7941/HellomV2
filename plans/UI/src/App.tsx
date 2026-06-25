@@ -90,6 +90,11 @@ export default function App() {
       <Route path="/insights" element={<InsightsPage />} />
       <Route path="/insights/:slug" element={<InsightDetailPage />} />
 
+      {/* Short public landing page URL: domain/<org-slug>. Kept as a single-segment
+          dynamic route so static routes above (login, produk, dashboard, ...) still win.
+          The longer /p/landingpage/:organizationSlug route below stays for old links. */}
+      <Route path="/:organizationSlug" element={<PublicPage />} />
+
       {/* Member Routes (Protected) */}
       <Route path="/dashboard" element={<DashboardLayout />}>
         <Route index element={<DashboardHome />} />

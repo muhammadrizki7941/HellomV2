@@ -12,6 +12,7 @@ use App\Models\ProductPurchase;
 use App\Models\Subscription;
 use App\Models\WalletWithdrawalRequest;
 use App\Mail\HellomCheckoutStatusMail;
+use App\Services\Hellom\LandingSaleService;
 use App\Services\Hellom\PlatformMailService;
 use App\Services\Hellom\PosProvisioningService;
 use App\Services\Hellom\SubscriptionCheckoutActivationService;
@@ -92,7 +93,25 @@ class XenditWebhookController extends BaseApiController
                 $this->handleProductPurchaseEvent($payload, $metadata, $eventType);
             }
 
-            if ($organizationId > 0 && $this->isIncomingPaymentEvent($eventType) && $purpose !== 'subscription_checkout') {
+            if ($purpose === 'landing_sale') {
+                $reference = (string) (
+                    $metadata['reference_id']
+                    ?? $payload['reference_id']
+                    ?? data_get($payload, 'data.reference_id')
+                    ?? data_get($payload, 'data.external_id')
+                    ?? ''
+                );
+                if ($this->isIncomingPaymentEvent($eventType)) {
+                    app(LandingSaleService::class)->settlePaidOrderByReference($reference, [
+                        'provider' => 'xendit',
+                        'gateway_ref' => (string) ($payload['payment_id'] ?? data_get($payload, 'data.payment_id') ?? data_get($payload, 'id') ?? ''),
+                    ]);
+                } elseif ($this->isSubscriptionFailedEvent($eventType)) {
+                    app(LandingSaleService::class)->markFailedByReference($reference);
+                }
+            }
+
+            if ($organizationId > 0 && $this->isIncomingPaymentEvent($eventType) && !in_array($purpose, ['subscription_checkout', 'landing_sale'], true)) {
                 $amount = (int) ($payload['amount'] ?? data_get($payload, 'data.amount', 0));
                 $externalRef = (string) (
                     $payload['external_id']

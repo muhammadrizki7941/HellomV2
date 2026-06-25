@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\V1\Hellom\BillingController;
 use App\Http\Controllers\Api\V1\Hellom\AdminMailController;
 use App\Http\Controllers\Api\V1\Hellom\FileAssetController;
 use App\Http\Controllers\Api\V1\Hellom\LandingBuilderController;
+use App\Http\Controllers\Api\V1\Hellom\LandingSaleController;
 use App\Http\Controllers\Api\V1\Hellom\LandingContentController;
 use App\Http\Controllers\Api\V1\Hellom\InvoiceController;
 use App\Http\Controllers\Api\V1\Hellom\MemberDashboardController;
@@ -32,6 +33,7 @@ use App\Http\Controllers\Api\V1\Hellom\ProductPurchaseSettingController;
 use App\Http\Controllers\Api\V1\Hellom\ShowcaseController;
 use App\Http\Controllers\Api\V1\Hellom\SuperAdminController;
 use App\Http\Controllers\Api\V1\Hellom\WalletController;
+use App\Http\Controllers\Api\V1\Hellom\PayoutProfileController;
 use App\Http\Controllers\Api\V1\Hellom\DokuWebhookController;
 use App\Http\Controllers\Api\V1\Hellom\IpaymuWebhookController;
 use App\Http\Controllers\Api\V1\Hellom\XenditWebhookController;
@@ -56,6 +58,15 @@ Route::prefix('v1/hellom')->name('api.v1.hellom.')->group(function () {
         ->name('public.landing.show');
     Route::post('/public/landing/{landingPageId}/customers', [LandingBuilderController::class, 'publicStoreCustomer'])
         ->name('public.landing.customers.store');
+    // Public buyer checkout for landing-page product/PDF sales (gateway only)
+    Route::post('/public/landingpage/{organizationSlug}/orders', [BillingController::class, 'publicLandingCheckout'])
+        ->name('public.landing.orders.checkout');
+    Route::get('/public/landingpage/orders/{reference}/status', [LandingSaleController::class, 'status'])
+        ->name('public.landing.orders.status');
+    Route::get('/public/landingpage/orders/{token}/download', [LandingSaleController::class, 'download'])
+        ->name('public.landing.orders.download');
+    Route::get('/public/landingpage/orders/{reference}/qr', [LandingSaleController::class, 'qr'])
+        ->name('public.landing.orders.qr');
     Route::get('/public/showcase/portfolios', [ShowcaseController::class, 'publicPortfolios'])->name('public.showcase.portfolios');
     Route::get('/public/showcase/clients', [ShowcaseController::class, 'publicClients'])->name('public.showcase.clients');
     Route::get('/public/landing-content', [LandingContentController::class, 'publicContent'])->name('public.landing_content');
@@ -128,6 +139,16 @@ Route::prefix('v1/hellom')->name('api.v1.hellom.')->group(function () {
         Route::post('/wallet/withdrawals/{withdrawalId}/mark-paid', [WalletController::class, 'markWithdrawalPaid'])->name('wallet.withdrawals.mark_paid');
         Route::post('/wallet/withdrawals/{withdrawalId}/mark-failed', [WalletController::class, 'markWithdrawalFailed'])->name('wallet.withdrawals.mark_failed');
         Route::post('/wallet/withdrawals/{withdrawalId}/cancel', [WalletController::class, 'cancelWithdrawal'])->name('wallet.withdrawals.cancel');
+
+        // Payout / KYC profile (KTP + bank) required before withdrawal
+        Route::get('/payout-profile', [PayoutProfileController::class, 'show'])->name('payout_profile.show');
+        Route::post('/payout-profile', [PayoutProfileController::class, 'submit'])->name('payout_profile.submit');
+
+        // Super-admin KYC review queue
+        Route::get('/admin/payout-profiles', [PayoutProfileController::class, 'adminIndex'])->name('admin.payout_profiles.index');
+        Route::get('/admin/payout-profiles/{profileId}/ktp', [PayoutProfileController::class, 'ktpImage'])->name('admin.payout_profiles.ktp');
+        Route::post('/admin/payout-profiles/{profileId}/approve', [PayoutProfileController::class, 'approve'])->name('admin.payout_profiles.approve');
+        Route::post('/admin/payout-profiles/{profileId}/reject', [PayoutProfileController::class, 'reject'])->name('admin.payout_profiles.reject');
 
         // Platform finance (super admin only)
         Route::get('/platform/finance-summary', [WalletController::class, 'platformFinanceSummary'])->name('platform.finance_summary');

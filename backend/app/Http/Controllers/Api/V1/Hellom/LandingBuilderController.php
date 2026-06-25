@@ -1389,6 +1389,7 @@ class LandingBuilderController extends BaseApiController
         return [
             'id' => $page->id,
             'organization_id' => (int) $page->organization_id,
+            'organization_slug' => $organizationSlug !== '' ? $organizationSlug : null,
             'title' => (string) $page->title,
             'slug' => (string) $page->slug,
             'status' => (string) $page->status,

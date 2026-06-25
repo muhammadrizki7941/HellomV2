@@ -7,7 +7,7 @@ import {
   Quote, Check, ChevronDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { checkoutConfirmMock, checkoutIntentMock, getPublicLandingByDomain, getPublicLandingPage, getPublicLandingPageByOrganization, getToken, submitLandingCustomer } from '@/lib/hellomApi';
+import { createLandingOrder, getLandingOrderStatus, getPublicLandingByDomain, getPublicLandingPage, getPublicLandingPageByOrganization, submitLandingCustomer } from '@/lib/hellomApi';
 import { THEMES } from '@/pages/apps/landing-builder/constants';
 import { BLOCK_TYPES, BlockType } from '@/pages/apps/landing-builder/types';
 
@@ -99,11 +99,8 @@ const RenderFeatures = ({ content, styles }: { content: any, styles?: any }) => 
   </section>
 );
 
-const RenderProduct = ({ content, styles, onBuy }: { content: any, styles?: any, onBuy: (product: any) => void }) => (
-  (() => {
-    const gatewayConfigMissing = content.paymentType === 'gateway' && (!content.appSlug || !content.planSlug);
-    return (
-  <section 
+const RenderProduct = ({ content, styles, blockId, onBuy }: { content: any, styles?: any, blockId: string, onBuy: (product: any) => void }) => (
+  <section
     className="py-20 px-6"
     style={{ backgroundColor: styles?.backgroundColor || '#f9fafb', color: styles?.textColor }}
   >
@@ -119,30 +116,18 @@ const RenderProduct = ({ content, styles, onBuy }: { content: any, styles?: any,
         <h2 className="text-3xl font-bold mb-2 text-zinc-900">{content.name}</h2>
         <p className="text-2xl font-bold mb-6" style={{ color: styles?.accentColor }}>{formatPrice(content.price)}</p>
         <p className="text-zinc-600 mb-8 leading-relaxed">{content.description}</p>
-        
-        <button 
-          onClick={() => onBuy(content)}
-          disabled={gatewayConfigMissing}
-          className="w-full py-4 bg-black text-white font-bold rounded-xl hover:bg-zinc-800 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-black"
+
+        <button
+          onClick={() => onBuy({ blockId, name: content.name, price: content.price })}
+          className="w-full py-4 bg-black text-white font-bold rounded-xl hover:bg-zinc-800 transition-all flex items-center justify-center gap-2"
           style={{ backgroundColor: styles?.buttonColor, color: styles?.buttonTextColor }}
         >
-          {gatewayConfigMissing
-            ? 'Checkout Belum Tersedia'
-            : content.paymentType === 'whatsapp'
-              ? 'Buy via WhatsApp'
-              : 'Buy Now'} <ArrowRight className="w-5 h-5" />
+          {content.buttonText || 'Beli Sekarang'} <ArrowRight className="w-5 h-5" />
         </button>
-        {gatewayConfigMissing && (
-          <p className="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-            Checkout gateway belum dikonfigurasi untuk produk ini.
-          </p>
-        )}
-        <p className="text-xs text-center text-zinc-400 mt-4">Secure payment powered by Hellom</p>
+        <p className="text-xs text-center text-zinc-400 mt-4">Pembayaran aman diproses oleh Hellom</p>
       </div>
     </div>
   </section>
-    );
-  })()
 );
 
 const RenderContent = ({ content, styles }: { content: any, styles?: any }) => (
@@ -216,7 +201,7 @@ const RenderImage = ({ content, styles }: { content: any, styles?: any }) => (
   </section>
 );
 
-const RenderPdf = ({ content, styles, onBuy }: { content: any, styles?: any, onBuy: (product: any) => void }) => (
+const RenderPdf = ({ content, styles, blockId, onBuy }: { content: any, styles?: any, blockId: string, onBuy: (product: any) => void }) => (
   <section className="py-16 px-6" style={{ backgroundColor: styles?.backgroundColor || '#f8fafc', color: styles?.textColor }}>
     <div className="mx-auto flex max-w-2xl flex-col gap-5 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm md:flex-row md:items-center">
       <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-zinc-100 text-zinc-700">
@@ -230,14 +215,7 @@ const RenderPdf = ({ content, styles, onBuy }: { content: any, styles?: any, onB
       </div>
       {content.accessType === 'paid' ? (
         <button
-          onClick={() => onBuy({
-            ...content,
-            name: content.title || 'Katalog Produk',
-            description: content.description,
-            paymentType: content.paymentType || 'gateway',
-            buttonText: content.paidButtonText || 'Beli Katalog',
-            isPdf: true,
-          })}
+          onClick={() => onBuy({ blockId, name: content.title || 'Katalog Produk', price: content.price })}
           className="inline-flex items-center justify-center gap-2 rounded-xl bg-black px-4 py-3 text-sm font-bold text-white"
         >
           <Upload className="h-4 w-4 rotate-180" /> {content.paidButtonText || 'Beli Katalog'}
@@ -587,8 +565,13 @@ export default function PublicPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showCheckout, setShowCheckout] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
-  const [paymentStatus, setPaymentStatus] = useState<'idle' | 'processing' | 'success'>('idle');
+  const [checkoutSubmitting, setCheckoutSubmitting] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [checkoutOrgSlug, setCheckoutOrgSlug] = useState<string>('');
+  const [buyerForm, setBuyerForm] = useState({ name: '', email: '', phone: '' });
+  // In-app QRIS flow (iPaymu, when only QRIS is enabled)
+  const [qrCheckout, setQrCheckout] = useState<{ reference: string; qrImageUrl: string } | null>(null);
+  const [qrPaid, setQrPaid] = useState(false);
 
   // Load published page from backend public endpoint
   useEffect(() => {
@@ -605,7 +588,7 @@ export default function PublicPage() {
             : null;
 
         if (!response) {
-          setLoadError('URL public tidak lengkap. Gunakan /p/landingpage/{organizationSlug}, /p/{organizationSlug}/{pageSlug}, atau /p/domain/{domain}.');
+          setLoadError('URL public tidak lengkap. Gunakan /{organizationSlug}, /p/{organizationSlug}/{pageSlug}, atau /p/domain/{domain}.');
           setBlocks([]);
           setLoading(false);
           return;
@@ -613,9 +596,11 @@ export default function PublicPage() {
 
         const landingPayload = response as {
           blocks?: Array<Record<string, any>>;
-          page?: { id?: number; content?: Record<string, unknown> | null };
+          page?: { id?: number; organization_slug?: string | null; content?: Record<string, unknown> | null };
           seo?: { title?: string };
         };
+
+        setCheckoutOrgSlug(String(landingPayload.page?.organization_slug || organizationSlug || ''));
 
         const mappedBlocks: Block[] = (landingPayload.blocks || []).map((block) => ({
           id: String(block.id),
@@ -651,61 +636,74 @@ export default function PublicPage() {
   }, [organizationSlug, pageSlug, domain]);
 
   const handleBuy = (product: any) => {
-    if (product.paymentType === 'whatsapp') {
-      const phone = String(product.whatsappNumber || pageSettings.whatsappNumber || '').replace(/\D/g, '');
-      const text = product.whatsappMessage || `Halo, saya tertarik dengan ${product.name} (${formatPrice(product.price)}).`;
-      if (phone) {
-        window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank');
-      } else {
-        setPaymentError('Nomor WhatsApp organisasi belum diatur.');
-      }
-    } else {
-      // Gateway Logic
-      setSelectedProduct(product);
-      setPaymentError(null);
-      setPaymentStatus('idle');
-      setShowCheckout(true);
-    }
+    // All product/PDF purchases go through the secure gateway only.
+    setSelectedProduct(product);
+    setPaymentError(null);
+    setCheckoutSubmitting(false);
+    setShowCheckout(true);
   };
 
-  const processPayment = async () => {
-    const token = getToken();
-    if (!token) {
-      setPaymentError('Untuk checkout online, silakan login dulu ke dashboard Hellom.');
+  const submitBuyerCheckout = async () => {
+    if (!selectedProduct?.blockId) {
+      setPaymentError('Produk tidak valid.');
+      return;
+    }
+    if (!checkoutOrgSlug) {
+      setPaymentError('Halaman ini belum siap menerima pembayaran.');
+      return;
+    }
+    if (!buyerForm.name.trim() || !buyerForm.email.trim()) {
+      setPaymentError('Nama dan email wajib diisi.');
       return;
     }
 
-    const appSlug = String(selectedProduct?.appSlug || selectedProduct?.app_slug || '').trim();
-    const planSlug = String(selectedProduct?.planSlug || selectedProduct?.plan_slug || '').trim();
-
-    if (!appSlug || !planSlug) {
-      setPaymentError('Produk ini belum terhubung ke app/plan checkout. Tambahkan appSlug dan planSlug di blok produk.');
-      return;
-    }
-
-    setPaymentStatus('processing');
+    setCheckoutSubmitting(true);
     setPaymentError(null);
-
     try {
-      const intent = await checkoutIntentMock({
-        app_slug: appSlug,
-        plan_slug: planSlug,
-      });
+      const res = await createLandingOrder(checkoutOrgSlug, {
+        block_id: selectedProduct.blockId,
+        buyer_name: buyerForm.name.trim(),
+        buyer_email: buyerForm.email.trim(),
+        buyer_phone: buyerForm.phone.trim() || undefined,
+      }) as { payment_url?: string | null; mode?: string; reference_id?: string; qr_image_url?: string };
 
-      const checkoutIntent = intent as { checkout_intent?: { intent_token?: string } };
-      await checkoutConfirmMock({
-        intent_token: checkoutIntent.checkout_intent?.intent_token,
-      });
+      // QRIS-only (iPaymu direct): show a downloadable QR in-app and poll for payment.
+      if (res?.mode === 'qris' && res.reference_id) {
+        setQrCheckout({ reference: res.reference_id, qrImageUrl: String(res.qr_image_url || '') });
+        setQrPaid(false);
+        setCheckoutSubmitting(false);
+        return;
+      }
 
-      setPaymentStatus('success');
+      if (res?.payment_url) {
+        window.location.href = res.payment_url;
+        return;
+      }
+      setPaymentError('Gagal membuat halaman pembayaran. Coba lagi.');
+      setCheckoutSubmitting(false);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Checkout gagal diproses.';
       setPaymentError(message);
-      setPaymentStatus('idle');
+      setCheckoutSubmitting(false);
     }
   };
 
-  const loginPath = window.location.pathname.startsWith('/hellom') ? '/hellom/login' : '/login';
+  // Poll order status while a QRIS payment is pending.
+  useEffect(() => {
+    if (!qrCheckout || qrPaid) return;
+    const timer = setInterval(async () => {
+      try {
+        const s = await getLandingOrderStatus(qrCheckout.reference) as { status?: string };
+        if (s?.status === 'paid') {
+          setQrPaid(true);
+          clearInterval(timer);
+        }
+      } catch {
+        /* keep polling */
+      }
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [qrCheckout, qrPaid]);
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin" /></div>;
 
@@ -729,14 +727,14 @@ export default function PublicPage() {
         switch (block.type) {
           case 'hero': return <RenderHero key={block.id} content={block.content} styles={mergedStyles} />;
           case 'features': return <RenderFeatures key={block.id} content={block.content} styles={mergedStyles} />;
-          case 'product': return <RenderProduct key={block.id} content={block.content} styles={mergedStyles} onBuy={handleBuy} />;
+          case 'product': return <RenderProduct key={block.id} content={block.content} styles={mergedStyles} blockId={String(block.id)} onBuy={handleBuy} />;
           case 'content': return <RenderContent key={block.id} content={block.content} styles={mergedStyles} />;
           case 'cta': return <RenderCTA key={block.id} content={block.content} styles={mergedStyles} pageSettings={pageSettings} />;
           case 'banner': return <RenderBanner key={block.id} content={block.content} styles={mergedStyles} />;
           case 'video': return <RenderVideo key={block.id} content={block.content} styles={mergedStyles} />;
           case 'text': return <RenderText key={block.id} content={block.content} styles={mergedStyles} />;
           case 'image': return <RenderImage key={block.id} content={block.content} styles={mergedStyles} />;
-          case 'pdf': return <RenderPdf key={block.id} content={block.content} styles={mergedStyles} onBuy={handleBuy} />;
+          case 'pdf': return <RenderPdf key={block.id} content={block.content} styles={mergedStyles} blockId={String(block.id)} onBuy={handleBuy} />;
           case 'social': return <RenderSocial key={block.id} content={block.content} styles={mergedStyles} />;
           case 'form': return <RenderForm key={block.id} block={block} pageId={pageId} styles={mergedStyles} />;
           case 'button': return <RenderButton key={block.id} content={block.content} styles={mergedStyles} pageSettings={pageSettings} />;
@@ -779,73 +777,101 @@ export default function PublicPage() {
               initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
               className="bg-white rounded-2xl max-w-md w-full overflow-hidden shadow-2xl"
             >
-              {paymentStatus === 'success' ? (
-                <div className="p-8 text-center">
-                  <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <CheckCircle className="w-8 h-8" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-zinc-900 mb-2">Payment Successful!</h3>
-                  <p className="text-zinc-500 mb-6">Thank you for your purchase. Checkout sudah diproses ke backend Hellom.</p>
-                  <button 
-                    onClick={() => { setShowCheckout(false); setPaymentStatus('idle'); setPaymentError(null); }}
-                    className="w-full py-3 bg-black text-white font-bold rounded-xl"
-                  >
-                    Close
-                  </button>
+              <div className="p-6">
+                <div className="flex justify-between items-center mb-5">
+                  <h3 className="text-xl font-bold text-zinc-900">{qrCheckout ? (qrPaid ? 'Pembayaran Berhasil' : 'Scan QRIS') : 'Checkout'}</h3>
+                  <button onClick={() => { setShowCheckout(false); setQrCheckout(null); setQrPaid(false); }}><X className="w-5 h-5 text-zinc-400" /></button>
                 </div>
-              ) : (
-                <div className="p-6">
-                  <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-xl font-bold text-zinc-900">Checkout</h3>
-                    <button onClick={() => setShowCheckout(false)}><X className="w-5 h-5 text-zinc-400" /></button>
-                  </div>
-                  
-                  <div className="mb-6 p-4 bg-zinc-50 rounded-xl border border-zinc-100">
-                    <p className="text-sm text-zinc-500 mb-1">Product</p>
-                    <p className="font-bold text-zinc-900">{selectedProduct?.name}</p>
-                    <div className="my-2 border-t border-zinc-200" />
-                    <div className="flex justify-between items-center">
+
+                <div className="mb-5 p-4 bg-zinc-50 rounded-xl border border-zinc-100">
+                  <p className="text-sm text-zinc-500 mb-1">Produk</p>
+                  <p className="font-bold text-zinc-900">{selectedProduct?.name}</p>
+                  <div className="my-2 border-t border-zinc-200" />
+                  <div className="flex justify-between items-center">
                     <p className="text-sm text-zinc-500">Total</p>
-                      <p className="text-xl font-bold text-zinc-900">{formatPrice(selectedProduct?.price)}</p>
-                    </div>
+                    <p className="text-xl font-bold text-zinc-900">{formatPrice(selectedProduct?.price)}</p>
                   </div>
-
-                  {paymentError && (
-                    <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                      {paymentError}
-                    </div>
-                  )}
-
-                  <div className="space-y-3 mb-6">
-                    <p className="text-sm font-bold text-zinc-700">Select Payment Method</p>
-                    <div className="p-3 border border-yellow-400 bg-yellow-50 rounded-lg flex items-center gap-3 cursor-pointer">
-                      <div className="w-4 h-4 rounded-full bg-yellow-400 border border-yellow-500" />
-                      <span className="font-medium text-zinc-900">QRIS (Instant)</span>
-                    </div>
-                    <div className="p-3 border border-zinc-200 rounded-lg flex items-center gap-3 opacity-50 cursor-not-allowed">
-                      <div className="w-4 h-4 rounded-full border border-zinc-300" />
-                      <span className="font-medium text-zinc-500">Virtual Account</span>
-                    </div>
-                  </div>
-
-                  {!getToken() && (
-                    <Link
-                      to={loginPath}
-                      className="mb-4 inline-flex w-full items-center justify-center rounded-xl border border-zinc-200 py-3 text-sm font-semibold text-zinc-700 hover:bg-zinc-50"
-                    >
-                      Login untuk Checkout
-                    </Link>
-                  )}
-
-                  <button 
-                    onClick={processPayment}
-                    disabled={paymentStatus === 'processing'}
-                    className="w-full py-3 bg-black text-white font-bold rounded-xl hover:bg-zinc-800 transition-colors flex items-center justify-center gap-2 disabled:opacity-70"
-                  >
-                    {paymentStatus === 'processing' ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Pay Now'}
-                  </button>
                 </div>
-              )}
+
+                {paymentError && (
+                  <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                    {paymentError}
+                  </div>
+                )}
+
+                {qrCheckout ? (
+                  qrPaid ? (
+                    <div className="text-center py-4">
+                      <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <CheckCircle className="w-8 h-8" />
+                      </div>
+                      <p className="font-bold text-zinc-900 text-lg">Pembayaran diterima 🎉</p>
+                      <p className="mt-1 text-sm text-zinc-500">Bukti & akses produk dikirim ke email kamu.</p>
+                      <button
+                        onClick={() => { setShowCheckout(false); setQrCheckout(null); setQrPaid(false); }}
+                        className="mt-5 w-full py-3 bg-black text-white font-bold rounded-xl"
+                      >
+                        Selesai
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="text-center">
+                      <p className="text-sm text-zinc-600 mb-3">Scan QR berikut dengan aplikasi e-wallet / m-banking apa pun (QRIS).</p>
+                      <div className="rounded-2xl border border-zinc-200 p-3 inline-block bg-white">
+                        {qrCheckout.qrImageUrl
+                          ? <img src={qrCheckout.qrImageUrl} alt="QRIS" className="w-56 h-56 object-contain" />
+                          : <div className="w-56 h-56 flex items-center justify-center text-zinc-400 text-sm">QR tidak tersedia</div>}
+                      </div>
+                      <div className="mt-4 flex items-center justify-center gap-2 text-sm text-zinc-500">
+                        <Loader2 className="w-4 h-4 animate-spin" /> Menunggu pembayaran...
+                      </div>
+                      <a
+                        href={`${qrCheckout.qrImageUrl}?download=1`}
+                        className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-200 py-3 text-sm font-semibold text-zinc-700 hover:bg-zinc-50"
+                      >
+                        <Upload className="w-4 h-4 rotate-180" /> Download Gambar QR
+                      </a>
+                      <p className="mt-3 text-xs text-zinc-400">Jangan tutup halaman ini sampai pembayaran selesai.</p>
+                    </div>
+                  )
+                ) : (
+                  <>
+                    <div className="space-y-3 mb-5">
+                      <p className="text-sm font-bold text-zinc-700">Data Pembeli</p>
+                      <input
+                        type="text"
+                        placeholder="Nama lengkap"
+                        value={buyerForm.name}
+                        onChange={(e) => setBuyerForm((f) => ({ ...f, name: e.target.value }))}
+                        className="w-full rounded-xl border border-zinc-300 px-3 py-2.5 text-sm outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-100"
+                      />
+                      <input
+                        type="email"
+                        placeholder="Email (untuk bukti & akses produk)"
+                        value={buyerForm.email}
+                        onChange={(e) => setBuyerForm((f) => ({ ...f, email: e.target.value }))}
+                        className="w-full rounded-xl border border-zinc-300 px-3 py-2.5 text-sm outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-100"
+                      />
+                      <input
+                        type="tel"
+                        placeholder="Nomor HP (opsional)"
+                        value={buyerForm.phone}
+                        onChange={(e) => setBuyerForm((f) => ({ ...f, phone: e.target.value }))}
+                        className="w-full rounded-xl border border-zinc-300 px-3 py-2.5 text-sm outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-100"
+                      />
+                    </div>
+
+                    <button
+                      onClick={submitBuyerCheckout}
+                      disabled={checkoutSubmitting}
+                      className="w-full py-3 bg-black text-white font-bold rounded-xl hover:bg-zinc-800 transition-colors flex items-center justify-center gap-2 disabled:opacity-70"
+                    >
+                      {checkoutSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Lanjut ke Pembayaran'}
+                    </button>
+                    <p className="mt-3 text-xs text-center text-zinc-400">Pembayaran aman diproses oleh gateway resmi Hellom</p>
+                  </>
+                )}
+              </div>
             </motion.div>
           </motion.div>
         )}

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { nanoid } from 'nanoid';
+import { Copy, Check, ExternalLink, CheckCircle2 } from 'lucide-react';
 import { arrayMove } from '@dnd-kit/sortable';
+import { cn } from '@/lib/utils';
 import { THEMES, defaultContent } from './constants';
 import { Block, BlockType, BlockStyles, BLOCK_TYPES } from './types';
 import { LanguageProvider } from './i18n';
@@ -228,6 +230,9 @@ export default function LandingBuilder() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveInfo, setSaveInfo] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // Full public URL after a successful publish, for the share/copy bar.
+  const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
   const [checkoutDefault, setCheckoutDefault] = useState<CheckoutDefault | null>(null);
   
   // AI Generator State
@@ -478,6 +483,8 @@ export default function LandingBuilder() {
     setIsSaving(true);
     setSaveError(null);
     setSaveInfo(null);
+    setPublishedUrl(null);
+    setLinkCopied(false);
     try {
       let pageId = currentPageId;
       let pageSlug = currentPageSlug;
@@ -526,10 +533,10 @@ export default function LandingBuilder() {
       if (publish) {
         await publishLandingPage(pageId);
         const orgSlug = getSessionUser<{ current_organization?: { slug?: string } }>()?.current_organization?.slug;
-        const publicPath = orgSlug ? `/p/landingpage/${orgSlug}` : `/p/landingpage/${pageSlug}`;
-        setSaveInfo(`Publish berhasil. Akses halaman di ${publicPath}`);
+        const publicPath = orgSlug ? `/${orgSlug}` : `/${pageSlug}`;
+        setPublishedUrl(`${window.location.origin}${publicPath}`);
       } else {
-        setSaveInfo('Draft berhasil disimpan ke backend.');
+        setSaveInfo('Draft berhasil disimpan.');
       }
     } catch (syncError) {
       const message = syncError instanceof Error ? syncError.message : 'Gagal sync landing editor';
@@ -537,6 +544,26 @@ export default function LandingBuilder() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const copyPublishedLink = async () => {
+    if (!publishedUrl) return;
+    try {
+      await navigator.clipboard.writeText(publishedUrl);
+    } catch {
+      // Fallback for non-secure contexts / older browsers.
+      const textarea = document.createElement('textarea');
+      textarea.value = publishedUrl;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      try { document.execCommand('copy'); } catch { /* ignore */ }
+      document.body.removeChild(textarea);
+    }
+    setLinkCopied(true);
+    window.setTimeout(() => setLinkCopied(false), 2000);
   };
 
   const handleSave = () => {
@@ -555,6 +582,43 @@ export default function LandingBuilder() {
       {saveInfo && (
         <div className="mb-3 p-3 rounded-lg bg-green-50 border border-green-100 text-sm text-green-700">{saveInfo}</div>
       )}
+      {publishedUrl && (
+        <div className="mb-3 p-3 rounded-xl bg-green-50 border border-green-100">
+          <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-green-700">
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            Publish berhasil! Bagikan link ini ke sosmed kamu:
+          </p>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <input
+              readOnly
+              value={publishedUrl}
+              onFocus={(e) => e.currentTarget.select()}
+              onClick={(e) => e.currentTarget.select()}
+              className="min-w-0 flex-1 rounded-lg border border-green-200 bg-white px-3 py-2 text-sm text-zinc-700 outline-none focus:border-green-400"
+            />
+            <div className="flex shrink-0 gap-2">
+              <button
+                onClick={() => void copyPublishedLink()}
+                className={cn(
+                  'inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition-colors sm:flex-none',
+                  linkCopied ? 'bg-green-600 text-white' : 'bg-black text-white hover:bg-zinc-800',
+                )}
+              >
+                {linkCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                {linkCopied ? 'Tersalin!' : 'Salin Link'}
+              </button>
+              <a
+                href={publishedUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 sm:flex-none"
+              >
+                <ExternalLink className="w-4 h-4" /> Buka
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
       {isMobile ? (
         <MobileEditor 
           blocks={blocks}
@@ -565,6 +629,7 @@ export default function LandingBuilder() {
           updateBlockContent={updateBlockContent}
           updateBlockStyles={updateBlockStyles}
           moveBlock={moveBlock}
+          reorderBlocks={reorderBlocks}
           deleteBlock={deleteBlock}
           handleFileUpload={handleFileUpload}
           isPreview={isPreview}

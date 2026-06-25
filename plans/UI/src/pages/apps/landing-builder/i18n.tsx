@@ -34,6 +34,24 @@ const DICT: Record<string, Entry> = {
     en: 'Tap the "+ Add Block" button below to start',
   },
 
+  // --- Mobile (Lynk-style) manager ---
+  'mobile.addNewBlock': { id: 'Tambah Block Baru', en: 'Add New Block' },
+  'mobile.blockList': { id: 'Daftar Block', en: 'Block List' },
+  'mobile.pagePreview': { id: 'Pratinjau Halaman', en: 'Page Preview' },
+  'mobile.previewHint': { id: 'Tampilan langsung halaman kamu', en: 'Live view of your page' },
+  'mobile.emptyList': {
+    id: 'Belum ada block. Tap "Tambah Block Baru" untuk mulai.',
+    en: 'No blocks yet. Tap "Add New Block" to start.',
+  },
+  'mobile.tapToEdit': { id: 'Tap untuk edit', en: 'Tap to edit' },
+  'mobile.dragHint': { id: 'Tahan & geser untuk pindah posisi', en: 'Press & drag to reorder' },
+  'mobile.moveUp': { id: 'Naikkan', en: 'Move up' },
+  'mobile.moveDown': { id: 'Turunkan', en: 'Move down' },
+  'mobile.delete': { id: 'Hapus', en: 'Delete' },
+  'mobile.fullPreview': { id: 'Pratinjau penuh', en: 'Full preview' },
+  'mobile.hideChrome': { id: 'Sembunyikan menu atas (layar penuh)', en: 'Hide top menu (full screen)' },
+  'mobile.showChrome': { id: 'Tampilkan menu atas', en: 'Show top menu' },
+
   // --- Toolbox ---
   'toolbox.components': { id: 'Komponen', en: 'Components' },
   'toolbox.structure': { id: 'Struktur', en: 'Structure' },
@@ -104,6 +122,15 @@ const DICT: Record<string, Entry> = {
   'pp.product.price': { id: 'Harga', en: 'Price' },
   'pp.product.desc': { id: 'Deskripsi', en: 'Description' },
   'pp.product.payment': { id: 'Aksi Pembayaran', en: 'Payment Action' },
+  'pp.product.gatewayNote': {
+    id: 'Pembayaran diproses lewat gateway resmi. Dana hasil penjualan (dikurangi komisi) otomatis masuk ke Saldo Penjualan kamu — bukan WhatsApp/link langsung, demi keamanan pembeli.',
+    en: 'Payments go through the official gateway. Sale proceeds (minus commission) land in your Sales Balance automatically — no WhatsApp/direct links, for buyer safety.',
+  },
+  'pp.product.fileUrl': { id: 'Link File Digital', en: 'Digital File Link' },
+  'pp.product.fileUrlHint': {
+    id: 'Opsional. Jika diisi, pembeli mendapat link unduhan otomatis setelah pembayaran berhasil.',
+    en: 'Optional. If set, buyers get an automatic download link after successful payment.',
+  },
   'pp.product.linkUrl': { id: 'URL Link Eksternal', en: 'External Link URL' },
   'pp.video.url': { id: 'URL Embed Video', en: 'Video Embed URL' },
   'pp.video.hint': { id: 'Gunakan link embed YouTube/Vimeo.', en: 'Use a YouTube/Vimeo embed link.' },

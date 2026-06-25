@@ -12,6 +12,7 @@ use App\Models\ProductPurchase;
 use App\Models\Subscription;
 use App\Mail\HellomCheckoutStatusMail;
 use App\Services\Hellom\IpaymuSettingsService;
+use App\Services\Hellom\LandingSaleService;
 use App\Services\Hellom\PlatformMailService;
 use App\Services\Hellom\PosProvisioningService;
 use App\Services\Hellom\SubscriptionCheckoutActivationService;
@@ -103,6 +104,10 @@ class IpaymuWebhookController extends BaseApiController
                 }
             }
 
+            if ((string) $metadata['purpose'] === 'landing_sale') {
+                app(LandingSaleService::class)->markFailedByReference((string) ($metadata['reference_id'] ?? ''));
+            }
+
             $paymentEvent->forceFill([
                 'status' => 'ignored',
                 'error_message' => 'iPaymu notification was not marked successful.',
@@ -130,6 +135,13 @@ class IpaymuWebhookController extends BaseApiController
                     $this->notificationService->notifyConsumerPaymentSuccess($purchase->user, $purchase, $purchase->product->name);
                     $this->notificationService->notifyConsumerAccessActivated($purchase->user, null, $purchase->product->name);
                 }
+            }
+
+            if ((string) $metadata['purpose'] === 'landing_sale') {
+                app(LandingSaleService::class)->settlePaidOrderByReference((string) ($metadata['reference_id'] ?? ''), [
+                    'provider' => 'ipaymu',
+                    'gateway_ref' => (string) ($payload['transaction_id'] ?? $payload['transactionId'] ?? $payload['trx_id'] ?? ''),
+                ]);
             }
 
             $paymentEvent->forceFill([

@@ -49,6 +49,12 @@
         @endforeach
     @endif
 
+    @if (!empty($payload['cta_url']))
+        <p style="margin: 18px 0;">
+            <a href="{{ $payload['cta_url'] }}" style="display:inline-block;background:#18181b;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:700;">{{ $payload['cta_label'] ?? 'Buka' }}</a>
+        </p>
+    @endif
+
     @if (!empty($payload['closing']))
         <p>{{ $payload['closing'] }}</p>
     @endif

@@ -50,3 +50,18 @@ require __DIR__.'/customer.php';
 
 // Marketing landing pages (loaded after root redirect so it doesn't conflict)
 require __DIR__.'/marketing.php';
+
+// Short public landing page URL: domain.com/<org-slug> (e.g. /rudi-bengkel).
+// Registered LAST so every real route above wins first; this only catches a
+// leftover single-segment slug and serves the Hellom SPA, whose router then
+// resolves the slug to the published landing page. The dot-less constraint
+// keeps static files (favicon.ico, robots.txt, ...) from being swallowed.
+Route::get('/{slug}', function () {
+	$spaPath = public_path('hellom/index.html');
+
+	if (!file_exists($spaPath)) {
+		abort(503, 'Hellom UI assets not found. Run: npm --prefix plans/UI run build:laravel');
+	}
+
+	return response()->file($spaPath);
+})->where('slug', '[A-Za-z0-9_-]+')->name('landingpage.short');

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1\Hellom;
 
 use App\Models\Organization;
+use App\Models\OrganizationPayoutProfile;
 use App\Models\OrganizationWallet;
 use App\Models\OrganizationWalletTransaction;
 use App\Models\User;
@@ -186,17 +187,28 @@ class WalletController extends BaseApiController
             return $this->fail('Only owner/admin/super admin can request withdrawal', ['code' => 'INSUFFICIENT_ROLE'], 403);
         }
 
+        // KYC gate: KTP + bank account must be verified by Hellom before any withdrawal.
+        $profile = OrganizationPayoutProfile::query()
+            ->where('organization_id', (int) $organization->id)
+            ->first();
+
+        if (!$profile instanceof OrganizationPayoutProfile || !$profile->isVerified()) {
+            return $this->fail('Verifikasi KTP & rekening belum disetujui. Lengkapi & tunggu verifikasi sebelum menarik saldo.', [
+                'code' => 'KYC_NOT_VERIFIED',
+                'kyc_status' => $profile instanceof OrganizationPayoutProfile ? (string) $profile->status : OrganizationPayoutProfile::STATUS_UNVERIFIED,
+            ], 422);
+        }
+
+        $minWithdrawal = (int) config('payments.wallet.min_withdrawal', 100000);
+
         $validated = $request->validate([
-            'amount' => ['required', 'integer', 'min:10000'],
-            'bank_code' => ['required', 'string', 'max:30'],
-            'account_number' => ['required', 'string', 'max:50'],
-            'account_name' => ['required', 'string', 'max:120'],
+            'amount' => ['required', 'integer', 'min:' . $minWithdrawal],
             'notes' => ['nullable', 'string', 'max:500'],
         ]);
 
         $feeFlat = (int) config('payments.providers.xendit.withdrawal_fee_flat', 5000);
 
-        $result = DB::transaction(function () use ($organization, $user, $validated, $feeFlat) {
+        $result = DB::transaction(function () use ($organization, $user, $validated, $feeFlat, $profile) {
             $wallet = OrganizationWallet::query()
                 ->where('organization_id', (int) $organization->id)
                 ->lockForUpdate()
@@ -241,9 +253,9 @@ class WalletController extends BaseApiController
                 'amount' => $amount,
                 'fee_amount' => $fee,
                 'net_amount' => $net,
-                'bank_code' => (string) $validated['bank_code'],
-                'account_number' => (string) $validated['account_number'],
-                'account_name' => (string) $validated['account_name'],
+                'bank_code' => (string) $profile->bank_code,
+                'account_number' => (string) $profile->account_number,
+                'account_name' => (string) $profile->account_name,
                 'provider' => 'xendit',
                 'external_ref' => $externalRef,
                 'notes' => isset($validated['notes']) ? (string) $validated['notes'] : null,

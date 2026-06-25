@@ -437,36 +437,18 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
               <textarea value={block.content.description} onChange={(e) => patch({ description: e.target.value })} rows={3} className={`${inputClass} resize-none`} />
             </div>
 
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-zinc-700">{t('pp.product.payment')}</label>
-              <select value={block.content.paymentType || 'link'} onChange={(e) => patch({ paymentType: e.target.value })} className={inputClass}>
-                <option value="link">Direct Link (External)</option>
-                <option value="whatsapp">WhatsApp Checkout</option>
-                <option value="gateway">Payment Gateway (Auto)</option>
-              </select>
+            <div className="p-3 bg-blue-50 rounded-lg border border-blue-100 text-xs text-blue-800">
+              {t('pp.product.gatewayNote')}
             </div>
 
-            {block.content.paymentType === 'whatsapp' && (
-              <div className="p-3 bg-green-50 rounded-lg border border-green-100 text-xs text-green-800">
-                Button will open WhatsApp with a pre-filled message. Configure your number in <strong>Payments</strong> settings.
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-zinc-700">{t('pp.product.fileUrl')}</label>
+              <div className="flex items-center gap-2">
+                <LinkIcon className="w-4 h-4 text-zinc-400" />
+                <input type="text" value={block.content.fileUrl || ''} onChange={(e) => patch({ fileUrl: e.target.value })} className={inputClass} placeholder="https://... (opsional)" />
               </div>
-            )}
-
-            {block.content.paymentType === 'gateway' && (
-              <div className="p-3 bg-blue-50 rounded-lg border border-blue-100 text-xs text-blue-800">
-                Button will open the automated checkout modal. Funds will be deposited to your Wallet.
-              </div>
-            )}
-
-            {(!block.content.paymentType || block.content.paymentType === 'link') && (
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-zinc-700">{t('pp.product.linkUrl')}</label>
-                <div className="flex items-center gap-2">
-                  <LinkIcon className="w-4 h-4 text-zinc-400" />
-                  <input type="text" value={block.content.productUrl} onChange={(e) => patch({ productUrl: e.target.value })} className={inputClass} placeholder="https://..." />
-                </div>
-              </div>
-            )}
+              <p className="text-xs text-zinc-500">{t('pp.product.fileUrlHint')}</p>
+            </div>
           </>
         )}
 
