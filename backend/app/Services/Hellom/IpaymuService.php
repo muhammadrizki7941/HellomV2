@@ -18,7 +18,29 @@ class IpaymuService
      */
     public function createRedirectPayment(array $payload): array
     {
-        return $this->request('POST', '/api/v2/payment', $payload);
+        return $this->request('POST', '/api/v2/payment', $this->normalizePaymentMethod($payload));
+    }
+
+    /**
+     * iPaymu's redirect API expects `paymentMethod` as a single STRING, not an
+     * array. If callers pass a list of enabled channels: one entry -> use that
+     * single method; multiple/none -> drop the key so iPaymu shows all.
+     *
+     * @param array<string,mixed> $payload
+     * @return array<string,mixed>
+     */
+    private function normalizePaymentMethod(array $payload): array
+    {
+        if (isset($payload['paymentMethod']) && is_array($payload['paymentMethod'])) {
+            $methods = array_values(array_filter($payload['paymentMethod'], fn ($m) => is_string($m) && $m !== ''));
+            if (count($methods) === 1) {
+                $payload['paymentMethod'] = (string) $methods[0];
+            } else {
+                unset($payload['paymentMethod']);
+            }
+        }
+
+        return $payload;
     }
 
     /**
