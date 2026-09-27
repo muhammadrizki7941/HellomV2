@@ -589,7 +589,7 @@ export default function OrderPage() {
       });
       const data = await res.json();
       if (data.success) {
-        const methods = data.data.payment_methods || [];
+        const methods: PublicPaymentMethod[] = data.data.payment_methods || [];
         setPaymentMethods(methods);
 
         // Set default payment method if none selected or if selected is not available

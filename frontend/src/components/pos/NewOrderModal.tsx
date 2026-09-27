@@ -7,16 +7,16 @@ import { getImageUrl } from '@/lib/hellomApi';
 type Table = {
   id: number;
   code: string;
-  name: string;
+  name: string | null;
   is_active: boolean;
 };
 
 type Product = {
   id: number;
   name: string;
-  description: string;
+  description: string | null;
   price: number;
-  image_path: string;
+  image_path: string | null;
   is_available: boolean;
   track_stock: boolean;
   stock: number | null;

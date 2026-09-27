@@ -63,7 +63,7 @@ export function getPublicBanners(params?: Record<string, string | number | boole
 // ─── Landing Builder ───
 
 export function getLandingPages() {
-  return apiRequest<Record<string, unknown>>('/apps/landing-builder/pages');
+  return apiRequest<{ items: LandingPageRecord[] }>('/apps/landing-builder/pages');
 }
 
 // LandingBuilderController::pagePayload.

@@ -5,7 +5,7 @@ import {
   ResponsiveContainer, PieChart, Pie, Cell, Legend
 } from 'recharts';
 import { Download, Calendar, TrendingUp, TrendingDown } from 'lucide-react';
-import { getPosReportSummary, getPosReportProducts, getPosReportDaily, exportPosReport } from '@/lib/hellomApi';
+import { getPosReportSummary, getPosReportProducts, getPosReportDaily, exportPosReport, type PosReportDaily, type PosReportProducts, type PosReportSummary } from '@/lib/hellomApi';
 
 // Format harga Indonesia
 const formatRp = (amount: number) =>
@@ -33,11 +33,11 @@ const PosReports = () => {
   const [isExporting, setIsExporting] = useState(false);
 
   // State data
-  const [summary, setSummary] = useState(null);
-  const [dailyData, setDailyData] = useState([]);
-  const [topProducts, setTopProducts] = useState([]);
-  const [topCategories, setTopCategories] = useState([]);
-  const [peakHours, setPeakHours] = useState([]);
+  const [summary, setSummary] = useState<PosReportSummary['summary'] | null>(null);
+  const [dailyData, setDailyData] = useState<PosReportDaily['daily']>([]);
+  const [topProducts, setTopProducts] = useState<PosReportProducts['top_products']>([]);
+  const [topCategories, setTopCategories] = useState<PosReportProducts['top_categories']>([]);
+  const [peakHours, setPeakHours] = useState<PosReportSummary['peak_hours']>([]);
   const [chartMode, setChartMode] = useState<'revenue'|'orders'>('revenue');
   // Owner-only cross-outlet aggregate view
   const [isOwner, setIsOwner] = useState(false);
@@ -128,7 +128,13 @@ const PosReports = () => {
   }, [scopeAll]);
 
   // Kartu ringkasan
-  const SummaryCard = ({ icon, label, value, change, color }) => (
+  const SummaryCard = ({ icon, label, value, change, color }: {
+    icon: string;
+    label: string;
+    value: string | number;
+    change?: number;
+    color: string;
+  }) => (
     <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
       <div className={`w-10 h-10 rounded-xl flex items-center
         justify-center text-xl mb-3 ${color}`}>
@@ -399,7 +405,7 @@ const PosReports = () => {
                       ? formatRp(value) : `${value} pesanan`,
                     chartMode === 'revenue' ? 'Revenue' : 'Orders'
                   ]}
-                  labelFormatter={formatDateShort}
+                  labelFormatter={(label) => formatDateShort(String(label))}
                 />
                 <Bar
                   dataKey={chartMode === 'revenue'

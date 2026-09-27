@@ -459,7 +459,7 @@ export default function PosStaff() {
   }
 
   function downloadQrCard() {
-    if (!selectedQr || !selectedQrStaff) return;
+    if (!selectedQr?.svg_data_uri || !selectedQrStaff) return;
     const link = document.createElement('a');
     link.href = selectedQr.svg_data_uri;
     link.download = `attendance-qr-${selectedQrStaff.name.toLowerCase().replace(/\s+/g, '-')}.svg`;

@@ -140,7 +140,7 @@ export type PosReportProducts = {
     avg_price: number;
     order_count: number;
   }>;
-  top_categories: Array<Record<string, unknown>>;
+  top_categories: Array<{ category_name: string; total_qty: number; total_revenue: number }>;
   period: PosReportPeriod;
 };
 

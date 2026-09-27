@@ -25,7 +25,7 @@ php artisan schedule:work                 # lokal; produksi: cron schedule:run
 
 # frontend
 npm install && npm run dev                # vite :3000
-npx tsc --noEmit                          # harus 0 error
+npx tsc --noEmit                          # harus 0 error (tsconfig strict: true)
 npm run build                             # → ../backend/public/hellom
 
 # realtime

@@ -373,7 +373,7 @@ Legenda: 🟢 aman (tanpa perubahan perilaku) · 🟡 perlu verifikasi · 🔴 b
 - [ ] 🟡 Pecah `hellomApi.ts` → `services/api/*` (re-export kompatibel)
 - [ ] 🟡 Susun `features/<modul>`; update import (tanpa ubah tampilan)
 - [x] 🟢 R-14 lazy route + chunk grafik terpisah: JS awal ~2,2 MB → ~500 KB (gzip 568 → 149 KB) (`c53fbfc`)
-- [ ] 🟡 Turunkan error `tsc` bertahap (baseline **178**)
+- [x] 🟡 Turunkan error `tsc` bertahap (baseline **178**) → **0**, lalu `strict: true` diaktifkan (44 error strict diperbaiki: tipe lokal mengikuti nullability API, state `PosReports` bertipe, formatter recharts)
 
 ### Langkah 4: Konfigurasi
 - [x] 🟢 H-2 CORS → `CORS_ALLOWED_ORIGINS`; H-3 realtime → `REALTIME_ALLOWED_ORIGINS` + warning secret default; H-5 selesai di Langkah 0; **bug**: link undangan tim/kasir memakai `env()` di luar config → `localhost` setelah `config:cache` → `config('app.frontend_url')` (`2842463`, `b54d466`). H-1: fallback dev dipertahankan (didokumentasikan di `.env.example`). H-7: **tidak perlu** (skrip sudah pakai `$PSScriptRoot`)

@@ -517,7 +517,7 @@ export default function PosAdminDashboard() {
                 tickLine={false}
               />
               <Tooltip
-                formatter={(value: number) => [formatCurrency(value), 'Pendapatan']}
+                formatter={(value) => [formatCurrency(Number(value)), 'Pendapatan']}
                 labelFormatter={(label) => formatDate(label)}
                 contentStyle={{
                   borderRadius: 16,

@@ -17,9 +17,9 @@ type RewardRule = {
   trigger_value: number;
   reward_type: 'free_product' | 'discount_percent' | 'discount_fixed' | 'bonus_points';
   reward_value: number;
-  reward_product_id?: number;
+  reward_product_id: number | null;
   is_active: boolean;
-  description: string;
+  description: string | null;
   created_at: string;
 };
 
@@ -219,7 +219,7 @@ export default function PosLoyaltySettings() {
       reward_type: rule.reward_type,
       reward_value: rule.reward_value,
       reward_product_id: rule.reward_product_id || null,
-      description: rule.description,
+      description: rule.description ?? '',
       is_active: rule.is_active,
     });
     setShowAddModal(true);

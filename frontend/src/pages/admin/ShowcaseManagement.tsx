@@ -552,7 +552,7 @@ export default function ShowcaseManagement() {
               {/* Website */}
               <div>
                 <label className="block text-sm font-medium text-zinc-700 mb-1">Website URL</label>
-                <input type="url" placeholder="https://example.com" value={clientForm.website_url} onChange={e => setClientForm(f => ({ ...f, website_url: e.target.value }))}
+                <input type="url" placeholder="https://example.com" value={clientForm.website_url ?? ''} onChange={e => setClientForm(f => ({ ...f, website_url: e.target.value }))}
                   className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none" />
               </div>
 

@@ -298,7 +298,7 @@ export type { PosLoyaltySettings, PosRewardRuleRecord } from './pos';
 export type { PosReceipt } from './pos';
 export type { AdminDashboardStats, AdminManualCheckout, AdminOrganizationListItem, AdminPayoutQueue, AdminPayoutQueueItem, PlatformFinanceSummary } from './admin';
 export type { LandingBuilderPageStat, LandingBuilderPerformance, LandingBuilderStats, LandingPageRef } from './landing';
-export type { PricingMatrixItem, PricingMatrixPlan } from './billing';
+export type { PaymentGatewayStatus, PricingMatrixItem, PricingMatrixPlan } from './billing';
 export type { LandingBlockRecord, LandingPageRecord } from './landing';
 export type { CatalogAppItem } from './billing';
 export type { MemberDashboardCard } from './member';

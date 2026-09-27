@@ -6,9 +6,9 @@ import { getPosProducts, getPosCategories, createPosCategory, updatePosCategory,
 type Product = {
   id: number;
   name: string;
-  description: string;
+  description: string | null;
   price: number;
-  image_path: string;
+  image_path: string | null;
   is_available: boolean;
   track_stock: boolean;
   stock: number | null;

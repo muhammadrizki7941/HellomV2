@@ -45,8 +45,24 @@ export function getPricingMatrix() {
 
 // ─── Billing & Wallet ───
 
+// Billing\PaymentGatewayConfigController::gatewayStatus payload.
+export type PaymentGatewayStatus = {
+  provider: 'xendit' | 'ipaymu' | 'doku';
+  active_provider: 'xendit' | 'ipaymu' | 'doku';
+  mode: 'sandbox' | 'production';
+  is_ready: boolean;
+  checkout_mode: string;
+  member_wallet_enabled: boolean;
+  supports: Record<string, boolean>;
+  webhook: { path: string; callback_token_configured: boolean };
+  manual_confirmation: { enabled: boolean; label: string };
+  providers: Record<string, Record<string, unknown>>;
+  manual_payment: { enabled: boolean; methods: Array<Record<string, unknown>> } & Record<string, unknown>;
+  balance: { currency: string; amount: number } | null;
+};
+
 export function getPaymentGatewayStatus() {
-  return apiRequest<Record<string, unknown>>('/billing/gateway-status');
+  return apiRequest<PaymentGatewayStatus>('/billing/gateway-status');
 }
 
 export function getCheckoutRuntimeConfig() {

@@ -53,7 +53,7 @@ export default function MemberProfile() {
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [organizations, setOrganizations] = useState<Array<{ id: number; name: string; role: string }>>([]);
+  const [organizations, setOrganizations] = useState<Array<{ id: number; name: string; role?: string }>>([]);
   const [currentOrganizationId, setCurrentOrganizationId] = useState<number | null>(null);
 
   // Mock User Data

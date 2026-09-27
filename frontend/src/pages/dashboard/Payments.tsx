@@ -24,6 +24,7 @@ import {
   pollWalletBalance,
   reconcileCheckout,
   requestWithdrawal,
+  type PaymentGatewayStatus,
 } from '@/lib/hellomApi';
 import { cn } from '@/lib/utils';
 
@@ -77,15 +78,7 @@ export default function Payments() {
   const [pendingWithdrawals, setPendingWithdrawals] = useState<Array<Record<string, unknown>>>([]);
   const [catalogApps, setCatalogApps] = useState<AppCard[]>([]);
 
-  const [gatewayStatus, setGatewayStatus] = useState<{
-    provider: string;
-    active_provider: 'xendit' | 'ipaymu';
-    mode: 'sandbox' | 'production';
-    is_ready: boolean;
-    member_wallet_enabled: boolean;
-    supports: Record<string, boolean>;
-    webhook: { path: string; callback_token_configured: boolean };
-  } | null>(null);
+  const [gatewayStatus, setGatewayStatus] = useState<PaymentGatewayStatus | null>(null);
 
   const [depositAmount, setDepositAmount] = useState(250000);
   const [qrisEstimatedFee, setQrisEstimatedFee] = useState<number | null>(null);

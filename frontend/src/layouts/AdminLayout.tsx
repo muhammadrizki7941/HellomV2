@@ -26,7 +26,7 @@ export default function AdminLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const location = useLocation();
   const [adminName, setAdminName] = useState('Super Admin');
-  const [organizations, setOrganizations] = useState<Array<{ id: number; name: string; role: string }>>([]);
+  const [organizations, setOrganizations] = useState<Array<{ id: number; name: string; role?: string }>>([]);
   const [currentOrgId, setCurrentOrgId] = useState<number | null>(null);
   const [switchingOrg, setSwitchingOrg] = useState(false);
   const [brand, setBrand] = useState<BrandSettings | null>(null);

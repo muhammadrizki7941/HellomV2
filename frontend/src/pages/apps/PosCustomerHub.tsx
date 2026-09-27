@@ -7,7 +7,7 @@ type PosAccessPayload = PosAccessInfo;
 type PosTable = {
   id: number;
   code: string;
-  name: string;
+  name: string | null;
   is_active: boolean;
   public_id: string;
 };

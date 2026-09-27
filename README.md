@@ -52,7 +52,7 @@ Build SPA untuk disajikan Laravel (`http://127.0.0.1:8000`): `npm --prefix front
 ## Pemeriksaan kualitas
 
 ```bash
-cd frontend && npx tsc --noEmit     # harus 0 error
+cd frontend && npx tsc --noEmit     # harus 0 error (strict)
 cd frontend && npm run build
 cd backend && php artisan route:list && php artisan config:cache && php artisan config:clear
 cd backend && php artisan test      # lihat catatan tes di docs/ARCHITECTURE.md

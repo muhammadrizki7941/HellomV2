@@ -118,7 +118,7 @@ deploy/                          PM2, contoh Nginx, crontab, deploy.sh
 
 - Respons API: `BaseApiController::ok()/fail()` (Hellom) atau `success()/error()` (POS/konsumen) — amplop sama.
 - Endpoint baru: validasi di Form Request **hanya** bila otorisasi juga dipindah ke `authorize()`, supaya urutan 401/403 → 422 tetap sama dengan endpoint lain.
-- Frontend: panggil API lewat `services/api/*` (atau `@/lib/hellomApi`); tipe respons diambil dari payload backend. `npx tsc --noEmit` harus 0 error.
+- Frontend: panggil API lewat `services/api/*` (atau `@/lib/hellomApi`); tipe respons diambil dari payload backend. `npx tsc --noEmit` harus 0 error dengan `strict: true`; jangan menambah `any` untuk membungkam error.
 - Commit: conventional commits, kecil per langkah.
 
 ## 10. Tes

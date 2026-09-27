@@ -6,7 +6,7 @@ import { getPosTables, createPosTable, updatePosTable, deletePosTable, getCurren
 type Table = {
   id: number;
   code: string;
-  name: string;
+  name: string | null;
   is_active: boolean;
   public_id: string;
 };
