@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { PosMenuProduct } from '@/lib/pos/posApi';
+import type { PosMenuProduct } from '@/lib/hellomApi';
 
 export type CartItem = {
   product: PosMenuProduct;

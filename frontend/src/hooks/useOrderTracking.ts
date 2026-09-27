@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { getCustomerOrderStatus, type PosOrderPayload } from '@/lib/pos/posApi';
+import { getCustomerOrderStatus, type PosOrderPayload } from '@/lib/hellomApi';
 import { isOrderPending } from '@/lib/pos/orderStatus';
 
 export function useOrderTracking(orderNumber: string | undefined, tableToken: string | undefined, intervalMs = 5000) {

@@ -1,4 +1,6 @@
-import { HELLOM_API_BASE } from '@/lib/hellomApi';
+// Public POS customer endpoints (table QR menu, guest orders, promos, reservations).
+// Part of the Hellom API client; import from '@/lib/hellomApi' or '@/services/api'.
+import { publicApiRequest } from './client';
 
 export type PosMenuProduct = {
   id: number;
@@ -160,39 +162,14 @@ export type PosOrderPayload = {
   items: PosOrderItem[];
 };
 
-type ApiEnvelope<T> = {
-  success: boolean;
-  message: string;
-  data: T;
-  error: unknown;
-};
-
-async function publicRequest<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${HELLOM_API_BASE}${path}`, {
-    ...init,
-    headers: {
-      Accept: 'application/json',
-      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
-      ...(init?.headers ?? {}),
-    },
-  });
-
-  const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | null;
-
-  if (!response.ok || !payload?.success) {
-    throw new Error(payload?.message || `HTTP ${response.status}`);
-  }
-
-  return payload.data;
-}
 
 export function getCustomerMenu(tableToken: string) {
-  return publicRequest<PosMenuPayload>(`/pos/customer/menu/${tableToken}`);
+  return publicApiRequest<PosMenuPayload>(`/pos/customer/menu/${tableToken}`);
 }
 
 export function getCustomerMenuByOrganization(organizationSlug: string, outletSlug?: string | null) {
   const qs = outletSlug ? `?outlet=${encodeURIComponent(outletSlug)}` : '';
-  return publicRequest<PosMenuPayload>(`/pos/customer/organization/${encodeURIComponent(organizationSlug)}/menu${qs}`);
+  return publicApiRequest<PosMenuPayload>(`/pos/customer/organization/${encodeURIComponent(organizationSlug)}/menu${qs}`);
 }
 
 export type CustomerOutlet = {
@@ -205,7 +182,7 @@ export type CustomerOutlet = {
 };
 
 export function getCustomerOrganizationOutlets(organizationSlug: string) {
-  return publicRequest<{ organization: { slug: string; name: string }; outlets: CustomerOutlet[] }>(
+  return publicApiRequest<{ organization: { slug: string; name: string }; outlets: CustomerOutlet[] }>(
     `/pos/customer/organization/${encodeURIComponent(organizationSlug)}/outlets`
   );
 }
@@ -222,16 +199,16 @@ export function createCustomerOrder(payload: {
   payment_confirmed?: boolean;
   payment_method?: string;
 }) {
-  return publicRequest<{ order: PosOrderPayload }>('/pos/customer/order', {
+  return publicApiRequest<{ order: PosOrderPayload }>('/pos/customer/order', {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: payload,
   });
 }
 
 // tableToken proves the guest ordered from that table (order numbers alone are guessable).
 export function getCustomerOrderStatus(orderNumber: string, tableToken: string) {
   const query = new URLSearchParams({ table_token: tableToken }).toString();
-  return publicRequest<{ order: PosOrderPayload }>(`/pos/customer/order/${encodeURIComponent(orderNumber)}?${query}`);
+  return publicApiRequest<{ order: PosOrderPayload }>(`/pos/customer/order/${encodeURIComponent(orderNumber)}?${query}`);
 }
 
 export function claimCustomerPromo(payload: {
@@ -241,7 +218,7 @@ export function claimCustomerPromo(payload: {
   customer_email?: string;
   notes?: string;
 }, promoId: number) {
-  return publicRequest<{
+  return publicApiRequest<{
     claim: Record<string, unknown>;
     member: {
       id: number;
@@ -259,7 +236,7 @@ export function claimCustomerPromo(payload: {
     awarded_points?: number;
   }>(`/pos/customer/promos/${promoId}/claim`, {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: payload,
   });
 }
 
@@ -276,7 +253,7 @@ export function createCustomerReservation(payload: {
   menu_items?: Array<{ product_id: number; qty: number }>;
   notes?: string;
 }) {
-  return publicRequest<{
+  return publicApiRequest<{
     reservation: Record<string, unknown>;
     member: {
       id: number;
@@ -292,6 +269,6 @@ export function createCustomerReservation(payload: {
     estimated_points: number;
   }>('/pos/customer/reservations', {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: payload,
   });
 }

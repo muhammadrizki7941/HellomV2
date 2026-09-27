@@ -1,11 +1,7 @@
-import { HELLOM_API_BASE, getToken, getActiveOutletId } from '@/lib/hellomApi';
-
-type ApiEnvelope<T> = {
-  success: boolean;
-  message: string;
-  data: T;
-  error: unknown;
-};
+// POS staff management (team, shifts, attendance, cash sessions). Requests carry
+// X-Outlet-Id via apiRequest so each outlet keeps its own team.
+// Part of the Hellom API client; import from '@/lib/hellomApi' or '@/services/api'.
+import { apiRequest, apiRequestBlob } from './client';
 
 export type PosStaffPermissionKey =
   | 'transactions'
@@ -142,32 +138,8 @@ export type PosStaffDashboard = {
   };
 };
 
-async function staffRequest<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = getToken();
-  const activeOutletId = getActiveOutletId();
-  const response = await fetch(`${HELLOM_API_BASE}${path}`, {
-    ...init,
-    headers: {
-      Accept: 'application/json',
-      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      // Scope staff management to the active outlet so each outlet keeps its own
-      // team (without this the backend falls back to the primary outlet).
-      ...(activeOutletId ? { 'X-Outlet-Id': activeOutletId } : {}),
-      ...(init?.headers ?? {}),
-    },
-  });
-
-  const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | null;
-  if (!response.ok || !payload?.success) {
-    throw new Error(payload?.message || `HTTP ${response.status}`);
-  }
-
-  return payload.data;
-}
-
 export function getPosStaffDashboard() {
-  return staffRequest<PosStaffDashboard>('/pos/staff');
+  return apiRequest<PosStaffDashboard>('/pos/staff');
 }
 
 export function createPosStaff(payload: {
@@ -181,9 +153,9 @@ export function createPosStaff(payload: {
   joined_at?: string;
   notes?: string;
 }) {
-  return staffRequest<{ staff: PosStaffItem }>('/pos/staff', {
+  return apiRequest<{ staff: PosStaffItem }>('/pos/staff', {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: payload,
   });
 }
 
@@ -201,14 +173,14 @@ export function updatePosStaff(
     notes?: string;
   }
 ) {
-  return staffRequest<{ staff: PosStaffItem }>(`/pos/staff/${staffId}`, {
+  return apiRequest<{ staff: PosStaffItem }>(`/pos/staff/${staffId}`, {
     method: 'PUT',
-    body: JSON.stringify(payload),
+    body: payload,
   });
 }
 
 export function deletePosStaff(staffId: number) {
-  return staffRequest<null>(`/pos/staff/${staffId}`, {
+  return apiRequest<null>(`/pos/staff/${staffId}`, {
     method: 'DELETE',
   });
 }
@@ -217,14 +189,14 @@ export function invitePosStaffLogin(
   staffId: number,
   payload?: { email?: string; expires_in_days?: number }
 ) {
-  return staffRequest<{
+  return apiRequest<{
     linked: boolean;
     invitation?: { id: number; email: string; role: string; status: string; expires_at: string | null };
     email_delivery?: unknown;
     staff: PosStaffItem;
   }>(`/pos/staff/${staffId}/invite-login`, {
     method: 'POST',
-    body: JSON.stringify(payload || {}),
+    body: payload || {},
   });
 }
 
@@ -236,9 +208,9 @@ export function createPosStaffShift(payload: {
   reminder_minutes?: number;
   notes?: string;
 }) {
-  return staffRequest<{ shift: PosStaffShift }>('/pos/staff/shifts', {
+  return apiRequest<{ shift: PosStaffShift }>('/pos/staff/shifts', {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: payload,
   });
 }
 
@@ -253,9 +225,9 @@ export function updatePosStaffShift(
     notes?: string;
   }
 ) {
-  return staffRequest<{ shift: PosStaffShift }>(`/pos/staff/shifts/${shiftId}`, {
+  return apiRequest<{ shift: PosStaffShift }>(`/pos/staff/shifts/${shiftId}`, {
     method: 'PUT',
-    body: JSON.stringify(payload),
+    body: payload,
   });
 }
 
@@ -266,9 +238,9 @@ export function checkInPosStaff(staffId: number, payload?: {
   longitude?: number;
   notes?: string;
 }) {
-  return staffRequest<{ attendance: PosStaffAttendance }>(`/pos/staff/${staffId}/attendance/check-in`, {
+  return apiRequest<{ attendance: PosStaffAttendance }>(`/pos/staff/${staffId}/attendance/check-in`, {
     method: 'POST',
-    body: JSON.stringify(payload ?? {}),
+    body: payload ?? {},
   });
 }
 
@@ -279,18 +251,18 @@ export function checkOutPosStaff(staffId: number, payload?: {
   longitude?: number;
   notes?: string;
 }) {
-  return staffRequest<{ attendance: PosStaffAttendance }>(`/pos/staff/${staffId}/attendance/check-out`, {
+  return apiRequest<{ attendance: PosStaffAttendance }>(`/pos/staff/${staffId}/attendance/check-out`, {
     method: 'POST',
-    body: JSON.stringify(payload ?? {}),
+    body: payload ?? {},
   });
 }
 
 export function getPosStaffAttendanceQr(staffId: number) {
-  return staffRequest<{ staff_id: number; staff_name: string; attendance_qr: PosStaffAttendanceQr }>(`/pos/staff/${staffId}/attendance-qr`);
+  return apiRequest<{ staff_id: number; staff_name: string; attendance_qr: PosStaffAttendanceQr }>(`/pos/staff/${staffId}/attendance-qr`);
 }
 
 export function regeneratePosStaffAttendanceQr(staffId: number) {
-  return staffRequest<{ staff_id: number; staff_name: string; attendance_qr: PosStaffAttendanceQr }>(`/pos/staff/${staffId}/attendance-qr/regenerate`, {
+  return apiRequest<{ staff_id: number; staff_name: string; attendance_qr: PosStaffAttendanceQr }>(`/pos/staff/${staffId}/attendance-qr/regenerate`, {
     method: 'POST',
   });
 }
@@ -303,9 +275,9 @@ export function scanPosStaffAttendanceQr(payload: {
   longitude?: number;
   notes?: string;
 }) {
-  return staffRequest<{ staff_id: number; staff_name: string; attendance: PosStaffAttendance }>('/pos/staff/attendance/scan', {
+  return apiRequest<{ staff_id: number; staff_name: string; attendance: PosStaffAttendance }>('/pos/staff/attendance/scan', {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: payload,
   });
 }
 
@@ -313,9 +285,9 @@ export function markLeavePosStaff(staffId: number, payload?: {
   attendance_date?: string;
   notes?: string;
 }) {
-  return staffRequest<{ attendance: PosStaffAttendance }>(`/pos/staff/${staffId}/attendance/leave`, {
+  return apiRequest<{ attendance: PosStaffAttendance }>(`/pos/staff/${staffId}/attendance/leave`, {
     method: 'POST',
-    body: JSON.stringify(payload ?? {}),
+    body: payload ?? {},
   });
 }
 
@@ -324,9 +296,9 @@ export function openPosStaffCash(staffId: number, payload: {
   shift_id?: number;
   notes?: string;
 }) {
-  return staffRequest<{ cash_log: PosStaffCashLog }>(`/pos/staff/${staffId}/cash/open`, {
+  return apiRequest<{ cash_log: PosStaffCashLog }>(`/pos/staff/${staffId}/cash/open`, {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: payload,
   });
 }
 
@@ -334,27 +306,15 @@ export function closePosStaffCash(staffId: number, payload: {
   closing_cash: number;
   notes?: string;
 }) {
-  return staffRequest<{ cash_log: PosStaffCashLog }>(`/pos/staff/${staffId}/cash/close`, {
+  return apiRequest<{ cash_log: PosStaffCashLog }>(`/pos/staff/${staffId}/cash/close`, {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: payload,
   });
 }
 
 export async function downloadPosStaffExport(type: 'attendance' | 'performance' | 'cash', month?: string) {
-  const token = getToken();
   const params = new URLSearchParams({ type, ...(month ? { month } : {}) });
-  const response = await fetch(`${HELLOM_API_BASE}/pos/staff/export/download?${params.toString()}`, {
-    headers: {
-      Accept: 'text/csv',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Export gagal (${response.status})`);
-  }
-
-  const blob = await response.blob();
+  const blob = await apiRequestBlob(`/pos/staff/export/download?${params.toString()}`);
   const url = window.URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;

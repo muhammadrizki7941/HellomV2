@@ -302,3 +302,33 @@ export type { PricingMatrixItem, PricingMatrixPlan } from './billing';
 export type { LandingBlockRecord, LandingPageRecord } from './landing';
 export type { CatalogAppItem } from './billing';
 export type { MemberDashboardCard } from './member';
+
+export {
+  claimCustomerPromo,
+  createCustomerOrder,
+  createCustomerReservation,
+  getCustomerMenu,
+  getCustomerMenuByOrganization,
+  getCustomerOrderStatus,
+  getCustomerOrganizationOutlets,
+} from './posCustomer';
+export type { CustomerOutlet, PosCustomerExperiencePayload, PosMenuCategory, PosMenuPayload, PosMenuProduct, PosOrderItem, PosOrderPayload } from './posCustomer';
+export {
+  checkInPosStaff,
+  checkOutPosStaff,
+  closePosStaffCash,
+  createPosStaff,
+  createPosStaffShift,
+  deletePosStaff,
+  downloadPosStaffExport,
+  getPosStaffAttendanceQr,
+  getPosStaffDashboard,
+  invitePosStaffLogin,
+  markLeavePosStaff,
+  openPosStaffCash,
+  regeneratePosStaffAttendanceQr,
+  scanPosStaffAttendanceQr,
+  updatePosStaff,
+  updatePosStaffShift,
+} from './posStaff';
+export type { PosStaffAttendance, PosStaffAttendanceQr, PosStaffCashLog, PosStaffDashboard, PosStaffEmploymentStatus, PosStaffItem, PosStaffPermissionKey, PosStaffRole, PosStaffShift } from './posStaff';

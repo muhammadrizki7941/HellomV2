@@ -40,9 +40,8 @@ frontend/src/
   App.tsx                        router; halaman di-lazy-load per route
   pages/, components/, layouts/, hooks/
   services/api/                  klien API per modul (client, auth, organizations, billing, admin, consumer,
-                                 landing, store, pos, content, member) + index barrel
+                                 landing, store, pos, posCustomer, posStaff, content, member) + index barrel
   lib/hellomApi.ts               barrel kompatibilitas → services/api
-  lib/pos/{posApi,staffApi}.ts   klien self-order publik & staf POS
 realtime/server.js               Socket.IO + endpoint /emit
 deploy/                          PM2, contoh Nginx, crontab, deploy.sh
 ```

@@ -46,7 +46,7 @@ import {
   scanPosStaffAttendanceQr,
   updatePosStaff,
   updatePosStaffShift,
-} from '@/lib/pos/staffApi';
+} from '@/lib/hellomApi';
 import { getPosOutlets, getActiveOutletId, setActiveOutletId, type PosOutlet } from '@/lib/hellomApi';
 
 type ScanMode = 'check_in' | 'check_out';

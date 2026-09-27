@@ -255,7 +255,7 @@ Legenda status: `[ ]` belum · `[x]` selesai (diisi di Fase 2)
 |---|---|---|---|---|
 | F-11 | Tinggi | Admin → System Health | Halaman membaca `summary.withdrawals.*` / `summary.period.net` (bentuk ringkasan **per organisasi**, `/wallet/finance-summary`), tetapi `getFinanceSummary()` memanggil **`/platform/finance-summary`** (bentuk berbeda) → `summary.withdrawals` undefined → halaman crash setelah data termuat | (a) pakai angka platform (`user_withdrawals`, `platform_revenue`, `organization_wallets`) — disarankan untuk super admin; (b) pakai wallet organisasi milik admin |
 | F-12 | Sedang | Admin → Dashboard | `normalizeFinanceSummary()` mencari `wallet/period/withdrawals` di ringkasan platform → kartu keuangan **selalu 0** (tanpa error) | sama dengan F-11 |
-| N-9 | Rendah | `frontend/src/lib/pos/{posApi,staffApi}.ts` | Dua klien API tambahan di luar `services/api` (fetch sendiri, header sendiri) | Satukan ke `services/api` (Langkah 3) |
+| N-9 | Rendah | `frontend/src/lib/pos/{posApi,staffApi}.ts` | Dua klien API tambahan di luar `services/api` (fetch sendiri, header sendiri) | ✅ Dipindah ke `services/api/{posCustomer,posStaff}.ts` memakai `publicApiRequest`/`apiRequest`; ekspor CSV staf kini ikut mengirim `X-Outlet-Id` |
 
 ### 3.7 Isolasi tenant — temuan tambahan (Fase 2)
 

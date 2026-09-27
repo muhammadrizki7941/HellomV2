@@ -35,7 +35,7 @@ import {
   type PosCustomerExperiencePayload,
   type PosMenuCategory,
   type PosMenuProduct,
-} from '@/lib/pos/posApi';
+} from '@/lib/hellomApi';
 import { cn } from '@/lib/utils';
 
 function formatCurrency(value: number) {
