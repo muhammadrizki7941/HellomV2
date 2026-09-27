@@ -265,5 +265,14 @@ export {
   uploadShowcaseMedia,
 } from './content';
 export type { LandingContent, ShowcaseClient, ShowcasePortfolio } from './content';
-export type { AdminPagination, AdminPlan, AdminUserDetail, AdminUserListItem } from './admin';
+export type {
+  AdminMailSettings,
+  AdminPagination,
+  AdminPaymentGatewayConfig,
+  AdminPlan,
+  AdminUserDetail,
+  AdminUserListItem,
+  EmailDeliveryResult,
+  GatewayProviderCard,
+} from './admin';
 export type { EmailDelivery, OrganizationRef, TeamInvitation, TeamMember } from './organizations';

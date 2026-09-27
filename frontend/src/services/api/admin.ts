@@ -79,6 +79,8 @@ export type AdminPlan = {
   sort_order: number;
 };
 
+export type EmailDeliveryResult = { sent: boolean; error: string | null; mailer?: string };
+
 // ─── Admin Finance ───
 
 export function getFinanceSummary(query: { days?: number } = {}) {
@@ -140,8 +142,44 @@ export function markWithdrawalFailed(withdrawalId: number, notes?: string) {
 
 // ─── Admin Runtime / Gateway ───
 
+// GET /admin/billing/provider-config (BillingController::adminGatewayConfig).
+export type GatewayProviderCard = {
+  provider: string;
+  mode: 'sandbox' | 'production';
+  is_ready: boolean;
+  webhook: { path: string; callback_token_configured: boolean };
+  balance?: { currency: string; amount: number | null; error?: string } | null;
+};
+
+export type AdminPaymentGatewayConfig = {
+  active_provider: 'xendit' | 'ipaymu' | 'doku';
+  checkout_mode: 'manual_confirmation' | 'gateway_automatic';
+  member_wallet_enabled: boolean;
+  sale_commission_percent: number;
+  providers: {
+    xendit: GatewayProviderCard & {
+      secret_key_masked: string | null;
+      callback_token_masked: string | null;
+      va_channels: string[];
+    };
+    ipaymu: GatewayProviderCard & {
+      va_masked: string | null;
+      api_key_masked: string | null;
+      callback_token_masked: string | null;
+      payment_methods?: string[];
+    };
+    doku: GatewayProviderCard & {
+      client_id_masked: string | null;
+      secret_key_masked: string | null;
+      callback_token_masked: string | null;
+      payment_method_types: string[];
+    };
+  };
+  manual_payment: Record<string, unknown>;
+};
+
 export function getAdminPaymentGatewayConfig() {
-  return apiRequest<Record<string, unknown>>('/admin/billing/provider-config');
+  return apiRequest<AdminPaymentGatewayConfig>('/admin/billing/provider-config');
 }
 
 export function updateAdminPaymentGatewayConfig(payload: Record<string, unknown>) {
@@ -365,19 +403,34 @@ export function ignoreOwnerNotificationAction(id: number) {
 
 // ─── Admin Mail Settings ───
 
+// Mail settings summary (PlatformMailService::publicSettingsSummary).
+export type AdminMailSettings = {
+  enabled: boolean;
+  host: string;
+  port: number;
+  username: string;
+  password_masked: string | null;
+  encryption: string;
+  from_address: string;
+  from_name: string;
+  reply_to_address: string;
+  reply_to_name: string;
+  is_ready: boolean;
+};
+
 export function getAdminMailSettings() {
-  return apiRequest<Record<string, unknown>>('/admin/mail-settings');
+  return apiRequest<{ mail: AdminMailSettings }>('/admin/mail-settings');
 }
 
 export function updateAdminMailSettings(payload: Record<string, unknown>) {
-  return apiRequest<Record<string, unknown>>('/admin/mail-settings', {
+  return apiRequest<{ mail: AdminMailSettings }>('/admin/mail-settings', {
     method: 'PUT',
     body: payload,
   });
 }
 
 export function sendAdminMailTest(payload: Record<string, unknown>) {
-  return apiRequest<Record<string, unknown>>('/admin/mail-settings/test', {
+  return apiRequest<{ delivery: EmailDeliveryResult }>('/admin/mail-settings/test', {
     method: 'POST',
     body: payload,
   });
