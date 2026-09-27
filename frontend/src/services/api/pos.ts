@@ -262,10 +262,11 @@ export function createPosOrder(payload: Record<string, unknown>) {
   });
 }
 
-export function updatePosOrderStatus(orderId: number, payload: Record<string, unknown>) {
-  return apiRequest<Record<string, unknown>>(`/pos/orders/${orderId}/status`, {
+// Backend validates { status }; callers pass the status string.
+export function updatePosOrderStatus(orderId: number, status: string) {
+  return apiRequest<{ order: Record<string, unknown> }>(`/pos/orders/${orderId}/status`, {
     method: 'PATCH',
-    body: payload,
+    body: { status },
   });
 }
 
