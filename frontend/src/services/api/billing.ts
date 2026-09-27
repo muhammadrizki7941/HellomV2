@@ -4,8 +4,16 @@ import { apiRequest } from './client';
 
 // ─── Catalog & Pricing ───
 
+// GET /catalog/apps (AppCatalogController::index): apps with this org's access.
+export type CatalogAppItem = {
+  app: { slug: string; name: string; [key: string]: unknown };
+  entitlement: { status: string; allowed: boolean; plan?: { slug: string; name: string } | null; [key: string]: unknown };
+  recommended_plan?: { slug: string; name: string; [key: string]: unknown } | null;
+  [key: string]: unknown;
+};
+
 export function getCatalogApps() {
-  return apiRequest<Record<string, unknown>>('/catalog/apps');
+  return apiRequest<{ items: CatalogAppItem[] }>('/catalog/apps');
 }
 
 // GET /pricing/matrix (PricingController::matrix).
@@ -161,7 +169,7 @@ export function getWalletTransactions(query: { limit?: number; cursor?: number; 
 }
 
 export function createWalletTopupSession(payload: { amount: number; channel?: string }) {
-  return apiRequest<Record<string, unknown>>('/billing/wallet/topup-session', {
+  return apiRequest<{ reference_id: string; provider: string; payment_session_id: string; payment_url: string; amount: number; channel: string }>('/billing/wallet/topup-session', {
     method: 'POST',
     body: payload,
   });
@@ -228,5 +236,5 @@ export function getAutoRenewPreview(query: { days?: number; limit?: number; incl
   if (query.include_overdue !== undefined) params.set('include_overdue', query.include_overdue ? '1' : '0');
   const qs = params.toString() ? `?${params.toString()}` : '';
 
-  return apiRequest<Record<string, unknown>>(`/billing/wallet/auto-renew-preview${qs}`);
+  return apiRequest<{ summary: { total_due_count: number; minimum_topup_required: number; [key: string]: unknown }; [key: string]: unknown }>(`/billing/wallet/auto-renew-preview${qs}`);
 }

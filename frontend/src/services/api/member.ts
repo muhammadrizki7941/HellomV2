@@ -5,8 +5,16 @@ import { apiRequest } from './client';
 
 // ─── Dashboard Cards ───
 
+// MemberDashboardController::cards: one card per app with this org's access.
+export type MemberDashboardCard = {
+  app: { slug: string; name: string; [key: string]: unknown };
+  entitlement: { status: string; allowed: boolean; plan: { slug: string; name: string; type: string; price: number } | null; [key: string]: unknown };
+  card: { badge: string; [key: string]: unknown };
+  [key: string]: unknown;
+};
+
 export function getMemberDashboardCards() {
-  return apiRequest<{ cards: Array<Record<string, unknown>> }>('/member/dashboard/cards');
+  return apiRequest<{ cards: MemberDashboardCard[] }>('/member/dashboard/cards');
 }
 
 /** Poll until the given app slug becomes allowed (entitlement activated). */

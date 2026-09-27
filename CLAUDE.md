@@ -27,7 +27,7 @@ php artisan schedule:work      # lokal; production: cron schedule:run tiap menit
 npm install
 npm run dev                    # vite dev server, port 3000
 npm run build                  # → ../backend/public/hellom (menimpa build lama)
-npx tsc --noEmit               # baseline: 260 error (dengan @types/react), jangan menambah
+npx tsc --noEmit               # baseline: 1 error (SystemHealth, F-11); target 0
 
 # Realtime (dari realtime/)
 node server.js                 # env: PORT, HOST, REALTIME_SERVER_SECRET

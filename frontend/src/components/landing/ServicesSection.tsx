@@ -32,7 +32,7 @@ export const ServicesSection = () => {
                 </h3>
                 <p className="mt-2 text-[11px] leading-relaxed text-zinc-400 sm:text-sm">{service.desc}</p>
                 <div className="mt-4 text-xs font-semibold text-yellow-400 sm:text-sm">
-                  {service.code === 'CS' ? 'Konsultasi via WhatsApp -&gt;' : 'Lihat detail -&gt;'}
+                  Lihat detail -&gt;
                 </div>
               </div>
             </div>

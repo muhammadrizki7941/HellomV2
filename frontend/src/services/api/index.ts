@@ -300,3 +300,5 @@ export type { AdminManualCheckout, AdminOrganizationListItem, AdminPayoutQueue, 
 export type { LandingBuilderPageStat, LandingBuilderPerformance, LandingBuilderStats, LandingPageRef } from './landing';
 export type { PricingMatrixItem, PricingMatrixPlan } from './billing';
 export type { LandingBlockRecord, LandingPageRecord } from './landing';
+export type { CatalogAppItem } from './billing';
+export type { MemberDashboardCard } from './member';
