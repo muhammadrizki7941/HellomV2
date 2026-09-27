@@ -328,7 +328,7 @@ Legenda: 🟢 aman (tanpa perubahan perilaku) · 🟡 perlu verifikasi · 🔴 b
 
 ### Langkah 2: Struktur & penamaan backend
 - [ ] 🟢 `Enums` role/plan/status (tanpa mengubah nilai DB)
-- [ ] 🟢 Pecah `routes/api.php` per modul (URL & nama route tidak berubah; diff `route:list` sebelum/sesudah harus identik)
+- [x] 🟢 Pecah `routes/api.php` → `routes/api/{public,account,wallet,billing,consumer,landing-builder,member,pos,admin}.php`; fingerprint 498 route (urutan, nama, middleware) **identik** (`a57d2e5`, `74f3024`)
 - [ ] 🟡 Form Request untuk endpoint tulis (aturan validasi disalin 1:1)
 - [ ] 🟡 Pecah `BillingController`/`WalletController`/`LandingBuilderController` → Services/Actions (perilaku identik)
 - [ ] 🟡 Policy: Withdrawal, Outlet, Organization
@@ -351,13 +351,15 @@ Legenda: 🟢 aman (tanpa perubahan perilaku) · 🟡 perlu verifikasi · 🔴 b
 - [ ] 🟡 S-7 batasi role `admin`
 - [ ] 🟡 S-8 throttle
 - [ ] 🟡 S-9 scope tenant / tes isolasi
-- [ ] 🟢 S-10/S-11/S-12 hapus kode mati berisiko
+- [x] 🟢 S-10 method tak ter-route dihapus (`Hellom\OrderController` 14 method, 2 mock di `BillingController`) (`6c7dbb5`); S-11 selesai di `18dbcbd`. S-12 (dummy auth) ikut D-3
 
 ### Langkah 6: Fondasi penjualan (desain dulu, tidak menulis ulang)
-- [ ] 🔴 Proposal desain: `plans` (langganan) vs `licenses` (sekali beli) + `EntitlementService` tunggal yang menegakkan `ends_at`; konsistensi periode (bukan `addMonth` hardcode). **Diajukan ke Anda sebelum implementasi.**
+- [x] 🔴 Proposal desain ditulis: [`docs/proposals/billing-foundation.md`](proposals/billing-foundation.md) (lifetime di SaaS, tanpa license key; `Plan::accessEndsAt()` + `EntitlementService` tunggal)
+- [ ] 🔴 Implementasi, **menunggu persetujuan & jawaban 5 pertanyaan di proposal**
+- ⚠ **Temuan B-1 (Tinggi): akses paket tahunan tidak pernah berakhir.** `entitlements.ends_at` selalu `null` dan satu-satunya proses kedaluwarsa (`hellom:billing:auto-renew-wallet`) hanya memproses `billing_cycle = monthly`. Laten: berdampak saat langganan tahunan pertama melewati 365 hari (±April 2027).
 
 ### Langkah 7: Deploy
-- [ ] 🟢 `deploy/ecosystem.config.js`, `deploy/nginx.conf.example` (+ `/socket.io`), `deploy/crontab.example`, `deploy/deploy.sh`
+- [x] 🟢 `deploy/ecosystem.config.js` (nama PM2 tetap `hellom-realtime`, secret dari `realtime/.env`), `deploy/nginx/hellomspace.com.conf.example` (+ proxy `/socket.io`), `deploy/crontab.example`, `deploy/deploy.sh` (`986dfac`)
 - [ ] 🟡 `phpunit.xml` → MySQL tes
 
 ### Verifikasi setiap langkah
