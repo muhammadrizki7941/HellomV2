@@ -1,0 +1,9 @@
+# Laravel scheduler for Hellom (install as the web user, e.g. `crontab -u www -e`,
+# or aaPanel → Cron → Shell Script, every 1 minute).
+#
+# Required: subscription expiry/auto-renew (hourly), wallet settlement release,
+# and expiry notifications (daily) only run through the scheduler.
+# Check it is installed:  crontab -l | grep schedule:run
+# See scheduled tasks:    php artisan schedule:list
+
+* * * * * cd /www/wwwroot/hellomspace.com/backend && php artisan schedule:run >> /dev/null 2>&1

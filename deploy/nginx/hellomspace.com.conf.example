@@ -1,0 +1,87 @@
+# Nginx vhost for hellomspace.com (aaPanel: Website → hellomspace.com → Config).
+# Based on the config documented in DEPLOYMENT.MD, plus the /socket.io proxy.
+# Compare with the live file before replacing:  nginx -T | less
+# After editing:  nginx -t && nginx -s reload
+
+server {
+    listen 80;
+    server_name hellomspace.com www.hellomspace.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name hellomspace.com www.hellomspace.com;
+
+    # React SPA build output (frontend/ → npm run build)
+    root /www/wwwroot/hellomspace.com/backend/public/hellom;
+    index index.html;
+
+    ssl_certificate     /www/server/panel/vhost/cert/hellomspace.com/fullchain.pem;
+    ssl_certificate_key /www/server/panel/vhost/cert/hellomspace.com/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+
+    add_header X-Frame-Options "SAMEORIGIN";
+    add_header X-Content-Type-Options "nosniff";
+    charset utf-8;
+    client_max_body_size 20m;
+
+    # PWA service worker: never cache
+    location = /sw.js {
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        try_files $uri =404;
+    }
+
+    location ^~ /.well-known/acme-challenge/ {
+        default_type "text/plain";
+        try_files $uri =404;
+    }
+
+    # Laravel API
+    location ^~ /api {
+        root /www/wwwroot/hellomspace.com/backend/public;
+        rewrite ^/api/(.*)$ /index.php break;
+        fastcgi_pass unix:/tmp/php-cgi-83.sock;
+        fastcgi_param SCRIPT_FILENAME /www/wwwroot/hellomspace.com/backend/public/index.php;
+        fastcgi_param SCRIPT_NAME /index.php;
+        fastcgi_param REQUEST_URI $request_uri;
+        include fastcgi_params;
+        fastcgi_hide_header X-Powered-By;
+    }
+
+    # Public uploads (storage/app/public), no `storage:link` needed
+    location ^~ /storage {
+        alias /www/wwwroot/hellomspace.com/backend/storage/app/public;
+        try_files $uri =404;
+    }
+
+    location ^~ /media {
+        alias /www/wwwroot/hellomspace.com/backend/storage/app/public;
+        try_files $uri =404;
+    }
+
+    # Realtime Socket.IO (realtime/server.js via PM2 "hellom-realtime")
+    location ^~ /socket.io/ {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 60s;
+    }
+
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot|webp)$ {
+        expires max;
+        add_header Cache-Control "public, immutable";
+        access_log off;
+        try_files $uri =404;
+    }
+
+    # SPA fallback
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
