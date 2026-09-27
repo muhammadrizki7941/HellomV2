@@ -227,7 +227,18 @@ export {
   updatePosRewardRule,
   updatePosTable,
 } from './pos';
-export type { PosExperienceDashboard, PosExperiencePromo, PosExperienceReservation, PosExperienceSpace, PosOutlet, PosOutletListResponse } from './pos';
+export type {
+  PosExperienceClaim,
+  PosExperienceDashboard,
+  PosExperienceMember,
+  PosExperiencePromo,
+  PosExperienceReservation,
+  PosExperienceSpace,
+  PosExperienceSpaceItem,
+  PosOutlet,
+  PosOutletListResponse,
+  PosTableRecord,
+} from './pos';
 export {
   aiAssistArticle,
   createAdminClient,

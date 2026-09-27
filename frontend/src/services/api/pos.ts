@@ -8,8 +8,20 @@ export function getPosAccess() {
   return apiRequest<Record<string, unknown>>('/apps/pos/access');
 }
 
+// A dining table as returned by PosTableController (dining_tables row).
+export type PosTableRecord = {
+  id: number;
+  tenant_id: string;
+  public_id: string;
+  code: string;
+  name: string | null;
+  is_active: boolean;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
 export function getPosTables() {
-  return apiRequest<Record<string, unknown>>('/pos/tables');
+  return apiRequest<{ tables: PosTableRecord[] }>('/pos/tables');
 }
 
 export function createPosTable(payload: Record<string, unknown>) {
@@ -221,23 +233,130 @@ export function applyReward(payload: Record<string, unknown>) {
   });
 }
 
-export type PosExperienceDashboard = Record<string, unknown>;
-export type PosExperiencePromo = Record<string, unknown>;
-export type PosExperienceSpace = Record<string, unknown>;
-export type PosExperienceReservation = Record<string, unknown>;
+// Shapes returned by PosExperienceController (transformPromo/Claim/Space/Reservation).
+export type PosExperiencePromo = {
+  id: number;
+  title: string;
+  promo_code: string | null;
+  description: string | null;
+  terms: string | null;
+  thumbnail_url: string | null;
+  link_url: string | null;
+  bonus_points: number;
+  minimum_spend: number;
+  claim_limit: number | null;
+  claimed_count: number;
+  requires_reservation: boolean;
+  starts_at: string | null;
+  ends_at: string | null;
+  valid_until: string | null;
+  is_active: boolean;
+  sort_order: number;
+};
+
+export type PosExperienceMember = {
+  id: number;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  total_points: number;
+  redeemable_points: number;
+  total_orders: number;
+  total_spent: number;
+  tier: string | null;
+};
+
+export type PosExperienceClaim = {
+  id: number;
+  promo: { id: number; title: string; promo_code: string | null } | null;
+  member: PosExperienceMember | null;
+  customer_name: string;
+  customer_phone: string | null;
+  customer_email: string | null;
+  claim_code: string | null;
+  bonus_points_awarded: number;
+  claimed_via: string | null;
+  created_at: string | null;
+};
+
+export type PosExperienceSpaceItem = {
+  id: number;
+  product_id: number;
+  product_name: string;
+  unit_price: number;
+  qty: number;
+  is_required: boolean;
+  sort_order: number;
+  line_total: number;
+};
+
+export type PosExperienceSpace = {
+  id: number;
+  name: string;
+  slug: string;
+  location: string | null;
+  capacity: number;
+  description: string | null;
+  rent_price: number;
+  rent_enabled: boolean;
+  min_menu_total: number;
+  sort_order: number;
+  is_active: boolean;
+  cover_image_url: string | null;
+  images: Array<{ id: number; url: string; caption: string | null }>;
+  items: PosExperienceSpaceItem[];
+  estimated_points: number;
+};
+
+export type PosExperienceReservation = {
+  id: number;
+  space_name: string;
+  reservation_space_id: number;
+  customer_name: string;
+  customer_phone: string;
+  customer_email: string | null;
+  scheduled_at: string | null;
+  duration_minutes: number;
+  guests_count: number;
+  notes: string | null;
+  admin_notes: string | null;
+  status: string;
+  rent_price: number;
+  items_total: number;
+  menu_commitment_total: number;
+  total_price: number;
+  estimated_points: number;
+  items_snapshot: Array<Record<string, unknown>>;
+  menu_order_snapshot: Array<Record<string, unknown>>;
+};
+
+export type PosExperienceDashboard = {
+  summary: {
+    active_promos: number;
+    promo_claims: number;
+    active_spaces: number;
+    pending_reservations: number;
+  };
+  loyalty_settings: Record<string, unknown>;
+  products: Array<{ id: number; name: string; price: number }>;
+  promos: PosExperiencePromo[];
+  promo_claims: PosExperienceClaim[];
+  spaces: PosExperienceSpace[];
+  reservations: PosExperienceReservation[];
+};
 
 export function getPosExperienceDashboard() {
   return apiRequest<PosExperienceDashboard>('/pos/customer-experience/dashboard');
 }
 
-export function createPosExperiencePromo(payload: Record<string, unknown>) {
+export function createPosExperiencePromo(payload: Record<string, unknown> | FormData) {
   return apiRequest<Record<string, unknown>>('/pos/customer-experience/promos', {
     method: 'POST',
     body: payload,
   });
 }
 
-export function updatePosExperiencePromo(promoId: number, payload: Record<string, unknown>) {
+export function updatePosExperiencePromo(promoId: number, payload: Record<string, unknown> | FormData) {
   return apiRequest<Record<string, unknown>>(`/pos/customer-experience/promos/${promoId}`, {
     method: 'POST',
     body: payload,
@@ -250,14 +369,14 @@ export function deletePosExperiencePromo(promoId: number) {
   });
 }
 
-export function createPosExperienceSpace(payload: Record<string, unknown>) {
+export function createPosExperienceSpace(payload: Record<string, unknown> | FormData) {
   return apiRequest<Record<string, unknown>>('/pos/customer-experience/spaces', {
     method: 'POST',
     body: payload,
   });
 }
 
-export function updatePosExperienceSpace(spaceId: number, payload: Record<string, unknown>) {
+export function updatePosExperienceSpace(spaceId: number, payload: Record<string, unknown> | FormData) {
   return apiRequest<Record<string, unknown>>(`/pos/customer-experience/spaces/${spaceId}`, {
     method: 'POST',
     body: payload,
