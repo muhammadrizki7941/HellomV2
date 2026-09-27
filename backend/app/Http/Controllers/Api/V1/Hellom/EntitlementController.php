@@ -84,13 +84,8 @@ class EntitlementController extends BaseApiController
             ], 'Entitlement status');
         }
 
-        $status = (string) $entitlement->status;
-        $allowed = in_array($status, ['active', 'trialing'], true);
-
-        if ($allowed && $entitlement->ends_at && $entitlement->ends_at->isPast()) {
-            $allowed = false;
-            $status = 'expired';
-        }
+        $status = $entitlement->effectiveStatus();
+        $allowed = $entitlement->allowsAccess();
 
         return $this->ok([
             'app' => (string) ($entitlement->app->slug ?? $slug),

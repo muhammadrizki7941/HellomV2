@@ -31,13 +31,8 @@ class MemberDashboardController extends BaseApiController
 
         $cards = $apps->map(function (AppCatalog $app) {
             $entitlement = $app->entitlements->first();
-            $status = (string) ($entitlement?->status ?? 'locked');
-            $allowed = in_array($status, ['active', 'trialing'], true);
-
-            if ($allowed && $entitlement?->ends_at && $entitlement->ends_at->isPast()) {
-                $allowed = false;
-                $status = 'expired';
-            }
+            $status = $entitlement?->effectiveStatus() ?? 'locked';
+            $allowed = (bool) $entitlement?->allowsAccess();
 
             $action = $allowed ? 'open' : 'upgrade';
 

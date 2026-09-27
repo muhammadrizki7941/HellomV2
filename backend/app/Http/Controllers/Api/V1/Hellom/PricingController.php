@@ -40,11 +40,7 @@ class PricingController extends BaseApiController
 
         $items = $apps->map(function (AppCatalog $app) use ($plans) {
             $entitlement = $app->entitlements->first();
-            $currentStatus = (string) ($entitlement?->status ?? 'locked');
-
-            if (in_array($currentStatus, ['active', 'trialing'], true) && $entitlement?->ends_at && $entitlement->ends_at->isPast()) {
-                $currentStatus = 'expired';
-            }
+            $currentStatus = $entitlement?->effectiveStatus() ?? 'locked';
 
             $isCurrentPlanActive = in_array($currentStatus, ['active', 'trialing'], true);
             $currentPlanSlug = $isCurrentPlanActive ? (string) ($entitlement?->plan?->slug ?? '') : '';

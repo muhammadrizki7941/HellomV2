@@ -27,6 +27,30 @@ class Entitlement extends Model
         ];
     }
 
+    /**
+     * Status used for access decisions: an active/trialing entitlement whose
+     * ends_at (+ BILLING_GRACE_DAYS) has passed counts as "expired", even if
+     * the scheduler has not updated the stored status yet.
+     */
+    public function effectiveStatus(): string
+    {
+        $status = (string) ($this->status ?? 'locked');
+
+        if (in_array($status, ['active', 'trialing'], true) && $this->ends_at !== null) {
+            $graceDays = (int) config('payments.billing.grace_days', 0);
+            if ($this->ends_at->copy()->addDays($graceDays)->isPast()) {
+                return 'expired';
+            }
+        }
+
+        return $status;
+    }
+
+    public function allowsAccess(): bool
+    {
+        return in_array($this->effectiveStatus(), ['active', 'trialing'], true);
+    }
+
     public function organization(): BelongsTo
     {
         return $this->belongsTo(Organization::class);

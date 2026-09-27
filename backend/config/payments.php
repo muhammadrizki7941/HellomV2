@@ -7,6 +7,11 @@ return [
         'enabled' => (bool) env('BILLING_MOCK_ENABLED', false),
     ],
 
+    'billing' => [
+        // Days an expired subscription keeps app access before it is locked.
+        'grace_days' => (int) env('BILLING_GRACE_DAYS', 0),
+    ],
+
     // Platform-level policy for landing-page product sales + seller wallet payouts.
     'platform' => [
         // Commission Hellom keeps from each landing-page product sale, in percent.

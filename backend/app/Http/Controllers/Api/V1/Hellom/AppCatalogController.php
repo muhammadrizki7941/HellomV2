@@ -37,8 +37,8 @@ class AppCatalogController extends BaseApiController
 
         $items = $apps->map(function (AppCatalog $app) use ($plans) {
             $entitlement = $app->entitlements->first();
-            $status = (string) ($entitlement?->status ?? 'locked');
-            $allowed = in_array($status, ['active', 'trialing'], true);
+            $status = $entitlement?->effectiveStatus() ?? 'locked';
+            $allowed = (bool) $entitlement?->allowsAccess();
 
             $recommendedPlan = $this->recommendedPlanSlug($app->slug);
             $plan = $plans->firstWhere('slug', $recommendedPlan);
@@ -105,8 +105,8 @@ class AppCatalogController extends BaseApiController
         }
 
         $entitlement = $app->entitlements->first();
-        $status = (string) ($entitlement?->status ?? 'locked');
-        $allowed = in_array($status, ['active', 'trialing'], true);
+        $status = $entitlement?->effectiveStatus() ?? 'locked';
+        $allowed = (bool) $entitlement?->allowsAccess();
 
         $recommendedPlanSlug = $this->recommendedPlanSlug($app->slug);
         $recommendedPlan = Plan::query()

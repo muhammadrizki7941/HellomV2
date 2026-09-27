@@ -67,13 +67,8 @@ class EnsureAppEntitlement
             ->orderByDesc('id')
             ->first();
 
-        $status = (string) ($entitlement->status ?? 'locked');
-        $allowed = in_array($status, ['active', 'trialing'], true);
-
-        if ($allowed && $entitlement?->ends_at && $entitlement->ends_at->isPast()) {
-            $allowed = false;
-            $status = 'expired';
-        }
+        $status = $entitlement instanceof Entitlement ? $entitlement->effectiveStatus() : 'locked';
+        $allowed = $entitlement instanceof Entitlement && $entitlement->allowsAccess();
 
         if (!$allowed) {
             return response()->json([
