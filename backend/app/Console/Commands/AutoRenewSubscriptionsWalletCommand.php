@@ -6,6 +6,7 @@ use App\Models\Entitlement;
 use App\Models\OrganizationWallet;
 use App\Models\OrganizationWalletTransaction;
 use App\Models\Subscription;
+use App\Services\Billing\EntitlementService;
 use App\Services\NotificationService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -14,6 +15,7 @@ class AutoRenewSubscriptionsWalletCommand extends Command
 {
     public function __construct(
         private readonly NotificationService $notificationService,
+        private readonly EntitlementService $entitlements,
     ) {
         parent::__construct();
     }
@@ -107,7 +109,7 @@ class AutoRenewSubscriptionsWalletCommand extends Command
     {
         return DB::transaction(function () use ($subscriptionId, $now): string {
             $subscription = Subscription::query()
-                ->with(['app:id,slug', 'plan:id,slug', 'organization:id,name'])
+                ->with(['app:id,slug', 'plan:id,slug,type,duration_days,billing_cycles', 'organization:id,name'])
                 ->where('id', $subscriptionId)
                 ->lockForUpdate()
                 ->first();
@@ -189,7 +191,7 @@ class AutoRenewSubscriptionsWalletCommand extends Command
             if ($renewalStart->lt($now)) {
                 $renewalStart = $now->copy();
             }
-            $renewalEnd = $renewalStart->copy()->addMonth();
+            $renewalEnd = $this->entitlements->subscriptionEndsAt($subscription, $renewalStart);
 
             $meta = is_array($subscription->metadata) ? $subscription->metadata : [];
             $meta['wallet_last_auto_renew'] = [
@@ -206,18 +208,8 @@ class AutoRenewSubscriptionsWalletCommand extends Command
                 'metadata' => $meta,
             ])->save();
 
-            Entitlement::query()->updateOrCreate(
-                [
-                    'organization_id' => (int) $subscription->organization_id,
-                    'app_id' => (int) $subscription->app_id,
-                ],
-                [
-                    'plan_id' => (int) $subscription->plan_id,
-                    'status' => 'active',
-                    'starts_at' => $renewalStart,
-                    'ends_at' => null,
-                ]
-            );
+            // Access lasts exactly as long as the renewed period.
+            $this->entitlements->grantForSubscription($subscription, $renewalStart);
 
             // Create notification for successful auto-renewal
             $this->notificationService->createSubscriptionRenewalNotif($subscription, $amount, 'auto_wallet');

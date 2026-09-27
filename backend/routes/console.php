@@ -371,3 +371,7 @@ Schedule::command('hellom:billing:auto-renew-wallet --limit=500')
 Schedule::command('hellom:wallet:release-pending-settlements --limit=300')
     ->everyFifteenMinutes()
     ->withoutOverlapping();
+
+Schedule::command('hellom:billing:expire-subscriptions --limit=500')
+    ->hourly()
+    ->withoutOverlapping();

@@ -54,6 +54,30 @@ class EntitlementService
         );
     }
 
+    /**
+     * Mark an ended subscription (and its entitlement) as expired. The
+     * entitlement is only touched when its own ends_at has passed, so a newer
+     * purchase that already extended access is never overwritten.
+     */
+    public function expire(Subscription $subscription, CarbonInterface $now, string $reason): void
+    {
+        $meta = is_array($subscription->metadata) ? $subscription->metadata : [];
+        $meta['expired'] = ['at' => $now->toISOString(), 'reason' => $reason];
+
+        $subscription->forceFill([
+            'status' => 'expired',
+            'metadata' => $meta,
+        ])->save();
+
+        Entitlement::query()
+            ->where('organization_id', (int) $subscription->organization_id)
+            ->where('app_id', (int) $subscription->app_id)
+            ->whereIn('status', ['active', 'trialing'])
+            ->whereNotNull('ends_at')
+            ->where('ends_at', '<=', $now)
+            ->update(['status' => 'expired']);
+    }
+
     /** Grant access that lasts exactly as long as $subscription. */
     public function grantForSubscription(Subscription $subscription, CarbonInterface $startsAt): Entitlement
     {
