@@ -41,6 +41,7 @@ type Product = {
   category: string;
   type: string;
   price: number;
+  thumbnail_url?: string | null;
   tech_stack?: string[] | null;
   tags?: string[] | null;
   is_featured: boolean;

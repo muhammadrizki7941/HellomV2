@@ -1,7 +1,19 @@
 import { Check, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
-const plans = [
+type PricingPlan = {
+  label: string;
+  price: string;
+  period: string;
+  features: ReadonlyArray<{ text: string; included: boolean }>;
+  cta: string;
+  href: string;
+  kind: string;
+  featured: boolean;
+  badge?: string;
+};
+
+const plans: ReadonlyArray<PricingPlan> = [
   {
     label: 'Gratis',
     price: '0',
@@ -56,7 +68,7 @@ const plans = [
     kind: 'tertiary',
     featured: false,
   },
-] as const;
+];
 
 export const PricingSection = () => {
   return (
