@@ -2,6 +2,83 @@
 // Part of the Hellom API client; import from '@/lib/hellomApi' or '@/services/api'.
 import { apiRequest } from './client';
 
+// ─── Types (SuperAdminController payloads) ───
+
+type AppRef = { id: number; name: string; slug: string };
+type PlanRef = { id: number; name: string; slug: string; type: string; price: number };
+
+export type AdminUserListItem = {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  created_at: string;
+  current_organization_id: number | null;
+  current_organization?: { id: number; name: string; slug: string; status?: string } | null;
+};
+
+export type AdminPagination = { total: number; per_page: number; current_page: number; last_page: number };
+
+export type AdminUserDetail = {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  created_at: string;
+  current_organization: { id: number; name: string; slug: string; status: string } | null;
+  organizations: Array<{
+    id: number;
+    name: string;
+    slug: string;
+    role: string;
+    status: string;
+    entitlements: Array<{ id: number; status: string; starts_at: string | null; ends_at: string | null; app: AppRef | null; plan: PlanRef | null }>;
+    subscriptions: Array<{
+      id: number;
+      status: string;
+      billing_cycle: string;
+      amount: number;
+      currency: string;
+      starts_at: string | null;
+      ends_at: string | null;
+      created_at: string | null;
+      app: AppRef | null;
+      plan: PlanRef | null;
+    }>;
+  }>;
+  product_purchases: Array<{
+    id: number;
+    transaction_code: string;
+    amount_paid: number;
+    payment_status: string;
+    payment_method: string;
+    payment_gateway: string;
+    gateway_ref: string;
+    checkout_url: string;
+    paid_at: string | null;
+    created_at: string | null;
+    product: { id: number; slug: string; name: string; category: string } | null;
+  }>;
+};
+
+// A plans row (Plan model attributes).
+export type AdminPlan = {
+  id: number;
+  slug: string;
+  name: string;
+  type: string;
+  price: number;
+  is_active: boolean;
+  description: string | null;
+  features: unknown;
+  billing_cycles: string[] | null;
+  duration_days: number | null;
+  max_outlets: number | null;
+  is_visible: boolean;
+  is_recommended: boolean;
+  sort_order: number;
+};
+
 // ─── Admin Finance ───
 
 export function getFinanceSummary(query: { days?: number } = {}) {
@@ -117,11 +194,11 @@ export function getAdminOrganizations() {
 }
 
 export function getAdminUsers() {
-  return apiRequest<Record<string, unknown>>('/admin/users');
+  return apiRequest<{ items: AdminUserListItem[]; pagination: AdminPagination }>('/admin/users');
 }
 
 export function getAdminUserDetail(userId: number) {
-  return apiRequest<Record<string, unknown>>(`/admin/users/${userId}`);
+  return apiRequest<{ user: AdminUserDetail }>(`/admin/users/${userId}`);
 }
 
 export function suspendUser(userId: number) {
@@ -172,7 +249,7 @@ export function updateAdminApp(appId: number, payload: Record<string, unknown>) 
 }
 
 export function getAdminPlans() {
-  return apiRequest<Record<string, unknown>>('/admin/plans');
+  return apiRequest<{ items: AdminPlan[] }>('/admin/plans');
 }
 
 export function createAdminPlan(payload: Record<string, unknown>) {

@@ -2,6 +2,35 @@
 // Part of the Hellom API client; import from '@/lib/hellomApi' or '@/services/api'.
 import { apiRequest } from './client';
 
+// ─── Types (OrganizationTeamController payloads) ───
+
+export type OrganizationRef = { id: number; name: string; slug: string };
+
+export type TeamMember = {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  joined_at: string | null;
+};
+
+export type TeamInvitation = {
+  id: number;
+  organization_id: number;
+  email: string;
+  role: string;
+  status: string;
+  expires_at: string | null;
+  accepted_at: string | null;
+  accepted_by_user_id: number | null;
+  invited_by_user_id: number;
+  created_at: string | null;
+  updated_at: string | null;
+  token?: string;
+};
+
+export type EmailDelivery = { sent: boolean; error: string | null; mailer?: string };
+
 // ─── Organizations ───
 
 export function getOrganizations() {
@@ -20,22 +49,23 @@ export function switchOrganization(payload: { organization_id: number }) {
 }
 
 export function getOrganizationTeam() {
-  return apiRequest<Record<string, unknown>>('/organizations/current/team');
+  return apiRequest<{ organization: OrganizationRef; requester_role: string; items: TeamMember[] }>('/organizations/current/team');
 }
 
-export function createOrganizationInvitation(payload: { email: string; role?: string }) {
-  return apiRequest<Record<string, unknown>>('/organizations/current/team/invite', {
+// NOTE: POST /team/invite adds an already-registered user directly (no token).
+export function createOrganizationInvitation(payload: { email: string; role?: string; expires_in_days?: number }) {
+  return apiRequest<{ organization_id: number; member: TeamMember | null }>('/organizations/current/team/invite', {
     method: 'POST',
     body: payload,
   });
 }
 
 export function getOrganizationInvitations() {
-  return apiRequest<Record<string, unknown>>('/organizations/current/team/invitations');
+  return apiRequest<{ organization: OrganizationRef; items: TeamInvitation[]; pagination: Record<string, unknown> }>('/organizations/current/team/invitations');
 }
 
 export function resendOrganizationInvitation(invitationId: number) {
-  return apiRequest<Record<string, unknown>>(`/organizations/current/team/invitations/${invitationId}/resend`, {
+  return apiRequest<{ organization_id: number; invitation: TeamInvitation; email_delivery: EmailDelivery }>(`/organizations/current/team/invitations/${invitationId}/resend`, {
     method: 'POST',
     body: {},
   });

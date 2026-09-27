@@ -126,7 +126,7 @@ export default function UserManagement() {
     try {
       if (activeTab === 'global' && isSuperAdmin) {
         const result = await getAdminUsers({ search: searchTerm || undefined, page: currentPage, limit: itemsPerPage });
-        const mapped = (result.items || []).map((u: { id: number; name: string; email: string; role: string; created_at: string; current_organization?: { id: number; name: string; slug: string; status: string } | null }) => ({
+        const mapped = (result.items || []).map((u: { id: number; name: string; email: string; role: string; created_at: string; current_organization?: { id: number; name: string; slug: string; status?: string } | null }) => ({
           id: u.id,
           name: u.name,
           email: u.email,
