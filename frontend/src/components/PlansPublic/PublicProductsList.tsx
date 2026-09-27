@@ -79,9 +79,9 @@ export default function PublicProductsList() {
                   <div className="mt-4 flex items-center justify-between gap-3">
                     <span className="font-bold text-zinc-950">{isFree ? 'Gratis' : `Rp ${Number(p.price || 0).toLocaleString('id-ID')}`}</span>
                     <Link
-                      to={isAuthenticated ? detailUrl : '/login'}
+                      to={isAuthenticated ? detailUrl : isFree ? '/login' : `/produk/${p.slug}/checkout`}
                       onClick={() => {
-                        if (!isAuthenticated) {
+                        if (!isAuthenticated && isFree) {
                           savePendingCheckoutIntent({
                             kind: 'digital_product',
                             product_id: p.id,

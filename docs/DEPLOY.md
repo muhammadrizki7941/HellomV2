@@ -53,7 +53,7 @@ Lakukan **sekali** saat pertama kali men-deploy hasil refactor:
    pm2 delete hellom-realtime && pm2 start deploy/ecosystem.config.js && pm2 save
    ```
 5. **Paket composer dihapus** (dbal, breeze, sail). Jika artisan error menyebut `SailServiceProvider`: `rm -f bootstrap/cache/packages.php bootstrap/cache/services.php && php artisan package:discover` (deploy.sh sudah melakukannya).
-6. **Migration baru**: `users.role_before_suspension` (hanya menambah kolom).
+6. **Migration baru** (semua aditif): `users.role_before_suspension`; checkout tamu produk digital: kolom `product_purchases.guest_token_hash/buyer_phone/access_email_sent_at`, `users.pending_guest_credentials`, tabel `login_links`. `FRONTEND_URL` **wajib** benar karena link di email akses produk memakainya, dan SMTP (Pengaturan Email super admin) harus aktif agar pembeli tamu menerima aksesnya.
 7. **Masa berlaku langganan lama**: jalankan laporan dulu, putuskan, baru terapkan:
    ```bash
    cd backend

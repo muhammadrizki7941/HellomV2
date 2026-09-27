@@ -564,9 +564,9 @@ export const HellomspaceLanding = ({ brand, logoSrc }: { brand: BrandSettings; l
                 return (
                 <Link
                   key={product.id}
-                  to={isAuthenticated ? detailUrl : '/login'}
+                  to={isAuthenticated ? detailUrl : isFree ? '/login' : `/produk/${product.slug}/checkout`}
                   onClick={() => {
-                    if (!isAuthenticated) {
+                    if (!isAuthenticated && isFree) {
                       savePendingCheckoutIntent({
                         kind: 'digital_product',
                         product_id: product.id,

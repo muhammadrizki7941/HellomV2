@@ -95,7 +95,8 @@ export const SaasSection = () => {
             const priceLabel = isFree ? 'Gratis' : `Rp ${Number(product.price || 0).toLocaleString('id-ID')}`;
             const thumbnail = getImageUrl(product.thumbnail_url || '');
             const detailUrl = `/dashboard/products/${product.slug}/checkout`;
-            const href = isAuthenticated ? detailUrl : '/login';
+            // Paid products: guest checkout (no login). Free products: sign in to activate.
+            const href = isAuthenticated ? detailUrl : isFree ? '/login' : `/produk/${product.slug}/checkout`;
             const cta = isFree ? 'Mulai Sekarang' : 'Beli Sekarang';
 
             return (
@@ -149,7 +150,7 @@ export const SaasSection = () => {
                   <Link
                     to={href}
                     onClick={() => {
-                      if (!isAuthenticated) {
+                      if (!isAuthenticated && isFree) {
                         savePendingCheckoutIntent({
                           kind: 'digital_product',
                           product_id: product.id,

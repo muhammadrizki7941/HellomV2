@@ -8,6 +8,9 @@ const LoginPage = lazy(() => import('@/pages/auth/LoginPage'));
 const RegisterPage = lazy(() => import('@/pages/auth/RegisterPage'));
 const ForgotPassword = lazy(() => import('@/pages/auth/ForgotPassword'));
 const ProdukPublicPage = lazy(() => import('@/pages/produk/index'));
+const GuestProductCheckoutPage = lazy(() => import('@/pages/produk/checkout'));
+const GuestCheckoutStatusPage = lazy(() => import('@/pages/produk/checkout-status'));
+const MagicLoginPage = lazy(() => import('@/pages/auth/MagicLoginPage'));
 const FaqPage = lazy(() => import('@/pages/public/FaqPage'));
 const RefundPolicyPage = lazy(() => import('@/pages/public/RefundPolicyPage'));
 const TermsPage = lazy(() => import('@/pages/public/TermsPage'));
@@ -91,6 +94,9 @@ export default function App() {
         <Route path="/customer/:organizationSlug/order/:tableToken/member" element={<MemberPortalPage />} />
 
         <Route path="/produk" element={<ProdukPublicPage />} />
+        <Route path="/produk/checkout/:token" element={<GuestCheckoutStatusPage />} />
+        <Route path="/produk/:slug/checkout" element={<GuestProductCheckoutPage />} />
+        <Route path="/auth/magic" element={<MagicLoginPage />} />
 
         {/* Legal & Info Pages (public) */}
         <Route path="/faq" element={<FaqPage />} />

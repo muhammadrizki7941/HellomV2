@@ -81,6 +81,8 @@ deploy/                          PM2, contoh Nginx, crontab, deploy.sh
 
 **Kasir**: `PosOrders` → `PATCH /pos/orders/{id}/status` `{status}` → `POST /pos/orders/{id}/payment` → struk `GET /pos/orders/{id}/receipt`. Poin loyalti diberikan saat order selesai.
 
+**Checkout tamu produk digital** (produk berbayar milik platform, tanpa login): `/produk/{slug}/checkout` → `POST /public/products/{slug}/checkout` `{email, phone?, payment_flow, …}` → pembelian ditautkan ke akun ber-email itu (dibuat otomatis bila belum ada, `users.pending_guest_credentials`) → halaman status `/produk/checkout/{token}` mem-*poll* `GET /public/product-checkouts/{token}`. Saat pembelian menjadi `paid` lewat jalur mana pun (webhook, sinkron iPaymu, approval super admin), `ProductPurchaseObserver` (after commit) memanggil `ProductAccessMailer`: satu email berisi link masuk sekali pakai (`login_links`, 7 hari → `/auth/magic` → `POST /auth/magic-login` → `/dashboard/products/{slug}`) dan password baru **hanya** untuk akun yang dibuat oleh checkout tamu. Akun lama tidak pernah diubah password-nya. Produk gratis/berlangganan tetap lewat login. Logika pembayaran bersama ada di `Services/DigitalProducts/ProductCheckoutService` (dipakai juga oleh checkout dashboard).
+
 ## 6. Realtime
 
 - Laravel memanggil `RealtimeClient::emitToRoom($room, $event, $data)` → `POST {REALTIME_SERVER_URL}/emit` dengan header `X-RT-SECRET`.
@@ -103,7 +105,7 @@ deploy/                          PM2, contoh Nginx, crontab, deploy.sh
 - **Scheduler**: `hellom:billing:auto-renew-wallet` (per jam, bulanan dari saldo wallet), `hellom:billing:expire-subscriptions` (per jam, tahunan/prabayar dan bulanan tanpa auto-renew), `notifications:check-expiry` (harian).
 - **Data lama**: `hellom:billing:backfill-entitlement-ends` (laporan dulu, tulis dengan `--force`).
 - **Endpoint mock** (top-up/checkout palsu) hanya aktif bila `BILLING_MOCK_ENABLED=true` (lokal saja).
-- **Produk digital** (`digital_products`, `product_purchases`): penjualan file sekali beli di katalog Hellom.
+- **Produk digital** (`digital_products`, `product_purchases`): penjualan file sekali beli (akses selamanya) di katalog Hellom; bisa dibeli tanpa login (lihat §5).
 
 **Wallet & penarikan**: saldo per organisasi (`organization_wallets` + ledger). Penjualan produk landing page masuk `pending` → dirilis ke `available` oleh `hellom:wallet:release-pending-settlements` setelah jeda settlement (hari kerja), dipotong komisi platform (`PLATFORM_SALE_COMMISSION_PERCENT`). Penarikan butuh KYC terverifikasi dan **hanya super admin** yang dapat menyetujui/menandai dibayar (lintas organisasi).
 

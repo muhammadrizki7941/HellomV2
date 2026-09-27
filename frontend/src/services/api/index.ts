@@ -332,3 +332,12 @@ export {
   updatePosStaffShift,
 } from './posStaff';
 export type { PosStaffAttendance, PosStaffAttendanceQr, PosStaffCashLog, PosStaffDashboard, PosStaffEmploymentStatus, PosStaffItem, PosStaffPermissionKey, PosStaffRole, PosStaffShift } from './posStaff';
+
+export {
+  getGuestCheckoutOptions,
+  getGuestCheckoutStatus,
+  magicLogin,
+  resendGuestAccessEmail,
+  startGuestCheckout,
+} from './guestCheckout';
+export type { GatewayPaymentInstructions, GuestCheckoutOptions, GuestCheckoutProduct, GuestCheckoutStartResult, GuestCheckoutStatus, ManualPaymentMethodOption } from './guestCheckout';

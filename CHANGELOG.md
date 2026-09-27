@@ -28,6 +28,7 @@ Audit lengkap dan status per temuan: [docs/AUDIT.md](docs/AUDIT.md). Langkah dep
 - **Billing**: akses paket tahunan tidak pernah berakhir; pembelian tahunan/lifetime via saldo wallet atau Xendit tercatat 1 bulan; webhook lama yang diputar ulang bisa menghidupkan akses kedaluwarsa; bulanan dengan auto-renew mati tidak pernah berakhir.
 
 ### Ditambahkan
+- **Checkout tamu produk digital**: produk berbayar milik platform bisa dibeli tanpa login (email wajib, no. HP opsional). Setelah lunas, pembeli menerima email berisi link sekali pakai yang langsung membuka produk di dashboard, plus password untuk akun baru. Halaman status pembayaran publik dengan polling dan kirim ulang email.
 - Fondasi penjualan: `Plan::accessEndsAt()`, `EntitlementService`, `Entitlement::effectiveStatus()`, masa tenggang `BILLING_GRACE_DAYS`, command `hellom:billing:expire-subscriptions` (per jam) dan `hellom:billing:backfill-entitlement-ends` (laporan dulu, `--force` untuk menulis). Paket **lifetime** (bayar sekali) didukung penuh.
 - Artefak deploy: `deploy/deploy.sh`, `deploy/ecosystem.config.js` (PM2), contoh Nginx (termasuk proxy `/socket.io`), `deploy/crontab.example`.
 - `.env.example` lengkap untuk backend, frontend, dan realtime.
@@ -53,6 +54,6 @@ Audit lengkap dan status per temuan: [docs/AUDIT.md](docs/AUDIT.md). Langkah dep
 
 ### Catatan upgrade
 - Build frontend dari `frontend/` (`npm ci --include=dev && npm run build`).
-- Migration baru: `users.role_before_suspension` (aditif).
+- Migration baru (aditif): `users.role_before_suspension`, `users.pending_guest_credentials`, kolom checkout tamu di `product_purchases`, tabel `login_links`.
 - Jalankan laporan `hellom:billing:backfill-entitlement-ends` sebelum memutuskan `--force`.
 - Pastikan cron `schedule:run` aktif dan `REALTIME_REQUIRE_AUTH=true`.
