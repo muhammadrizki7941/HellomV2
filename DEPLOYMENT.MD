@@ -88,7 +88,7 @@ DB_PASSWORD=[password_db]
 REALTIME_ENABLED=true
 REALTIME_SERVER_URL=http://127.0.0.1:3001
 REALTIME_PUBLIC_URL=https://hellomspace.com
-REALTIME_SERVER_SECRET=hellom1811@#!$
+REALTIME_SERVER_SECRET=<isi-dengan-secret-acak-panjang>
 REALTIME_TIMEOUT_SECONDS=1
 
 # POS URL — WAJIB diisi agar POS tidak redirect ke localhost
