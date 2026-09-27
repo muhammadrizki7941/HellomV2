@@ -320,11 +320,11 @@ Legenda: 🟢 aman (tanpa perubahan perilaku) · 🟡 perlu verifikasi · 🔴 b
 - [x] 🟢 D-2 skrip debug → `_archive/backend-debug-scripts/`
 - [x] 🟢 D-6 file UI mati
 - [x] 🟢 D-11 dokumen & file usang → `docs/notes/`, `docs/screenshots/`, `scripts/ngrok.yml`, `_archive/docs/` (D-12 dibatalkan: `server.php` dipakai)
-- [ ] 🟢 R-11 `.gitignore` (`.kilo/`, seluruh `backend/public/hellom/` kecuali yang dibutuhkan)
-- [ ] 🟡 P-1..P-5 bersihkan `plans/UI/package.json` → `npm install`, `npm run build`
-- [ ] 🟡 D-4/D-5/D-10 kelas & command tak terpakai → `_archive/`
-- [ ] 🟡 P-7/P-8 composer (`doctrine/dbal`, breeze, sail) → `composer install`, `route:list`, migrate status
-- [ ] 🔴 D-3 arsip UI Blade + route + middleware dummy + tes Blade + `backend/package.json` (setelah konfirmasi Nginx VPS)
+- [x] 🟢 R-11/D-9 `.gitignore`: `.kilo/`, `*.tsbuildinfo`, seluruh `backend/public/hellom/` (salinan ter-commit ternyata usang: `sw.js` v3 vs sumber v4) (`a2b2d02`)
+- [x] 🟡 P-1..P-5, D-8, S-11 `plans/UI/package.json`: −201 paket, `server.ts` dihapus (`npm run dev` = vite), `define` GEMINI dihapus. Bonus: `tsc` 313 → **231** error (tipe react-router v5 yang salah) (`18dbcbd`). ⚠ vite kini di devDependencies → di VPS pakai `npm ci --include=dev`
+- [x] 🟡 D-4/D-5/D-10 kelas & command tak terpakai → `_archive/backend-unused/` (+ controller/view/tes Breeze yang tidak ter-route). `OrganizationPolicy` dipertahankan (auto-discovered, akan dipakai Langkah 2) (`a5e8b29`)
+- [x] 🟡 P-7/P-8 composer: hapus `doctrine/dbal`, `laravel/breeze`, `laravel/sail` (`f6bfc3a`)
+- [ ] 🔴 D-3 arsip UI Blade + route + middleware dummy + tes Blade + `backend/package.json` — **DITAHAN** sampai config Nginx VPS dikonfirmasi (keputusan #2)
 
 ### Langkah 2: Struktur & penamaan backend
 - [ ] 🟢 `Enums` role/plan/status (tanpa mengubah nilai DB)
