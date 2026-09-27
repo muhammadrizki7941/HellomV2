@@ -68,8 +68,58 @@ export function checkoutConfirmWallet(payload: Record<string, unknown>) {
   });
 }
 
+// ─── Wallet types (WalletController payloads) ───
+
+export type WalletBalance = { available_balance: number; pending_balance: number; total_in: number; total_out: number };
+
+export type WalletTransaction = {
+  id: number;
+  type: string;
+  direction: string;
+  amount: number;
+  balance_after: number;
+  reference_type: string | null;
+  reference_id: string | null;
+  external_ref: string | null;
+  description: string | null;
+  metadata: unknown;
+  created_at: string | null;
+};
+
+export type WalletWithdrawal = {
+  id: number;
+  status: string;
+  amount: number;
+  fee_amount: number;
+  net_amount: number;
+  bank_code: string | null;
+  account_number_masked: string | null;
+  account_name: string | null;
+  provider: string;
+  external_ref: string | null;
+  provider_ref: string | null;
+  notes: string | null;
+  processed_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type WalletOverview = {
+  organization: { id: number; name: string; slug: string };
+  requester_role: string;
+  wallet: WalletBalance;
+  recent_transactions: WalletTransaction[];
+  pending_withdrawals: WalletWithdrawal[];
+};
+
+export type PayoutPolicy = {
+  query: { channel: string; amount: number };
+  policy: { default: Record<string, unknown>; channels: Record<string, unknown>; selected: Record<string, unknown> };
+  estimation: { fee_amount: number; net_amount: number };
+};
+
 export function getWalletOverview() {
-  return apiRequest<Record<string, unknown>>('/wallet/overview');
+  return apiRequest<WalletOverview>('/wallet/overview');
 }
 
 // Short-lived token for the Socket.IO handshake (grants private rooms).
@@ -84,7 +134,7 @@ export function getWalletTransactions(query: { limit?: number; cursor?: number; 
   if (query.type) params.set('type', query.type);
   const qs = params.toString() ? `?${params.toString()}` : '';
 
-  return apiRequest<Record<string, unknown>>(`/wallet/transactions${qs}`);
+  return apiRequest<{ items: WalletTransaction[]; pagination: Record<string, unknown> }>(`/wallet/transactions${qs}`);
 }
 
 export function createWalletTopupSession(payload: { amount: number; channel?: string }) {
@@ -107,7 +157,7 @@ export function getPayoutPolicy(query: { channel?: string; amount?: number } = {
   if (query.amount) params.set('amount', String(query.amount));
   const qs = params.toString() ? `?${params.toString()}` : '';
 
-  return apiRequest<Record<string, unknown>>(`/wallet/payout-policy${qs}`);
+  return apiRequest<PayoutPolicy>(`/wallet/payout-policy${qs}`);
 }
 
 export function requestWithdrawal(payload: Record<string, unknown>) {
