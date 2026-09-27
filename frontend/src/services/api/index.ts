@@ -277,3 +277,14 @@ export type {
 } from './admin';
 export type { EmailDelivery, OrganizationRef, TeamInvitation, TeamMember } from './organizations';
 export type { PayoutPolicy, WalletBalance, WalletOverview, WalletTransaction, WalletWithdrawal } from './billing';
+export type {
+  PosCategoryRecord,
+  PosOrderListItem,
+  PosProductOption,
+  PosProductOptionValue,
+  PosProductRecord,
+  PosReportDaily,
+  PosReportPeriod,
+  PosReportProducts,
+  PosReportSummary,
+} from './pos';

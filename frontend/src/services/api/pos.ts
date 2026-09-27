@@ -8,6 +8,121 @@ export function getPosAccess() {
   return apiRequest<Record<string, unknown>>('/apps/pos/access');
 }
 
+// ─── Menu, orders and reports (PosProductController/PosOrderController/PosReportController) ───
+
+export type PosCategoryRecord = {
+  id: number;
+  tenant_id: string;
+  name: string;
+  slug: string;
+  sort_order: number;
+  is_active: boolean;
+};
+
+export type PosProductOptionValue = {
+  id: number;
+  product_option_id: number;
+  name: string;
+  price_delta: number;
+  is_active: boolean;
+  sort_order: number;
+};
+
+export type PosProductOption = {
+  id: number;
+  product_id: number;
+  name: string;
+  type: 'single' | 'multi';
+  is_required: boolean;
+  is_active: boolean;
+  sort_order: number;
+  values: PosProductOptionValue[];
+};
+
+// products row with its category and options (index always eager-loads both).
+export type PosProductRecord = {
+  id: number;
+  tenant_id: string;
+  category_id: number;
+  name: string;
+  slug: string;
+  description: string | null;
+  price: number;
+  image_path: string | null;
+  sort_order: number;
+  is_available: boolean;
+  track_stock: boolean;
+  stock: number | null;
+  is_package: boolean;
+  show_as_banner: boolean;
+  banner_title: string | null;
+  banner_subtitle: string | null;
+  banner_starts_at: string | null;
+  banner_ends_at: string | null;
+  available_purchase_types: string[] | null;
+  preorder_enabled: boolean;
+  preorder_lead_time_minutes: number | null;
+  hide_when_unavailable: boolean;
+  category: PosCategoryRecord;
+  options: PosProductOption[];
+};
+
+export type PosOrderListItem = {
+  id: number;
+  order_number: string;
+  customer_name: string;
+  table: { id: number; code: string; name: string } | null;
+  table_label: string;
+  service_type: string;
+  status: string;
+  payment_status: string;
+  total_amount: number;
+  discount_amount: number;
+  final_amount: number;
+  member_id: number | null;
+  created_at: string;
+  updated_at: string;
+  items_count: number;
+  items: Array<{ id: number; product_name: string; quantity: number; unit_price: number; line_total: number }>;
+};
+
+export type PosReportPeriod = { start: string; end: string; days?: number };
+
+export type PosReportSummary = {
+  scope: 'all_outlets' | 'single_outlet';
+  is_owner: boolean;
+  period: PosReportPeriod;
+  summary: {
+    total_revenue: number;
+    total_orders: number;
+    avg_order_value: number;
+    total_items_sold: number;
+    revenue_change: number;
+    orders_change: number;
+  };
+  payment_breakdown: Array<{ payment_method: string; count: number; total: number }>;
+  service_breakdown: Array<Record<string, unknown>>;
+  peak_hours: Array<{ hour: number; count: number; total: number }>;
+  outlet_breakdown: Array<Record<string, unknown>>;
+};
+
+export type PosReportDaily = {
+  daily: Array<{ date: string; total_orders: number; total_revenue: number; avg_order: number }>;
+};
+
+export type PosReportProducts = {
+  top_products: Array<{
+    product_name: string;
+    product_id: number;
+    total_qty: number;
+    total_revenue: number;
+    avg_price: number;
+    order_count: number;
+  }>;
+  top_categories: Array<Record<string, unknown>>;
+  period: PosReportPeriod;
+};
+
 // A dining table as returned by PosTableController (dining_tables row).
 export type PosTableRecord = {
   id: number;
@@ -45,7 +160,7 @@ export function deletePosTable(tableId: number) {
 }
 
 export function getPosCategories() {
-  return apiRequest<Record<string, unknown>>('/pos/categories');
+  return apiRequest<{ categories: PosCategoryRecord[] }>('/pos/categories');
 }
 
 export function createPosCategory(payload: Record<string, unknown>) {
@@ -69,17 +184,17 @@ export function deletePosCategory(categoryId: number) {
 }
 
 export function getPosProducts() {
-  return apiRequest<Record<string, unknown>>('/pos/products');
+  return apiRequest<{ products: PosProductRecord[] }>('/pos/products');
 }
 
-export function createPosProduct(payload: Record<string, unknown>) {
+export function createPosProduct(payload: Record<string, unknown> | FormData) {
   return apiRequest<Record<string, unknown>>('/pos/products', {
     method: 'POST',
     body: payload,
   });
 }
 
-export function updatePosProduct(productId: number, payload: Record<string, unknown>) {
+export function updatePosProduct(productId: number, payload: Record<string, unknown> | FormData) {
   return apiRequest<Record<string, unknown>>(`/pos/products/${productId}`, {
     method: 'PATCH',
     body: payload,
@@ -137,7 +252,7 @@ export function getPublicOrganizationOutlets(organizationSlug: string) {
 }
 
 export function getPosOrders() {
-  return apiRequest<Record<string, unknown>>('/pos/orders');
+  return apiRequest<{ orders: PosOrderListItem[] }>('/pos/orders');
 }
 
 export function createPosOrder(payload: Record<string, unknown>) {
@@ -406,15 +521,15 @@ function toReportQuery(params?: ReportParams): string {
 }
 
 export function getPosReportSummary(params?: ReportParams) {
-  return apiRequest<Record<string, unknown>>(`/pos/reports/summary${toReportQuery(params)}`);
+  return apiRequest<PosReportSummary>(`/pos/reports/summary${toReportQuery(params)}`);
 }
 
 export function getPosReportProducts(params?: ReportParams) {
-  return apiRequest<Record<string, unknown>>(`/pos/reports/products${toReportQuery(params)}`);
+  return apiRequest<PosReportProducts>(`/pos/reports/products${toReportQuery(params)}`);
 }
 
 export function getPosReportDaily(params?: ReportParams) {
-  return apiRequest<Record<string, unknown>>(`/pos/reports/daily${toReportQuery(params)}`);
+  return apiRequest<PosReportDaily>(`/pos/reports/daily${toReportQuery(params)}`);
 }
 
 export function exportPosReport() {
