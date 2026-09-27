@@ -24,7 +24,6 @@ import {
   pollWalletBalance,
   reconcileCheckout,
   requestWithdrawal,
-  walletTopupMock,
 } from '@/lib/hellomApi';
 import { cn } from '@/lib/utils';
 
@@ -278,9 +277,7 @@ export default function Payments() {
 
     try {
       if (!gatewayReady) {
-        await walletTopupMock({ amount, source, notes: '' });
-        await loadPage();
-        setSuccessMessage('Permintaan deposit sedang diproses. Saldo Anda akan diperbarui setelah konfirmasi.');
+        setError('Isi saldo belum tersedia karena pembayaran online sedang dalam konfigurasi. Silakan hubungi dukungan.');
         return;
       }
 

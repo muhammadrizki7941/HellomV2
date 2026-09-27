@@ -167,14 +167,14 @@ Route::prefix('v1/hellom')->name('api.v1.hellom.')->group(function () {
         Route::get('/billing/runtime-config', [BillingController::class, 'checkoutRuntimeConfig'])->name('billing.runtime_config');
         Route::post('/billing/checkout-start', [BillingController::class, 'checkoutStart'])->name('billing.checkout_start');
         Route::post('/billing/checkout-reconcile', [BillingController::class, 'reconcileCheckout'])->name('billing.checkout_reconcile');
-        Route::post('/billing/subscriptions/{subscriptionId}/renew-mock', [BillingController::class, 'renewSubscriptionMock'])->name('billing.subscriptions.renew_mock');
+        Route::post('/billing/subscriptions/{subscriptionId}/renew-mock', [BillingController::class, 'renewSubscriptionMock'])->middleware('billing.mock')->name('billing.subscriptions.renew_mock');
         Route::post('/billing/subscriptions/{subscriptionId}/renew-wallet', [BillingController::class, 'renewSubscriptionWallet'])->name('billing.subscriptions.renew_wallet');
         Route::post('/billing/subscriptions/{subscriptionId}/auto-renew-wallet', [BillingController::class, 'setSubscriptionWalletAutoRenew'])->name('billing.subscriptions.auto_renew_wallet');
-        Route::post('/billing/checkout-intent-mock', [BillingController::class, 'checkoutIntentMock'])->name('billing.checkout_intent_mock');
-        Route::post('/billing/checkout-confirm-mock', [BillingController::class, 'checkoutConfirmMock'])->name('billing.checkout_confirm_mock');
+        Route::post('/billing/checkout-intent-mock', [BillingController::class, 'checkoutIntentMock'])->middleware('billing.mock')->name('billing.checkout_intent_mock');
+        Route::post('/billing/checkout-confirm-mock', [BillingController::class, 'checkoutConfirmMock'])->middleware('billing.mock')->name('billing.checkout_confirm_mock');
         Route::post('/billing/checkout-confirm-wallet', [BillingController::class, 'checkoutConfirmWallet'])->name('billing.checkout_confirm_wallet');
         Route::post('/billing/wallet/topup-session', [BillingController::class, 'walletTopupSession'])->name('billing.wallet.topup_session');
-        Route::post('/billing/wallet/topup-mock', [BillingController::class, 'walletTopupMock'])->name('billing.wallet.topup_mock');
+        Route::post('/billing/wallet/topup-mock', [BillingController::class, 'walletTopupMock'])->middleware('billing.mock')->name('billing.wallet.topup_mock');
         Route::get('/billing/wallet/auto-renew-preview', [BillingController::class, 'walletAutoRenewPreview'])->name('billing.wallet.auto_renew_preview');
 
         Route::prefix('consumer/notifications')->group(function () {

@@ -34,6 +34,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'canUseApp' => \App\Http\Middleware\Api\EnsureAppEntitlement::class,
             'superAdmin' => \App\Http\Middleware\Api\EnsureSuperAdmin::class,
             'injectPosContext' => \App\Http\Middleware\Api\InjectPosContext::class,
+            'billing.mock' => \App\Http\Middleware\Api\EnsureBillingMockEnabled::class,
                 'web.pos.entitled' => \App\Http\Middleware\EnsureWebPosEntitlement::class,
 
             // Dev helpers

@@ -2,7 +2,10 @@
 
 return [
     'mock' => [
-        'webhook_secret' => env('MOCK_PAYMENT_WEBHOOK_SECRET', 'dev_mock_webhook_secret'),
+        // Mock billing endpoints grant balance/entitlements without payment.
+        // Keep false everywhere except a local dev machine.
+        'enabled' => (bool) env('BILLING_MOCK_ENABLED', false),
+        'webhook_secret' => env('MOCK_PAYMENT_WEBHOOK_SECRET', ''),
     ],
 
     // Platform-level policy for landing-page product sales + seller wallet payouts.
