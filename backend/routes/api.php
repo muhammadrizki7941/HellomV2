@@ -129,15 +129,15 @@ Route::prefix('v1/hellom')->name('api.v1.hellom.')->group(function () {
         Route::get('/wallet/overview', [WalletController::class, 'overview'])->name('wallet.overview');
         Route::get('/wallet/payout-policy', [WalletController::class, 'payoutPolicy'])->name('wallet.payout_policy');
         Route::get('/wallet/finance-summary', [WalletController::class, 'financeSummary'])->name('wallet.finance_summary');
-        Route::get('/wallet/admin/payout-queue', [WalletController::class, 'adminPayoutQueue'])->name('wallet.admin.payout_queue');
+        Route::get('/wallet/admin/payout-queue', [WalletController::class, 'adminPayoutQueue'])->middleware('superAdmin')->name('wallet.admin.payout_queue');
         Route::get('/wallet/transactions', [WalletController::class, 'transactions'])->name('wallet.transactions');
         Route::get('/wallet/payout-history', [WalletController::class, 'payoutHistory'])->name('wallet.payout_history');
         Route::get('/wallet/withdrawals', [WalletController::class, 'withdrawals'])->name('wallet.withdrawals');
         Route::post('/wallet/withdrawals', [WalletController::class, 'requestWithdrawal'])->name('wallet.withdrawals.request');
-        Route::post('/wallet/withdrawals/{withdrawalId}/approve', [WalletController::class, 'approveWithdrawal'])->name('wallet.withdrawals.approve');
-        Route::post('/wallet/withdrawals/{withdrawalId}/reject', [WalletController::class, 'rejectWithdrawal'])->name('wallet.withdrawals.reject');
-        Route::post('/wallet/withdrawals/{withdrawalId}/mark-paid', [WalletController::class, 'markWithdrawalPaid'])->name('wallet.withdrawals.mark_paid');
-        Route::post('/wallet/withdrawals/{withdrawalId}/mark-failed', [WalletController::class, 'markWithdrawalFailed'])->name('wallet.withdrawals.mark_failed');
+        Route::post('/wallet/withdrawals/{withdrawalId}/approve', [WalletController::class, 'approveWithdrawal'])->middleware('superAdmin')->name('wallet.withdrawals.approve');
+        Route::post('/wallet/withdrawals/{withdrawalId}/reject', [WalletController::class, 'rejectWithdrawal'])->middleware('superAdmin')->name('wallet.withdrawals.reject');
+        Route::post('/wallet/withdrawals/{withdrawalId}/mark-paid', [WalletController::class, 'markWithdrawalPaid'])->middleware('superAdmin')->name('wallet.withdrawals.mark_paid');
+        Route::post('/wallet/withdrawals/{withdrawalId}/mark-failed', [WalletController::class, 'markWithdrawalFailed'])->middleware('superAdmin')->name('wallet.withdrawals.mark_failed');
         Route::post('/wallet/withdrawals/{withdrawalId}/cancel', [WalletController::class, 'cancelWithdrawal'])->name('wallet.withdrawals.cancel');
 
         // Payout / KYC profile (KTP + bank) required before withdrawal

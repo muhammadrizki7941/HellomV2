@@ -421,13 +421,8 @@ class WalletController extends BaseApiController
             return $this->fail('Unauthorized', ['code' => 'UNAUTHORIZED'], 401);
         }
 
-        [$organization, $requesterRole, $error] = $this->resolveCurrentOrganizationContext($user);
-        if ($error) {
-            return $error;
-        }
-
-        if (!in_array($requesterRole, ['owner', 'admin', 'super_admin'], true)) {
-            return $this->fail('Only owner/admin/super admin can access payout queue', ['code' => 'INSUFFICIENT_ROLE'], 403);
+        if ($denied = $this->denyUnlessSuperAdmin($user, 'access payout queue')) {
+            return $denied;
         }
 
         $validated = $request->validate([
@@ -439,7 +434,8 @@ class WalletController extends BaseApiController
         $limit = (int) ($validated['limit'] ?? 20);
         $cursor = isset($validated['cursor']) ? (int) $validated['cursor'] : null;
 
-        $query = WalletWithdrawalRequest::query()->where('organization_id', (int) $organization->id);
+        // Platform-wide queue: super admin reviews withdrawals from every organization.
+        $query = WalletWithdrawalRequest::query()->with('organization:id,name,slug');
 
         if (!empty($validated['status'])) {
             $query->where('status', (string) $validated['status']);
@@ -456,15 +452,11 @@ class WalletController extends BaseApiController
         $items = $hasMore ? $rows->take($limit) : $rows;
         $nextCursor = $hasMore ? (int) ($items->last()?->id ?? 0) : null;
 
-        $summaryBase = WalletWithdrawalRequest::query()->where('organization_id', (int) $organization->id);
+        $summaryBase = WalletWithdrawalRequest::query();
 
         return $this->ok([
-            'organization' => [
-                'id' => (int) $organization->id,
-                'name' => (string) $organization->name,
-                'slug' => (string) $organization->slug,
-            ],
-            'requester_role' => $requesterRole,
+            'organization' => null,
+            'requester_role' => 'super_admin',
             'filters' => [
                 'status' => $validated['status'] ?? null,
                 'limit' => $limit,
@@ -484,6 +476,11 @@ class WalletController extends BaseApiController
                 $status = (string) $withdrawal->status;
 
                 return array_merge($this->withdrawalPayload($withdrawal), [
+                    'organization' => $withdrawal->organization ? [
+                        'id' => (int) $withdrawal->organization->id,
+                        'name' => (string) $withdrawal->organization->name,
+                        'slug' => (string) $withdrawal->organization->slug,
+                    ] : null,
                     'actions' => [
                         'can_approve' => $status === 'pending',
                         'can_reject' => in_array($status, ['pending', 'processing'], true),
@@ -586,17 +583,11 @@ class WalletController extends BaseApiController
             return $this->fail('Unauthorized', ['code' => 'UNAUTHORIZED'], 401);
         }
 
-        [$organization, $requesterRole, $error] = $this->resolveCurrentOrganizationContext($user);
-        if ($error) {
-            return $error;
-        }
-
-        if (!in_array($requesterRole, ['owner', 'admin', 'super_admin'], true)) {
-            return $this->fail('Only owner/admin/super admin can approve withdrawal', ['code' => 'INSUFFICIENT_ROLE'], 403);
+        if ($denied = $this->denyUnlessSuperAdmin($user, 'approve withdrawal')) {
+            return $denied;
         }
 
         $withdrawal = WalletWithdrawalRequest::query()
-            ->where('organization_id', (int) $organization->id)
             ->where('id', $withdrawalId)
             ->first();
 
@@ -624,7 +615,7 @@ class WalletController extends BaseApiController
                     'description' => 'Hellom withdrawal payout',
                     'currency' => 'IDR',
                     'metadata' => [
-                        'organization_id' => (int) $organization->id,
+                        'organization_id' => (int) $withdrawal->organization_id,
                         'withdrawal_id' => (int) $withdrawal->id,
                     ],
                 ], (string) ($withdrawal->external_ref ?? ''));
@@ -679,13 +670,8 @@ class WalletController extends BaseApiController
             return $this->fail('Unauthorized', ['code' => 'UNAUTHORIZED'], 401);
         }
 
-        [$organization, $requesterRole, $error] = $this->resolveCurrentOrganizationContext($user);
-        if ($error) {
-            return $error;
-        }
-
-        if (!in_array($requesterRole, ['owner', 'admin', 'super_admin'], true)) {
-            return $this->fail('Only owner/admin/super admin can mark withdrawal as paid', ['code' => 'INSUFFICIENT_ROLE'], 403);
+        if ($denied = $this->denyUnlessSuperAdmin($user, 'mark withdrawal as paid')) {
+            return $denied;
         }
 
         $validated = $request->validate([
@@ -693,9 +679,8 @@ class WalletController extends BaseApiController
             'notes' => ['nullable', 'string', 'max:500'],
         ]);
 
-        $result = DB::transaction(function () use ($organization, $user, $withdrawalId, $validated) {
+        $result = DB::transaction(function () use ($user, $withdrawalId, $validated) {
             $withdrawal = WalletWithdrawalRequest::query()
-                ->where('organization_id', (int) $organization->id)
                 ->where('id', $withdrawalId)
                 ->lockForUpdate()
                 ->first();
@@ -732,7 +717,7 @@ class WalletController extends BaseApiController
             ])->save();
 
             OrganizationWalletTransaction::query()->create([
-                'organization_id' => (int) $organization->id,
+                'organization_id' => (int) $withdrawal->organization_id,
                 'wallet_id' => (int) $wallet->id,
                 'user_id' => (int) $user->id,
                 'type' => 'withdrawal_paid_manual',
@@ -772,22 +757,16 @@ class WalletController extends BaseApiController
             return $this->fail('Unauthorized', ['code' => 'UNAUTHORIZED'], 401);
         }
 
-        [$organization, $requesterRole, $error] = $this->resolveCurrentOrganizationContext($user);
-        if ($error) {
-            return $error;
-        }
-
-        if (!in_array($requesterRole, ['owner', 'admin', 'super_admin'], true)) {
-            return $this->fail('Only owner/admin/super admin can mark withdrawal as failed', ['code' => 'INSUFFICIENT_ROLE'], 403);
+        if ($denied = $this->denyUnlessSuperAdmin($user, 'mark withdrawal as failed')) {
+            return $denied;
         }
 
         $validated = $request->validate([
             'notes' => ['nullable', 'string', 'max:500'],
         ]);
 
-        $result = DB::transaction(function () use ($organization, $user, $withdrawalId, $validated) {
+        $result = DB::transaction(function () use ($user, $withdrawalId, $validated) {
             $withdrawal = WalletWithdrawalRequest::query()
-                ->where('organization_id', (int) $organization->id)
                 ->where('id', $withdrawalId)
                 ->lockForUpdate()
                 ->first();
@@ -823,7 +802,7 @@ class WalletController extends BaseApiController
             ])->save();
 
             OrganizationWalletTransaction::query()->create([
-                'organization_id' => (int) $organization->id,
+                'organization_id' => (int) $withdrawal->organization_id,
                 'wallet_id' => (int) $wallet->id,
                 'user_id' => (int) $user->id,
                 'type' => 'withdrawal_failed_release',
@@ -1143,22 +1122,16 @@ class WalletController extends BaseApiController
             return $this->fail('Unauthorized', ['code' => 'UNAUTHORIZED'], 401);
         }
 
-        [$organization, $requesterRole, $error] = $this->resolveCurrentOrganizationContext($user);
-        if ($error) {
-            return $error;
-        }
-
-        if (!in_array($requesterRole, ['owner', 'admin', 'super_admin'], true)) {
-            return $this->fail('Only owner/admin/super admin can reject withdrawal', ['code' => 'INSUFFICIENT_ROLE'], 403);
+        if ($denied = $this->denyUnlessSuperAdmin($user, 'reject withdrawal')) {
+            return $denied;
         }
 
         $validated = $request->validate([
             'notes' => ['nullable', 'string', 'max:500'],
         ]);
 
-        $result = DB::transaction(function () use ($organization, $user, $withdrawalId, $validated) {
+        $result = DB::transaction(function () use ($user, $withdrawalId, $validated) {
             $withdrawal = WalletWithdrawalRequest::query()
-                ->where('organization_id', (int) $organization->id)
                 ->where('id', $withdrawalId)
                 ->lockForUpdate()
                 ->first();
@@ -1195,7 +1168,7 @@ class WalletController extends BaseApiController
             ])->save();
 
             OrganizationWalletTransaction::query()->create([
-                'organization_id' => (int) $organization->id,
+                'organization_id' => (int) $withdrawal->organization_id,
                 'wallet_id' => (int) $wallet->id,
                 'user_id' => (int) $user->id,
                 'type' => 'withdrawal_reject_release',
@@ -1240,6 +1213,20 @@ class WalletController extends BaseApiController
                 'status' => 'active',
             ]
         );
+    }
+
+    /**
+     * Withdrawal review (queue, approve, reject, mark paid/failed) is a platform
+     * duty: only super admin may perform it, never the organization that owns
+     * the funds. Returns a 403 response when the user is not a super admin.
+     */
+    private function denyUnlessSuperAdmin(User $user, string $action): ?JsonResponse
+    {
+        if ((string) ($user->role ?? '') === 'super_admin') {
+            return null;
+        }
+
+        return $this->fail("Only super admin can {$action}", ['code' => 'INSUFFICIENT_ROLE'], 403);
     }
 
     private function resolveCurrentOrganizationContext(User $user): array
