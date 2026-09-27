@@ -4,8 +4,29 @@ import { apiRequest, apiRequestBlob, publicApiRequest } from './client';
 
 // ─── POS ───
 
+// GET /apps/pos/access (EntitlementController::posAccess): SSO links into the POS.
+// customer_url/order_url point at legacy Blade routes and are not used by the SPA.
+export type PosAccessInfo = {
+  app: string;
+  organization: {
+    id: number;
+    name: string;
+    slug: string;
+    pos_tenant_slug: string;
+    pos_tenant_name: string;
+    pos_provisioned_at: string | null;
+  };
+  access: {
+    admin_url: string;
+    cashier_url: string;
+    customer_url: string;
+    order_url: string;
+    requires_legacy_admin_auth: boolean;
+  };
+};
+
 export function getPosAccess() {
-  return apiRequest<Record<string, unknown>>('/apps/pos/access');
+  return apiRequest<PosAccessInfo>('/apps/pos/access');
 }
 
 // ─── Menu, orders and reports (PosProductController/PosOrderController/PosReportController) ───
@@ -315,8 +336,16 @@ export function searchPosMembers(query: { q?: string; keyword?: string }) {
   return apiRequest<{ members: PosMemberSearchResult[] }>(`/pos/members/search${qs}`);
 }
 
+// PosLoyaltySetting::toPosPayload.
+export type PosLoyaltySettings = {
+  enabled: boolean;
+  points_per_amount: number;
+  min_spend_amount: number;
+  max_points_per_order: number | null;
+};
+
 export function getPosLoyaltySettings() {
-  return apiRequest<Record<string, unknown>>('/pos/loyalty/settings');
+  return apiRequest<PosLoyaltySettings>('/pos/loyalty/settings');
 }
 
 export function updatePosLoyaltySettings(payload: Record<string, unknown>) {
@@ -326,8 +355,24 @@ export function updatePosLoyaltySettings(payload: Record<string, unknown>) {
   });
 }
 
+// pos_reward_rules rows (PosRewardRule model).
+export type PosRewardRuleRecord = {
+  id: number;
+  tenant_id: string;
+  name: string;
+  trigger_type: 'points_threshold' | 'orders_threshold' | 'spend_threshold';
+  trigger_value: number;
+  reward_type: 'free_product' | 'discount_percent' | 'discount_fixed' | 'bonus_points';
+  reward_value: number;
+  reward_product_id: number | null;
+  is_active: boolean;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export function getPosLoyaltyRewardRules() {
-  return apiRequest<Record<string, unknown>>('/pos/loyalty/reward-rules');
+  return apiRequest<PosRewardRuleRecord[]>('/pos/loyalty/reward-rules');
 }
 
 export function createPosRewardRule(payload: Record<string, unknown>) {

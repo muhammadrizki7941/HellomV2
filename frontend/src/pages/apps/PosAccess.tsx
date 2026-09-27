@@ -1,26 +1,9 @@
 import { Link } from 'react-router-dom';
 import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, ExternalLink, Monitor, RefreshCw, Store, Tablet } from 'lucide-react';
-import { getPosAccess } from '@/lib/hellomApi';
+import { getPosAccess, type PosAccessInfo } from '@/lib/hellomApi';
 
-type PosAccessPayload = {
-  app: string;
-  organization: {
-    id: number;
-    name: string;
-    slug: string;
-    pos_tenant_slug: string;
-    pos_tenant_name: string;
-    pos_provisioned_at: string | null;
-  };
-  access: {
-    admin_url: string;
-    cashier_url: string;
-    customer_url: string;
-    order_url: string;
-    requires_legacy_admin_auth: boolean;
-  };
-};
+type PosAccessPayload = PosAccessInfo;
 
 export default function PosAccess() {
   const [loading, setLoading] = useState(true);

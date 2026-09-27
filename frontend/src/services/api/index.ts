@@ -293,3 +293,5 @@ export type { ConsumerNotification } from './consumer';
 export type { PosMemberSearchResult } from './pos';
 export type { HellomUser } from './auth';
 export type { OrganizationSummary } from './organizations';
+export type { PosAccessInfo } from './pos';
+export type { PosLoyaltySettings, PosRewardRuleRecord } from './pos';
