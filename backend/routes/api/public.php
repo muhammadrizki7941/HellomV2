@@ -30,10 +30,10 @@ Route::get('/public/landingpage/{organizationSlug}', [LandingBuilderController::
     ->name('public.landing.show_by_organization');
 Route::get('/public/landing/{organizationSlug}/{pageSlug}', [LandingBuilderController::class, 'publicShow'])
     ->name('public.landing.show');
-Route::post('/public/landing/{landingPageId}/customers', [LandingBuilderController::class, 'publicStoreCustomer'])
+Route::post('/public/landing/{landingPageId}/customers', [LandingBuilderController::class, 'publicStoreCustomer'])->middleware('throttle:hellom-public-write')
     ->name('public.landing.customers.store');
 // Public buyer checkout for landing-page product/PDF sales (gateway only)
-Route::post('/public/landingpage/{organizationSlug}/orders', [BillingController::class, 'publicLandingCheckout'])
+Route::post('/public/landingpage/{organizationSlug}/orders', [BillingController::class, 'publicLandingCheckout'])->middleware('throttle:hellom-public-write')
     ->name('public.landing.orders.checkout');
 Route::get('/public/landingpage/orders/{reference}/status', [LandingSaleController::class, 'status'])
     ->name('public.landing.orders.status');
@@ -52,24 +52,24 @@ Route::get('/public/products', [PublicProductController::class, 'index'])->name(
 Route::get('/public/products/categories', [PublicProductController::class, 'categories'])->name('public.products.categories');
 Route::get('/public/products/{slug}', [PublicProductController::class, 'show'])->name('public.products.show');
 Route::get('/pos/public/payment-methods/{tenantSlug}', [PosPaymentSettingController::class, 'publicSettings'])->name('pos.public.payment-methods');
-Route::post('/pos/public/members/register', [PosMemberController::class, 'publicRegister'])->name('pos.public.members.register');
-Route::get('/pos/public/members/lookup', [PosMemberController::class, 'publicLookup'])->name('pos.public.members.lookup');
+Route::post('/pos/public/members/register', [PosMemberController::class, 'publicRegister'])->middleware('throttle:hellom-public-write')->name('pos.public.members.register');
+Route::get('/pos/public/members/lookup', [PosMemberController::class, 'publicLookup'])->middleware('throttle:hellom-public-lookup')->name('pos.public.members.lookup');
 Route::post('/webhooks/xendit', [XenditWebhookController::class, 'handle'])->name('webhooks.xendit');
 Route::post('/webhooks/ipaymu', [IpaymuWebhookController::class, 'handle'])->name('webhooks.ipaymu');
 Route::post('/webhooks/doku', [DokuWebhookController::class, 'handle'])->name('webhooks.doku');
 
 // Public auth endpoints (no token needed)
-Route::post('/auth/register', [AuthController::class, 'register'])->name('auth.register');
-Route::post('/auth/login', [AuthController::class, 'login'])->name('auth.login');
-Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword'])->name('auth.forgot_password');
-Route::post('/auth/reset-password', [AuthController::class, 'resetPassword'])->name('auth.reset_password');
-Route::post('/auth/sso-login', [AuthController::class, 'ssoLogin'])->name('auth.sso_login');
+Route::post('/auth/register', [AuthController::class, 'register'])->middleware('throttle:hellom-auth')->name('auth.register');
+Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:hellom-auth')->name('auth.login');
+Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:hellom-auth')->name('auth.forgot_password');
+Route::post('/auth/reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:hellom-auth')->name('auth.reset_password');
+Route::post('/auth/sso-login', [AuthController::class, 'ssoLogin'])->middleware('throttle:hellom-auth')->name('auth.sso_login');
 
 // Public — customer self-order (scan QR, no login needed)
 Route::get('/pos/customer/menu/{tableToken}', [CustomerOrderController::class, 'getMenu']);
 Route::get('/pos/customer/organization/{organizationSlug}/outlets', [CustomerOrderController::class, 'getOrganizationOutlets']);
 Route::get('/pos/customer/organization/{organizationSlug}/menu', [CustomerOrderController::class, 'getOrganizationMenu']);
-Route::post('/pos/customer/order', [CustomerOrderController::class, 'createOrder']);
+Route::post('/pos/customer/order', [CustomerOrderController::class, 'createOrder'])->middleware('throttle:hellom-public-write');
 Route::get('/pos/customer/order/{orderNumber}', [CustomerOrderController::class, 'getOrderStatus']);
-Route::post('/pos/customer/promos/{promoId}/claim', [PosExperienceController::class, 'claimPromo']);
-Route::post('/pos/customer/reservations', [PosExperienceController::class, 'createReservation']);
+Route::post('/pos/customer/promos/{promoId}/claim', [PosExperienceController::class, 'claimPromo'])->middleware('throttle:hellom-public-write');
+Route::post('/pos/customer/reservations', [PosExperienceController::class, 'createReservation'])->middleware('throttle:hellom-public-write');
