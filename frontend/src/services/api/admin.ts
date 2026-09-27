@@ -1,5 +1,6 @@
 // Super admin: finance, gateways, users, apps/plans, promos, dashboard, notifications, mail.
 // Part of the Hellom API client; import from '@/lib/hellomApi' or '@/services/api'.
+import type { WalletWithdrawal } from './billing';
 import { apiRequest, buildQuery } from './client';
 
 // ─── Types (SuperAdminController payloads) ───
@@ -81,6 +82,79 @@ export type AdminPlan = {
 
 export type EmailDeliveryResult = { sent: boolean; error: string | null; mailer?: string };
 
+// ─── Finance / organizations types ───
+
+// Platform-wide finance (WalletController::platformFinanceSummary, super admin).
+export type PlatformFinanceSummary = {
+  range: { days: number; start_at: string; end_at: string };
+  xendit_balance?: { available_balance: number; pending_balance: number; currency: string; captured_at: string | null };
+  platform_revenue?: {
+    total_revenue: number;
+    revenue_count: number;
+    by_category: Record<string, number>;
+    withdrawable_revenue: number;
+    pending_payouts: number;
+  };
+  user_deposits?: { total_deposits: number; active_users_count: number };
+  organization_wallets?: { total_available: number; total_pending: number; total_inflow: number; total_outflow: number };
+  platform_payouts?: {
+    pending_count: number;
+    processing_count: number;
+    paid_count: number;
+    failed_count: number;
+    total_paid_amount: number;
+    total_pending_amount: number;
+  };
+  user_withdrawals?: {
+    pending_count: number;
+    processing_count: number;
+    paid_count: number;
+    failed_count: number;
+    total_pending_amount: number;
+  };
+};
+
+// Super-admin payout queue (WalletController::adminPayoutQueue).
+export type AdminPayoutQueueItem = WalletWithdrawal & {
+  organization: { id: number; name: string; slug: string } | null;
+  actions: { can_approve: boolean; can_reject: boolean; can_mark_paid: boolean; can_mark_failed: boolean; can_cancel: boolean };
+};
+
+export type AdminPayoutQueue = {
+  organization: null;
+  requester_role: string;
+  pagination: { has_more: boolean; next_cursor: number | null };
+  summary: { pending_count: number; processing_count: number; failed_count: number; paid_count: number };
+  items: AdminPayoutQueueItem[];
+};
+
+// Manual (transfer) checkouts awaiting approval (BillingController::adminPendingCheckouts).
+export type AdminManualCheckout = {
+  id: number;
+  intent_token: string;
+  status: string;
+  amount: number;
+  currency: string;
+  created_at: string;
+  organization?: { id: number; name: string };
+  user?: { id: number; name: string; email: string };
+  app?: { slug: string; name: string };
+  plan?: { slug: string; name: string };
+};
+
+// organizations row + users_count (SuperAdminController::listOrganizations).
+export type AdminOrganizationListItem = {
+  id: number;
+  name: string;
+  slug: string;
+  status: string;
+  users_count: number;
+  created_at: string;
+  max_outlets_override?: number | null;
+  pos_tenant_slug?: string | null;
+  default_locale?: string | null;
+};
+
 // ─── Admin Finance ───
 
 export function getFinanceSummary(query: { days?: number } = {}) {
@@ -88,7 +162,7 @@ export function getFinanceSummary(query: { days?: number } = {}) {
   if (query.days) params.set('days', String(query.days));
   const qs = params.toString() ? `?${params.toString()}` : '';
 
-  return apiRequest<Record<string, unknown>>(`/platform/finance-summary${qs}`);
+  return apiRequest<PlatformFinanceSummary>(`/platform/finance-summary${qs}`);
 }
 
 export function getPlatformFinanceSummary(query: { days?: number } = {}) {
@@ -109,7 +183,7 @@ export function getAdminPayoutQueue(query: { status?: string; limit?: number; cu
   if (query.cursor) params.set('cursor', String(query.cursor));
   const qs = params.toString() ? `?${params.toString()}` : '';
 
-  return apiRequest<Record<string, unknown>>(`/wallet/admin/payout-queue${qs}`);
+  return apiRequest<AdminPayoutQueue>(`/wallet/admin/payout-queue${qs}`);
 }
 
 export function approveWithdrawal(withdrawalId: number) {
@@ -208,7 +282,7 @@ export function updateAdminManualPaymentConfig(payload: FormData | Record<string
 }
 
 export function getAdminManualCheckouts(params?: { limit?: number }) {
-  return apiRequest<Record<string, unknown>>(`/admin/billing/manual-checkouts${buildQuery(params)}`);
+  return apiRequest<{ items: AdminManualCheckout[] }>(`/admin/billing/manual-checkouts${buildQuery(params)}`);
 }
 
 export function approveAdminManualCheckout(intentId: number) {
@@ -228,7 +302,7 @@ export function rejectAdminManualCheckout(intentId: number) {
 // ─── Admin Users & Organizations ───
 
 export function getAdminOrganizations(params?: { search?: string; status?: string; limit?: number; page?: number }) {
-  return apiRequest<Record<string, unknown>>(`/admin/organizations${buildQuery(params)}`);
+  return apiRequest<{ items: AdminOrganizationListItem[]; pagination: AdminPagination }>(`/admin/organizations${buildQuery(params)}`);
 }
 
 export function getAdminUsers(params?: { search?: string; page?: number; limit?: number }) {

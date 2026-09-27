@@ -295,3 +295,5 @@ export type { HellomUser } from './auth';
 export type { OrganizationSummary } from './organizations';
 export type { PosAccessInfo } from './pos';
 export type { PosLoyaltySettings, PosRewardRuleRecord } from './pos';
+export type { PosReceipt } from './pos';
+export type { AdminManualCheckout, AdminOrganizationListItem, AdminPayoutQueue, AdminPayoutQueueItem, PlatformFinanceSummary } from './admin';

@@ -301,8 +301,45 @@ export function confirmPosOrderPayment(orderId: number, payload: Record<string, 
   });
 }
 
+// GET /pos/orders/{id}/receipt (PosOrderController::receipt).
+export type PosReceipt = {
+  order_number: string;
+  created_at: string;
+  status: string;
+  service_type: string;
+  table_code?: string;
+  customer_name?: string;
+  customer_phone?: string;
+  customer_whatsapp?: string;
+  notes?: string;
+  items: Array<{
+    name: string;
+    quantity: number;
+    price: number;
+    subtotal: number;
+  }>;
+  total_amount: number;
+  discount_amount?: number;
+  final_amount?: number;
+  payment?: {
+    method: string;
+    amount: number;
+    change: number;
+    note?: string;
+    paid_at?: string;
+  };
+  organization: {
+    name: string;
+    logo_path?: string;
+    logo_url?: string;
+    logo_base64?: string;
+    address?: string;
+    phone?: string;
+  };
+};
+
 export function getPosOrderReceipt(orderId: number) {
-  return apiRequest<Record<string, unknown>>(`/pos/orders/${orderId}/receipt`);
+  return apiRequest<{ receipt: PosReceipt }>(`/pos/orders/${orderId}/receipt`);
 }
 
 export function getPosMembers() {

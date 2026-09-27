@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from 'react';
 import { X, Printer, Copy, MessageCircle } from 'lucide-react';
-import { getPosOrderReceipt } from '@/lib/hellomApi';
+import { getPosOrderReceipt, type PosReceipt } from '@/lib/hellomApi';
 import html2canvas from 'html2canvas';
 
 interface ReceiptProps {
@@ -9,39 +9,7 @@ interface ReceiptProps {
   orderId: number | null;
 }
 
-interface ReceiptData {
-  order_number: string;
-  created_at: string;
-  status: string;
-  service_type: string;
-  table_code?: string;
-  customer_name?: string;
-  customer_phone?: string;
-  customer_whatsapp?: string;
-  notes?: string;
-  items: Array<{
-    name: string;
-    quantity: number;
-    price: number;
-    subtotal: number;
-  }>;
-  total_amount: number;
-  payment?: {
-    method: string;
-    amount: number;
-    change: number;
-    note?: string;
-    paid_at?: string;
-  };
-  organization: {
-    name: string;
-    logo_path?: string;
-    logo_url?: string;
-    logo_base64?: string;
-    address?: string;
-    phone?: string;
-  };
-}
+type ReceiptData = PosReceipt;
 
 const ReceiptModal = ({ isOpen, onClose, orderId }: ReceiptProps) => {
   const receiptRef = useRef<HTMLDivElement>(null);
