@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api\V1\Hellom;
 
 use App\Models\CheckoutIntent;
-use App\Models\Entitlement;
 use App\Models\Invoice;
 use App\Models\OrganizationWallet;
 use App\Models\OrganizationWalletTransaction;
@@ -12,6 +11,7 @@ use App\Models\ProductPurchase;
 use App\Models\Subscription;
 use App\Models\WalletWithdrawalRequest;
 use App\Mail\HellomCheckoutStatusMail;
+use App\Services\Billing\EntitlementService;
 use App\Services\Hellom\LandingSaleService;
 use App\Services\Hellom\PlatformMailService;
 use App\Services\Hellom\PosProvisioningService;
@@ -717,22 +717,19 @@ class XenditWebhookController extends BaseApiController
                 $subscription->forceFill([
                     'status' => 'active',
                     'starts_at' => $now,
-                    'ends_at' => $now->copy()->addMonth(),
+                    'ends_at' => app(EntitlementService::class)->subscriptionEndsAt($subscription, $now, $intent->plan),
                     'metadata' => $subscriptionMeta,
                 ])->save();
             }
 
-            Entitlement::query()->updateOrCreate(
-                [
-                    'organization_id' => (int) $intent->organization_id,
-                    'app_id' => (int) $intent->app_id,
-                ],
-                [
-                    'plan_id' => (int) $intent->plan_id,
-                    'status' => 'active',
-                    'starts_at' => $now,
-                    'ends_at' => null,
-                ]
+            app(EntitlementService::class)->grant(
+                (int) $intent->organization_id,
+                (int) $intent->app_id,
+                (int) $intent->plan_id,
+                $now,
+                $subscription instanceof Subscription
+                    ? $subscription->ends_at
+                    : app(EntitlementService::class)->periodEndsAt($intent->plan, $now)
             );
 
             $invoiceId = (int) ($metadata['invoice_id'] ?? 0);

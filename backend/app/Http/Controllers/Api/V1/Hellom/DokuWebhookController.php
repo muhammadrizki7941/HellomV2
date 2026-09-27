@@ -3,12 +3,12 @@
 namespace App\Http\Controllers\Api\V1\Hellom;
 
 use App\Models\CheckoutIntent;
-use App\Models\Entitlement;
 use App\Models\Invoice;
 use App\Models\PaymentEvent;
 use App\Models\ProductPurchase;
 use App\Models\Subscription;
 use App\Mail\HellomCheckoutStatusMail;
+use App\Services\Billing\EntitlementService;
 use App\Services\Hellom\DokuSettingsService;
 use App\Services\Hellom\LandingSaleService;
 use App\Services\Hellom\PlatformMailService;
@@ -248,22 +248,19 @@ class DokuWebhookController extends BaseApiController
                 $subscription->forceFill([
                     'status' => 'active',
                     'starts_at' => $now,
-                    'ends_at' => $this->resolveSubscriptionEndAt($subscription->plan, $now),
+                    'ends_at' => app(EntitlementService::class)->subscriptionEndsAt($subscription, $now, $intent->plan),
                     'metadata' => $subscriptionMeta,
                 ])->save();
             }
 
-            Entitlement::query()->updateOrCreate(
-                [
-                    'organization_id' => (int) $intent->organization_id,
-                    'app_id' => (int) $intent->app_id,
-                ],
-                [
-                    'plan_id' => (int) $intent->plan_id,
-                    'status' => 'active',
-                    'starts_at' => $now,
-                    'ends_at' => null,
-                ]
+            app(EntitlementService::class)->grant(
+                (int) $intent->organization_id,
+                (int) $intent->app_id,
+                (int) $intent->plan_id,
+                $now,
+                $subscription instanceof Subscription
+                    ? $subscription->ends_at
+                    : app(EntitlementService::class)->periodEndsAt($intent->plan, $now)
             );
 
             if ($invoice instanceof Invoice) {
@@ -328,27 +325,6 @@ class DokuWebhookController extends BaseApiController
                 ])->save();
             }
         });
-    }
-
-    private function resolveSubscriptionEndAt(?\App\Models\Plan $plan, \Illuminate\Support\Carbon $startAt): ?\Illuminate\Support\Carbon
-    {
-        if (!$plan instanceof \App\Models\Plan) {
-            return $startAt->copy()->addMonth();
-        }
-
-        if ($plan->isLifetime()) {
-            return null;
-        }
-
-        if ($plan->duration_days) {
-            return $startAt->copy()->addDays((int) $plan->duration_days);
-        }
-
-        if ($plan->hasBillingCycle(\App\Models\Plan::BILLING_YEARLY)) {
-            return $startAt->copy()->addYear();
-        }
-
-        return $startAt->copy()->addMonth();
     }
 
     private function sendSuccessNotifications(?CheckoutIntent $intent): void
