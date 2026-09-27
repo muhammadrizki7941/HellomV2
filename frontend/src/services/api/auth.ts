@@ -41,20 +41,23 @@ export function logout() {
   });
 }
 
+// AuthController::userPayload (returned by /auth/me and /auth/profile).
+export type HellomUser = {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  current_organization: { id: number; name: string; slug: string; status: string } | null;
+  organizations: Array<{ id: number; name: string; slug: string; status: string; role: string }>;
+  pos_access?: PosAccess;
+};
+
 export function getAuthMe() {
-  return apiRequest<{
-    id: number;
-    name: string;
-    email: string;
-    role: string;
-    current_organization: { id: number; name: string; slug: string; status: string } | null;
-    organizations: Array<{ id: number; name: string; slug: string; status: string; role: string }>;
-    pos_access?: PosAccess;
-  }>('/auth/me');
+  return apiRequest<HellomUser>('/auth/me');
 }
 
 export function updateProfile(payload: { name?: string; email?: string; phone?: string }) {
-  return apiRequest<Record<string, unknown>>('/auth/profile', {
+  return apiRequest<HellomUser>('/auth/profile', {
     method: 'PUT',
     body: payload,
   });

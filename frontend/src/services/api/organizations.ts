@@ -6,6 +6,16 @@ import { apiRequest, buildQuery } from './client';
 
 export type OrganizationRef = { id: number; name: string; slug: string };
 
+// OrganizationController::index/current rows (role = caller's role in it).
+export type OrganizationSummary = {
+  id: number;
+  name: string;
+  slug: string;
+  status: string;
+  default_locale?: string | null;
+  role?: string;
+};
+
 export type TeamMember = {
   id: number;
   name: string;
@@ -34,11 +44,11 @@ export type EmailDelivery = { sent: boolean; error: string | null; mailer?: stri
 // ─── Organizations ───
 
 export function getOrganizations() {
-  return apiRequest<Array<Record<string, unknown>>>('/organizations');
+  return apiRequest<OrganizationSummary[]>('/organizations');
 }
 
 export function getCurrentOrganization() {
-  return apiRequest<Record<string, unknown> | null>('/organizations/current');
+  return apiRequest<OrganizationSummary | null>('/organizations/current');
 }
 
 export function switchOrganization(payload: { organization_id: number }) {
@@ -79,7 +89,7 @@ export function revokeOrganizationInvitation(invitationId: number) {
 }
 
 export function acceptOrganizationInvitation(payload: { token: string }) {
-  return apiRequest<Record<string, unknown>>('/organizations/current/team/invitations/accept', {
+  return apiRequest<{ organization: OrganizationRef; [key: string]: unknown }>('/organizations/current/team/invitations/accept', {
     method: 'POST',
     body: payload,
   });
