@@ -6,10 +6,14 @@ import {
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
-import { getAdminDashboardStats, getAdminProductPurchases, getFinanceSummary, getMemberDashboardCards } from '@/lib/hellomApi';
+import { getAdminDashboardStats, getAdminProductPurchases, getFinanceSummary, getMemberDashboardCards, type AdminDashboardStats } from '@/lib/hellomApi';
 import { toAdminFinanceView, type AdminFinanceView } from '@/lib/adminFinance';
 
-const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'];
+const growthRanges = [7, 30, 90] as const;
+type GrowthRange = (typeof growthRanges)[number];
+
+const formatDay = (isoDate: string) =>
+  new Date(`${isoDate}T00:00:00`).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
 
 type FinanceSummary = AdminFinanceView;
 
@@ -46,12 +50,9 @@ export default function AdminDashboard() {
   const [summary, setSummary] = useState<FinanceSummary>(emptySummary);
   const [cardsCount, setCardsCount] = useState(0);
   const [activeCardsCount, setActiveCardsCount] = useState(0);
-  const [adminStats, setAdminStats] = useState<{
-    organizations: { total: number; new_in_period: number };
-    users: { total: number; new_in_period: number };
-    subscriptions: { active: number; total: number };
-    paid_entitlements: number;
-  } | null>(null);
+  const [adminStats, setAdminStats] = useState<AdminDashboardStats | null>(null);
+  const [growthDays, setGrowthDays] = useState<GrowthRange>(30);
+  const [growthLoading, setGrowthLoading] = useState(true);
   const [recentPurchases, setRecentPurchases] = useState<Array<{
     id: number;
     payment_status?: string;
@@ -63,26 +64,20 @@ export default function AdminDashboard() {
   }>>([]);
   const [pendingManualCount, setPendingManualCount] = useState(0);
 
-  const chartData = monthLabels.map((name, index) => {
-    const baseInflow = Math.max(0, Math.floor(summary.period.inflow / monthLabels.length));
-    const baseOutflow = Math.max(0, Math.floor(summary.period.outflow / monthLabels.length));
-    const ratio = (index + 1) / monthLabels.length;
-    return {
-      name,
-      users: Math.max(0, Math.round(activeCardsCount * (0.6 + ratio))),
-      revenue: Math.max(0, Math.round(baseInflow * ratio) - Math.round(baseOutflow * 0.35)),
-    };
-  });
+  const chartData = (adminStats?.growth ?? []).map((point) => ({
+    name: formatDay(point.date),
+    users: point.users,
+    organizations: point.organizations,
+  }));
 
   useEffect(() => {
     const loadDashboard = async () => {
       setLoading(true);
       setError(null);
       try {
-        const [finance, memberCards, stats] = await Promise.all([
+        const [finance, memberCards] = await Promise.all([
           getFinanceSummary({ days: 30 }),
           getMemberDashboardCards(),
-          getAdminDashboardStats({ days: 30 }).catch(() => null),
         ]);
         const financeSummary = toAdminFinanceView(finance);
         const cards = Array.isArray(memberCards?.cards) ? memberCards.cards : [];
@@ -90,7 +85,6 @@ export default function AdminDashboard() {
         setSummary(financeSummary);
         setCardsCount(cards.length);
         setActiveCardsCount(cards.filter((item) => item?.entitlement?.allowed).length);
-        if (stats) setAdminStats(stats);
         const [purchaseResponse, pendingManualResponse] = await Promise.all([
           getAdminProductPurchases({ per_page: 5 }),
           getAdminProductPurchases({ status: 'pending', payment_gateway: 'manual', per_page: 1 }),
@@ -107,6 +101,16 @@ export default function AdminDashboard() {
 
     void loadDashboard();
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setGrowthLoading(true);
+    getAdminDashboardStats({ days: growthDays })
+      .then((stats) => { if (!cancelled) setAdminStats(stats); })
+      .catch(() => { /* platform summary & chart stay empty; the finance error banner covers load failures */ })
+      .finally(() => { if (!cancelled) setGrowthLoading(false); });
+    return () => { cancelled = true; };
+  }, [growthDays]);
 
   return (
     <div className="space-y-8">
@@ -212,14 +216,30 @@ export default function AdminDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-zinc-200 shadow-sm">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="font-bold text-zinc-900">User Growth</h3>
-            <select className="text-sm border-zinc-200 rounded-lg text-zinc-600 focus:ring-yellow-400 focus:border-yellow-400">
-              <option>Last 7 Days</option>
-              <option>Last 30 Days</option>
-              <option>Last Year</option>
+            <div>
+              <h3 className="font-bold text-zinc-900">User Growth</h3>
+              <p className="text-xs text-zinc-500">
+                {growthLoading
+                  ? 'Memuat...'
+                  : `${adminStats?.users.new_in_period ?? 0} pengguna & ${adminStats?.organizations.new_in_period ?? 0} organisasi baru`}
+              </p>
+            </div>
+            <select
+              value={growthDays}
+              onChange={(event) => setGrowthDays(Number(event.target.value) as GrowthRange)}
+              className="text-sm border-zinc-200 rounded-lg text-zinc-600 focus:ring-yellow-400 focus:border-yellow-400"
+            >
+              {growthRanges.map((days) => (
+                <option key={days} value={days}>Last {days} Days</option>
+              ))}
             </select>
           </div>
-          <div className="h-[300px] w-full min-w-0">
+          <div className="relative h-[300px] w-full min-w-0">
+            {!growthLoading && chartData.length === 0 && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center text-sm text-zinc-500">
+                Data pertumbuhan belum tersedia.
+              </div>
+            )}
             <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <AreaChart data={chartData}>
                 <defs>
@@ -229,13 +249,14 @@ export default function AdminDashboard() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f4f4f5" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#71717a', fontSize: 12}} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#71717a', fontSize: 12}} />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#71717a', fontSize: 12}} minTickGap={16} />
+                <YAxis axisLine={false} tickLine={false} tick={{fill: '#71717a', fontSize: 12}} allowDecimals={false} />
                 <Tooltip 
                   contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e4e4e7', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                   itemStyle={{ color: '#18181b', fontSize: '12px', fontWeight: 600 }}
                 />
-                <Area type="monotone" dataKey="users" stroke="#facc15" strokeWidth={3} fillOpacity={1} fill="url(#colorUsers)" />
+                <Area type="monotone" dataKey="users" name="Pengguna baru" stroke="#facc15" strokeWidth={3} fillOpacity={1} fill="url(#colorUsers)" />
+                <Area type="monotone" dataKey="organizations" name="Organisasi baru" stroke="#71717a" strokeWidth={2} fillOpacity={0} />
               </AreaChart>
             </ResponsiveContainer>
           </div>

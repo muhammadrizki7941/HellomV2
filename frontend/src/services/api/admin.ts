@@ -419,12 +419,23 @@ export function validatePromoCode(payload: Record<string, unknown>) {
 
 // ─── Admin Dashboard ───
 
+// SuperAdminController::dashboardStats payload.
+export type AdminDashboardStats = {
+  period_days: number;
+  organizations: { total: number; new_in_period: number };
+  users: { total: number; new_in_period: number };
+  subscriptions: { active: number; total: number };
+  paid_entitlements: number;
+  app_usage: Array<{ id: number; name: string; slug: string; active_count: number }>;
+  growth: Array<{ date: string; users: number; organizations: number }>;
+};
+
 export function getAdminDashboardStats(query: { days?: number } = {}) {
   const params = new URLSearchParams();
   if (query.days) params.set('days', String(query.days));
   const qs = params.toString() ? `?${params.toString()}` : '';
 
-  return apiRequest<Record<string, unknown>>(`/admin/dashboard-stats${qs}`);
+  return apiRequest<AdminDashboardStats>(`/admin/dashboard-stats${qs}`);
 }
 
 // ─── Admin Notifications ───

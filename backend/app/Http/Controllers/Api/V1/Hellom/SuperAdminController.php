@@ -22,7 +22,7 @@ class SuperAdminController extends BaseApiController
 
     public function dashboardStats(Request $request): JsonResponse
     {
-        $days = min((int) ($request->query('days') ?: 30), 90);
+        $days = max(1, min((int) ($request->query('days') ?: 30), 90));
         $since = now()->subDays($days);
 
         $totalOrgs = Organization::query()->count();
@@ -58,7 +58,40 @@ class SuperAdminController extends BaseApiController
             ],
             'paid_entitlements' => $paidEntitlements,
             'app_usage' => $appUsage,
+            'growth' => $this->dailyGrowth($days),
         ], 'Dashboard stats');
+    }
+
+    /**
+     * New users and organizations per day for the last $days days (today included),
+     * with zero-filled gaps so the chart has one point per day.
+     *
+     * @return list<array{date: string, users: int, organizations: int}>
+     */
+    private function dailyGrowth(int $days): array
+    {
+        $start = now()->startOfDay()->subDays($days - 1);
+
+        $countPerDay = fn (string $modelClass) => $modelClass::query()
+            ->where('created_at', '>=', $start)
+            ->selectRaw('DATE(created_at) as day, COUNT(*) as total')
+            ->groupBy('day')
+            ->pluck('total', 'day');
+
+        $users = $countPerDay(User::class);
+        $organizations = $countPerDay(Organization::class);
+
+        $series = [];
+        for ($i = 0; $i < $days; $i++) {
+            $day = $start->copy()->addDays($i)->toDateString();
+            $series[] = [
+                'date' => $day,
+                'users' => (int) ($users[$day] ?? 0),
+                'organizations' => (int) ($organizations[$day] ?? 0),
+            ];
+        }
+
+        return $series;
     }
 
     // ─── Organization Management ───
