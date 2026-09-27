@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\V1\Hellom\Pos\PosMemberController;
 use App\Http\Controllers\Api\V1\Hellom\Pos\PosPaymentSettingController;
 use App\Http\Controllers\Api\V1\Hellom\ShowcaseController;
 use App\Http\Controllers\Api\V1\Hellom\XenditWebhookController;
+use App\Http\Controllers\Api\V1\Public\GuestProductCheckoutController;
 use App\Http\Controllers\Api\V1\Public\ProductController as PublicProductController;
 use Illuminate\Support\Facades\Route;
 
@@ -51,6 +52,14 @@ Route::get('/public/banners', [BannerController::class, 'publicIndex'])->name('p
 Route::get('/public/products', [PublicProductController::class, 'index'])->name('public.products.index');
 Route::get('/public/products/categories', [PublicProductController::class, 'categories'])->name('public.products.categories');
 Route::get('/public/products/{slug}', [PublicProductController::class, 'show'])->name('public.products.show');
+// Guest checkout for platform digital products (no login; access delivered by email)
+Route::get('/public/products/{slug}/checkout', [GuestProductCheckoutController::class, 'options'])->name('public.products.checkout.options');
+Route::post('/public/products/{slug}/checkout', [GuestProductCheckoutController::class, 'store'])->middleware('throttle:hellom-guest-checkout')
+    ->name('public.products.checkout.store');
+Route::get('/public/product-checkouts/{token}', [GuestProductCheckoutController::class, 'status'])->middleware('throttle:hellom-public-lookup')
+    ->name('public.product_checkouts.status');
+Route::post('/public/product-checkouts/{token}/resend-access', [GuestProductCheckoutController::class, 'resendAccess'])->middleware('throttle:hellom-guest-checkout')
+    ->name('public.product_checkouts.resend_access');
 Route::get('/pos/public/payment-methods/{tenantSlug}', [PosPaymentSettingController::class, 'publicSettings'])->name('pos.public.payment-methods');
 Route::post('/pos/public/members/register', [PosMemberController::class, 'publicRegister'])->middleware('throttle:hellom-public-write')->name('pos.public.members.register');
 Route::get('/pos/public/members/lookup', [PosMemberController::class, 'publicLookup'])->middleware('throttle:hellom-public-lookup')->name('pos.public.members.lookup');
@@ -64,6 +73,7 @@ Route::post('/auth/login', [AuthController::class, 'login'])->middleware('thrott
 Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:hellom-auth')->name('auth.forgot_password');
 Route::post('/auth/reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:hellom-auth')->name('auth.reset_password');
 Route::post('/auth/sso-login', [AuthController::class, 'ssoLogin'])->middleware('throttle:hellom-auth')->name('auth.sso_login');
+Route::post('/auth/magic-login', [AuthController::class, 'magicLogin'])->middleware('throttle:hellom-auth')->name('auth.magic_login');
 
 // Public — customer self-order (scan QR, no login needed)
 Route::get('/pos/customer/menu/{tableToken}', [CustomerOrderController::class, 'getMenu']);

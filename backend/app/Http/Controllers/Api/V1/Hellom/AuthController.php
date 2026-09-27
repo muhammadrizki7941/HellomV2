@@ -6,6 +6,7 @@ use App\Models\AppCatalog;
 use App\Models\Category;
 use App\Models\Entitlement;
 use App\Models\ApiToken;
+use App\Models\LoginLink;
 use App\Models\Organization;
 use App\Models\Plan;
 use App\Models\PosStaff;
@@ -345,6 +346,46 @@ class AuthController extends BaseApiController
             'token' => $plainToken,
             'token_type' => 'Bearer',
             'user' => $this->userPayload($user->fresh(['currentOrganization', 'organizations'])),
+        ], __('hellom.logged_in'));
+    }
+
+    /**
+     * Exchange a single-use sign-in link from an email (e.g. digital product access
+     * after a guest checkout) for an API token.
+     */
+    public function magicLogin(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'token' => ['required', 'string', 'max:128'],
+        ]);
+
+        $link = LoginLink::findUsable((string) $validated['token']);
+        $invalid = fn () => $this->fail(
+            'Link masuk tidak valid, sudah dipakai, atau kedaluwarsa. Silakan masuk dengan email dan password.',
+            ['code' => 'LOGIN_LINK_INVALID'],
+            422
+        );
+
+        if (!$link instanceof LoginLink || !$link->user instanceof User) {
+            return $invalid();
+        }
+
+        if ($link->user->isSuspended()) {
+            return $this->fail(__('hellom.account_suspended'), ['code' => 'ACCOUNT_SUSPENDED'], 403);
+        }
+
+        $claimed = LoginLink::query()->whereKey($link->id)->whereNull('used_at')->update(['used_at' => now()]);
+        if ($claimed !== 1) {
+            return $invalid();
+        }
+
+        [$plainToken] = $this->issueToken($link->user, 'hellom-web');
+
+        return $this->ok([
+            'token' => $plainToken,
+            'token_type' => 'Bearer',
+            'user' => $this->userPayload($link->user->fresh(['currentOrganization', 'organizations'])),
+            'redirect_path' => $link->redirect_path,
         ], __('hellom.logged_in'));
     }
 

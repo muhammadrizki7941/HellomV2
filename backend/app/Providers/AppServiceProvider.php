@@ -39,6 +39,10 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('hellom-public-lookup', function (Request $request) {
             return Limit::perMinute(30)->by($request->ip());
         });
+        // Guest digital-product checkout: creates accounts and sends email.
+        RateLimiter::for('hellom-guest-checkout', function (Request $request) {
+            return Limit::perMinute(10)->by($request->ip());
+        });
 
         // ─── RBAC: Policy bindings + super-admin bypass ───
         Gate::policy(OrganizationLandingPage::class, LandingPagePolicy::class);

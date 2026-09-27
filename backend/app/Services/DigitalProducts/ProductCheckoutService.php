@@ -1,0 +1,667 @@
+<?php
+
+namespace App\Services\DigitalProducts;
+
+use App\Models\DigitalProduct;
+use App\Models\ProductPurchase;
+use App\Models\User;
+use App\Services\Hellom\DokuService;
+use App\Services\Hellom\DokuSettingsService;
+use App\Services\Hellom\IpaymuService;
+use App\Services\Hellom\IpaymuSettingsService;
+use App\Services\Hellom\ManualPaymentSettingsService;
+use App\Services\Hellom\PaymentGatewaySettingsService;
+use App\Services\Hellom\XenditService;
+use App\Services\Hellom\XenditSettingsService;
+use App\Services\NotificationService;
+use Illuminate\Support\Str;
+
+/**
+ * Starts payment for a platform digital product (manual transfer, iPaymu direct
+ * charge, or a hosted gateway checkout). Shared by the logged-in consumer checkout
+ * and the public guest checkout.
+ *
+ * start() returns ['ok' => bool, 'message' => string, 'data' => array] on success or
+ * ['ok' => false, 'message' => string, 'code' => string, 'status' => int] on failure.
+ */
+class ProductCheckoutService
+{
+    public function __construct(
+        private readonly NotificationService $notificationService,
+    ) {
+    }
+
+    /**
+     * @param array{payment_flow?:?string,manual_payment_method?:?string,gateway_channel?:?string} $options
+     * @param array{return_url?:?string,buyer_phone?:?string,guest_token_hash?:?string} $context
+     * @return array<string,mixed>
+     */
+    public function start(User $user, DigitalProduct $product, array $options, array $context = []): array
+    {
+        $validated = $options;
+        $notificationService = $this->notificationService;
+
+        $existing = ProductPurchase::query()
+            ->where('user_id', $user->id)
+            ->where('product_id', $product->id)
+            ->first();
+
+        if ($existing && $existing->hasAccess()) {
+            return $this->success([
+                'purchase_id' => $existing->id,
+                'status' => $existing->payment_status,
+                'payment_gateway' => $existing->payment_gateway,
+                'payment_method' => $existing->payment_method,
+                'checkout_url' => $existing->checkout_url,
+            ], 'Produk sudah dimiliki');
+        }
+
+        if ($product->type === 'subscription_locked') {
+            return $this->failure('Produk ini hanya untuk pelanggan berlangganan', 'SUBSCRIPTION_REQUIRED', 403);
+        }
+
+        if ($product->type === 'free' || (int) $product->price === 0) {
+            $purchase = ProductPurchase::query()->create([
+                'user_id' => $user->id,
+                'product_id' => $product->id,
+                'transaction_code' => 'FREE-' . strtoupper(Str::random(10)),
+                'amount_paid' => 0,
+                'payment_status' => 'paid',
+                'payment_gateway' => 'free',
+                'paid_at' => now(),
+            ]);
+
+            $product->increment('total_purchases');
+
+            $notificationService->notifyConsumerAccessActivated($user, null, $product->name);
+
+            return $this->success([
+                'purchase_id' => $purchase->id,
+                'status' => $purchase->payment_status,
+                'payment_gateway' => $purchase->payment_gateway,
+                'payment_method' => $purchase->payment_method,
+                'checkout_url' => $purchase->checkout_url,
+            ], 'Produk berhasil diaktifkan');
+        }
+
+        $manualOptions = app(ManualPaymentSettingsService::class)->publicOptions();
+        $runtime = $this->runtimeConfig();
+        $manualConfirmationEnabled = (string) ($runtime['checkout_mode'] ?? 'gateway_automatic') === 'manual_confirmation';
+        $manualEnabled = $manualConfirmationEnabled
+            && (bool) $manualOptions['enabled']
+            && count($manualOptions['methods']) > 0;
+        $provider = (string) ($runtime['active_provider'] ?? 'xendit');
+        $gatewayReady = $this->isGatewayReady($provider);
+        $paymentFlow = (string) ($validated['payment_flow'] ?? '');
+        if ($paymentFlow === '') {
+            $paymentFlow = $gatewayReady ? 'gateway' : ($manualEnabled ? 'manual' : 'gateway');
+        }
+
+        if ($existing && $existing->payment_status === 'pending') {
+            if ($paymentFlow === 'gateway' && $existing->checkout_url) {
+                $this->applyContext($existing, $context);
+
+                return $this->success([
+                    'purchase_id' => $existing->id,
+                    'status' => $existing->payment_status,
+                    'payment_gateway' => $existing->payment_gateway,
+                    'payment_method' => $existing->payment_method,
+                    'checkout_url' => $existing->checkout_url,
+                ], 'Checkout masih menunggu pembayaran');
+            }
+
+            if ($paymentFlow === 'manual' && $existing->payment_gateway === 'manual' && $existing->payment_method) {
+                $this->applyContext($existing, $context);
+
+                return $this->success([
+                    'purchase_id' => $existing->id,
+                    'status' => $existing->payment_status,
+                    'payment_gateway' => $existing->payment_gateway,
+                    'payment_method' => $existing->payment_method,
+                    'checkout_url' => $existing->checkout_url,
+                    'manual_payment' => $this->resolveManualMethod($manualOptions, $existing->payment_method),
+                    'manual_payment_options' => $manualOptions,
+                ], 'Checkout manual masih menunggu konfirmasi');
+            }
+        }
+
+        if ($paymentFlow === 'manual') {
+            if (!$manualEnabled) {
+                return $this->failure('Metode pembayaran manual belum diaktifkan.', 'MANUAL_PAYMENT_DISABLED', 422);
+            }
+
+            $manualMethod = (string) ($validated['manual_payment_method'] ?? ($existing?->payment_method ?? ''));
+            $manualDetail = $this->resolveManualMethod($manualOptions, $manualMethod);
+            if (!$manualDetail) {
+                return $this->failure('Metode pembayaran manual tidak valid.', 'INVALID_MANUAL_PAYMENT_METHOD', 422);
+            }
+
+            $purchase = $this->preparePurchase($user, $product, $existing, $context);
+            $purchase->forceFill([
+                'payment_status' => 'pending',
+                'payment_gateway' => 'manual',
+                'payment_method' => $manualMethod,
+                'gateway_ref' => null,
+                'checkout_url' => null,
+                'paid_at' => null,
+            ])->save();
+
+            $notificationService->notifyConsumerPaymentPending($user, $purchase, $product->name);
+            $notificationService->notifyOwnerNewPayment($user, $purchase, $product);
+
+            return $this->success([
+                'purchase_id' => $purchase->id,
+                'status' => $purchase->payment_status,
+                'payment_gateway' => $purchase->payment_gateway,
+                'payment_method' => $purchase->payment_method,
+                'checkout_url' => $purchase->checkout_url,
+                'manual_payment' => $manualDetail,
+                'manual_payment_options' => $manualOptions,
+            ], 'Checkout manual siap dikonfirmasi');
+        }
+
+        if (!$gatewayReady) {
+            return $this->failure('Gateway pembayaran belum siap.', 'PAYMENT_GATEWAY_NOT_READY', 422);
+        }
+
+        // In-dashboard direct charge: render VA/QRIS inside Hellom instead of
+        // redirecting to the gateway's hosted page. Supported for iPaymu when a
+        // channel is chosen; other providers keep the hosted checkout fallback.
+        $gatewayChannel = strtolower(trim((string) ($validated['gateway_channel'] ?? '')));
+        if ($provider === 'ipaymu' && $gatewayChannel !== '') {
+            $purchase = $this->preparePurchase($user, $product, $existing, $context);
+
+            try {
+                $instructions = $this->createIpaymuDirectCharge($purchase, $product, $user, $gatewayChannel, $context);
+            } catch (\Throwable $exception) {
+                return $this->failure($exception->getMessage(), 'PAYMENT_SESSION_FAILED', 422);
+            }
+
+            $purchase->forceFill([
+                'payment_status' => 'pending',
+                'payment_gateway' => 'ipaymu',
+                'payment_method' => $gatewayChannel,
+                'gateway_ref' => (string) ($instructions['transaction_id'] ?? ''),
+                'checkout_url' => null,
+                'payment_instructions' => $instructions,
+                'paid_at' => null,
+            ])->save();
+
+            $notificationService->notifyConsumerPaymentPending($user, $purchase, $product->name);
+            $notificationService->notifyOwnerNewPayment($user, $purchase, $product);
+
+            return $this->success([
+                'purchase_id' => $purchase->id,
+                'status' => $purchase->payment_status,
+                'payment_gateway' => $purchase->payment_gateway,
+                'payment_method' => $purchase->payment_method,
+                'checkout_url' => null,
+                'payment_instructions' => $instructions,
+            ], 'Instruksi pembayaran siap');
+        }
+
+        $purchase = $this->preparePurchase($user, $product, $existing, $context);
+
+        try {
+            $session = $this->createGatewayCheckout($provider, $purchase, $product, $user, $context);
+        } catch (\Throwable $exception) {
+            return $this->failure($exception->getMessage(), 'PAYMENT_SESSION_FAILED', 422);
+        }
+
+        $checkoutUrl = (string) ($session['checkout_url'] ?? '');
+        if ($checkoutUrl === '') {
+            return $this->failure('Checkout URL tidak tersedia.', 'CHECKOUT_URL_MISSING', 422);
+        }
+
+        $purchase->forceFill([
+            'payment_status' => 'pending',
+            'payment_gateway' => $provider,
+            'payment_method' => $provider,
+            'gateway_ref' => (string) ($session['gateway_ref'] ?? ''),
+            'checkout_url' => $checkoutUrl,
+            'paid_at' => null,
+        ])->save();
+
+        $notificationService->notifyConsumerPaymentPending($user, $purchase, $product->name);
+        $notificationService->notifyOwnerNewPayment($user, $purchase, $product);
+
+        return $this->success([
+            'purchase_id' => $purchase->id,
+            'status' => $purchase->payment_status,
+            'payment_gateway' => $purchase->payment_gateway,
+            'payment_method' => $purchase->payment_method,
+            'checkout_url' => $purchase->checkout_url,
+        ], 'Checkout gateway siap');
+    }
+
+    /**
+     * Payment options for a public checkout page (no secrets).
+     *
+     * @return array<string,mixed>
+     */
+    public function publicPaymentOptions(): array
+    {
+        $manualOptions = app(ManualPaymentSettingsService::class)->publicOptions();
+        $runtime = $this->runtimeConfig();
+        $provider = (string) ($runtime['active_provider'] ?? 'xendit');
+        $manualEnabled = (string) ($runtime['checkout_mode'] ?? 'gateway_automatic') === 'manual_confirmation'
+            && (bool) $manualOptions['enabled']
+            && count($manualOptions['methods']) > 0;
+
+        return [
+            'gateway' => [
+                'provider' => $provider,
+                'ready' => $this->isGatewayReady($provider),
+                // iPaymu supports rendering VA/QRIS on our page; others redirect to a hosted page.
+                'channels' => $provider === 'ipaymu'
+                    ? collect($this->ipaymuChannels())->map(fn (array $c, string $key) => ['key' => $key, 'label' => $c[2], 'type' => $c[0]])->values()->all()
+                    : [],
+            ],
+            'manual' => [
+                'enabled' => $manualEnabled,
+                'notes' => $manualOptions['notes'] ?? null,
+                'methods' => $manualEnabled ? array_values($manualOptions['methods']) : [],
+            ],
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $manualOptions
+     * @return array<string,mixed>|null
+     */
+    public function resolveManualMethod(array $manualOptions, string $key): ?array
+    {
+        if ($key === '') {
+            return null;
+        }
+
+        $methods = $manualOptions['methods'] ?? [];
+        foreach ($methods as $method) {
+            if (is_array($method) && (string) ($method['key'] ?? '') === $key) {
+                return $method;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Best-effort active confirmation for a pending iPaymu purchase. Only ever
+     * upgrades to paid; the webhook remains responsible for notifications.
+     */
+    public function syncIpaymuPurchaseStatus(ProductPurchase $purchase): void
+    {
+        try {
+            $response = app(IpaymuService::class)->checkTransaction((string) $purchase->gateway_ref);
+            $data = (array) (data_get($response, 'Data') ?: data_get($response, 'data') ?: []);
+
+            $statusCode = (string) (data_get($data, 'StatusCode') ?? data_get($data, 'statusCode') ?? '');
+            $statusText = strtolower(trim((string) (data_get($data, 'Status') ?: data_get($data, 'status') ?: '')));
+
+            $paid = $statusCode === '1'
+                || in_array($statusText, ['berhasil', 'success', 'successful', 'completed', 'paid', 'settlement', 'settled'], true);
+
+            if ($paid && $purchase->payment_status !== 'paid') {
+                $purchase->forceFill([
+                    'payment_status' => 'paid',
+                    'paid_at' => now(),
+                ])->save();
+
+                $purchase->product?->increment('total_purchases');
+            }
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $data
+     * @return array<string,mixed>
+     */
+    private function success(array $data, string $message): array
+    {
+        return ['ok' => true, 'message' => $message, 'data' => $data];
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function failure(string $message, string $code, int $status): array
+    {
+        return ['ok' => false, 'message' => $message, 'code' => $code, 'status' => $status];
+    }
+
+    /**
+     * Guest checkouts carry a status-page token (and optional phone); logged-in
+     * checkouts clear any token left by an earlier guest attempt.
+     *
+     * @param array<string,mixed> $context
+     */
+    private function applyContext(ProductPurchase $purchase, array $context): void
+    {
+        $purchase->forceFill([
+            'guest_token_hash' => $context['guest_token_hash'] ?? null,
+            'buyer_phone' => $context['buyer_phone'] ?? $purchase->buyer_phone,
+        ])->save();
+    }
+
+    /**
+     * @return array{
+     *   active_provider:string,
+     *   checkout_mode:string,
+     *   member_wallet_enabled:bool
+     * }
+     */
+    private function runtimeConfig(): array
+    {
+        return app(PaymentGatewaySettingsService::class)->getRuntimeConfig();
+    }
+
+    private function isGatewayReady(string $provider): bool
+    {
+        if ($provider === 'ipaymu') {
+            return app(IpaymuSettingsService::class)->isReady();
+        }
+
+        if ($provider === 'doku') {
+            return app(DokuSettingsService::class)->isReady();
+        }
+
+        return app(XenditSettingsService::class)->isReady();
+    }
+
+    /**
+     * @param array<string,mixed> $context
+     */
+    private function preparePurchase(User $user, DigitalProduct $product, ?ProductPurchase $existing, array $context): ProductPurchase
+    {
+        if ($existing instanceof ProductPurchase) {
+            $existing->forceFill([
+                'amount_paid' => (int) $product->price,
+                'transaction_code' => $existing->transaction_code ?: 'PUR-' . strtoupper(Str::random(10)),
+                'payment_status' => 'pending',
+                'paid_at' => null,
+            ])->save();
+            $this->applyContext($existing, $context);
+
+            return $existing;
+        }
+
+        $purchase = ProductPurchase::query()->create([
+            'user_id' => $user->id,
+            'product_id' => $product->id,
+            'transaction_code' => 'PUR-' . strtoupper(Str::random(10)),
+            'amount_paid' => (int) $product->price,
+            'payment_status' => 'pending',
+            'payment_gateway' => null,
+        ]);
+        $this->applyContext($purchase, $context);
+
+        return $purchase;
+    }
+
+    /**
+     * @param array<string,mixed> $context
+     */
+    private function returnUrl(DigitalProduct $product, array $context): string
+    {
+        $url = (string) ($context['return_url'] ?? '');
+
+        return $url !== '' ? $url : url("/hellom/dashboard/products/{$product->slug}");
+    }
+
+    /**
+     * @param array<string,mixed> $context
+     * @return array{checkout_url:string,gateway_ref?:string}
+     */
+    private function createGatewayCheckout(string $provider, ProductPurchase $purchase, DigitalProduct $product, User $user, array $context): array
+    {
+        $returnUrl = $this->returnUrl($product, $context);
+
+        if ($provider === 'ipaymu') {
+            $session = app(IpaymuService::class)->createRedirectPayment([
+                'product' => [(string) $product->name],
+                'qty' => [1],
+                'price' => [(int) $product->price],
+                'referenceId' => (string) $purchase->transaction_code,
+                'description' => ["Pembelian {$product->name}"],
+                'buyerName' => (string) $user->name,
+                'buyerEmail' => (string) $user->email,
+                'notifyUrl' => $this->ipaymuNotifyUrl([
+                    'purpose' => 'product_purchase',
+                    'purchase_id' => (int) $purchase->id,
+                    'product_id' => (int) $product->id,
+                    'user_id' => (int) $user->id,
+                    'reference_id' => (string) $purchase->transaction_code,
+                ]),
+                'returnUrl' => $returnUrl,
+            ]);
+
+            return [
+                'checkout_url' => (string) (data_get($session, 'Data.Url') ?: data_get($session, 'Url') ?: ''),
+                'gateway_ref' => (string) (data_get($session, 'Data.SessionID') ?: data_get($session, 'Data.TransactionId') ?: ''),
+            ];
+        }
+
+        if ($provider === 'doku') {
+            $session = app(DokuService::class)->createCheckout([
+                'order' => [
+                    'amount' => (int) $product->price,
+                    'invoice_number' => (string) $purchase->transaction_code,
+                    'currency' => 'IDR',
+                    'callback_url' => $returnUrl,
+                    'callback_url_result' => $returnUrl,
+                    'language' => 'ID',
+                    'auto_redirect' => false,
+                    'line_items' => [
+                        [
+                            'name' => (string) $product->name,
+                            'price' => (int) $product->price,
+                            'quantity' => 1,
+                        ],
+                    ],
+                    'additional_info' => [
+                        'purpose' => 'product_purchase',
+                        'purchase_id' => (int) $purchase->id,
+                        'product_id' => (int) $product->id,
+                        'user_id' => (int) $user->id,
+                    ],
+                ],
+                'payment' => [
+                    'payment_due_date' => 1440,
+                    'payment_method_types' => app(DokuSettingsService::class)->getConfig()['payment_method_types'],
+                ],
+                'customer' => [
+                    'name' => (string) $user->name,
+                    'email' => (string) $user->email,
+                ],
+                'additional_info' => [
+                    'override_notification_url' => $this->dokuNotifyUrl(),
+                ],
+            ]);
+
+            return [
+                'checkout_url' => (string) data_get($session, 'response.payment.url', ''),
+                'gateway_ref' => (string) data_get($session, 'response.order.session_id', ''),
+            ];
+        }
+
+        $session = app(XenditService::class)->createPaymentSession([
+            'reference_id' => (string) $purchase->transaction_code,
+            'session_type' => 'PAY',
+            'mode' => 'PAYMENT_LINK',
+            'amount' => (int) $product->price,
+            'currency' => 'IDR',
+            'country' => 'ID',
+            'locale' => 'id',
+            'capture_method' => 'AUTOMATIC',
+            'allow_save_payment_method' => 'DISABLED',
+            'description' => "Pembelian {$product->name}",
+            'items' => [
+                [
+                    'reference_id' => (string) $product->id,
+                    'type' => 'DIGITAL_PRODUCT',
+                    'name' => (string) $product->name,
+                    'net_unit_amount' => (int) $product->price,
+                    'quantity' => 1,
+                    'category' => 'DIGITAL',
+                ],
+            ],
+            'customer' => [
+                'reference_id' => $this->buildCustomerReferenceId($user),
+                'type' => 'INDIVIDUAL',
+                'email' => (string) $user->email,
+                'individual_detail' => [
+                    'given_names' => (string) Str::of((string) $user->name)->before(' ')->value(),
+                    'surname' => (string) Str::of((string) $user->name)->after(' ')->value(),
+                ],
+            ],
+            'metadata' => [
+                'purpose' => 'product_purchase',
+                'purchase_id' => (int) $purchase->id,
+                'product_id' => (int) $product->id,
+                'user_id' => (int) $user->id,
+            ],
+        ]);
+
+        return [
+            'checkout_url' => (string) data_get($session, 'payment_link_url', ''),
+            'gateway_ref' => (string) data_get($session, 'payment_session_id', ''),
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $params
+     */
+    private function ipaymuNotifyUrl(array $params): string
+    {
+        $base = url('/api/v1/hellom/webhooks/ipaymu');
+        $query = http_build_query($params);
+
+        return $query !== '' ? $base . '?' . $query : $base;
+    }
+
+    private function dokuNotifyUrl(): string
+    {
+        $token = (string) app(DokuSettingsService::class)->getConfig()['callback_token'];
+        if ($token === '') {
+            return url('/api/v1/hellom/webhooks/doku');
+        }
+
+        return url('/api/v1/hellom/webhooks/doku?token=' . urlencode($token));
+    }
+
+    private function buildCustomerReferenceId(User $user): string
+    {
+        return 'consumer_' . (int) $user->id;
+    }
+
+    /**
+     * Supported iPaymu direct-charge channels mapped to [paymentMethod, paymentChannel, label].
+     *
+     * @return array<string,array{0:string,1:string,2:string}>
+     */
+    private function ipaymuChannels(): array
+    {
+        return [
+            'qris' => ['qris', 'qris', 'QRIS'],
+            'bca' => ['va', 'bca', 'BCA Virtual Account'],
+            'bni' => ['va', 'bni', 'BNI Virtual Account'],
+            'bri' => ['va', 'bri', 'BRI Virtual Account'],
+            'mandiri' => ['va', 'mandiri', 'Mandiri Virtual Account'],
+            'permata' => ['va', 'permata', 'Permata Virtual Account'],
+            'cimb' => ['va', 'cimb', 'CIMB Niaga Virtual Account'],
+            'indomaret' => ['cstore', 'indomaret', 'Indomaret'],
+            'alfamart' => ['cstore', 'alfamart', 'Alfamart'],
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $context
+     * @return array<string,mixed>
+     */
+    private function createIpaymuDirectCharge(ProductPurchase $purchase, DigitalProduct $product, User $user, string $channelKey, array $context): array
+    {
+        $channels = $this->ipaymuChannels();
+        if (!isset($channels[$channelKey])) {
+            throw new \RuntimeException('Channel pembayaran iPaymu tidak didukung.');
+        }
+
+        [$method, $channel, $label] = $channels[$channelKey];
+
+        $response = app(IpaymuService::class)->createDirectPayment([
+            'name' => (string) ($user->name ?: 'Pelanggan Hellom'),
+            'phone' => $this->resolveBuyerPhone($user, $context),
+            'email' => (string) $user->email,
+            'amount' => (int) $product->price,
+            'notifyUrl' => $this->ipaymuNotifyUrl([
+                'purpose' => 'product_purchase',
+                'purchase_id' => (int) $purchase->id,
+                'product_id' => (int) $product->id,
+                'user_id' => (int) $user->id,
+                'reference_id' => (string) $purchase->transaction_code,
+                'channel' => $channel,
+            ]),
+            'referenceId' => (string) $purchase->transaction_code,
+            'paymentMethod' => $method,
+            'paymentChannel' => $channel,
+            'comments' => "Pembelian {$product->name}",
+        ]);
+
+        $data = (array) (data_get($response, 'Data') ?: data_get($response, 'data') ?: []);
+        $status = (int) (data_get($response, 'Status') ?? data_get($response, 'status') ?? 0);
+        if ($status !== 200 && $data === []) {
+            throw new \RuntimeException((string) (data_get($response, 'Message') ?: data_get($response, 'message') ?: 'Gagal membuat pembayaran iPaymu.'));
+        }
+
+        $expiredRaw = (string) (data_get($data, 'Expired') ?: data_get($data, 'expired') ?: '');
+        $expiresAt = null;
+        if ($expiredRaw !== '') {
+            try {
+                $expiresAt = \Illuminate\Support\Carbon::parse($expiredRaw)->toIso8601String();
+            } catch (\Throwable) {
+                $expiresAt = null;
+            }
+        }
+
+        $paymentNo = (string) (data_get($data, 'PaymentNo') ?: data_get($data, 'paymentNo') ?: '');
+        $qrString = (string) (data_get($data, 'QrString') ?: data_get($data, 'qrString') ?: '');
+        $qrImage = (string) (data_get($data, 'QrImage') ?: data_get($data, 'qrImage') ?: data_get($data, 'QrTemplate') ?: '');
+
+        // For QRIS the EMVCo payload may arrive in PaymentNo rather than QrString.
+        // Treat it as the QR string (never a VA number) so the client renders a
+        // scannable QR code instead of an unscannable, overflowing text blob.
+        if ($method === 'qris') {
+            if ($qrString === '' && $paymentNo !== '') {
+                $qrString = $paymentNo;
+            }
+            $paymentNo = '';
+        }
+
+        return array_filter([
+            'provider' => 'ipaymu',
+            'method' => $method,
+            'channel' => $channel,
+            'channel_label' => $label,
+            'va_number' => $paymentNo,
+            'qr_string' => $qrString,
+            'qr_image_url' => $qrImage,
+            'amount' => (int) (data_get($data, 'Total') ?: $product->price),
+            'fee' => (int) (data_get($data, 'Fee') ?: 0),
+            'expires_at' => $expiresAt,
+            'reference_id' => (string) $purchase->transaction_code,
+            'transaction_id' => (string) (data_get($data, 'TransactionId') ?: data_get($data, 'transactionId') ?: ''),
+            'session_id' => (string) (data_get($data, 'SessionId') ?: data_get($data, 'SessionID') ?: ''),
+        ], static fn ($value) => $value !== '' && $value !== null);
+    }
+
+    /**
+     * @param array<string,mixed> $context
+     */
+    private function resolveBuyerPhone(User $user, array $context = []): string
+    {
+        $phone = preg_replace('/\D/', '', (string) ($context['buyer_phone'] ?? $user->phone ?? ''));
+
+        return is_string($phone) && $phone !== '' ? $phone : '081234567890';
+    }
+}

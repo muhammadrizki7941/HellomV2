@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Observers\ProductPurchaseObserver;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+#[ObservedBy(ProductPurchaseObserver::class)]
 class ProductPurchase extends Model
 {
     use HasFactory;
@@ -21,15 +24,21 @@ class ProductPurchase extends Model
         'gateway_ref',
         'checkout_url',
         'payment_instructions',
+        'buyer_phone',
         'paid_at',
         'download_count',
         'last_downloaded_at',
         'expires_at',
     ];
 
+    protected $hidden = [
+        'guest_token_hash',
+    ];
+
     protected $casts = [
         'payment_instructions' => 'array',
         'paid_at' => 'datetime',
+        'access_email_sent_at' => 'datetime',
         'last_downloaded_at' => 'datetime',
         'expires_at' => 'datetime',
     ];
@@ -52,6 +61,12 @@ class ProductPurchase extends Model
     public function isExpired(): bool
     {
         return $this->expires_at !== null && now()->gt($this->expires_at);
+    }
+
+    /** Started from the public (no-login) checkout page. */
+    public function isGuestCheckout(): bool
+    {
+        return (string) $this->guest_token_hash !== '';
     }
 
     public function hasAccess(): bool

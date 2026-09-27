@@ -51,6 +51,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'points_balance' => 'integer',
+            'pending_guest_credentials' => 'boolean',
         ];
     }
 
