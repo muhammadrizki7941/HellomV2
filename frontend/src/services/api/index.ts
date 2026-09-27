@@ -288,3 +288,5 @@ export type {
   PosReportProducts,
   PosReportSummary,
 } from './pos';
+export type { OwnerNotification } from './admin';
+export type { ConsumerNotification } from './consumer';

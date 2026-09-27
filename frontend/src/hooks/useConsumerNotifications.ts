@@ -5,20 +5,9 @@ import {
   markConsumerNotificationAsRead,
   markAllConsumerNotificationsAsRead,
 } from '@/lib/hellomApi';
+import type { ConsumerNotification } from '@/lib/hellomApi';
 
-export interface ConsumerNotification {
-  id: number;
-  type: string;
-  title: string;
-  body: string;
-  data: Record<string, unknown> | null;
-  is_read: boolean;
-  read_at: string | null;
-  action_type: string | null;
-  action_url: string | null;
-  created_at: string;
-  updated_at: string;
-}
+export type { ConsumerNotification };
 
 export function useConsumerNotifications() {
   const [notifications, setNotifications] = useState<ConsumerNotification[]>([]);

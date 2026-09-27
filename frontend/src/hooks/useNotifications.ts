@@ -5,23 +5,9 @@ import {
   markAdminNotificationAsRead,
   markAllAdminNotificationsAsRead,
 } from '@/lib/hellomApi';
+import type { OwnerNotification } from '@/lib/hellomApi';
 
-export interface Notification {
-  id: number;
-  type: 'new_user' | 'new_transaction' | 'expiry_reminder';
-  title: string;
-  message: string;
-  data: Record<string, unknown>;
-  is_read: boolean;
-  action_type?: string | null;
-  action_url?: string | null;
-  action_status?: 'pending' | 'done' | 'ignored' | null;
-  action_done_at?: string | null;
-  reference_id?: number | null;
-  reference_type?: string | null;
-  created_at: string;
-  updated_at: string;
-}
+export type Notification = OwnerNotification;
 
 export function useNotifications() {
   const [notifications, setNotifications] = useState<Notification[]>([]);

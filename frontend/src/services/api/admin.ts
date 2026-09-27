@@ -355,6 +355,24 @@ export function getAdminDashboardStats(query: { days?: number } = {}) {
 
 // ─── Admin Notifications ───
 
+// Owner (super admin) notification row (OwnerNotificationController).
+export type OwnerNotification = {
+  id: number;
+  type: 'new_user' | 'new_transaction' | 'expiry_reminder';
+  title: string;
+  message: string;
+  data: Record<string, unknown>;
+  is_read: boolean;
+  action_type?: string | null;
+  action_url?: string | null;
+  action_status?: 'pending' | 'done' | 'ignored' | null;
+  action_done_at?: string | null;
+  reference_id?: number | null;
+  reference_type?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export function getAdminNotifications(params?: Record<string, string | number | boolean | undefined>) {
   const qs = params ? new URLSearchParams(
     Object.entries(params)
@@ -362,14 +380,14 @@ export function getAdminNotifications(params?: Record<string, string | number | 
       .map(([key, value]) => [key, String(value)])
   ).toString() : '';
 
-  return apiRequest<Record<string, unknown>>(`/admin/notifications${qs ? `?${qs}` : ''}`);
+  return apiRequest<{ data: OwnerNotification[]; meta: { current_page: number; per_page: number; total: number; last_page: number } }>(`/admin/notifications${qs ? `?${qs}` : ''}`);
 }
 
 export function getAdminNotificationsUnreadCount() {
-  return apiRequest<Record<string, unknown>>('/admin/notifications/unread-count');
+  return apiRequest<{ count: number }>('/admin/notifications/unread-count');
 }
 
-export function markAdminNotificationAsRead(id: number) {
+export function markAdminNotificationAsRead(id: number | string) {
   return apiRequest<Record<string, unknown>>(`/admin/notifications/${id}/read`, {
     method: 'PATCH',
     body: {},
@@ -383,18 +401,18 @@ export function markAllAdminNotificationsAsRead() {
   });
 }
 
-export function getOwnerNotificationDetail(id: number) {
-  return apiRequest<Record<string, unknown>>(`/admin/notifications/${id}`);
+export function getOwnerNotificationDetail(id: number | string) {
+  return apiRequest<OwnerNotification>(`/admin/notifications/${id}`);
 }
 
-export function executeOwnerNotificationAction(id: number) {
+export function executeOwnerNotificationAction(id: number | string) {
   return apiRequest<Record<string, unknown>>(`/admin/notifications/${id}/execute`, {
     method: 'POST',
     body: {},
   });
 }
 
-export function ignoreOwnerNotificationAction(id: number) {
+export function ignoreOwnerNotificationAction(id: number | string) {
   return apiRequest<Record<string, unknown>>(`/admin/notifications/${id}/ignore`, {
     method: 'POST',
     body: {},

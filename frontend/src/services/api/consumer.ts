@@ -4,15 +4,30 @@ import { HELLOM_API_BASE, apiRequest, getToken } from './client';
 
 // ─── Consumer Notifications ───
 
+// Consumer (member) notification row (Consumer\NotificationController).
+export type ConsumerNotification = {
+  id: number;
+  type: string;
+  title: string;
+  body: string;
+  data: Record<string, unknown> | null;
+  is_read: boolean;
+  read_at: string | null;
+  action_type: string | null;
+  action_url: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export function getConsumerNotifications() {
-  return apiRequest<Record<string, unknown>>('/consumer/notifications');
+  return apiRequest<{ notifications: ConsumerNotification[]; unread_count: number }>('/consumer/notifications');
 }
 
 export function getConsumerNotificationsUnreadCount() {
-  return apiRequest<Record<string, unknown>>('/consumer/notifications/unread-count');
+  return apiRequest<{ count: number }>('/consumer/notifications/unread-count');
 }
 
-export function markConsumerNotificationAsRead(id: number) {
+export function markConsumerNotificationAsRead(id: number | string) {
   return apiRequest<Record<string, unknown>>(`/consumer/notifications/${id}/read`, {
     method: 'POST',
     body: {},
