@@ -249,6 +249,30 @@ Legenda status: `[ ]` belum · `[x]` selesai (diisi di Fase 2)
 | R-13 | Sedang | `php artisan route:cache` **gagal** di lokal: `routes/marketing.php` mendaftarkan route per domain di `TENANCY_APP_DOMAINS` (lokal: `localhost`, `127.0.0.1`) → nama `marketing.landing` duplikat. Di production (1 domain) kemungkinan lolos. `customer.php` juga mendaftarkan URI `/pos` & `/reservations` dua kali. | Hilang bersama arsip Blade (D-3); verifikasi `route:cache` di setiap langkah. |
 | R-14 | Sedang | Bundle SPA tanpa code-splitting per route: chunk utama **1,71 MB** (424 KB gzip). Halaman self-order pelanggan (dibuka lewat HP) ikut memuat seluruh dashboard admin. | `React.lazy` per route di `App.tsx` (tanpa mengubah tampilan). |
 
+### 3.7 Isolasi tenant — temuan tambahan (Fase 2)
+
+| ID | Prio | Temuan | Status |
+|---|---|---|---|
+| S-9a | **Tinggi** | Dashboard Customer Experience POS menampilkan produk **semua tenant** (lokal: 22 produk, semuanya milik 5 tenant lain); paket Space, pre-order reservasi publik dan hadiah loyalti menerima ID produk tenant lain | ✅ `fcfb7de` |
+| S-9b | **Tinggi** | `GET /pos/customer/order/{orderNumber}` publik tanpa bukti; nomor `ORD-YYYYMMDD-NNN` berurutan lintas restoran → pesanan semua restoran bisa dienumerasi (nama pelanggan, item, catatan, total) | ✅ `4e3ea31` (wajib `table_token`) |
+
+### 3.8 Bug fungsional ditemukan lewat typecheck (Fase 2) — **menunggu keputusan pemilik**
+
+Setelah `@types/react` dipasang, error TypeScript menunjuk ke panggilan API yang tidak sesuai kontrak. Semua sudah dibuktikan terhadap backend; **belum diperbaiki** (mengubah perilaku).
+
+| ID | Prio | Halaman | Masalah | Bukti |
+|---|---|---|---|---|
+| F-1 | **Kritis** | POS → Pesanan | Ubah status pesanan (diterima/diproses/selesai) **selalu gagal 422**: UI mengirim body `"accepted"` (string), backend butuh `{status}`. Alur dapur macet; poin loyalti saat order selesai tidak terpicu lewat jalur ini | Direproduksi: string → 422, objek → 200 |
+| F-2 | Tinggi | POS → Laporan | Ekspor Excel **mengabaikan rentang tanggal** (`exportPosReport({start_date,end_date})` → fungsi tanpa parameter) | backend menerima `start_date`/`end_date` |
+| F-3 | Tinggi | POS → Pesanan | Filter status pesanan tidak dikirim | backend menerima `status` |
+| F-4 | Sedang | Admin → Pengguna | Pencarian & paginasi user tidak dikirim | backend menerima `search`, `limit` |
+| F-5 | Sedang | Admin → Organisasi | Pencarian & paginasi organisasi tidak dikirim | backend menerima `search`, `status`, `limit` |
+| F-6 | Sedang | Admin → Pengguna → Undangan | Filter status undangan tidak dikirim | backend menerima `status`, `limit` |
+| F-7 | Sedang | Admin → Pengguna → "Buat undangan" | Memanggil `POST /team/invite` (menambah user **yang sudah terdaftar** langsung, tanpa token) — email baru gagal "User must register first"; alur undangan bertoken `POST /team/invitations` tidak dipakai | respons `invite` = `{member}`, UI mengharapkan `{invitation.token, email_delivery}` |
+| F-8 | Sedang | Admin → Pengaturan Email & Brand | "Kirim email tes" selalu gagal validasi: body string, backend butuh `{email}` | `sendTest` validasi `email` required |
+| F-9 | Rendah | Admin → Keuangan | Batas jumlah checkout manual tidak dikirim | backend menerima `limit` |
+| F-10 | Sedang | Admin → Notifikasi | Filter (sudah dibaca, jenis, per halaman) rusak: string query dikirim ke fungsi yang mengharapkan objek → URL `?0=%3F&1=i…` | `Object.entries(string)` |
+
 ---
 
 ## 4. Usulan struktur akhir
