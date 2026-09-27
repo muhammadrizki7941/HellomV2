@@ -19,7 +19,9 @@ export default defineConfig(() => {
         output: {
           manualChunks: {
             'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-            'vendor-ui': ['recharts', 'lucide-react'],
+            'vendor-ui': ['lucide-react'],
+            // charts are only used by admin/POS dashboards: keep them out of the initial load
+            'vendor-charts': ['recharts'],
             'vendor-forms': ['react-hook-form', '@hookform/resolvers', 'zod'],
           },
         },
