@@ -117,6 +117,15 @@ export async function apiRequest<T>(
   return payload.data;
 }
 
+// "?a=1&b=2" from an object, skipping undefined/null/'' values ('' when empty).
+export function buildQuery(params?: Record<string, string | number | boolean | null | undefined>): string {
+  if (!params) return '';
+  const entries = Object.entries(params)
+    .filter(([, value]) => value !== undefined && value !== null && value !== '')
+    .map(([key, value]) => [key, String(value)] as [string, string]);
+  return entries.length ? `?${new URLSearchParams(entries).toString()}` : '';
+}
+
 // Authenticated GET for binary downloads (Excel exports, files). Sends the same
 // token and active-outlet headers as apiRequest, but returns the raw Blob.
 export async function apiRequestBlob(path: string): Promise<Blob> {

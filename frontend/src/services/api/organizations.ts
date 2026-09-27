@@ -1,6 +1,6 @@
 // Organizations, team and invitations.
 // Part of the Hellom API client; import from '@/lib/hellomApi' or '@/services/api'.
-import { apiRequest } from './client';
+import { apiRequest, buildQuery } from './client';
 
 // ─── Types (OrganizationTeamController payloads) ───
 
@@ -60,8 +60,8 @@ export function createOrganizationInvitation(payload: { email: string; role?: st
   });
 }
 
-export function getOrganizationInvitations() {
-  return apiRequest<{ organization: OrganizationRef; items: TeamInvitation[]; pagination: Record<string, unknown> }>('/organizations/current/team/invitations');
+export function getOrganizationInvitations(params?: { status?: string; email?: string; limit?: number; cursor?: number }) {
+  return apiRequest<{ organization: OrganizationRef; items: TeamInvitation[]; pagination: Record<string, unknown> }>(`/organizations/current/team/invitations${buildQuery(params)}`);
 }
 
 export function resendOrganizationInvitation(invitationId: number) {

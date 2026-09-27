@@ -1,6 +1,6 @@
 // Super admin: finance, gateways, users, apps/plans, promos, dashboard, notifications, mail.
 // Part of the Hellom API client; import from '@/lib/hellomApi' or '@/services/api'.
-import { apiRequest } from './client';
+import { apiRequest, buildQuery } from './client';
 
 // ─── Types (SuperAdminController payloads) ───
 
@@ -207,8 +207,8 @@ export function updateAdminManualPaymentConfig(payload: FormData | Record<string
   });
 }
 
-export function getAdminManualCheckouts() {
-  return apiRequest<Record<string, unknown>>('/admin/billing/manual-checkouts');
+export function getAdminManualCheckouts(params?: { limit?: number }) {
+  return apiRequest<Record<string, unknown>>(`/admin/billing/manual-checkouts${buildQuery(params)}`);
 }
 
 export function approveAdminManualCheckout(intentId: number) {
@@ -227,12 +227,12 @@ export function rejectAdminManualCheckout(intentId: number) {
 
 // ─── Admin Users & Organizations ───
 
-export function getAdminOrganizations() {
-  return apiRequest<Record<string, unknown>>('/admin/organizations');
+export function getAdminOrganizations(params?: { search?: string; status?: string; limit?: number; page?: number }) {
+  return apiRequest<Record<string, unknown>>(`/admin/organizations${buildQuery(params)}`);
 }
 
-export function getAdminUsers() {
-  return apiRequest<{ items: AdminUserListItem[]; pagination: AdminPagination }>('/admin/users');
+export function getAdminUsers(params?: { search?: string; page?: number; limit?: number }) {
+  return apiRequest<{ items: AdminUserListItem[]; pagination: AdminPagination }>(`/admin/users${buildQuery(params)}`);
 }
 
 export function getAdminUserDetail(userId: number) {
