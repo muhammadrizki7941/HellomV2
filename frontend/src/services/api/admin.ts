@@ -429,9 +429,10 @@ export function updateAdminMailSettings(payload: Record<string, unknown>) {
   });
 }
 
-export function sendAdminMailTest(payload: Record<string, unknown>) {
+// Backend validates { email }; callers pass the recipient address.
+export function sendAdminMailTest(email: string) {
   return apiRequest<{ delivery: EmailDeliveryResult }>('/admin/mail-settings/test', {
     method: 'POST',
-    body: payload,
+    body: { email },
   });
 }
