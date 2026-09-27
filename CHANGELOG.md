@@ -22,6 +22,8 @@ Audit lengkap dan status per temuan: [docs/AUDIT.md](docs/AUDIT.md). Langkah dep
 - **Admin → Buat undangan** memanggil endpoint yang salah (kini undangan bertoken dengan link register).
 - **Kirim email tes** (Pengaturan Email & Brand) selalu gagal validasi.
 - **System Health** crash dan **kartu keuangan Dashboard** selalu 0 — kini memakai angka platform.
+- **Admin → Dashboard**: grafik *User Growth* sebelumnya berisi angka karangan dan pilihan rentang tidak berfungsi; kini menampilkan pendaftaran pengguna & organisasi harian asli (7/30/90 hari).
+- **POS → Staf**: ekspor CSV selalu mengambil outlet utama; kini mengikuti outlet aktif.
 - **Link email undangan** mengarah ke `localhost` setelah `config:cache` (kini `FRONTEND_URL`/`APP_URL`).
 - **Billing**: akses paket tahunan tidak pernah berakhir; pembelian tahunan/lifetime via saldo wallet atau Xendit tercatat 1 bulan; webhook lama yang diputar ulang bisa menghidupkan akses kedaluwarsa; bulanan dengan auto-renew mati tidak pernah berakhir.
 
@@ -37,13 +39,15 @@ Audit lengkap dan status per temuan: [docs/AUDIT.md](docs/AUDIT.md). Langkah dep
 - `routes/api.php` dipecah per modul (`routes/api/*.php`), route identik.
 - `hellomApi.ts` (1.716 baris) dipecah ke `frontend/src/services/api/*` (export publik identik).
 - Satu base controller API; method controller yang tidak ter-route dihapus.
-- TypeScript: `@types/react` dipasang (sebelumnya React tidak dicek tipe sama sekali); error `tsc` 314 → **0**; respons API bertipe sesuai payload backend.
+- `BillingController` (2.737 baris) dipecah menjadi 6 controller di `Api/V1/Hellom/Billing/` + trait bersama + `Services/Billing/CheckoutNotifier`; route & perilaku identik.
+- Klien API `lib/pos/{posApi,staffApi}.ts` disatukan ke `services/api/{posCustomer,posStaff}.ts`.
+- TypeScript: `@types/react` dipasang (sebelumnya React tidak dicek tipe sama sekali); error `tsc` 314 → **0**; respons API bertipe sesuai payload backend; **`strict: true`** aktif.
 - Performa: route SPA di-lazy-load, grafik dipisah → JS awal ~2,2 MB → ~500 KB.
 - Artisan tidak lagi butuh koneksi DB saat boot; `route:cache` kini berhasil.
 
 ### Dihapus / diarsipkan (`_archive/`)
 - UI Blade lama (±50 controller, ±120 view, 6 file route, middleware dummy auth/tenancy, aset Vite backend, tes Blade, skrip kiosk).
-- Skrip debug di root `backend/`, kelas/command tak terpakai, controller Breeze tanpa route, build nyasar `plans/backend/`, desain referensi Figma (→ `docs/design-reference/`).
+- Skrip debug di root `backend/`, kelas/command tak terpakai, model `LoyaltySetting`/`PointTransaction` (tabelnya tetap ada), controller Breeze tanpa route, build nyasar `plans/backend/`, desain referensi Figma (→ `docs/design-reference/`).
 - Dependensi: `doctrine/dbal`, `laravel/breeze`, `laravel/sail`; frontend −201 paket (`@google/genai`, `better-sqlite3`, `express`, `motion`, dll.) dan dev server Express.
 - Log debug di konsol browser yang mencetak data member dan pesanan pelanggan.
 
