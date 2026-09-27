@@ -25,9 +25,9 @@ php artisan schedule:work      # lokal; production: cron schedule:run tiap menit
 
 # Frontend (dari plans/UI/)
 npm install
-npm run dev                    # tsx server.ts (Express + Vite, port 3000)
+npm run dev                    # vite dev server, port 3000
 npm run build                  # → ../../backend/public/hellom (menimpa build lama)
-npx tsc --noEmit               # baseline audit: 314 error (jangan menambah)
+npx tsc --noEmit               # baseline: 231 error (jangan menambah)
 
 # Realtime (dari realtime/)
 node server.js                 # env: PORT, HOST, REALTIME_SERVER_SECRET
