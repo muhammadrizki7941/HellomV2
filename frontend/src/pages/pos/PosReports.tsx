@@ -107,9 +107,7 @@ const PosReports = () => {
   const handleExport = async () => {
     setIsExporting(true);
     try {
-      const response = await exportPosReport({ start_date: startDate, end_date: endDate });
-
-      const blob = await response.blob();
+      const blob = await exportPosReport({ start_date: startDate, end_date: endDate });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;

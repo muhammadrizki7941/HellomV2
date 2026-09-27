@@ -117,6 +117,29 @@ export async function apiRequest<T>(
   return payload.data;
 }
 
+// Authenticated GET for binary downloads (Excel exports, files). Sends the same
+// token and active-outlet headers as apiRequest, but returns the raw Blob.
+export async function apiRequestBlob(path: string): Promise<Blob> {
+  const token = getToken();
+  const activeOutletId = getActiveOutletId();
+
+  const response = await fetch(`${HELLOM_API_BASE}${path}`, {
+    method: 'GET',
+    headers: {
+      Accept: '*/*',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(activeOutletId ? { 'X-Outlet-Id': activeOutletId } : {}),
+    },
+  });
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+    throw new Error(payload?.message || `HTTP ${response.status}`);
+  }
+
+  return response.blob();
+}
+
 export async function publicApiRequest<T>(
   path: string,
   options?: {

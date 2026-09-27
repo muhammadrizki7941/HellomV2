@@ -1,6 +1,6 @@
 // POS app (outlets, menu, tables, orders, members, loyalty, experience, reports) and public POS member endpoints.
 // Part of the Hellom API client; import from '@/lib/hellomApi' or '@/services/api'.
-import { apiRequest, publicApiRequest } from './client';
+import { apiRequest, apiRequestBlob, publicApiRequest } from './client';
 
 // ─── POS ───
 
@@ -536,8 +536,9 @@ export function getPosReportDaily(params?: ReportParams) {
   return apiRequest<PosReportDaily>(`/pos/reports/daily${toReportQuery(params)}`);
 }
 
-export function exportPosReport() {
-  return apiRequest<Record<string, unknown>>('/pos/reports/export');
+// Excel (.xlsx) export for the given period; returns the file as a Blob.
+export function exportPosReport(params?: ReportParams) {
+  return apiRequestBlob(`/pos/reports/export${toReportQuery(params)}`);
 }
 
 // ─── POS Public Member (no auth required — customer-facing) ───
