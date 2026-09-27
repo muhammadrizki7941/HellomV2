@@ -28,6 +28,7 @@ Thumbs.db
 /realtime/node_modules/
 /realtime/.env
 /realtime/.env.*
+!/realtime/.env.example
 /realtime/npm-debug.log*
 /realtime/yarn-error.log*
 

@@ -9,9 +9,22 @@ const HOST = process.env.HOST || '0.0.0.0';
 // Defaulting to 'change-me' keeps local/dev working out-of-the-box.
 const SECRET = process.env.REALTIME_SERVER_SECRET || 'change-me';
 
+// Comma-separated browser origins allowed to connect. Empty = allow any origin
+// (previous behaviour). Production: https://hellomspace.com
+const ALLOWED_ORIGINS = String(process.env.REALTIME_ALLOWED_ORIGINS || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+const CORS_ORIGIN = ALLOWED_ORIGINS.length > 0 ? ALLOWED_ORIGINS : true;
+
+if (SECRET === 'change-me') {
+  // eslint-disable-next-line no-console
+  console.warn('[realtime] WARNING: REALTIME_SERVER_SECRET is not set; using the public default "change-me". Set it in production.');
+}
+
 const app = express();
 app.use(express.json({ limit: '256kb' }));
-app.use(cors({ origin: true, credentials: false }));
+app.use(cors({ origin: CORS_ORIGIN, credentials: false }));
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true, time: new Date().toISOString() });
@@ -45,7 +58,7 @@ app.post('/emit', (req, res) => {
 const server = http.createServer(app);
 const io = new SocketIOServer(server, {
   cors: {
-    origin: true,
+    origin: CORS_ORIGIN,
     methods: ['GET', 'POST']
   }
 });
