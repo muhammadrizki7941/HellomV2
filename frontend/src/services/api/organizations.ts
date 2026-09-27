@@ -52,9 +52,10 @@ export function getOrganizationTeam() {
   return apiRequest<{ organization: OrganizationRef; requester_role: string; items: TeamMember[] }>('/organizations/current/team');
 }
 
-// NOTE: POST /team/invite adds an already-registered user directly (no token).
+// Token invitation (works for emails that are not registered yet): creates a
+// pending invitation, emails the register link and returns the token.
 export function createOrganizationInvitation(payload: { email: string; role?: string; expires_in_days?: number }) {
-  return apiRequest<{ organization_id: number; member: TeamMember | null }>('/organizations/current/team/invite', {
+  return apiRequest<{ organization_id: number; invitation: TeamInvitation; email_delivery: EmailDelivery }>('/organizations/current/team/invitations', {
     method: 'POST',
     body: payload,
   });
@@ -84,8 +85,12 @@ export function acceptOrganizationInvitation(payload: { token: string }) {
   });
 }
 
+// Adds an already-registered user to the current organization directly.
 export function inviteOrganizationMember(payload: { email: string; role?: string }) {
-  return createOrganizationInvitation(payload);
+  return apiRequest<{ organization_id: number; member: TeamMember | null }>('/organizations/current/team/invite', {
+    method: 'POST',
+    body: payload,
+  });
 }
 
 export function removeOrganizationMember(userId: number) {
