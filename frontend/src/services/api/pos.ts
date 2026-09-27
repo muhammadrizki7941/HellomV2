@@ -251,8 +251,11 @@ export function getPublicOrganizationOutlets(organizationSlug: string) {
   );
 }
 
-export function getPosOrders() {
-  return apiRequest<{ orders: PosOrderListItem[] }>('/pos/orders');
+// status: filter on the server ('all' or empty = no filter). The backend
+// returns at most the 100 latest orders, so filtering must happen there.
+export function getPosOrders(status?: string) {
+  const qs = status && status !== 'all' ? `?${new URLSearchParams({ status }).toString()}` : '';
+  return apiRequest<{ orders: PosOrderListItem[] }>(`/pos/orders${qs}`);
 }
 
 export function createPosOrder(payload: Record<string, unknown>) {
