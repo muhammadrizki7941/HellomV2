@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Bell } from 'lucide-react';
 import { useNotifications } from '@/hooks/useNotifications';
-import { HELLOM_REALTIME_PUBLIC_URL } from '@/lib/hellomApi';
+import { HELLOM_REALTIME_PUBLIC_URL, getRealtimeToken } from '@/lib/hellomApi';
 import NotificationDropdown from './NotificationDropdown';
 
 declare global {
@@ -87,6 +87,13 @@ export default function NotificationBell() {
       socket = window.io(HELLOM_REALTIME_PUBLIC_URL, {
         transports: ['websocket', 'polling'],
         timeout: 2000,
+        // Called on every (re)connect so an expired token is replaced. The
+        // token puts this socket in the private "admins" room.
+        auth: (cb: (data: { token?: string }) => void) => {
+          getRealtimeToken()
+            .then((result) => cb({ token: result.token }))
+            .catch(() => cb({}));
+        },
       });
 
       socket.on('connect', handleNotificationCreated);

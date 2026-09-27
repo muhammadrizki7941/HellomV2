@@ -479,6 +479,11 @@ export function getWalletOverview() {
   return apiRequest<Record<string, unknown>>('/wallet/overview');
 }
 
+// Short-lived token for the Socket.IO handshake (grants private rooms).
+export function getRealtimeToken() {
+  return apiRequest<{ token: string; expires_at: number; rooms: string[] }>('/realtime/token');
+}
+
 export function getWalletTransactions(query: { limit?: number; cursor?: number; type?: string } = {}) {
   const params = new URLSearchParams();
   if (query.limit) params.set('limit', String(query.limit));

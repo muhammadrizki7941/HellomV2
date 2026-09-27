@@ -422,7 +422,7 @@ class NotificationService
             'created_at' => $notification->created_at?->toISOString(),
         ];
 
-        $this->realtimeClient->emit('admin.notification.created', $payload);
+        $this->realtimeClient->emitToRoom(RealtimeClient::ROOM_ADMINS, 'admin.notification.created', $payload);
     }
 
     private function resolveAmount(mixed $record): int

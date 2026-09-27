@@ -8,6 +8,7 @@
 use App\Http\Controllers\Api\V1\Hellom\AuthController;
 use App\Http\Controllers\Api\V1\Hellom\OrganizationController;
 use App\Http\Controllers\Api\V1\Hellom\OrganizationTeamController;
+use App\Http\Controllers\Api\V1\Hellom\RealtimeController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/auth/me', [AuthController::class, 'me'])->name('auth.me');
@@ -33,3 +34,6 @@ Route::delete('/organizations/current/team/invitations/{invitationId}', [Organiz
 Route::post('/organizations/current/team/invitations/accept', [OrganizationTeamController::class, 'acceptInvitation'])->name('organizations.current.team.invitations.accept');
 Route::put('/organizations/current/team/{userId}/role', [OrganizationTeamController::class, 'updateRole'])->name('organizations.current.team.update_role');
 Route::delete('/organizations/current/team/{userId}', [OrganizationTeamController::class, 'destroy'])->name('organizations.current.team.destroy');
+
+// Socket.IO handshake token (private rooms: user_<id>, admins for super admins)
+Route::get('/realtime/token', [RealtimeController::class, 'token'])->name('realtime.token');
