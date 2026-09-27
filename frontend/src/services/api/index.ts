@@ -290,3 +290,4 @@ export type {
 } from './pos';
 export type { OwnerNotification } from './admin';
 export type { ConsumerNotification } from './consumer';
+export type { PosMemberSearchResult } from './pos';

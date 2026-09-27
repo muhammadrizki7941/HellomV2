@@ -357,20 +357,10 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
     searchTimeoutRef.current = setTimeout(async () => {
       try {
         const res = await searchPosMembers({ q: query });
-        console.log('searchPosMembers FULL response:', JSON.stringify(res, null, 2)); // DEBUG FULL
         
-        // API returns: { success: true, data: { members: [...] }, message: '...' }
-        let results: any[] = [];
-        
-        if (res.data && res.data.members && Array.isArray(res.data.members)) {
-          results = res.data.members;
-        } else if (Array.isArray(res)) {
-          results = res;
-        } else if (res.members && Array.isArray(res.members)) {
-          results = res.members;
-        }
-        
-        console.log('Found results:', results); // DEBUG
+        // apiRequest already unwraps the envelope: res = { members: [...] }
+        const results = Array.isArray(res.members) ? [...res.members] : [];
+
         
         // Sort results: exact match first, then partial matches
         const sortedResults = results.sort((a: any, b: any) => {
@@ -384,7 +374,6 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
           return (b.total_orders || 0) - (a.total_orders || 0);
         });
 
-        console.log('Sorted results:', sortedResults); // DEBUG
         setMemberResults(sortedResults);
       } catch (err) {
         console.error('Failed to search members ERROR:', err); // DEBUG
@@ -479,8 +468,6 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
           })),
         })),
       };
-
-      console.log('Sending order payload:', JSON.stringify(payload, null, 2));
 
       await createPosOrder(payload);
 

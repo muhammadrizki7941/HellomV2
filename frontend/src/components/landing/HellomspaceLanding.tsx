@@ -411,7 +411,7 @@ export const HellomspaceLanding = ({ brand, logoSrc }: { brand: BrandSettings; l
             <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
               <div>
                 <h2 className="max-w-3xl font-display text-4xl font-medium leading-tight md:text-5xl">
-                  Dua aplikasi untuk bantu bisnismu <span className="text-[var(--gold)]">naik kelas.</span>
+                  Siapkan aplikasi untuk bantu bisnismu <span className="text-[var(--gold)]">naik kelas.</span>
                 </h2>
                 <p className="mt-5 max-w-2xl text-sm leading-7 text-[var(--muted)]">
                   Solusi siap pakai dari Hellom: bikin halaman jualan online dulu, lalu kelola operasional usahamu dari satu tempat.

@@ -152,22 +152,6 @@ export default function PosMenu() {
   const handleSubmitProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      // Debug: log current state
-      console.log('Current formData state:', formData);
-      console.log('editingProduct:', editingProduct);
-
-      // Debug: log form data being sent
-      console.log('Submitting product form:', {
-        category_id: formData.category_id,
-        name: formData.name,
-        description: formData.description,
-        price: formData.price,
-        is_available: formData.is_available,
-        track_stock: formData.track_stock,
-        stock: formData.stock,
-        hasImage: !!imageFile,
-        isEditing: !!editingProduct,
-      });
 
       const data = new FormData();
       data.append('category_id', formData.category_id);
@@ -205,13 +189,6 @@ export default function PosMenu() {
       // Add method spoofing for updates
       if (editingProduct) {
         data.append('_method', 'PATCH');
-        console.log('Adding _method=PATCH for update');
-      }
-
-      // Debug: log FormData contents
-      console.log('FormData entries:');
-      for (const [key, value] of data.entries()) {
-        console.log(`${key}:`, typeof value === 'string' ? `"${value}"` : value);
       }
 
       if (editingProduct) {

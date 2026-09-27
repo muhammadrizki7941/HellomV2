@@ -289,18 +289,30 @@ export function getPosMembers() {
 }
 
 export function createPosMember(payload: Record<string, unknown>) {
-  return apiRequest<Record<string, unknown>>('/pos/members', {
+  // Returns the created pos_members row (superset of the search result fields).
+  return apiRequest<{ member: PosMemberSearchResult }>('/pos/members', {
     method: 'POST',
     body: payload,
   });
 }
+
+// Member search result (PosMemberController::search).
+export type PosMemberSearchResult = {
+  id: number;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  total_points: number;
+  total_orders: number;
+  total_spent: number;
+};
 
 export function searchPosMembers(query: { q?: string; keyword?: string }) {
   const params = new URLSearchParams();
   const searchTerm = query.q || query.keyword || '';
   if (searchTerm) params.set('q', searchTerm);
   const qs = params.toString() ? `?${params.toString()}` : '';
-  return apiRequest<Record<string, unknown>>(`/pos/members/search${qs}`);
+  return apiRequest<{ members: PosMemberSearchResult[] }>(`/pos/members/search${qs}`);
 }
 
 export function getPosLoyaltySettings() {
@@ -339,14 +351,14 @@ export function deletePosRewardRule(ruleId: number) {
 }
 
 export function calculateLoyaltyPoints(payload: Record<string, unknown>) {
-  return apiRequest<Record<string, unknown>>('/pos/loyalty/calculate', {
+  return apiRequest<{ points_to_earn: number; available_rewards: Array<Record<string, unknown>> }>('/pos/loyalty/calculate', {
     method: 'POST',
     body: payload,
   });
 }
 
 export function applyReward(payload: Record<string, unknown>) {
-  return apiRequest<Record<string, unknown>>('/pos/loyalty/apply-reward', {
+  return apiRequest<{ reward: { id: number; name: string; type: string }; discount_amount: number; final_amount: number; free_product_id: number | null }>('/pos/loyalty/apply-reward', {
     method: 'POST',
     body: payload,
   });
