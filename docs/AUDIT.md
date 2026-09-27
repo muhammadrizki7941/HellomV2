@@ -187,7 +187,7 @@ Legenda status: `[ ]` belum · `[x]` selesai (diisi di Fase 2)
 | D-9 | Rendah | Aset duplikat `plans/UI/public/*` vs `backend/public/hellom/{assets,fonts,manifest.json,sw.js}` ter-commit | Build menyalin `public/` ke outDir (emptyOutDir) | Hanya simpan di `plans/UI/public`; ignore seluruh `backend/public/hellom/` |
 | D-10 | Rendah | `backend/resources/js/hellom/api/*.ts` + `tsconfig.hellom-wallet.json` | Tidak di-import oleh Vite entry mana pun | Arsip |
 | D-11 | Rendah | Dokumen tercecer/usang di root: `PROGRESS.md`, `PRODUCT_FEATURE.md`, `LandingPage.md`, `STATIC_BRANDING_SETUP.md`, `running this app` (path `Self-OrderMenu`, Midtrans), `ngrok.yml`, screenshot `plans/UI/*.png`, `plans/UI/metadata.json` (AI Studio), `tsconfig.tsbuildinfo` | Konten usang (mis. `pos_base_url` sudah tidak ada) | Pindah ke `docs/` / `_archive/docs/` |
-| D-12 | Rendah | `backend/server.php` (router `artisan serve` lama) | Laravel 12 tidak memerlukannya | Hapus |
+| D-12 | ~~Rendah~~ | ~~`backend/server.php`~~ **Koreksi:** file ini router kustom `php artisan serve` (memperbaiki routing SPA di bawah `public/hellom/`), dipakai via `ServeCommand` bila ada di root | Dipakai | **Pertahankan** |
 
 ### 3.3 Dependensi
 
@@ -315,11 +315,11 @@ Legenda: 🟢 aman (tanpa perubahan perilaku) · 🟡 perlu verifikasi · 🔴 b
 - [ ] 🟡 Query audit read-only di production: transaksi `wallet_topup_mock`, invoice `payment_method = mock`, withdrawal yang di-approve non-super-admin
 
 ### Langkah 1: Arsip & dependensi
-- [ ] 🟢 `git checkout -b refactor/cleanup`
-- [ ] 🟢 D-1 hapus `plans/backend/`
-- [ ] 🟢 D-2 skrip debug → `_archive/backend-debug-scripts/`
-- [ ] 🟢 D-6 file UI mati
-- [ ] 🟢 D-11/D-12 dokumen & file usang → `docs/` / `_archive/`
+- [x] 🟢 `git checkout -b refactor/cleanup`
+- [x] 🟢 D-1 hapus `plans/backend/`
+- [x] 🟢 D-2 skrip debug → `_archive/backend-debug-scripts/`
+- [x] 🟢 D-6 file UI mati
+- [x] 🟢 D-11 dokumen & file usang → `docs/notes/`, `docs/screenshots/`, `scripts/ngrok.yml`, `_archive/docs/` (D-12 dibatalkan: `server.php` dipakai)
 - [ ] 🟢 R-11 `.gitignore` (`.kilo/`, seluruh `backend/public/hellom/` kecuali yang dibutuhkan)
 - [ ] 🟡 P-1..P-5 bersihkan `plans/UI/package.json` → `npm install`, `npm run build`
 - [ ] 🟡 D-4/D-5/D-10 kelas & command tak terpakai → `_archive/`
