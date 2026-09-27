@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -72,6 +73,36 @@ class Plan extends Model
     public function isSubscription(): bool
     {
         return $this->type === self::TYPE_SUBSCRIPTION;
+    }
+
+    /**
+     * When access bought at $start ends. Single source of truth for every
+     * activation/renewal path. null = never (lifetime and free plans).
+     *
+     * The cycle the buyer actually chose wins; without one we fall back to
+     * what the plan offers (yearly only when it supports yearly).
+     */
+    public function accessEndsAt(CarbonInterface $start, ?string $billingCycle = null): ?CarbonInterface
+    {
+        if ($this->isLifetime() || $this->isFree()) {
+            return null;
+        }
+
+        if ($this->duration_days) {
+            return $start->copy()->addDays((int) $this->duration_days);
+        }
+
+        if ($billingCycle === self::BILLING_YEARLY) {
+            return $start->copy()->addYear();
+        }
+
+        if ($billingCycle === self::BILLING_MONTHLY) {
+            return $start->copy()->addMonth();
+        }
+
+        return $this->hasBillingCycle(self::BILLING_YEARLY)
+            ? $start->copy()->addYear()
+            : $start->copy()->addMonth();
     }
 
     public function hasBillingCycle(string $cycle): bool
