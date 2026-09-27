@@ -377,11 +377,25 @@ Legenda: 🟢 aman (tanpa perubahan perilaku) · 🟡 perlu verifikasi · 🔴 b
 
 ---
 
-## 6. Pertanyaan yang perlu Anda putuskan
+## 6. Keputusan pemilik proyek (2026-09-27)
 
-1. ~~Hotfix keamanan (Langkah 0)~~ → disetujui; approval penarikan wajib melalui super admin.
-2. **Nginx production**: apakah konfigurasi di VPS sama dengan `DEPLOYMENT.MD` (root = `backend/public/hellom`, hanya `/api`, `/storage`, `/media` ke PHP)? Jika ya, UI Blade boleh diarsipkan.
-3. **Rename `plans/UI` → `frontend/`**: setuju? (Perlu menyesuaikan perintah build di VPS.)
-4. **"Sekali beli"**: yang dimaksud (a) lisensi **self-hosted** (pembeli memasang di server sendiri, pakai license key), atau (b) paket **lifetime** di SaaS yang sama (bayar sekali, akses selamanya di hellomspace.com)?
-5. **Realtime di production**: apakah `/socket.io` sudah di-proxy di VPS, dan apakah cron `schedule:run` sudah terpasang?
-6. **Akun `users.role = admin`**: apakah ada di production dan masih dibutuhkan?
+1. **Hotfix keamanan (Langkah 0)**: disetujui; approval penarikan dana wajib melalui super admin. ✅ selesai
+2. **Nginx production**: **belum pasti, harus diperiksa ulang di VPS**. D-3 (arsip UI Blade) **ditahan** sampai config Nginx aktual dikonfirmasi.
+3. **Rename `plans/UI` → `frontend/`**: disetujui (perintah build di VPS ikut berubah).
+4. **"Sekali beli"** = paket **lifetime** di SaaS yang sama (bayar sekali, akses selamanya di hellomspace.com). Bukan lisensi self-hosted, tidak perlu license key.
+5. **Realtime/cron production**: "sepertinya sudah"; masuk checklist verifikasi VPS (`/socket.io` proxy + `schedule:run`).
+6. **`users.role = admin`**: masih ada dan dibutuhkan. S-7 **tidak diubah**, cukup didokumentasikan (role ini sengaja bisa melihat/berpindah ke semua organisasi).
+
+### Perintah pemeriksaan VPS (read-only, dijalankan pemilik)
+```bash
+# Nginx aktual untuk hellomspace.com
+cat /www/server/panel/vhost/nginx/hellomspace.com.conf
+nginx -T 2>/dev/null | grep -nE "server_name|root |location|proxy_pass|fastcgi_pass" | grep -A3 -B3 hellomspace
+# Apakah URL Blade lama dijawab Laravel? (200 = Laravel, index.html SPA = sudah mati)
+curl -s -o /dev/null -w "%{http_code} %{content_type}\n" https://hellomspace.com/cashier/login
+curl -s https://hellomspace.com/cashier/login | head -c 300
+# Cron scheduler & realtime
+crontab -l | grep -i artisan
+pm2 describe hellom-realtime | grep -E "status|script path|exec cwd"
+curl -s -o /dev/null -w "%{http_code}\n" "https://hellomspace.com/socket.io/?EIO=4&transport=polling"
+```
