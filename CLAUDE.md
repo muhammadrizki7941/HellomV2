@@ -27,7 +27,7 @@ php artisan schedule:work      # lokal; production: cron schedule:run tiap menit
 npm install
 npm run dev                    # vite dev server, port 3000
 npm run build                  # → ../backend/public/hellom (menimpa build lama)
-npx tsc --noEmit               # baseline: 231 error (jangan menambah)
+npx tsc --noEmit               # baseline: 178 error, semua di src/ (jangan menambah)
 
 # Realtime (dari realtime/)
 node server.js                 # env: PORT, HOST, REALTIME_SERVER_SECRET
