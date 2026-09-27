@@ -33,12 +33,7 @@ export function useNotifications() {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams();
-      params.append('page', page.toString());
-      if (type) params.append('type', type);
-      params.append('per_page', '50');
-
-      const response = await getAdminNotifications(`?${params.toString()}`);
+      const response = await getAdminNotifications({ page, type, per_page: 50 });
       setNotifications(response.data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch notifications');
