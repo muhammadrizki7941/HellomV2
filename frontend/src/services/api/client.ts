@@ -1,0 +1,206 @@
+// HTTP client, session/token storage, active outlet, image URLs.
+// Part of the Hellom API client; import from '@/lib/hellomApi' or '@/services/api'.
+
+export const HELLOM_API_BASE =
+  (import.meta as { env?: Record<string, string | undefined> }).env?.VITE_HELLOM_API_BASE ||
+  'http://127.0.0.1:8000/api/v1/hellom';
+
+export const HELLOM_REALTIME_PUBLIC_URL =
+  (import.meta as { env?: Record<string, string | undefined> }).env?.VITE_REALTIME_PUBLIC_URL ||
+  (() => {
+    try {
+      const apiUrl = new URL(HELLOM_API_BASE);
+      return `${apiUrl.protocol}//${apiUrl.hostname}:3001`;
+    } catch {
+      return 'http://127.0.0.1:3001';
+    }
+  })();
+
+const TOKEN_KEY = 'hellom_token';
+const USER_KEY = 'hellom_user';
+const LEGACY_TOKEN_KEY = 'token';
+const LEGACY_USER_KEY = 'user';
+const SESSION_EVENT_NAME = 'hellom-session-changed';
+const ACTIVE_OUTLET_KEY = 'hellom_active_outlet_id';
+const ACTIVE_OUTLET_EVENT_NAME = 'hellom-active-outlet-changed';
+
+// Active POS outlet — sent as X-Outlet-Id on every authenticated request so the
+// backend scopes POS data (orders, products, reports, staff…) to that outlet.
+export function getActiveOutletId(): string | null {
+  if (typeof window === 'undefined') return null;
+  return window.localStorage.getItem(ACTIVE_OUTLET_KEY);
+}
+
+export function setActiveOutletId(outletId: string | number | null): void {
+  if (typeof window === 'undefined') return;
+  if (outletId === null || outletId === '') {
+    window.localStorage.removeItem(ACTIVE_OUTLET_KEY);
+  } else {
+    window.localStorage.setItem(ACTIVE_OUTLET_KEY, String(outletId));
+  }
+  window.dispatchEvent(new CustomEvent(ACTIVE_OUTLET_EVENT_NAME));
+}
+
+export function getActiveOutletEventName(): string {
+  return ACTIVE_OUTLET_EVENT_NAME;
+}
+
+export const getImageUrl = (path: string | null | undefined): string => {
+  if (!path) return '';
+  if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:') || path.startsWith('blob:')) {
+    return path;
+  }
+
+  const webBase = HELLOM_API_BASE.replace(/\/api\/v1\/hellom\/?$/, '');
+
+  if (path.startsWith('/storage/')) {
+    return `${webBase}${path}`;
+  }
+  if (path.startsWith('/media/')) {
+    return `${webBase}${path}`;
+  }
+  if (path.startsWith('storage/')) {
+    return `${webBase}/${path}`;
+  }
+  if (path.startsWith('media/')) {
+    return `${webBase}/${path}`;
+  }
+
+  return `${webBase}/storage/${path}`;
+};
+
+type ApiEnvelope<T> = {
+  success: boolean;
+  message: string;
+  data: T;
+  error: unknown;
+};
+
+export async function apiRequest<T>(
+  path: string,
+  options?: {
+    method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+    body?: unknown;
+    token?: string | null;
+    autoLogout?: boolean;
+  }
+): Promise<T> {
+  const token = options?.token ?? getToken();
+  const autoLogout = options?.autoLogout ?? (path === '/auth/me' || path === '/auth/logout');
+  const isFormData = options?.body instanceof FormData;
+  const activeOutletId = getActiveOutletId();
+
+  const response = await fetch(`${HELLOM_API_BASE}${path}`, {
+    method: options?.method ?? 'GET',
+    headers: {
+      Accept: 'application/json',
+      ...(!isFormData && options?.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(activeOutletId ? { 'X-Outlet-Id': activeOutletId } : {}),
+    },
+    body: options?.body !== undefined
+      ? (isFormData ? (options.body as BodyInit) : JSON.stringify(options.body))
+      : undefined,
+  });
+
+  const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | null;
+
+  if (response.status === 401 && token && autoLogout) {
+    clearSession();
+  }
+
+  if (!response.ok || !payload || payload.success !== true) {
+    const message = payload?.message || `HTTP ${response.status}`;
+    throw new Error(message);
+  }
+
+  return payload.data;
+}
+
+export async function publicApiRequest<T>(
+  path: string,
+  options?: {
+    method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+    body?: unknown;
+  }
+): Promise<T> {
+  const isFormData = options?.body instanceof FormData;
+  const response = await fetch(`${HELLOM_API_BASE}${path}`, {
+    method: options?.method ?? 'GET',
+    headers: {
+      Accept: 'application/json',
+      ...(!isFormData && options?.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+    },
+    body: options?.body !== undefined
+      ? (isFormData ? (options.body as BodyInit) : JSON.stringify(options.body))
+      : undefined,
+  });
+
+  const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | null;
+
+  if (!response.ok || !payload || payload.success !== true) {
+    const message = payload?.message || `HTTP ${response.status}`;
+    throw new Error(message);
+  }
+
+  return payload.data;
+}
+
+export function getToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+function emitSessionChanged(): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(SESSION_EVENT_NAME));
+}
+
+export function setSession(token: string, user: unknown): void {
+  localStorage.setItem(TOKEN_KEY, token);
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
+  localStorage.removeItem(LEGACY_TOKEN_KEY);
+  localStorage.removeItem(LEGACY_USER_KEY);
+  emitSessionChanged();
+}
+
+export function getSessionUser<T = unknown>(): T | null {
+  const raw = localStorage.getItem(USER_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
+export interface PosAccess {
+  is_cashier: boolean;
+  pos_role?: 'admin' | 'cashier';
+  permissions?: Record<string, boolean>;
+  outlet_id?: number | null;
+  outlet_name?: string | null;
+  tenant_slug?: string | null;
+}
+
+/** POS access context for the logged-in user (cashier lock + assigned outlet). */
+export function getSessionPosAccess(): PosAccess | null {
+  const user = getSessionUser<{ pos_access?: PosAccess }>();
+  return user?.pos_access ?? null;
+}
+
+/** True when the current account is a POS cashier locked to a single outlet. */
+export function isPosCashier(): boolean {
+  return getSessionPosAccess()?.is_cashier === true;
+}
+
+export function clearSession(): void {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+  localStorage.removeItem(LEGACY_TOKEN_KEY);
+  localStorage.removeItem(LEGACY_USER_KEY);
+  emitSessionChanged();
+}
+
+export function getSessionEventName(): string {
+  return SESSION_EVENT_NAME;
+}
