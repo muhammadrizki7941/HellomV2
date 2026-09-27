@@ -79,6 +79,7 @@ class PosLoyaltyController extends BasePosController
                 break;
             case 'free_product':
                 $product = $rule->scopedRewardProduct();
+                $freeProductId = $product?->id;
                 $discountAmount = $product?->price ?? 0;
                 break;
         }
