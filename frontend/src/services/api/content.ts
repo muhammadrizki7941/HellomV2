@@ -4,8 +4,39 @@ import { apiRequest, publicApiRequest } from './client';
 
 // ─── Showcase ───
 
-export type ShowcasePortfolio = Record<string, unknown>;
-export type ShowcaseClient = Record<string, unknown>;
+// showcase_portfolios row (ShowcasePortfolio model).
+export type ShowcasePortfolio = {
+  id: number;
+  title: string;
+  slug: string | null;
+  description: string | null;
+  full_description: string | null;
+  video_url: string | null;
+  thumbnail_url: string | null;
+  gallery_images: string[] | null;
+  client_name: string | null;
+  project_year: string | null;
+  project_url: string | null;
+  category: string | null;
+  tech_stack: string[] | null;
+  sort_order: number;
+  is_published: boolean;
+  is_featured: boolean;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+// showcase_clients row (ShowcaseClient model).
+export type ShowcaseClient = {
+  id: number;
+  name: string;
+  logo_url: string;
+  website_url: string | null;
+  sort_order: number;
+  is_published: boolean;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
 export type LandingContent = Record<string, unknown>;
 
 export function getPublicShowcasePortfolios() {
@@ -102,7 +133,7 @@ export function aiAssistArticle(payload: {
 }
 
 export function getAdminPortfolios() {
-  return apiRequest<Record<string, unknown>>('/admin/showcase/portfolios');
+  return apiRequest<{ items: ShowcasePortfolio[] }>('/admin/showcase/portfolios');
 }
 
 export function createAdminPortfolio(payload: Record<string, unknown>) {
@@ -126,7 +157,7 @@ export function deleteAdminPortfolio(portfolioId: number) {
 }
 
 export function getAdminClients() {
-  return apiRequest<Record<string, unknown>>('/admin/showcase/clients');
+  return apiRequest<{ items: ShowcaseClient[] }>('/admin/showcase/clients');
 }
 
 export function createAdminClient(payload: Record<string, unknown>) {
@@ -158,7 +189,7 @@ export function uploadShowcaseMedia(payload: FormData | File) {
       })()
     : payload;
 
-  return apiRequest<Record<string, unknown>>('/admin/showcase/upload-media', {
+  return apiRequest<{ url: string; path: string; mime_type: string | null; size_bytes: number; original_name: string }>('/admin/showcase/upload-media', {
     method: 'POST',
     body,
   });
