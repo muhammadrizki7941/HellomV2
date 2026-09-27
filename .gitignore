@@ -21,10 +21,8 @@ Thumbs.db
 /backend/bootstrap/cache/*.php
 
 # --- React SPA build output (rebuilt on each deploy via npm run build) ---
-# index.html dan JS/CSS di-regenerate tiap build dengan hash baru
-/backend/public/hellom/index.html
-/backend/public/hellom/assets/*.js
-/backend/public/hellom/assets/*.css
+# Seluruh folder dihasilkan ulang oleh build (emptyOutDir) dari plans/UI/public + src
+/backend/public/hellom/
 
 # --- Realtime node server (in /realtime) ---
 /realtime/node_modules/
@@ -35,3 +33,7 @@ Thumbs.db
 
 # --- Laragon / misc ---
 *.sqlite
+
+# --- Tooling / generated ---
+.kilo/
+*.tsbuildinfo
