@@ -1,6 +1,10 @@
 # Usulan: Fondasi Penjualan — Langganan & Lifetime (Langkah 6)
 
-> Status: **USULAN — menunggu persetujuan pemilik.** Belum ada kode yang diubah.
+> Status: **DISETUJUI & DIIMPLEMENTASIKAN** (branch `refactor/cleanup`, commit `ee1dfed` … `5c75d66`).
+> Default untuk pertanyaan §4 yang belum dijawab (semuanya mempertahankan perilaku lama, bisa diubah kemudian):
+> masa tenggang **0 hari** (`BILLING_GRACE_DAYS`); paket tahunan **tidak** diperpanjang otomatis (berakhir + notifikasi yang sudah ada);
+> lifetime tetap **per aplikasi** dengan `max_outlets` dari plan; aturan upgrade **tidak diubah**.
+> Backfill data lama: command `hellom:billing:backfill-entitlement-ends` (laporan dulu, tulis hanya dengan `--force`), bukan migration.
 > Keputusan #4: "sekali beli" = paket **lifetime** di SaaS yang sama (bayar sekali, akses selamanya). Tanpa license key.
 
 ## 1. Kondisi saat ini (hasil penelusuran kode)

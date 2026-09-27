@@ -355,7 +355,7 @@ Legenda: 🟢 aman (tanpa perubahan perilaku) · 🟡 perlu verifikasi · 🔴 b
 
 ### Langkah 6: Fondasi penjualan (desain dulu, tidak menulis ulang)
 - [x] 🔴 Proposal desain ditulis: [`docs/proposals/billing-foundation.md`](proposals/billing-foundation.md) (lifetime di SaaS, tanpa license key; `Plan::accessEndsAt()` + `EntitlementService` tunggal)
-- [ ] 🔴 Implementasi, **menunggu persetujuan & jawaban 5 pertanyaan di proposal**
+- [x] 🔴 Implementasi (disetujui): `Plan::accessEndsAt()`, `EntitlementService`, `Entitlement::effectiveStatus()`; semua aktivasi berbayar (iPaymu/reconcile/manual, wallet, Xendit, DOKU, auto-renew) kini menulis `ends_at` entitlement = langganan; command baru `hellom:billing:expire-subscriptions` (per jam) dan `hellom:billing:backfill-entitlement-ends` (laporan/`--force`). Diverifikasi per jalur di transaksi rollback. **B-1 & B-3 teratasi untuk pembelian baru**; data lama menunggu keputusan backfill (lihat laporan)
 - ⚠ **Temuan B-1 (Tinggi): akses paket tahunan tidak pernah berakhir.** `entitlements.ends_at` selalu `null` dan satu-satunya proses kedaluwarsa (`hellom:billing:auto-renew-wallet`) hanya memproses `billing_cycle = monthly`. Laten: berdampak saat langganan tahunan pertama melewati 365 hari (±April 2027).
 
 ### Langkah 7: Deploy
