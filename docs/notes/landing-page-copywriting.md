@@ -9,15 +9,15 @@ Tidak ada perubahan pada backend, API, state management, routing aplikasi inti, 
 
 ## File yang Diubah
 
-- `plans/UI/src/lib/landingData.ts`
-- `plans/UI/src/components/landing/HeroSection.tsx`
-- `plans/UI/src/components/landing/ServicesSection.tsx`
-- `plans/UI/src/components/landing/WhySection.tsx`
-- `plans/UI/src/components/landing/PricingSection.tsx`
-- `plans/UI/src/components/landing/TestimonialsSection.tsx`
-- `plans/UI/src/components/landing/CTASection.tsx`
-- `plans/UI/src/components/landing/Navbar.tsx`
-- `plans/UI/src/components/landing/Footer.tsx`
+- `frontend/src/lib/landingData.ts`
+- `frontend/src/components/landing/HeroSection.tsx`
+- `frontend/src/components/landing/ServicesSection.tsx`
+- `frontend/src/components/landing/WhySection.tsx`
+- `frontend/src/components/landing/PricingSection.tsx`
+- `frontend/src/components/landing/TestimonialsSection.tsx`
+- `frontend/src/components/landing/CTASection.tsx`
+- `frontend/src/components/landing/Navbar.tsx`
+- `frontend/src/components/landing/Footer.tsx`
 
 ## Ringkasan Revisi
 

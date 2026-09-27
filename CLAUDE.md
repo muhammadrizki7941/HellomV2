@@ -6,7 +6,7 @@ Aplikasi kasir (POS) + self-order restoran, bagian dari platform **Hellom** (hel
 | Folder | Isi |
 |---|---|
 | `backend/` | Laravel 12, PHP ^8.2, MySQL. API di `routes/api.php` (prefix `/api/v1/hellom`). Juga berisi UI **Blade lama** (routes `admin/cashier/customer/auth/marketing.php`) yang tidak terjangkau di production. |
-| `plans/UI/` | **UI resmi**: React 19 + Vite 6 + TypeScript + Tailwind 4, react-router v7. Build → `backend/public/hellom/` (base `/`). |
+| `frontend/` | **UI resmi**: React 19 + Vite 6 + TypeScript + Tailwind 4, react-router v7. Build → `backend/public/hellom/` (base `/`). |
 | `realtime/` | Node Socket.IO (`server.js`, port 3001), PM2 name `hellom-realtime`. Laravel POST `/emit` dengan header `X-RT-SECRET`. |
 | `scripts/` | Skrip PowerShell/CMD dev Windows. |
 | `docs/` | Dokumentasi (AUDIT.md, billing handoff). |
@@ -23,10 +23,10 @@ php artisan config:cache && php artisan config:clear
 php artisan serve --host=127.0.0.1 --port=8000
 php artisan schedule:work      # lokal; production: cron schedule:run tiap menit
 
-# Frontend (dari plans/UI/)
+# Frontend (dari frontend/)
 npm install
 npm run dev                    # vite dev server, port 3000
-npm run build                  # → ../../backend/public/hellom (menimpa build lama)
+npm run build                  # → ../backend/public/hellom (menimpa build lama)
 npx tsc --noEmit               # baseline: 231 error (jangan menambah)
 
 # Realtime (dari realtime/)
@@ -45,7 +45,7 @@ Tes PHPUnit **tidak bisa** jalan di sqlite `:memory:` (migration memakai `inform
 ## Konvensi
 - Respons API: `{ success, message, data, error }` via `BaseApiController::ok()/fail()`.
 - Komentar/teks UI berbahasa Indonesia; kode & nama variabel berbahasa Inggris.
-- Frontend: alias `@/` → `plans/UI/src`; semua panggilan API lewat `src/lib/hellomApi.ts`.
+- Frontend: alias `@/` → `frontend/src`; semua panggilan API lewat `src/lib/hellomApi.ts`.
 - Commit: conventional commits (`feat:`, `fix:`, `chore:`, `refactor:`, `docs:`), kecil per langkah.
 
 ## Aturan kerja (wajib)

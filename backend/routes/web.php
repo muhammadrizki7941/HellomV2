@@ -29,7 +29,7 @@ Route::get('/hellom/{any?}', function () {
 	$spaPath = public_path('hellom/index.html');
 
 	if (!file_exists($spaPath)) {
-		abort(503, 'Hellom UI assets not found. Run: npm --prefix plans/UI run build');
+		abort(503, 'Hellom UI assets not found. Run: npm --prefix frontend run build');
 	}
 
 	return response()->file($spaPath);
@@ -60,7 +60,7 @@ Route::get('/{slug}', function () {
 	$spaPath = public_path('hellom/index.html');
 
 	if (!file_exists($spaPath)) {
-		abort(503, 'Hellom UI assets not found. Run: npm --prefix plans/UI run build');
+		abort(503, 'Hellom UI assets not found. Run: npm --prefix frontend run build');
 	}
 
 	return response()->file($spaPath);

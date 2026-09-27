@@ -21,7 +21,7 @@ Thumbs.db
 /backend/bootstrap/cache/*.php
 
 # --- React SPA build output (rebuilt on each deploy via npm run build) ---
-# Seluruh folder dihasilkan ulang oleh build (emptyOutDir) dari plans/UI/public + src
+# Seluruh folder dihasilkan ulang oleh build (emptyOutDir) dari frontend/public + src
 /backend/public/hellom/
 
 # --- Realtime node server (in /realtime) ---

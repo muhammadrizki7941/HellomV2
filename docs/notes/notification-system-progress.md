@@ -10,7 +10,7 @@
 ## What Works (Consumer)
 - `notifyConsumerPaymentSuccess()`, `notifyConsumerPaymentPending()`, `notifyConsumerPaymentFailed()`, `notifyConsumerRefundProcessed()`, `notifyConsumerRefundDone()`, `notifyConsumerAccessActivated()`, `notifyConsumerExpiryWarning()`, `notifyConsumerMaintenance()`, `notifyConsumerPromo()`
 - Consumer routes: index, unread count, mark one read, mark all read
-- Frontend files created: `plans/UI/src/hooks/useConsumerNotifications.ts`, `plans/UI/src/components/consumer/NotificationBell.tsx`
+- Frontend files created: `frontend/src/hooks/useConsumerNotifications.ts`, `frontend/src/components/consumer/NotificationBell.tsx`
 
 ## Files Changed
 backend:
@@ -27,14 +27,14 @@ backend:
   - backend/app/Http/Controllers/Api/V1/Hellom/BillingController.php [modified]
   - backend/routes/api.php [modified]
 frontend:
-  - plans/UI/src/lib/hellomApi.ts [modified]
-  - plans/UI/src/hooks/useNotifications.ts [modified]
-  - plans/UI/src/hooks/useConsumerNotifications.ts [created]
-  - plans/UI/src/components/admin/NotificationBell.tsx [modified]
-  - plans/UI/src/components/admin/NotificationDropdown.tsx [modified]
-  - plans/UI/src/components/consumer/NotificationBell.tsx [created]
-  - plans/UI/src/layouts/DashboardLayout.tsx [modified]
-  - plans/UI/src/App.tsx [modified]
+  - frontend/src/lib/hellomApi.ts [modified]
+  - frontend/src/hooks/useNotifications.ts [modified]
+  - frontend/src/hooks/useConsumerNotifications.ts [created]
+  - frontend/src/components/admin/NotificationBell.tsx [modified]
+  - frontend/src/components/admin/NotificationDropdown.tsx [modified]
+  - frontend/src/components/consumer/NotificationBell.tsx [created]
+  - frontend/src/layouts/DashboardLayout.tsx [modified]
+  - frontend/src/App.tsx [modified]
 
 ## DB Tables
 owner_notifications: id, type, title, message, data, is_read, action_type, action_url, action_status, action_done_at, reference_id, reference_type, notifiable_id, notifiable_type, created_at, updated_at

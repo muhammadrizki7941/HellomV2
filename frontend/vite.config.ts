@@ -13,7 +13,7 @@ export default defineConfig(() => {
       },
     },
     build: {
-      outDir: '../../backend/public/hellom',
+      outDir: '../backend/public/hellom',
       emptyOutDir: true,
       rollupOptions: {
         output: {

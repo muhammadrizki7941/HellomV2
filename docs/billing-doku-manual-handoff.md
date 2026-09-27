@@ -40,9 +40,9 @@
 
 ## Main frontend files
 
-- `plans/UI/src/lib/hellomApi.ts`
-- `plans/UI/src/pages/admin/AdminSettings.tsx`
-- `plans/UI/src/components/SubscriptionModal.tsx`
+- `frontend/src/lib/hellomApi.ts`
+- `frontend/src/pages/admin/AdminSettings.tsx`
+- `frontend/src/components/SubscriptionModal.tsx`
 
 ## Runtime config
 

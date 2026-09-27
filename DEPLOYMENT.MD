@@ -50,21 +50,20 @@ SelfOrderResto/ (root repo: github.com/muhammadrizki7941/HellomV2)
 
 ## ⚙️ Konfigurasi Penting
 
-### 1. vite.config.ts (`plans/UI/vite.config.ts`)
+### 1. vite.config.ts (`frontend/vite.config.ts`)
 ```typescript
 // WAJIB: base harus '/' bukan '/hellom/'
 base: '/',
 
-// WAJIB: outDir pakai absolute path ke backend/public/hellom
+// outDir relatif: frontend/ dan backend/ bersebelahan di root repo,
+// jadi path ini benar di lokal (Laragon) maupun VPS — tidak perlu diedit per mesin.
 build: {
-  outDir: '/www/wwwroot/hellomspace.com/backend/public/hellom',
+  outDir: '../backend/public/hellom',
   emptyOutDir: true,
 }
 ```
 
-> ⚠️ **Lokal:** `outDir` di lokal harus diubah ke path lokal atau relative `../../backend/public/hellom`
-
-### 2. plans/UI/.env.production
+### 2. frontend/.env.production
 ```env
 VITE_HELLOM_API_BASE=https://hellomspace.com/api/v1/hellom
 VITE_REALTIME_PUBLIC_URL=https://hellomspace.com
@@ -195,7 +194,7 @@ php artisan route:cache
 php artisan view:cache
 
 # 4. Build React frontend
-cd /www/wwwroot/hellomspace.com/plans/UI
+cd /www/wwwroot/hellomspace.com/frontend
 npm install
 npm run build
 # (output otomatis ke backend/public/hellom/)
@@ -217,12 +216,12 @@ nginx -s reload
 ```typescript
 // Lokal: pakai relative path atau path Laragon
 build: {
-  outDir: '../../backend/public/hellom',
+  outDir: '../backend/public/hellom',
   emptyOutDir: true,
 }
 ```
 
-**2. plans/UI/.env.local (buat file baru):**
+**2. frontend/.env.local (buat file baru):**
 ```env
 VITE_HELLOM_API_BASE=http://127.0.0.1:8000/api/v1/hellom
 VITE_REALTIME_PUBLIC_URL=http://127.0.0.1:3001
@@ -280,9 +279,9 @@ Sebelumnya member POS bisa mendapat akun Hellom platform yang memberi akses ke `
   ```
 
 **File yang diubah (frontend):**
-- `plans/UI/src/lib/hellomApi.ts` — Tambah `registerPublicPosMember()` dan `lookupPublicPosMember()`
-- `plans/UI/src/pages/pos/customer/MemberPortalPage.tsx` — Ditulis ulang: hapus Hellom auth, pakai phone-based session
-- `plans/UI/src/pages/pos/PosMemberList.tsx` — Hapus `register()` Hellom, hanya `createPosMember()` biasa
+- `frontend/src/lib/hellomApi.ts` — Tambah `registerPublicPosMember()` dan `lookupPublicPosMember()`
+- `frontend/src/pages/pos/customer/MemberPortalPage.tsx` — Ditulis ulang: hapus Hellom auth, pakai phone-based session
+- `frontend/src/pages/pos/PosMemberList.tsx` — Hapus `register()` Hellom, hanya `createPosMember()` biasa
 
 ---
 
@@ -291,13 +290,13 @@ Sebelumnya member POS bisa mendapat akun Hellom platform yang memberi akses ke `
 Aplikasi POS sekarang bisa di-install di HP tanpa membuka Chrome setiap kali.
 
 **File baru:**
-- `plans/UI/public/manifest.json` — App manifest (nama, icon, start_url, display: standalone)
-- `plans/UI/public/sw.js` — Service worker (cache-first untuk asset, network-first untuk navigasi SPA)
-- `plans/UI/src/hooks/usePWAInstall.ts` — Hook untuk mendeteksi dan memicu install prompt
+- `frontend/public/manifest.json` — App manifest (nama, icon, start_url, display: standalone)
+- `frontend/public/sw.js` — Service worker (cache-first untuk asset, network-first untuk navigasi SPA)
+- `frontend/src/hooks/usePWAInstall.ts` — Hook untuk mendeteksi dan memicu install prompt
 
 **File yang diubah:**
-- `plans/UI/index.html` — Tambah `<link rel="manifest">`, `<meta name="theme-color">`, apple-touch-icon, registrasi SW
-- `plans/UI/src/layouts/PosLayout.tsx` — Tambah tombol "📲 Install" di header mobile (muncul otomatis jika browser mendukung), panduan khusus untuk iOS Safari
+- `frontend/index.html` — Tambah `<link rel="manifest">`, `<meta name="theme-color">`, apple-touch-icon, registrasi SW
+- `frontend/src/layouts/PosLayout.tsx` — Tambah tombol "📲 Install" di header mobile (muncul otomatis jika browser mendukung), panduan khusus untuk iOS Safari
 
 > ⚠️ **Nginx:** Tambahkan block khusus untuk `sw.js` agar tidak di-cache (lihat bagian Nginx di atas).
 
@@ -308,7 +307,7 @@ Aplikasi POS sekarang bisa di-install di HP tanpa membuka Chrome setiap kali.
 Saat kasir memilih Dana atau GoPay sebagai metode bayar, tombol "Buka Aplikasi" akan membuka langsung ke app yang bersangkutan.
 
 **File yang diubah:**
-- `plans/UI/src/components/pos/PaymentModal.tsx`
+- `frontend/src/components/pos/PaymentModal.tsx`
   - Tambah tipe `'dana' | 'gopay'` ke `PaymentMethod`
   - Panel berwarna (biru Dana / hijau GoPay) dengan tombol deep link
   - Dana: `https://link.dana.id/`
@@ -322,11 +321,11 @@ Saat kasir memilih Dana atau GoPay sebagai metode bayar, tombol "Buka Aplikasi" 
 Tabel pesanan di `/pos/orders` didesain ulang agar tidak perlu scroll horizontal di mode portrait mobile.
 
 **File yang diubah:**
-- `plans/UI/src/pages/pos/PosOrders.tsx` — Ubah dari `<table>` ke card-list per order
+- `frontend/src/pages/pos/PosOrders.tsx` — Ubah dari `<table>` ke card-list per order
   - Baris 1: nama pelanggan + total (kanan)
   - Baris 2: nomor meja · jumlah item · waktu (satu baris)
   - Baris 3: badge status + action bar (Bayar kiri, Print + ubah status kanan)
-- `plans/UI/src/layouts/PosLayout.tsx` — Kurangi padding mobile dari `p-6` ke `p-3 sm:p-5 lg:p-6`
+- `frontend/src/layouts/PosLayout.tsx` — Kurangi padding mobile dari `p-6` ke `p-3 sm:p-5 lg:p-6`
 
 ---
 
@@ -335,23 +334,23 @@ Tabel pesanan di `/pos/orders` didesain ulang agar tidak perlu scroll horizontal
 Dashboard member (`/dashboard`) dibersihkan dari data mock yang muncul ke pengguna.
 
 **File yang diubah:**
-- `plans/UI/src/pages/member/DashboardHome.tsx`
+- `frontend/src/pages/member/DashboardHome.tsx`
   - Hapus import `PROMOS` dari `mockData.ts`
   - Pengumuman/promo sekarang dari `getConsumerNotifications()` — **hanya muncul jika super admin mengaktifkan**
   - Kolom tabel riwayat diubah ke Bahasa Indonesia (Keterangan, Tanggal, Nominal, Status)
   - Tipe transaksi `wallet_transaction` → label ramah pengguna
 
-- `plans/UI/src/pages/dashboard/Payments.tsx`
+- `frontend/src/pages/dashboard/Payments.tsx`
   - Hapus semua teks teknis developer (webhook path, "Ledger", "Gateway credentials", "Kesiapan integrasi")
   - Tab rename: Overview → Ringkasan, Deposit → Isi Saldo, Withdraw → Tarik Saldo
   - Kolom tabel: Type/Direction dihapus → hanya Keterangan + Nominal berwarna (hijau masuk, abu keluar)
   - Kartu hero mobile: stack vertikal agar tidak overflow di portrait
 
-- `plans/UI/src/pages/dashboard/my-purchases.tsx`
+- `frontend/src/pages/dashboard/my-purchases.tsx`
   - Mobile (< md): card list per pembelian (tidak ada scroll horizontal)
   - Desktop (md+): tabel tetap ada
 
-- `plans/UI/src/pages/dashboard/products/[slug].tsx`
+- `frontend/src/pages/dashboard/products/[slug].tsx`
   - "Gateway iPaymu" → "Pembayaran via iPaymu"
   - "Manual Payment" → "Bayar Manual (Transfer / QRIS)"
   - "Konfirmasi checkout" → "Konfirmasi & Bayar"
@@ -364,7 +363,7 @@ Dashboard member (`/dashboard`) dibersihkan dari data mock yang muncul ke penggu
 | Masalah | Penyebab | Solusi |
 |---------|----------|--------|
 | White screen, MIME type error | `base: '/hellom/'` di vite.config → asset path salah | Ubah ke `base: '/'` |
-| Build ke folder salah | `outDir: '../backend/public/hellom'` resolve ke `plans/backend/` | Pakai absolute path |
+| Build ke folder salah | Dulu UI ada di `plans/UI`, sehingga `../backend` resolve ke `plans/backend/` | Sejak UI dipindah ke `frontend/`, `outDir: '../backend/public/hellom'` sudah benar |
 | POS redirect ke localhost | `POS_BASE_URL` tidak ada di `.env` & `config/app.php` | Tambah keduanya |
 | Realtime error `ERR_CONNECTION_REFUSED` | Realtime server belum jalan | `pm2 start server.js --name hellom-realtime` |
 | SSH key already in use | 1 deploy key hanya untuk 1 repo | Generate key baru di aaPanel |
@@ -401,7 +400,7 @@ pm2 save
 /backend/vendor/
 /backend/node_modules/
 /backend/public/build
-/plans/UI/node_modules/
+/frontend/node_modules/
 /realtime/node_modules/
 /realtime/.env
 ```
@@ -412,12 +411,12 @@ pm2 save
 
 ## 📝 Checklist Deploy Production
 
-- [x] Buat `plans/UI/.env.production`
+- [x] Buat `frontend/.env.production`
 - [x] PWA manifest dan service worker (`public/manifest.json`, `public/sw.js`)
 - [x] Route publik POS member di `backend/routes/api.php`
 - [x] Dana/GoPay deep link di `PaymentModal.tsx`
 - [x] Dashboard dibersihkan dari data statis/mock
-- [ ] Buat `plans/UI/.env.local` untuk development
+- [ ] Buat `frontend/.env.local` untuk development
 - [ ] Pisahkan `vite.config.ts` untuk lokal vs production (atau pakai env untuk `outDir`)
 - [ ] Tambah `backend/public/hellom/` ke `.gitignore`
 - [ ] Buat script deploy otomatis `scripts/deploy.sh`
@@ -435,7 +434,7 @@ cd /www/wwwroot/hellomspace.com
 git pull origin main
 
 # Build ulang UI
-cd plans/UI
+cd frontend
 npm run build
 Setelah ini selesai, white screen akan hilang dan semua perubahan POS/ForgotPassword/LandingBuilder akan tampil benar.
 
@@ -443,5 +442,5 @@ Mulai sekarang, setiap deploy cukup:
 
 
 git pull origin main
-cd plans/UI && npm run build
+cd frontend && npm run build
 index.html dan JS/CSS tidak lagi ikut git, jadi tidak akan ada konflik hash antara git dan build.
