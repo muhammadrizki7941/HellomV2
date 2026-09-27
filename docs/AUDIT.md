@@ -213,6 +213,7 @@ Legenda status: `[ ]` belum · `[x]` selesai (diisi di Fase 2)
 | N-4 | Sedang | Route API: middleware `canUseApp:landing_builder` diulang di 31 route (bukan group); indentasi rusak `api.php:338`; nama route campur (`purchase_settings.` vs tanpa nama untuk semua route POS). |
 | N-5 | Rendah | Frontend: `lib/hellomApi.ts` 1.711 baris (semua endpoint); halaman 1.000-2.300 baris (`OrderPage.tsx` 2.325, `PosStaff.tsx` 1.720); `pages/produk` vs `pages/dashboard/products` vs `pages/admin/products`; nama file campur (`[slug].tsx`, `my-purchases.tsx`, PascalCase). |
 | N-6 | Rendah | Folder `plans/UI` untuk kode produksi (nama menyiratkan draf); nama produk campur: SelfOrderResto / Hellom / HellomV2 / "Self Order" (`APP_NAME` di `.env.example`). |
+| N-8 | Rendah | Dua base controller API dengan kontrak berbeda: `Api\V1\BaseApiController` (`success()`/`error()`, dipakai Pos\* & Consumer\*) vs `Api\V1\Hellom\BaseApiController` (`ok()`/`fail()`). Satukan di Langkah 2. |
 | N-7 | Rendah | `DEPLOYMENT.MD` menyebut Laravel 11 dan `config('app.pos_base_url')`, padahal proyek memakai Laravel 12 dan config itu sudah dihapus (commit `fe36da3`). |
 
 ### 3.5 Hardcode yang seharusnya di env/config
@@ -339,17 +340,18 @@ Legenda: 🟢 aman (tanpa perubahan perilaku) · 🟡 perlu verifikasi · 🔴 b
 - [x] 🟢 `tsconfig` `include: ["src"]`; `referensi/` → `docs/design-reference/figma-landing` (`c598ab2`). `tsc` 231 → **178**; CSS 200 KB → 155 KB (427 selector shadcn tak terpakai)
 - [ ] 🟡 Pecah `hellomApi.ts` → `services/api/*` (re-export kompatibel)
 - [ ] 🟡 Susun `features/<modul>`; update import (tanpa ubah tampilan)
-- [ ] 🟡 Turunkan error `tsc` bertahap
+- [x] 🟢 R-14 lazy route + chunk grafik terpisah: JS awal ~2,2 MB → ~500 KB (gzip 568 → 149 KB) (`c53fbfc`)
+- [ ] 🟡 Turunkan error `tsc` bertahap (baseline **178**)
 
 ### Langkah 4: Konfigurasi
 - [x] 🟢 H-2 CORS → `CORS_ALLOWED_ORIGINS`; H-3 realtime → `REALTIME_ALLOWED_ORIGINS` + warning secret default; H-5 selesai di Langkah 0; **bug**: link undangan tim/kasir memakai `env()` di luar config → `localhost` setelah `config:cache` → `config('app.frontend_url')` (`2842463`, `b54d466`). H-1: fallback dev dipertahankan (didokumentasikan di `.env.example`). H-7: **tidak perlu** (skrip sudah pakai `$PSScriptRoot`)
 - [x] 🟢 `.env.example` lengkap: backend (semua kunci aplikasi; opsional dikomentari), frontend (ganti template AI Studio), realtime (baru)
 
 ### Langkah 5: Keamanan lanjutan
-- [ ] 🔴 S-5 auth Socket.IO + room per org
-- [ ] 🔴 S-6 suspend → cabut token, cek status
+- [x] 🔴 S-5 token realtime HMAC (10 menit) + room privat (`admins`, `user_<id>`); notifikasi admin tidak lagi broadcast; token palsu ditolak; `REALTIME_REQUIRE_AUTH` (default false demi UI Blade) (`3967307`)
+- [x] 🔴 S-6 suspend mencabut token; login/SSO/middleware menolak akun suspended; role asli dipulihkan saat reactivate (kolom baru `role_before_suspension`); tidak bisa suspend diri sendiri (`aa29882`)
 - [ ] 🟡 S-7 batasi role `admin`
-- [ ] 🟡 S-8 throttle
+- [x] 🟡 S-8 rate limit: auth 10/menit per email+IP, tulis publik 60/menit per IP, lookup member 30/menit per IP (`ff63583`)
 - [ ] 🟡 S-9 scope tenant / tes isolasi
 - [x] 🟢 S-10 method tak ter-route dihapus (`Hellom\OrderController` 14 method, 2 mock di `BillingController`) (`6c7dbb5`); S-11 selesai di `18dbcbd`. S-12 (dummy auth) ikut D-3
 
