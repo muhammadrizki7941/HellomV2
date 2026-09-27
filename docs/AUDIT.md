@@ -225,7 +225,7 @@ Legenda status: `[ ]` belum · `[x]` selesai (diisi di Fase 2)
 | H-4 | `plans/UI/vite.config.ts` / `server.ts` | port 3000, outDir relatif ke backend | `VITE_OUT_DIR` opsional; dokumentasikan |
 | H-5 | `config/payments.php` | default token `dev_*` | default `''` |
 | H-6 | `PaymentModal.tsx` | deep link Dana/GoPay | Wajar sebagai konstanta; pindah ke `lib/constants` |
-| H-7 | `scripts/*.ps1` | path `C:\laragon\app\Self-OrderMenu` | Pakai `$PSScriptRoot` |
+| H-7 | `scripts/*.ps1` | ~~path `Self-OrderMenu`~~ koreksi: skrip sudah memakai `$PSScriptRoot`. **Temuan baru:** skrip kiosk `start-kasir-*.ps1` membuka `/admin/cashier` (UI kasir **Blade lama**), bukan `/pos/cashier` (SPA) | Putuskan bersama D-3 |
 | H-8 | `config/tenancy.php` | tenant dummy alpha/beta/expired + tanggal | Hapus (D-3) |
 | H-9 | `lib/companyInfo.ts`, legal pages | data perusahaan | Periksa di Fase 2; bila ingin white-label pindah ke brand settings (**fitur → tanya**) |
 
@@ -335,15 +335,15 @@ Legenda: 🟢 aman (tanpa perubahan perilaku) · 🟡 perlu verifikasi · 🔴 b
 - [ ] 🟡 R-3 lazy brand share / hapus bersama Blade
 
 ### Langkah 3: Frontend resmi
-- [ ] 🔴 Pindah `plans/UI` → `frontend/` (butuh ubah path build di VPS & outDir)
-- [ ] 🟢 `tsconfig` `include: ["src"]`; `referensi/` → `docs/design-reference/`
+- [x] 🔴 Pindah `plans/UI` → `frontend/` (`c2cfdb7`); outDir relatif `../backend/public/hellom` kini benar di lokal & VPS. ⚠ Build di VPS dari `frontend/`
+- [x] 🟢 `tsconfig` `include: ["src"]`; `referensi/` → `docs/design-reference/figma-landing` (`c598ab2`). `tsc` 231 → **178**; CSS 200 KB → 155 KB (427 selector shadcn tak terpakai)
 - [ ] 🟡 Pecah `hellomApi.ts` → `services/api/*` (re-export kompatibel)
 - [ ] 🟡 Susun `features/<modul>`; update import (tanpa ubah tampilan)
 - [ ] 🟡 Turunkan error `tsc` bertahap
 
 ### Langkah 4: Konfigurasi
-- [ ] 🟢 H-1..H-5, H-7 ke env/config
-- [ ] 🟢 `.env.example` lengkap: backend, frontend, realtime
+- [x] 🟢 H-2 CORS → `CORS_ALLOWED_ORIGINS`; H-3 realtime → `REALTIME_ALLOWED_ORIGINS` + warning secret default; H-5 selesai di Langkah 0; **bug**: link undangan tim/kasir memakai `env()` di luar config → `localhost` setelah `config:cache` → `config('app.frontend_url')` (`2842463`, `b54d466`). H-1: fallback dev dipertahankan (didokumentasikan di `.env.example`). H-7: **tidak perlu** (skrip sudah pakai `$PSScriptRoot`)
+- [x] 🟢 `.env.example` lengkap: backend (semua kunci aplikasi; opsional dikomentari), frontend (ganti template AI Studio), realtime (baru)
 
 ### Langkah 5: Keamanan lanjutan
 - [ ] 🔴 S-5 auth Socket.IO + room per org
