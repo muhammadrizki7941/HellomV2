@@ -1,5 +1,5 @@
 # Nginx vhost for hellomspace.com (aaPanel: Website → hellomspace.com → Config).
-# Based on the config documented in DEPLOYMENT.MD, plus the /socket.io proxy.
+# Based on the previously documented config (_archive/docs/DEPLOYMENT-legacy.md), plus the /socket.io proxy.
 # Compare with the live file before replacing:  nginx -T | less
 # After editing:  nginx -t && nginx -s reload
 

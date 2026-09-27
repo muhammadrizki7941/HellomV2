@@ -6,6 +6,7 @@
 # Options (env vars):
 #   BRANCH=main          git branch to deploy
 #   SKIP_MIGRATE=1       do not run migrations
+#   SKIP_PULL=1          build the currently checked-out commit (rollback)
 #
 # Never runs destructive commands (no migrate:fresh / db:wipe).
 set -euo pipefail
@@ -22,8 +23,12 @@ cd "$ROOT"
 [ -f frontend/.env.production ] || warn "frontend/.env.production not found: VITE_HELLOM_API_BASE falls back to 127.0.0.1"
 [ -f realtime/.env ] || warn "realtime/.env not found: realtime will use the default secret"
 
-step "git pull ($BRANCH)"
-git pull --ff-only origin "$BRANCH"
+if [ "${SKIP_PULL:-0}" != "1" ]; then
+  step "git pull ($BRANCH)"
+  git pull --ff-only origin "$BRANCH"
+else
+  warn "SKIP_PULL=1: deploying the current checkout ($(git rev-parse --short HEAD))"
+fi
 
 step "backend: composer install"
 cd "$ROOT/backend"
