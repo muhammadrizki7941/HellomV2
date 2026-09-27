@@ -256,23 +256,22 @@ Legenda status: `[ ]` belum · `[x]` selesai (diisi di Fase 2)
 | S-9a | **Tinggi** | Dashboard Customer Experience POS menampilkan produk **semua tenant** (lokal: 22 produk, semuanya milik 5 tenant lain); paket Space, pre-order reservasi publik dan hadiah loyalti menerima ID produk tenant lain | ✅ `fcfb7de` |
 | S-9b | **Tinggi** | `GET /pos/customer/order/{orderNumber}` publik tanpa bukti; nomor `ORD-YYYYMMDD-NNN` berurutan lintas restoran → pesanan semua restoran bisa dienumerasi (nama pelanggan, item, catatan, total) | ✅ `4e3ea31` (wajib `table_token`) |
 
-### 3.8 Bug fungsional ditemukan lewat typecheck (Fase 2) — **menunggu keputusan pemilik**
+### 3.8 Bug fungsional ditemukan lewat typecheck (Fase 2) — ✅ **semua diperbaiki** (disetujui pemilik)
 
-Setelah `@types/react` dipasang, error TypeScript menunjuk ke panggilan API yang tidak sesuai kontrak. Semua sudah dibuktikan terhadap backend; **belum diperbaiki** (mengubah perilaku).
+Setelah `@types/react` dipasang, error TypeScript menunjuk ke panggilan API yang tidak sesuai kontrak. Semua dibuktikan terhadap backend lalu diperbaiki satu per satu (commit per bug, verifikasi di transaksi rollback; email tidak pernah benar-benar terkirim).
 
-| ID | Prio | Halaman | Masalah | Bukti |
-|---|---|---|---|---|
-| F-1 | **Kritis** | POS → Pesanan | Ubah status pesanan (diterima/diproses/selesai) **selalu gagal 422**: UI mengirim body `"accepted"` (string), backend butuh `{status}`. Alur dapur macet; poin loyalti saat order selesai tidak terpicu lewat jalur ini | Direproduksi: string → 422, objek → 200 |
-| F-2 | Tinggi | POS → Laporan | Ekspor Excel **mengabaikan rentang tanggal** (`exportPosReport({start_date,end_date})` → fungsi tanpa parameter) | backend menerima `start_date`/`end_date` |
-| F-3 | Tinggi | POS → Pesanan | Filter status pesanan tidak dikirim | backend menerima `status` |
-| F-4 | Sedang | Admin → Pengguna | Pencarian & paginasi user tidak dikirim | backend menerima `search`, `limit` |
-| F-5 | Sedang | Admin → Organisasi | Pencarian & paginasi organisasi tidak dikirim | backend menerima `search`, `status`, `limit` |
-| F-6 | Sedang | Admin → Pengguna → Undangan | Filter status undangan tidak dikirim | backend menerima `status`, `limit` |
-| F-7 | Sedang | Admin → Pengguna → "Buat undangan" | Memanggil `POST /team/invite` (menambah user **yang sudah terdaftar** langsung, tanpa token) — email baru gagal "User must register first"; alur undangan bertoken `POST /team/invitations` tidak dipakai | respons `invite` = `{member}`, UI mengharapkan `{invitation.token, email_delivery}` |
-| F-8 | Sedang | Admin → Pengaturan Email & Brand | "Kirim email tes" selalu gagal validasi: body string, backend butuh `{email}` | `sendTest` validasi `email` required |
-| F-9 | Rendah | Admin → Keuangan | Batas jumlah checkout manual tidak dikirim | backend menerima `limit` |
-| F-10 | Sedang | Admin → Notifikasi | Filter (sudah dibaca, jenis, per halaman) rusak: string query dikirim ke fungsi yang mengharapkan objek → URL `?0=%3F&1=i…` | `Object.entries(string)` |
-
+| ID | Prio | Halaman | Masalah | Bukti | Status |
+|---|---|---|---|---|---|
+| F-1 | **Kritis** | POS → Pesanan | Ubah status pesanan (diterima/diproses/selesai) **selalu gagal 422**: UI mengirim body `"accepted"` (string), backend butuh `{status}`. Alur dapur macet; poin loyalti saat order selesai tidak terpicu lewat jalur ini | Direproduksi: string → 422, objek → 200 | ✅ `ae296c2` |
+| F-2 | Tinggi | POS → Laporan | Ekspor Excel **mengabaikan rentang tanggal** (`exportPosReport({start_date,end_date})` → fungsi tanpa parameter) | backend menerima `start_date`/`end_date` | ✅ `9219ef8 (juga: ekspor sebelumnya selalu gagal karena file biner di-parse sebagai JSON)` |
+| F-3 | Tinggi | POS → Pesanan | Filter status pesanan tidak dikirim | backend menerima `status` | ✅ `a6ebcfd` |
+| F-4 | Sedang | Admin → Pengguna | Pencarian & paginasi user tidak dikirim | backend menerima `search`, `limit` | ✅ `a446d9a` |
+| F-5 | Sedang | Admin → Organisasi | Pencarian & paginasi organisasi tidak dikirim | backend menerima `search`, `status`, `limit` | ✅ `a446d9a` |
+| F-6 | Sedang | Admin → Pengguna → Undangan | Filter status undangan tidak dikirim | backend menerima `status`, `limit` | ✅ `a446d9a` |
+| F-7 | Sedang | Admin → Pengguna → "Buat undangan" | Memanggil `POST /team/invite` (menambah user **yang sudah terdaftar** langsung, tanpa token) — email baru gagal "User must register first"; alur undangan bertoken `POST /team/invitations` tidak dipakai | respons `invite` = `{member}`, UI mengharapkan `{invitation.token, email_delivery}` | ✅ `540f772` |
+| F-8 | Sedang | Admin → Pengaturan Email & Brand | "Kirim email tes" selalu gagal validasi: body string, backend butuh `{email}` | `sendTest` validasi `email` required | ✅ `45204c9` |
+| F-9 | Rendah | Admin → Keuangan | Batas jumlah checkout manual tidak dikirim | backend menerima `limit` | ✅ `a446d9a` |
+| F-10 | Sedang | Admin → Notifikasi | Filter (sudah dibaca, jenis, per halaman) rusak: string query dikirim ke fungsi yang mengharapkan objek → URL `?0=%3F&1=i…` | `Object.entries(string)` | ✅ `c13917e` |
 ---
 
 ## 4. Usulan struktur akhir
