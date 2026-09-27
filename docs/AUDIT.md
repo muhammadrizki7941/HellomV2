@@ -249,6 +249,14 @@ Legenda status: `[ ]` belum · `[x]` selesai (diisi di Fase 2)
 | R-13 | Sedang | `php artisan route:cache` **gagal** di lokal: `routes/marketing.php` mendaftarkan route per domain di `TENANCY_APP_DOMAINS` (lokal: `localhost`, `127.0.0.1`) → nama `marketing.landing` duplikat. Di production (1 domain) kemungkinan lolos. `customer.php` juga mendaftarkan URI `/pos` & `/reservations` dua kali. | Hilang bersama arsip Blade (D-3); verifikasi `route:cache` di setiap langkah. |
 | R-14 | Sedang | Bundle SPA tanpa code-splitting per route: chunk utama **1,71 MB** (424 KB gzip). Halaman self-order pelanggan (dibuka lewat HP) ikut memuat seluruh dashboard admin. | `React.lazy` per route di `App.tsx` (tanpa mengubah tampilan). |
 
+### 3.6b Temuan lanjutan typecheck — **menunggu keputusan pemilik**
+
+| ID | Prio | Halaman | Masalah | Pilihan |
+|---|---|---|---|---|
+| F-11 | Tinggi | Admin → System Health | Halaman membaca `summary.withdrawals.*` / `summary.period.net` (bentuk ringkasan **per organisasi**, `/wallet/finance-summary`), tetapi `getFinanceSummary()` memanggil **`/platform/finance-summary`** (bentuk berbeda) → `summary.withdrawals` undefined → halaman crash setelah data termuat | (a) pakai angka platform (`user_withdrawals`, `platform_revenue`, `organization_wallets`) — disarankan untuk super admin; (b) pakai wallet organisasi milik admin |
+| F-12 | Sedang | Admin → Dashboard | `normalizeFinanceSummary()` mencari `wallet/period/withdrawals` di ringkasan platform → kartu keuangan **selalu 0** (tanpa error) | sama dengan F-11 |
+| N-9 | Rendah | `frontend/src/lib/pos/{posApi,staffApi}.ts` | Dua klien API tambahan di luar `services/api` (fetch sendiri, header sendiri) | Satukan ke `services/api` (Langkah 3) |
+
 ### 3.7 Isolasi tenant — temuan tambahan (Fase 2)
 
 | ID | Prio | Temuan | Status |
