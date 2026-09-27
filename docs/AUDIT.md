@@ -308,10 +308,10 @@ SelfOrderResto/
 Legenda: 🟢 aman (tanpa perubahan perilaku) · 🟡 perlu verifikasi · 🔴 berisiko / mengubah perilaku, **butuh izin eksplisit**
 
 ### Langkah 0: Hotfix keamanan (disarankan SEBELUM cleanup, commit terpisah & bisa langsung di-deploy)
-- [ ] 🔴 S-1 Nonaktifkan route mock billing di non-local + UI tidak memanggil `topup-mock`
-- [ ] 🔴 S-2 Aksi admin wallet → hanya `super_admin`
-- [ ] 🔴 S-4 Tolak token `dev_*` Xendit & mock
-- [ ] 🟡 S-3 Ganti secret di `DEPLOYMENT.MD` jadi placeholder (+ Anda merotasi di VPS)
+- [x] 🔴 S-1 Route mock billing → middleware `billing.mock` (404 kecuali `BILLING_MOCK_ENABLED=true`); UI tidak memanggil `topup-mock` (`3e09ce6`)
+- [x] 🔴 S-2 Aksi admin wallet → hanya `super_admin` (route + controller); antrean lintas organisasi + field `organization` (`62ca425`). Catatan: sebelumnya super admin pun hanya melihat penarikan organisasinya sendiri
+- [x] 🔴 S-4 Tolak token `dev_*` Xendit; default token dev dihapus dari config (`4bd424e`)
+- [x] 🟡 S-3 Secret di `DEPLOYMENT.MD` → placeholder (`2633b09`). **Rotasi di VPS masih harus Anda lakukan**
 - [ ] 🟡 Query audit read-only di production: transaksi `wallet_topup_mock`, invoice `payment_method = mock`, withdrawal yang di-approve non-super-admin
 
 ### Langkah 1: Arsip & dependensi
@@ -379,7 +379,7 @@ Legenda: 🟢 aman (tanpa perubahan perilaku) · 🟡 perlu verifikasi · 🔴 b
 
 ## 6. Pertanyaan yang perlu Anda putuskan
 
-1. **Hotfix keamanan (Langkah 0)**: boleh saya kerjakan lebih dulu (mengubah perilaku endpoint mock & approval withdrawal)?
+1. ~~Hotfix keamanan (Langkah 0)~~ → disetujui; approval penarikan wajib melalui super admin.
 2. **Nginx production**: apakah konfigurasi di VPS sama dengan `DEPLOYMENT.MD` (root = `backend/public/hellom`, hanya `/api`, `/storage`, `/media` ke PHP)? Jika ya, UI Blade boleh diarsipkan.
 3. **Rename `plans/UI` → `frontend/`**: setuju? (Perlu menyesuaikan perintah build di VPS.)
 4. **"Sekali beli"**: yang dimaksud (a) lisensi **self-hosted** (pembeli memasang di server sendiri, pakai license key), atau (b) paket **lifetime** di SaaS yang sama (bayar sekali, akses selamanya di hellomspace.com)?
