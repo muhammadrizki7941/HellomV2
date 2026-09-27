@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\OutletService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -29,6 +30,21 @@ class PosRewardRule extends Model
     public function rewardProduct(): BelongsTo
     {
         return $this->belongsTo(Product::class, 'reward_product_id');
+    }
+
+    /**
+     * The free-product reward, limited to products of this rule's own
+     * organization (a rule must never expose another tenant's product).
+     */
+    public function scopedRewardProduct(): ?Product
+    {
+        if (!$this->reward_product_id) {
+            return null;
+        }
+
+        return Product::withoutGlobalScope('tenant')
+            ->whereIn('tenant_id', app(OutletService::class)->tenantSlugsForTenant((string) $this->tenant_id))
+            ->find((int) $this->reward_product_id);
     }
 
     public function redemptions(): HasMany

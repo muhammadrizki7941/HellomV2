@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Api\V1\Hellom\Pos;
 use App\Models\PosLoyaltySetting;
 use App\Models\PosRewardRule;
 use App\Models\PosMember;
+use App\Services\OutletService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class PosLoyaltyController extends BasePosController
 {
@@ -76,8 +78,7 @@ class PosLoyaltyController extends BasePosController
                 $discountAmount = min($rule->reward_value, $validated['total_amount']);
                 break;
             case 'free_product':
-                $freeProductId = $rule->reward_product_id;
-                $product = \App\Models\Product::find($freeProductId);
+                $product = $rule->scopedRewardProduct();
                 $discountAmount = $product?->price ?? 0;
                 break;
         }
@@ -159,7 +160,11 @@ class PosLoyaltyController extends BasePosController
             'trigger_value' => 'required|integer|min:1',
             'reward_type' => 'required|in:free_product,discount_percent,discount_fixed,bonus_points',
             'reward_value' => 'required|integer|min:1',
-            'reward_product_id' => 'nullable|integer',
+            'reward_product_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('products', 'id')->whereIn('tenant_id', app(OutletService::class)->tenantSlugs($org)),
+            ],
             'description' => 'nullable|string|max:255',
         ]);
 
@@ -185,7 +190,11 @@ class PosLoyaltyController extends BasePosController
             'trigger_value' => 'required|integer|min:1',
             'reward_type' => 'required|in:free_product,discount_percent,discount_fixed,bonus_points',
             'reward_value' => 'required|integer|min:1',
-            'reward_product_id' => 'nullable|integer',
+            'reward_product_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('products', 'id')->whereIn('tenant_id', app(OutletService::class)->tenantSlugs($org)),
+            ],
             'description' => 'nullable|string|max:255',
             'is_active' => 'boolean',
         ]);
@@ -257,9 +266,7 @@ class PosLoyaltyController extends BasePosController
                     'description'  => $rule->description,
                     'reward_type'  => $rule->reward_type,
                     'reward_value' => $rule->reward_value,
-                    'product'      => $rule->reward_product_id
-                        ? \App\Models\Product::find($rule->reward_product_id)?->name
-                        : null,
+                    'product'      => $rule->scopedRewardProduct()?->name,
                 ];
             }
         }

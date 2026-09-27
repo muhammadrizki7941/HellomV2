@@ -195,9 +195,7 @@ class PosMemberController extends BasePosController
                     'description'  => $rule->description,
                     'reward_type'  => $rule->reward_type,
                     'reward_value' => $rule->reward_value,
-                    'product'      => $rule->reward_product_id
-                        ? \App\Models\Product::find($rule->reward_product_id)?->name
-                        : null,
+                    'product'      => $rule->scopedRewardProduct()?->name,
                 ];
             }
         }

@@ -6,6 +6,7 @@ use App\Models\Reservation;
 use App\Models\ReservationSpace;
 use App\Models\Product;
 use App\Models\User;
+use App\Services\OutletService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -122,7 +123,10 @@ class ReservationBookingService
         $menuProductIds = array_keys($menuMap);
         $menuProducts = collect();
         if (!empty($menuProductIds)) {
+            // Only products of the organization that owns this space (guests
+            // submit product ids; never accept another tenant's products).
             $menuProducts = Product::query()
+                ->whereIn('tenant_id', app(OutletService::class)->tenantSlugsForTenant((string) $space->tenant_id))
                 ->whereIn('id', $menuProductIds)
                 ->where('is_available', true)
                 ->get()

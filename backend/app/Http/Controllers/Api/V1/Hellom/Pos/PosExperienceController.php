@@ -11,6 +11,7 @@ use App\Models\Reservation;
 use App\Models\ReservationSpace;
 use App\Models\SitePromotion;
 use App\Models\SitePromotionClaim;
+use App\Services\OutletService;
 use App\Services\Reservations\ReservationBookingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -46,7 +47,10 @@ class PosExperienceController extends BasePosController
             ->latest()
             ->limit(80)
             ->get();
+        // Only this organization's products (all outlets). The Eloquent tenant
+        // scope is not active for API-token requests, so filter explicitly.
         $products = Product::query()
+            ->whereIn('tenant_id', app(OutletService::class)->tenantSlugs($org))
             ->where('is_available', true)
             ->orderBy('name')
             ->get(['id', 'name', 'price']);
@@ -497,13 +501,14 @@ class PosExperienceController extends BasePosController
         $space->loadMissing('items');
         $existing = $space->items->keyBy('id');
         $keptIds = [];
+        $tenantSlugs = app(OutletService::class)->tenantSlugsForTenant((string) $space->tenant_id);
 
         foreach ($items as $row) {
             if (!is_array($row)) {
                 continue;
             }
 
-            $product = Product::query()->findOrFail((int) $row['product_id']);
+            $product = Product::query()->whereIn('tenant_id', $tenantSlugs)->findOrFail((int) $row['product_id']);
             $payload = [
                 'product_id' => (int) $product->id,
                 'product_name' => (string) $product->name,

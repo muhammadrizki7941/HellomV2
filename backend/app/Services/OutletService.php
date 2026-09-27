@@ -41,6 +41,48 @@ class OutletService
         return max(1, (int) ($planMax ?? 1));
     }
 
+    /**
+     * Every POS tenant key (products.tenant_id etc.) owned by the organization:
+     * its primary POS slug plus each outlet's tenant_slug. Use this to scope
+     * org-level POS queries; the Eloquent "tenant" global scope is not active
+     * for API-token requests.
+     *
+     * @return array<int, string>
+     */
+    public function tenantSlugs(Organization $organization): array
+    {
+        $slugs = Outlet::query()
+            ->where('organization_id', $organization->id)
+            ->pluck('tenant_slug')
+            ->push($organization->pos_tenant_slug)
+            ->filter(fn ($slug) => is_string($slug) && $slug !== '')
+            ->unique()
+            ->values()
+            ->all();
+
+        return $slugs !== [] ? $slugs : [(string) ($organization->pos_tenant_slug ?: $organization->slug)];
+    }
+
+    /**
+     * Same as tenantSlugs(), starting from one tenant key (e.g. a record's
+     * tenant_id). Falls back to just that key when no organization matches.
+     *
+     * @return array<int, string>
+     */
+    public function tenantSlugsForTenant(string $tenantSlug): array
+    {
+        if ($tenantSlug === '') {
+            return [];
+        }
+
+        $organizationId = Organization::query()->where('pos_tenant_slug', $tenantSlug)->value('id')
+            ?? Outlet::query()->where('tenant_slug', $tenantSlug)->value('organization_id');
+
+        $organization = $organizationId ? Organization::query()->find($organizationId) : null;
+
+        return $organization instanceof Organization ? $this->tenantSlugs($organization) : [$tenantSlug];
+    }
+
     public function outletCount(Organization $organization): int
     {
         return Outlet::query()->where('organization_id', $organization->id)->count();

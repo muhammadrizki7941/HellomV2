@@ -496,7 +496,7 @@ class PosOrderController extends BasePosController
         return match ($rule->reward_type) {
             'discount_percent' => (int) round($totalAmount * $rule->reward_value / 100),
             'discount_fixed' => min($rule->reward_value, $totalAmount),
-            'free_product' => (int) (Product::withoutGlobalScope('tenant')->find($rule->reward_product_id)?->price ?? 0),
+            'free_product' => (int) ($rule->scopedRewardProduct()?->price ?? 0),
             'bonus_points' => 0,
             default => 0,
         };
