@@ -27,6 +27,10 @@ class XenditSettingsService
     {
         $secretKey = $this->readEncryptedSetting(self::SECRET_KEY) ?: (string) config('payments.providers.xendit.secret_key', '');
         $callbackToken = $this->readEncryptedSetting(self::CALLBACK_TOKEN) ?: (string) config('payments.providers.xendit.callback_token', '');
+        if ($callbackToken === 'dev_xendit_callback_token') {
+            $callbackToken = '';
+        }
+
         $isProduction = filter_var(
             SystemSetting::get(self::IS_PRODUCTION, config('payments.providers.xendit.is_production', false)),
             FILTER_VALIDATE_BOOLEAN

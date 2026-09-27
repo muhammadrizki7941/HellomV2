@@ -32,7 +32,7 @@ return [
 
         'xendit' => [
             'secret_key' => env('XENDIT_SECRET_KEY', ''),
-            'callback_token' => env('XENDIT_CALLBACK_TOKEN', 'dev_xendit_callback_token'),
+            'callback_token' => env('XENDIT_CALLBACK_TOKEN', ''),
             'is_production' => (bool) env('XENDIT_IS_PRODUCTION', false),
             'withdrawal_fee_flat' => (int) env('XENDIT_WITHDRAWAL_FEE_FLAT', 5000),
             'policy' => [
@@ -85,14 +85,14 @@ return [
         'ipaymu' => [
             'va' => env('IPAYMU_VA', ''),
             'api_key' => env('IPAYMU_API_KEY', ''),
-            'callback_token' => env('IPAYMU_CALLBACK_TOKEN', 'dev_ipaymu_callback_token'),
+            'callback_token' => env('IPAYMU_CALLBACK_TOKEN', ''),
             'is_production' => (bool) env('IPAYMU_IS_PRODUCTION', false),
         ],
 
         'doku' => [
             'client_id' => env('DOKU_CLIENT_ID', ''),
             'secret_key' => env('DOKU_SECRET_KEY', ''),
-            'callback_token' => env('DOKU_CALLBACK_TOKEN', 'dev_doku_callback_token'),
+            'callback_token' => env('DOKU_CALLBACK_TOKEN', ''),
             'is_production' => (bool) env('DOKU_IS_PRODUCTION', false),
             'payment_method_types' => array_values(array_filter(array_map(
                 static fn (string $item): string => trim(strtoupper($item)),
