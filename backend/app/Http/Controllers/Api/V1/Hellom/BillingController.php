@@ -14,6 +14,7 @@ use App\Models\OrganizationWalletTransaction;
 use App\Models\Plan;
 use App\Models\Subscription;
 use App\Models\User;
+use App\Services\Billing\EntitlementService;
 use App\Services\Hellom\LandingSaleService;
 use App\Services\NotificationService;
 use App\Http\Controllers\Api\V1\Hellom\InvoiceController;
@@ -1197,22 +1198,19 @@ class BillingController extends BaseApiController
                 $intent->subscription->forceFill([
                     'status' => 'active',
                     'starts_at' => $now,
-                    'ends_at' => $this->resolveSubscriptionEndAt($intent->subscription->plan, $now),
+                    'ends_at' => $this->entitlements()->subscriptionEndsAt($intent->subscription, $now, $intent->plan),
                     'metadata' => $subMeta,
                 ])->save();
             }
 
-            Entitlement::query()->updateOrCreate(
-                [
-                    'organization_id' => (int) $intent->organization_id,
-                    'app_id' => (int) $intent->app_id,
-                ],
-                [
-                    'plan_id' => (int) $intent->plan_id,
-                    'status' => 'active',
-                    'starts_at' => $now,
-                    'ends_at' => null,
-                ]
+            $this->entitlements()->grant(
+                (int) $intent->organization_id,
+                (int) $intent->app_id,
+                (int) $intent->plan_id,
+                $now,
+                $intent->subscription
+                    ? $intent->subscription->ends_at
+                    : $this->entitlements()->periodEndsAt($intent->plan, $now)
             );
 
             if ((int) $intent->amount > 0) {
@@ -1642,22 +1640,11 @@ class BillingController extends BaseApiController
             $subscription->forceFill([
                 'status' => 'active',
                 'starts_at' => $now,
-                'ends_at' => $now->copy()->addMonth(),
+                'ends_at' => $this->entitlements()->subscriptionEndsAt($subscription, $now),
                 'metadata' => $meta,
             ])->save();
 
-            Entitlement::query()->updateOrCreate(
-                [
-                    'organization_id' => $organizationId,
-                    'app_id' => $subscription->app_id,
-                ],
-                [
-                    'plan_id' => $subscription->plan_id,
-                    'status' => 'active',
-                    'starts_at' => $now,
-                    'ends_at' => null,
-                ]
-            );
+            $this->entitlements()->grantForSubscription($subscription, $now);
 
             $this->ensurePosProvisioning((string) ($subscription->app?->slug ?? ''), $organizationId);
 
@@ -1714,21 +1701,10 @@ class BillingController extends BaseApiController
             $subscription->forceFill([
                 'status' => 'active',
                 'starts_at' => $now,
-                'ends_at' => $now->copy()->addMonth(),
+                'ends_at' => $this->entitlements()->subscriptionEndsAt($subscription, $now),
             ])->save();
 
-            Entitlement::query()->updateOrCreate(
-                [
-                    'organization_id' => $organizationId,
-                    'app_id' => $subscription->app_id,
-                ],
-                [
-                    'plan_id' => $subscription->plan_id,
-                    'status' => 'active',
-                    'starts_at' => $now,
-                    'ends_at' => null,
-                ]
-            );
+            $this->entitlements()->grantForSubscription($subscription, $now);
 
             $this->ensurePosProvisioning((string) ($subscription->app?->slug ?? ''), $organizationId);
         });
@@ -2134,21 +2110,18 @@ class BillingController extends BaseApiController
                 $intent->subscription->forceFill([
                     'status' => 'active',
                     'starts_at' => $now,
-                    'ends_at' => $now->copy()->addMonth(),
+                    'ends_at' => $this->entitlements()->subscriptionEndsAt($intent->subscription, $now, $intent->plan),
                 ])->save();
             }
 
-            Entitlement::query()->updateOrCreate(
-                [
-                    'organization_id' => $intent->organization_id,
-                    'app_id' => $intent->app_id,
-                ],
-                [
-                    'plan_id' => $intent->plan_id,
-                    'status' => 'active',
-                    'starts_at' => $now,
-                    'ends_at' => null,
-                ]
+            $this->entitlements()->grant(
+                (int) $intent->organization_id,
+                (int) $intent->app_id,
+                (int) $intent->plan_id,
+                $now,
+                $intent->subscription
+                    ? $intent->subscription->ends_at
+                    : $this->entitlements()->periodEndsAt($intent->plan, $now)
             );
 
             $this->ensurePosProvisioning((string) ($intent->app?->slug ?? ''), (int) $intent->organization_id);
@@ -2300,22 +2273,19 @@ class BillingController extends BaseApiController
                 $intent->subscription->forceFill([
                     'status' => 'active',
                     'starts_at' => $now,
-                    'ends_at' => $now->copy()->addMonth(),
+                    'ends_at' => $this->entitlements()->subscriptionEndsAt($intent->subscription, $now, $intent->plan),
                     'metadata' => $subMeta,
                 ])->save();
             }
 
-            Entitlement::query()->updateOrCreate(
-                [
-                    'organization_id' => $intent->organization_id,
-                    'app_id' => $intent->app_id,
-                ],
-                [
-                    'plan_id' => $intent->plan_id,
-                    'status' => 'active',
-                    'starts_at' => $now,
-                    'ends_at' => null,
-                ]
+            $this->entitlements()->grant(
+                (int) $intent->organization_id,
+                (int) $intent->app_id,
+                (int) $intent->plan_id,
+                $now,
+                $intent->subscription
+                    ? $intent->subscription->ends_at
+                    : $this->entitlements()->periodEndsAt($intent->plan, $now)
             );
 
             $this->ensurePosProvisioning((string) ($intent->app?->slug ?? ''), (int) $intent->organization_id);
@@ -2430,25 +2400,10 @@ class BillingController extends BaseApiController
         return (int) $plan->getEffectivePrice($billingCycle);
     }
 
-    private function resolveSubscriptionEndAt(?Plan $plan, \Illuminate\Support\Carbon $startAt): ?\Illuminate\Support\Carbon
+
+    private function entitlements(): EntitlementService
     {
-        if (!$plan instanceof Plan) {
-            return $startAt->copy()->addMonth();
-        }
-
-        if ($plan->isLifetime() || $plan->isFree()) {
-            return null;
-        }
-
-        if ($plan->duration_days) {
-            return $startAt->copy()->addDays((int) $plan->duration_days);
-        }
-
-        if ($plan->hasBillingCycle(Plan::BILLING_YEARLY)) {
-            return $startAt->copy()->addYear();
-        }
-
-        return $startAt->copy()->addMonth();
+        return app(EntitlementService::class);
     }
 
     private function checkoutMode(): string
