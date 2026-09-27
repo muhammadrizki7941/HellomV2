@@ -249,7 +249,7 @@ Legenda status: `[ ]` belum · `[x]` selesai (diisi di Fase 2)
 | R-13 | Sedang | `php artisan route:cache` **gagal** di lokal: `routes/marketing.php` mendaftarkan route per domain di `TENANCY_APP_DOMAINS` (lokal: `localhost`, `127.0.0.1`) → nama `marketing.landing` duplikat. Di production (1 domain) kemungkinan lolos. `customer.php` juga mendaftarkan URI `/pos` & `/reservations` dua kali. | Hilang bersama arsip Blade (D-3); verifikasi `route:cache` di setiap langkah. |
 | R-14 | Sedang | Bundle SPA tanpa code-splitting per route: chunk utama **1,71 MB** (424 KB gzip). Halaman self-order pelanggan (dibuka lewat HP) ikut memuat seluruh dashboard admin. | `React.lazy` per route di `App.tsx` (tanpa mengubah tampilan). |
 
-### 3.6b Temuan lanjutan typecheck — **menunggu keputusan pemilik**
+### 3.6b Temuan lanjutan typecheck — ✅ F-11/F-12 diperbaiki (opsi a: angka platform, `978a005`)
 
 | ID | Prio | Halaman | Masalah | Pilihan |
 |---|---|---|---|---|
@@ -356,7 +356,7 @@ Legenda: 🟢 aman (tanpa perubahan perilaku) · 🟡 perlu verifikasi · 🔴 b
 - [x] 🟡 P-1..P-5, D-8, S-11 `plans/UI/package.json`: −201 paket, `server.ts` dihapus (`npm run dev` = vite), `define` GEMINI dihapus. Bonus: `tsc` 313 → **231** error (tipe react-router v5 yang salah) (`18dbcbd`). ⚠ vite kini di devDependencies → di VPS pakai `npm ci --include=dev`
 - [x] 🟡 D-4/D-5/D-10 kelas & command tak terpakai → `_archive/backend-unused/` (+ controller/view/tes Breeze yang tidak ter-route). `OrganizationPolicy` dipertahankan (auto-discovered, akan dipakai Langkah 2) (`a5e8b29`)
 - [x] 🟡 P-7/P-8 composer: hapus `doctrine/dbal`, `laravel/breeze`, `laravel/sail` (`f6bfc3a`)
-- [ ] 🔴 D-3 arsip UI Blade + route + middleware dummy + tes Blade + `backend/package.json` — **DITAHAN** sampai config Nginx VPS dikonfirmasi (keputusan #2)
+- [x] 🔴 D-3 UI Blade lama + route + middleware dummy + service khusus Blade + tes Blade + tooling Vite backend + skrip kiosk → `_archive/blade-ui/` (`e30f621`). Nginx VPS & kiosk dikonfirmasi pemilik. 315 route API identik; fallback SPA di `routes/web.php`. Sisa: model `LoyaltySetting`, `PointTransaction` tak dirujuk (tabel lama, dipertahankan)
 
 ### Langkah 2: Struktur & penamaan backend
 - [ ] 🟢 `Enums` role/plan/status (tanpa mengubah nilai DB)
@@ -364,7 +364,7 @@ Legenda: 🟢 aman (tanpa perubahan perilaku) · 🟡 perlu verifikasi · 🔴 b
 - [ ] 🟡 Form Request untuk endpoint tulis (aturan validasi disalin 1:1)
 - [ ] 🟡 Pecah `BillingController`/`WalletController`/`LandingBuilderController` → Services/Actions (perilaku identik)
 - [ ] 🟡 Policy: Withdrawal, Outlet, Organization
-- [ ] 🟡 R-3 lazy brand share / hapus bersama Blade
+- [x] 🟡 R-3 `View::share(brand)` dihapus bersama Blade → artisan jalan tanpa DB; R-13 `route:cache` kini berhasil (`e30f621`)
 
 ### Langkah 3: Frontend resmi
 - [x] 🔴 Pindah `plans/UI` → `frontend/` (`c2cfdb7`); outDir relatif `../backend/public/hellom` kini benar di lokal & VPS. ⚠ Build di VPS dari `frontend/`
