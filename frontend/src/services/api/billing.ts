@@ -8,8 +8,31 @@ export function getCatalogApps() {
   return apiRequest<Record<string, unknown>>('/catalog/apps');
 }
 
+// GET /pricing/matrix (PricingController::matrix).
+export type PricingMatrixPlan = {
+  id: number;
+  slug: string;
+  name: string;
+  type: string;
+  price: number;
+  description: string;
+  features: unknown;
+  billing_cycles: string[];
+  duration_days: number | null;
+  max_outlets: number;
+  is_recommended: boolean;
+  sort_order: number;
+  is_current: boolean;
+};
+
+export type PricingMatrixItem = {
+  app: { id: number; slug: string; name: string };
+  current: { status: string; plan_slug: string | null };
+  plans: PricingMatrixPlan[];
+};
+
 export function getPricingMatrix() {
-  return apiRequest<Record<string, unknown>>('/pricing/matrix');
+  return apiRequest<{ organization_id: number; items: PricingMatrixItem[] }>('/pricing/matrix');
 }
 
 // ─── Billing & Wallet ───

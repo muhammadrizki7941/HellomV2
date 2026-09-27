@@ -66,8 +66,37 @@ export function getLandingPages() {
   return apiRequest<Record<string, unknown>>('/apps/landing-builder/pages');
 }
 
+// LandingBuilderController::pagePayload.
+export type LandingPageRecord = {
+  id: number;
+  organization_id: number;
+  organization_slug: string | null;
+  title: string;
+  slug: string;
+  status: string;
+  public_url: string | null;
+  legacy_public_url: string | null;
+  content: unknown;
+  published_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+// landing_blocks row.
+export type LandingBlockRecord = {
+  id: number;
+  landing_page_id: number;
+  block_key: string;
+  block_type: string;
+  sort_order: number;
+  is_visible: boolean;
+  content: Record<string, unknown> | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
 export function createLandingPage(payload: Record<string, unknown>) {
-  return apiRequest<Record<string, unknown>>('/apps/landing-builder/pages', {
+  return apiRequest<LandingPageRecord>('/apps/landing-builder/pages', {
     method: 'POST',
     body: payload,
   });
@@ -88,7 +117,7 @@ export function publishLandingPage(pageId: number) {
 }
 
 export function getLandingPageBlocks(pageId: number) {
-  return apiRequest<Record<string, unknown>>(`/apps/landing-builder/pages/${pageId}/blocks`);
+  return apiRequest<{ items: LandingBlockRecord[] }>(`/apps/landing-builder/pages/${pageId}/blocks`);
 }
 
 export function createLandingPageBlock(pageId: number, payload: Record<string, unknown>) {
@@ -104,14 +133,43 @@ export function deleteLandingPageBlock(pageId: number, blockId: number) {
   });
 }
 
+// ─── Landing Builder stats types (LandingBuilderController) ───
+
+export type LandingPageRef = { id: number; title: string; slug: string };
+
+export type LandingBuilderStats = {
+  organization_id: number;
+  published_count: number;
+  views_count: number;
+  last_viewed_at: string | null;
+  first_published_at: string | null;
+  first_published_page: LandingPageRef | null;
+};
+
+export type LandingBuilderPerformance = {
+  organization_id: number;
+  summary: {
+    total_pages: number;
+    total_views: number;
+    average_views_per_page: number;
+    top_page: (LandingPageRef & { status: string; views_count: number }) | null;
+  };
+};
+
+export type LandingBuilderPageStat = {
+  landing_page: (LandingPageRef & { status: string; published_at: string | null }) | null;
+  views_count: number;
+  last_viewed_at: string | null;
+};
+
 export function getLandingBuilderStats() {
-  return apiRequest<Record<string, unknown>>('/apps/landing-builder/stats');
+  return apiRequest<LandingBuilderStats>('/apps/landing-builder/stats');
 }
 
 export function getLandingBuilderPageStats() {
-  return apiRequest<Record<string, unknown>>('/apps/landing-builder/stats/pages');
+  return apiRequest<{ organization_id: number; items: LandingBuilderPageStat[] }>('/apps/landing-builder/stats/pages');
 }
 
 export function getLandingBuilderPerformance() {
-  return apiRequest<Record<string, unknown>>('/apps/landing-builder/stats/performance');
+  return apiRequest<LandingBuilderPerformance>('/apps/landing-builder/stats/performance');
 }
