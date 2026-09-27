@@ -228,8 +228,10 @@ export function createCustomerOrder(payload: {
   });
 }
 
-export function getCustomerOrderStatus(orderNumber: string) {
-  return publicRequest<{ order: PosOrderPayload }>(`/pos/customer/order/${orderNumber}`);
+// tableToken proves the guest ordered from that table (order numbers alone are guessable).
+export function getCustomerOrderStatus(orderNumber: string, tableToken: string) {
+  const query = new URLSearchParams({ table_token: tableToken }).toString();
+  return publicRequest<{ order: PosOrderPayload }>(`/pos/customer/order/${encodeURIComponent(orderNumber)}?${query}`);
 }
 
 export function claimCustomerPromo(payload: {

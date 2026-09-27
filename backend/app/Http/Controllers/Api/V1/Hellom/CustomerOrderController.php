@@ -277,11 +277,27 @@ class CustomerOrderController extends BaseApiController
         }
     }
 
-    public function getOrderStatus(string $orderNumber): JsonResponse
+    public function getOrderStatus(Request $request, string $orderNumber): JsonResponse
     {
+        // Order numbers are sequential across all restaurants, so the number
+        // alone must not reveal an order: the guest also proves the table
+        // (token from the QR code the order was placed from).
+        $tableToken = trim((string) $request->query('table_token', ''));
+        if ($tableToken === '') {
+            return $this->fail('Order not found', [], 404);
+        }
+
+        // Active or not: a table disabled after ordering must not hide the order.
+        $table = DiningTable::withoutGlobalScope('tenant')->where('public_id', $tableToken)->first();
+        if (!$table instanceof DiningTable) {
+            return $this->fail('Order not found', [], 404);
+        }
+
         $order = Order::withoutGlobalScope('tenant')
             ->with(['items', 'table'])
             ->where('order_number', $orderNumber)
+            ->where('tenant_id', $table->tenant_id)
+            ->where('dining_table_id', $table->id)
             ->first();
 
         if (!$order) {

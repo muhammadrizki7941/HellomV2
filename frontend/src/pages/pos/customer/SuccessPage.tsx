@@ -24,7 +24,7 @@ type PublicPaymentMethod = {
 
 export default function SuccessPage() {
   const { organizationSlug, tableToken, orderNumber } = useParams<{ organizationSlug?: string; tableToken?: string; orderNumber: string }>();
-  const { order, isLoading, isRefreshing, error, lastUpdated, refresh } = useOrderTracking(orderNumber);
+  const { order, isLoading, isRefreshing, error, lastUpdated, refresh } = useOrderTracking(orderNumber, tableToken);
   const [paymentMethods, setPaymentMethods] = useState<PublicPaymentMethod[]>([]);
   const backToMenu = tableToken
     ? organizationSlug

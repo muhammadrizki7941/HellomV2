@@ -1,4 +1,4 @@
-const CACHE = 'hellom-pos-v4';
+const CACHE = 'hellom-pos-v5';
 const SHELL = '/';
 const STATIC_EXT = /\.(js|css|png|jpg|jpeg|webp|gif|svg|ico|woff2?|ttf|eot)(\?.*)?$/;
 

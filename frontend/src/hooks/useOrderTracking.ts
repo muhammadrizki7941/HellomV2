@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { getCustomerOrderStatus, type PosOrderPayload } from '@/lib/pos/posApi';
 import { isOrderPending } from '@/lib/pos/orderStatus';
 
-export function useOrderTracking(orderNumber: string | undefined, intervalMs = 5000) {
+export function useOrderTracking(orderNumber: string | undefined, tableToken: string | undefined, intervalMs = 5000) {
   const [order, setOrder] = useState<PosOrderPayload | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -10,7 +10,7 @@ export function useOrderTracking(orderNumber: string | undefined, intervalMs = 5
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
   const refresh = useCallback(async (background = false) => {
-    if (!orderNumber) {
+    if (!orderNumber || !tableToken) {
       setError('Nomor order tidak ditemukan.');
       setIsLoading(false);
       return;
@@ -23,7 +23,7 @@ export function useOrderTracking(orderNumber: string | undefined, intervalMs = 5
     }
 
     try {
-      const data = await getCustomerOrderStatus(orderNumber);
+      const data = await getCustomerOrderStatus(orderNumber, tableToken);
       setOrder(data.order);
       setLastUpdated(new Date().toISOString());
       setError(null);
@@ -33,7 +33,7 @@ export function useOrderTracking(orderNumber: string | undefined, intervalMs = 5
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [orderNumber]);
+  }, [orderNumber, tableToken]);
 
   useEffect(() => {
     void refresh(false);
