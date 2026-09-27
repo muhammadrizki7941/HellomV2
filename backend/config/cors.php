@@ -23,10 +23,12 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => [
-        'http://127.0.0.1:3000',
-        'http://localhost:3000',
-    ],
+    // Comma-separated list. Production serves the SPA from the same origin as
+    // the API, so only dev servers on other ports need to be listed here.
+    'allowed_origins' => array_values(array_filter(array_map(
+        'trim',
+        explode(',', (string) env('CORS_ALLOWED_ORIGINS', 'http://127.0.0.1:3000,http://localhost:3000'))
+    ))),
 
     'allowed_origins_patterns' => [],
 

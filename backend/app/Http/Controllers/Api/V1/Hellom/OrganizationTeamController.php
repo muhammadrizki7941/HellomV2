@@ -849,7 +849,7 @@ class OrganizationTeamController extends BaseApiController
 
     private function sendInvitationEmail(Organization $organization, OrganizationTeamInvitation $invitation, string $plainToken): array
     {
-        $appBase = trim((string) config('app.frontend_url', env('FRONTEND_URL', 'http://localhost:3000/hellom')));
+        $appBase = trim((string) config('app.frontend_url'));
         $registerUrl = rtrim($appBase, '/') . '/register?inviteToken=' . urlencode($plainToken);
 
         return $this->platformMailService->sendTo($invitation->email, new OrganizationTeamInvitationMail(

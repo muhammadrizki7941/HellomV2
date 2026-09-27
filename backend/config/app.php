@@ -54,6 +54,10 @@ return [
 
     'url' => env('APP_URL', 'http://localhost'),
 
+    // Public URL of the React SPA, used for links in emails (team/staff
+    // invitations). Must live in config: env() returns null once config is cached.
+    'frontend_url' => env('FRONTEND_URL') ?: env('APP_URL', 'http://localhost'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Timezone

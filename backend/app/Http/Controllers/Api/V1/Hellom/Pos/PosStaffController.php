@@ -334,7 +334,7 @@ class PosStaffController extends BasePosController
 
     private function sendStaffInvitationEmail(Organization $organization, OrganizationTeamInvitation $invitation, string $plainToken): array
     {
-        $appBase = trim((string) config('app.frontend_url', env('FRONTEND_URL', 'http://localhost:3000/hellom')));
+        $appBase = trim((string) config('app.frontend_url'));
         $registerUrl = rtrim($appBase, '/') . '/register?inviteToken=' . urlencode($plainToken);
 
         return app(PlatformMailService::class)->sendTo($invitation->email, new OrganizationTeamInvitationMail(
