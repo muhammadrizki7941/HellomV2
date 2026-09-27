@@ -68,7 +68,8 @@ export function changePassword(payload: { current_password: string; password: st
 }
 
 export function forgotPassword(email: string) {
-  return apiRequest<Record<string, unknown>>('/auth/forgot-password', {
+  // debug_reset_token is only returned when the backend runs with APP_ENV=local.
+  return apiRequest<{ debug_reset_token?: string | null }>('/auth/forgot-password', {
     method: 'POST',
     body: { email },
     token: null,
