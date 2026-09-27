@@ -24,12 +24,14 @@ backend/
   app/Http/Controllers/Api/V1/
     BaseApiController.php        amplop respons { success, message, data, error }
     Hellom/                      platform: auth, organisasi, tim, billing, wallet, landing, admin, webhook
+    Hellom/Billing/              checkout & overview, konfigurasi gateway, review checkout manual (super admin),
+                                 bayar via wallet, checkout landing publik, mock (dev); helper bersama di Concerns/
     Hellom/Pos/                  POS: outlet, menu, meja, pesanan, member, loyalti, staf, laporan
     Consumer/, Public/           produk digital (konsumen & katalog publik)
   app/Http/Controllers/Admin/    3 controller super admin yang dipakai API (produk digital, pembelian, notifikasi)
   app/Http/Middleware/Api/       AuthenticateApiToken, EnsureAppEntitlement (canUseApp), InjectPosContext,
                                  EnsureSuperAdmin, EnsureBillingMockEnabled
-  app/Services/Billing/          EntitlementService (satu pintu aktivasi/kedaluwarsa akses)
+  app/Services/Billing/          EntitlementService (satu pintu aktivasi/kedaluwarsa akses), CheckoutNotifier (email billing)
   app/Services/Hellom/           gateway (iPaymu/Xendit/DOKU), mail, provisioning POS, landing sale, Gemini
   app/Services/                  OutletService (outlet & slug tenant), NotificationService, Realtime/, Reservations/
   routes/api.php                 prefix v1/hellom + grup auth; me-require routes/api/*.php per modul

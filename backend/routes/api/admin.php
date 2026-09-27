@@ -9,7 +9,8 @@ use App\Http\Controllers\Admin\DigitalProductController as AdminDigitalProductCo
 use App\Http\Controllers\Admin\ProductPurchaseController;
 use App\Http\Controllers\Api\V1\Hellom\AdminMailController;
 use App\Http\Controllers\Api\V1\Hellom\BannerController;
-use App\Http\Controllers\Api\V1\Hellom\BillingController;
+use App\Http\Controllers\Api\V1\Hellom\Billing\ManualCheckoutReviewController;
+use App\Http\Controllers\Api\V1\Hellom\Billing\PaymentGatewayConfigController;
 use App\Http\Controllers\Api\V1\Hellom\BrandSettingController;
 use App\Http\Controllers\Api\V1\Hellom\InvoiceController;
 use App\Http\Controllers\Api\V1\Hellom\LandingContentController;
@@ -47,15 +48,15 @@ Route::prefix('admin')->name('admin.')->middleware('superAdmin')->group(function
     Route::post('/entitlements/override', [SuperAdminController::class, 'overrideEntitlement'])->name('entitlements.override');
 
     Route::get('/audit-logs', [SuperAdminController::class, 'auditLogs'])->name('audit_logs');
-    Route::put('/billing/runtime-config', [BillingController::class, 'updateCheckoutRuntimeConfig'])->name('billing.runtime_config.update');
-    Route::get('/billing/provider-config', [BillingController::class, 'adminGatewayConfig'])->name('billing.provider_config');
-    Route::put('/billing/provider-config', [BillingController::class, 'updateAdminGatewayConfig'])->name('billing.provider_config.update');
-    Route::post('/billing/provider-config/ipaymu/reset', [BillingController::class, 'resetIpaymuConfig'])->name('billing.provider_config.ipaymu.reset');
-    Route::get('/billing/manual-payment-config', [BillingController::class, 'adminManualPaymentConfig'])->name('billing.manual_payment_config');
-    Route::post('/billing/manual-payment-config', [BillingController::class, 'updateAdminManualPaymentConfig'])->name('billing.manual_payment_config.update');
-    Route::get('/billing/manual-checkouts', [BillingController::class, 'adminPendingCheckouts'])->name('billing.manual_checkouts');
-    Route::post('/billing/manual-checkouts/{intentId}/approve', [BillingController::class, 'adminApproveManualCheckout'])->name('billing.manual_checkouts.approve');
-    Route::post('/billing/manual-checkouts/{intentId}/reject', [BillingController::class, 'adminRejectManualCheckout'])->name('billing.manual_checkouts.reject');
+    Route::put('/billing/runtime-config', [PaymentGatewayConfigController::class, 'updateCheckoutRuntimeConfig'])->name('billing.runtime_config.update');
+    Route::get('/billing/provider-config', [PaymentGatewayConfigController::class, 'adminGatewayConfig'])->name('billing.provider_config');
+    Route::put('/billing/provider-config', [PaymentGatewayConfigController::class, 'updateAdminGatewayConfig'])->name('billing.provider_config.update');
+    Route::post('/billing/provider-config/ipaymu/reset', [PaymentGatewayConfigController::class, 'resetIpaymuConfig'])->name('billing.provider_config.ipaymu.reset');
+    Route::get('/billing/manual-payment-config', [PaymentGatewayConfigController::class, 'adminManualPaymentConfig'])->name('billing.manual_payment_config');
+    Route::post('/billing/manual-payment-config', [PaymentGatewayConfigController::class, 'updateAdminManualPaymentConfig'])->name('billing.manual_payment_config.update');
+    Route::get('/billing/manual-checkouts', [ManualCheckoutReviewController::class, 'adminPendingCheckouts'])->name('billing.manual_checkouts');
+    Route::post('/billing/manual-checkouts/{intentId}/approve', [ManualCheckoutReviewController::class, 'adminApproveManualCheckout'])->name('billing.manual_checkouts.approve');
+    Route::post('/billing/manual-checkouts/{intentId}/reject', [ManualCheckoutReviewController::class, 'adminRejectManualCheckout'])->name('billing.manual_checkouts.reject');
 
     // ─── Promo Campaigns CRUD ───
     Route::get('/promos', [PromoCampaignController::class, 'index'])->name('promos.index');

@@ -362,7 +362,8 @@ Legenda: 🟢 aman (tanpa perubahan perilaku) · 🟡 perlu verifikasi · 🔴 b
 - [ ] 🟢 `Enums` role/plan/status (tanpa mengubah nilai DB)
 - [x] 🟢 Pecah `routes/api.php` → `routes/api/{public,account,wallet,billing,consumer,landing-builder,member,pos,admin}.php`; fingerprint 498 route (urutan, nama, middleware) **identik** (`a57d2e5`, `74f3024`)
 - [ ] 🟡 Form Request untuk endpoint tulis (aturan validasi disalin 1:1)
-- [ ] 🟡 Pecah `BillingController`/`WalletController`/`LandingBuilderController` → Services/Actions (perilaku identik)
+- [x] 🟡 Pecah `BillingController` (2.737 baris) → 6 controller di `Hellom/Billing/` + trait `Concerns/{InteractsWithPaymentGateways,ActivatesPlans,PresentsWallets}` + `Services/Billing/CheckoutNotifier`; isi method disalin apa adanya, 319 route identik, uji perilaku 33 panggilan (mock checkout → wallet → renew → admin → publik) identik sebelum/sesudah
+- [ ] 🟡 Pecah `WalletController`/`LandingBuilderController`/`PosStaffController` dengan cara yang sama
 - [ ] 🟡 Policy: Withdrawal, Outlet, Organization
 - [x] 🟡 R-3 `View::share(brand)` dihapus bersama Blade → artisan jalan tanpa DB; R-13 `route:cache` kini berhasil (`e30f621`)
 

@@ -7,7 +7,7 @@
 
 use App\Http\Controllers\Api\V1\Hellom\AuthController;
 use App\Http\Controllers\Api\V1\Hellom\BannerController;
-use App\Http\Controllers\Api\V1\Hellom\BillingController;
+use App\Http\Controllers\Api\V1\Hellom\Billing\LandingCheckoutController;
 use App\Http\Controllers\Api\V1\Hellom\BrandSettingController;
 use App\Http\Controllers\Api\V1\Hellom\CustomerOrderController;
 use App\Http\Controllers\Api\V1\Hellom\DokuWebhookController;
@@ -33,7 +33,7 @@ Route::get('/public/landing/{organizationSlug}/{pageSlug}', [LandingBuilderContr
 Route::post('/public/landing/{landingPageId}/customers', [LandingBuilderController::class, 'publicStoreCustomer'])->middleware('throttle:hellom-public-write')
     ->name('public.landing.customers.store');
 // Public buyer checkout for landing-page product/PDF sales (gateway only)
-Route::post('/public/landingpage/{organizationSlug}/orders', [BillingController::class, 'publicLandingCheckout'])->middleware('throttle:hellom-public-write')
+Route::post('/public/landingpage/{organizationSlug}/orders', [LandingCheckoutController::class, 'publicLandingCheckout'])->middleware('throttle:hellom-public-write')
     ->name('public.landing.orders.checkout');
 Route::get('/public/landingpage/orders/{reference}/status', [LandingSaleController::class, 'status'])
     ->name('public.landing.orders.status');
