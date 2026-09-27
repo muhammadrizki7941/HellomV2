@@ -146,6 +146,19 @@ function normalizeFeatureList(features: unknown): string[] {
   return [];
 }
 
+// Billing cycle to request at checkout, read from the plan data (same default
+// order as the backend's resolveBillingCycle). Slug matching is only a fallback.
+function billingCycleForPlan(plan: MatrixPlan | undefined, planSlug: string): 'monthly' | 'yearly' | 'lifetime' {
+  if (!plan) {
+    return planSlug.includes('yearly') ? 'yearly' : planSlug.includes('lifetime') || planSlug === 'free' ? 'lifetime' : 'monthly';
+  }
+  if (plan.type === 'free' || plan.type === 'lifetime') return 'lifetime';
+  if (plan.billing_cycles?.includes('monthly')) return 'monthly';
+  if (plan.billing_cycles?.includes('yearly')) return 'yearly';
+  if (plan.type === 'one_time') return plan.duration_days && plan.duration_days >= 365 ? 'yearly' : 'lifetime';
+  return 'monthly';
+}
+
 function resolvePeriod(plan: MatrixPlan) {
   if (plan.type === 'free') return '/lifetime';
   if (plan.type === 'lifetime') return '/lifetime';
@@ -347,8 +360,7 @@ export default function SubscriptionModal({ isOpen, onClose, appName, appSlug, a
     setErrorMessage(null);
     setSuccessMessage(null);
 
-    const billingCycle: 'monthly' | 'yearly' | 'lifetime' =
-      planSlug.includes('yearly') ? 'yearly' : planSlug.includes('lifetime') || planSlug === 'free' ? 'lifetime' : 'monthly';
+    const billingCycle = billingCycleForPlan(plans.find((plan) => plan.slug === planSlug), planSlug);
 
     try {
       if (paymentFlow === 'wallet') {
