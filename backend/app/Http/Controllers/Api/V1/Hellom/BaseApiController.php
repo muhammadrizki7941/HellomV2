@@ -2,28 +2,12 @@
 
 namespace App\Http\Controllers\Api\V1\Hellom;
 
-use App\Http\Controllers\Controller;
-use Illuminate\Http\JsonResponse;
+use App\Http\Controllers\Api\V1\BaseApiController as ApiBaseController;
 
-abstract class BaseApiController extends Controller
+/**
+ * Kept so existing Hellom controllers (same namespace, no import) keep
+ * working. All helpers live in App\Http\Controllers\Api\V1\BaseApiController.
+ */
+abstract class BaseApiController extends ApiBaseController
 {
-    protected function ok(mixed $data = null, string $message = 'OK', int $status = 200): JsonResponse
-    {
-        return response()->json([
-            'success' => true,
-            'message' => $message,
-            'data' => $data,
-            'error' => null,
-        ], $status);
-    }
-
-    protected function fail(string $message, mixed $error = null, int $status = 400): JsonResponse
-    {
-        return response()->json([
-            'success' => false,
-            'message' => $message,
-            'data' => null,
-            'error' => $error,
-        ], $status);
-    }
 }
