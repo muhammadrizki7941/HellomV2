@@ -7,73 +7,16 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
 import { getAdminDashboardStats, getAdminProductPurchases, getFinanceSummary, getMemberDashboardCards } from '@/lib/hellomApi';
+import { toAdminFinanceView, type AdminFinanceView } from '@/lib/adminFinance';
 
 const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'];
 
-type FinanceSummary = {
-  wallet: {
-    available_balance: number;
-    pending_balance: number;
-    total_in: number;
-    total_out: number;
-  };
-  period: {
-    inflow: number;
-    outflow: number;
-    net: number;
-    transaction_count: number;
-  };
-  withdrawals: {
-    pending_count: number;
-    processing_count: number;
-    paid_count: number;
-    failed_count: number;
-    rejected_count: number;
-    cancelled_count: number;
-  };
-};
+type FinanceSummary = AdminFinanceView;
 
 const emptySummary: FinanceSummary = {
   wallet: { available_balance: 0, pending_balance: 0, total_in: 0, total_out: 0 },
   period: { inflow: 0, outflow: 0, net: 0, transaction_count: 0 },
   withdrawals: { pending_count: 0, processing_count: 0, paid_count: 0, failed_count: 0, rejected_count: 0, cancelled_count: 0 },
-};
-
-const toNumber = (value: unknown): number => {
-  const normalized = Number(value);
-  return Number.isFinite(normalized) ? normalized : 0;
-};
-
-const normalizeFinanceSummary = (input: unknown): FinanceSummary => {
-  const source = (input && typeof input === 'object') ? (input as Record<string, unknown>) : {};
-  const wallet = (source.wallet && typeof source.wallet === 'object') ? (source.wallet as Record<string, unknown>) : {};
-  const period = (source.period && typeof source.period === 'object') ? (source.period as Record<string, unknown>) : {};
-  const withdrawals = (source.withdrawals && typeof source.withdrawals === 'object')
-    ? (source.withdrawals as Record<string, unknown>)
-    : {};
-
-  return {
-    wallet: {
-      available_balance: toNumber(wallet.available_balance),
-      pending_balance: toNumber(wallet.pending_balance),
-      total_in: toNumber(wallet.total_in),
-      total_out: toNumber(wallet.total_out),
-    },
-    period: {
-      inflow: toNumber(period.inflow),
-      outflow: toNumber(period.outflow),
-      net: toNumber(period.net),
-      transaction_count: toNumber(period.transaction_count),
-    },
-    withdrawals: {
-      pending_count: toNumber(withdrawals.pending_count),
-      processing_count: toNumber(withdrawals.processing_count),
-      paid_count: toNumber(withdrawals.paid_count),
-      failed_count: toNumber(withdrawals.failed_count),
-      rejected_count: toNumber(withdrawals.rejected_count),
-      cancelled_count: toNumber(withdrawals.cancelled_count),
-    },
-  };
 };
 
 const StatCard = ({ title, value, trend, trendUp, icon: Icon }: any) => (
@@ -141,7 +84,7 @@ export default function AdminDashboard() {
           getMemberDashboardCards(),
           getAdminDashboardStats({ days: 30 }).catch(() => null),
         ]);
-        const financeSummary = normalizeFinanceSummary(finance);
+        const financeSummary = toAdminFinanceView(finance);
         const cards = Array.isArray(memberCards?.cards) ? memberCards.cards : [];
 
         setSummary(financeSummary);

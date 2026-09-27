@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getAdminPayoutQueue, getFinanceSummary } from '@/lib/hellomApi';
+import { toAdminFinanceView } from '@/lib/adminFinance';
 
 const StatusBadge = ({ status }: { status: string }) => {
   const styles = {
@@ -85,7 +86,7 @@ export default function SystemHealth() {
         getFinanceSummary({ days: 30 }),
         getAdminPayoutQueue({ status: 'pending', limit: 10 }),
       ]);
-      setSummary(finance);
+      setSummary(toAdminFinanceView(finance));
       setQueueSummary(queue.summary);
       setLastUpdated(new Date());
     } catch (refreshError) {
