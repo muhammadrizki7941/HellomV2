@@ -4,12 +4,11 @@ namespace App\Services\Hellom;
 
 use App\Http\Controllers\Api\V1\Hellom\InvoiceController;
 use App\Models\CheckoutIntent;
-use App\Models\Entitlement;
 use App\Models\Invoice;
-use App\Models\Plan;
 use App\Models\PlatformFinanceLedger;
 use App\Models\Subscription;
 use App\Models\User;
+use App\Services\Billing\EntitlementService;
 use App\Services\NotificationService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -19,6 +18,7 @@ class SubscriptionCheckoutActivationService
     public function __construct(
         private readonly PosProvisioningService $posProvisioningService,
         private readonly NotificationService $notificationService,
+        private readonly EntitlementService $entitlements,
     ) {
     }
 
@@ -60,7 +60,7 @@ class SubscriptionCheckoutActivationService
                 $subscription->forceFill([
                     'status' => 'active',
                     'starts_at' => $now,
-                    'ends_at' => $this->resolveSubscriptionEndAt($subscription->plan ?? $intent->plan, $now),
+                    'ends_at' => $this->entitlements->subscriptionEndsAt($subscription, $now, $intent->plan),
                     'metadata' => $subMeta,
                 ])->save();
             }
@@ -140,7 +140,7 @@ class SubscriptionCheckoutActivationService
                 $subscription->forceFill([
                     'status' => 'active',
                     'starts_at' => $now,
-                    'ends_at' => $this->resolveSubscriptionEndAt($subscription->plan ?? $lockedIntent->plan, $now),
+                    'ends_at' => $this->entitlements->subscriptionEndsAt($subscription, $now, $lockedIntent->plan),
                     'metadata' => $subMeta,
                 ])->save();
             }
@@ -188,7 +188,7 @@ class SubscriptionCheckoutActivationService
             $subscription->forceFill([
                 'status' => 'active',
                 'starts_at' => $subscription->starts_at ?? $now,
-                'ends_at' => $subscription->ends_at ?? $this->resolveSubscriptionEndAt($subscription->plan ?? $intent->plan, $now),
+                'ends_at' => $subscription->ends_at ?? $this->entitlements->subscriptionEndsAt($subscription, $now, $intent->plan),
             ])->save();
         }
 
@@ -196,23 +196,27 @@ class SubscriptionCheckoutActivationService
         $this->ensurePosProvisioning($intent);
     }
 
+    /**
+     * Grant access for exactly the period that was paid for: the entitlement
+     * ends when the subscription ends (null only for lifetime/free plans).
+     */
     private function upsertActiveEntitlement(CheckoutIntent $intent, Carbon $now): void
     {
         if ((int) $intent->organization_id <= 0 || (int) $intent->app_id <= 0) {
             return;
         }
 
-        Entitlement::query()->updateOrCreate(
-            [
-                'organization_id' => (int) $intent->organization_id,
-                'app_id' => (int) $intent->app_id,
-            ],
-            [
-                'plan_id' => (int) $intent->plan_id,
-                'status' => 'active',
-                'starts_at' => $now,
-                'ends_at' => null,
-            ]
+        $subscription = $intent->subscription;
+        $endsAt = $subscription instanceof Subscription
+            ? $subscription->ends_at
+            : $this->entitlements->periodEndsAt($intent->plan, $now);
+
+        $this->entitlements->grant(
+            (int) $intent->organization_id,
+            (int) $intent->app_id,
+            (int) $intent->plan_id,
+            $now,
+            $endsAt
         );
     }
 
@@ -223,26 +227,5 @@ class SubscriptionCheckoutActivationService
         }
 
         $this->posProvisioningService->ensureProvisionedForPos((int) $intent->organization_id);
-    }
-
-    private function resolveSubscriptionEndAt(?Plan $plan, Carbon $startAt): ?Carbon
-    {
-        if (!$plan instanceof Plan) {
-            return $startAt->copy()->addMonth();
-        }
-
-        if ($plan->isLifetime() || $plan->isFree()) {
-            return null;
-        }
-
-        if ($plan->duration_days) {
-            return $startAt->copy()->addDays((int) $plan->duration_days);
-        }
-
-        if ($plan->hasBillingCycle(Plan::BILLING_YEARLY)) {
-            return $startAt->copy()->addYear();
-        }
-
-        return $startAt->copy()->addMonth();
     }
 }
