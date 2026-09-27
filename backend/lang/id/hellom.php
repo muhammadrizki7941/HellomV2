@@ -4,6 +4,7 @@ return [
     // ─── Auth ───
     'unauthorized' => 'Tidak berwenang',
     'invalid_credentials' => 'Kredensial tidak valid',
+    'account_suspended' => 'Akun ini sedang dinonaktifkan. Hubungi admin Hellom.',
     'registered' => 'Terdaftar',
     'logged_in' => 'Berhasil masuk',
     'logged_out' => 'Berhasil keluar',

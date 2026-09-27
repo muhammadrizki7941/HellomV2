@@ -46,6 +46,15 @@ class AuthenticateApiToken
             ], 401);
         }
 
+        if ($apiToken->user->isSuspended()) {
+            return response()->json([
+                'success' => false,
+                'message' => __('hellom.account_suspended'),
+                'data' => null,
+                'error' => ['code' => 'ACCOUNT_SUSPENDED'],
+            ], 403);
+        }
+
         $apiToken->forceFill(['last_used_at' => Carbon::now()])->save();
 
         $request->attributes->set('apiToken', $apiToken);

@@ -59,6 +59,12 @@ class User extends Authenticatable
         return $this->role === 'admin';
     }
 
+    /** Suspended by a super admin: may not log in or use existing tokens. */
+    public function isSuspended(): bool
+    {
+        return $this->role === 'suspended';
+    }
+
     public function isCashier(): bool
     {
         return $this->role === 'cashier';

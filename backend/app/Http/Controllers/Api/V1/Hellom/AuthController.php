@@ -279,6 +279,10 @@ class AuthController extends BaseApiController
             return $this->fail('User not found', ['code' => 'USER_NOT_FOUND'], 404);
         }
 
+        if ($user->isSuspended()) {
+            return $this->fail(__('hellom.account_suspended'), ['code' => 'ACCOUNT_SUSPENDED'], 403);
+        }
+
         $organizationId = (int) ($ssoData['organization_id'] ?? 0);
         if ($organizationId <= 0) {
             return $this->fail('SSO organization is invalid', ['code' => 'INVALID_SSO_ORGANIZATION'], 422);
@@ -329,6 +333,10 @@ class AuthController extends BaseApiController
 
         if (!$user || !Hash::check((string) $validated['password'], (string) $user->password)) {
             return $this->fail(__('hellom.invalid_credentials'), ['code' => 'INVALID_CREDENTIALS'], 401);
+        }
+
+        if ($user->isSuspended()) {
+            return $this->fail(__('hellom.account_suspended'), ['code' => 'ACCOUNT_SUSPENDED'], 403);
         }
 
         [$plainToken] = $this->issueToken($user, 'hellom-web');

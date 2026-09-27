@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Hellom;
 
+use App\Models\ApiToken;
 use App\Models\AuditLog;
 use App\Models\AppCatalog;
 use App\Models\Entitlement;
@@ -319,7 +320,21 @@ class SuperAdminController extends BaseApiController
             return $this->fail('User not found', ['code' => 'NOT_FOUND'], 404);
         }
 
-        $user->update(['role' => 'suspended']);
+        if ((int) $user->id === (int) $request->user()?->id) {
+            return $this->fail('You cannot suspend your own account', ['code' => 'CANNOT_SUSPEND_SELF'], 422);
+        }
+
+        DB::transaction(function () use ($user): void {
+            if (!$user->isSuspended()) {
+                $user->forceFill([
+                    'role_before_suspension' => (string) $user->role,
+                    'role' => 'suspended',
+                ])->save();
+            }
+
+            // End every active session immediately.
+            ApiToken::query()->where('user_id', (int) $user->id)->delete();
+        });
 
         $this->audit($request, 'user.suspend', 'User', $userId);
 
@@ -333,11 +348,20 @@ class SuperAdminController extends BaseApiController
             return $this->fail('User not found', ['code' => 'NOT_FOUND'], 404);
         }
 
-        $user->update(['role' => 'member']);
+        // Restore the role the user had before suspension (older suspensions
+        // did not record it and fall back to "member", as before).
+        $restoredRole = $user->isSuspended()
+            ? ((string) ($user->role_before_suspension ?: 'member'))
+            : (string) $user->role;
+
+        $user->forceFill([
+            'role' => $restoredRole,
+            'role_before_suspension' => null,
+        ])->save();
 
         $this->audit($request, 'user.reactivate', 'User', $userId);
 
-        return $this->ok(['id' => $user->id, 'role' => 'member'], __('hellom.user_reactivated'));
+        return $this->ok(['id' => $user->id, 'role' => $restoredRole], __('hellom.user_reactivated'));
     }
 
     public function deleteUser(Request $request, int $userId): JsonResponse

@@ -4,6 +4,7 @@ return [
     // ─── Auth ───
     'unauthorized' => 'Unauthorized',
     'invalid_credentials' => 'Invalid credentials',
+    'account_suspended' => 'This account is suspended. Please contact Hellom support.',
     'registered' => 'Registered',
     'logged_in' => 'Logged in',
     'logged_out' => 'Logged out',
