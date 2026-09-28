@@ -25,9 +25,13 @@ Audit lengkap dan status per temuan: [docs/AUDIT.md](docs/AUDIT.md). Langkah dep
 - **Admin → Dashboard**: grafik *User Growth* sebelumnya berisi angka karangan dan pilihan rentang tidak berfungsi; kini menampilkan pendaftaran pengguna & organisasi harian asli (7/30/90 hari).
 - **POS → Staf**: ekspor CSV selalu mengambil outlet utama; kini mengikuti outlet aktif.
 - **Link email undangan** mengarah ke `localhost` setelah `config:cache` (kini `FRONTEND_URL`/`APP_URL`).
+- **Pembayaran produk digital via iPaymu tidak pernah tercatat lunas**: URL notifikasi tidak membawa callback token sehingga webhook ditolak.
+- **Halaman kembali setelah bayar** DOKU/iPaymu mengarah ke path lama `/hellom/dashboard/...`; Xendit tidak mengembalikan pembeli ke Hellom (langganan, top-up, produk).
+- **Mode checkout dari admin diabaikan untuk langganan**: bila transfer manual aktif, langganan selalu dipaksa manual walau admin memilih *Otomatis*. Kini satu `PaymentPolicy` untuk langganan & produk (manual hanya cadangan saat gateway belum siap).
 - **Billing**: akses paket tahunan tidak pernah berakhir; pembelian tahunan/lifetime via saldo wallet atau Xendit tercatat 1 bulan; webhook lama yang diputar ulang bisa menghidupkan akses kedaluwarsa; bulanan dengan auto-renew mati tidak pernah berakhir.
 
 ### Ditambahkan
+- Pengaturan pembayaran dari dashboard super admin: channel VA/QRIS iPaymu yang tampil di checkout, tombol checkout tanpa login, URL webhook lengkap beserta petunjuk pendaftaran.
 - **Checkout tamu produk digital**: produk berbayar milik platform bisa dibeli tanpa login (email wajib, no. HP opsional). Setelah lunas, pembeli menerima email berisi link sekali pakai yang langsung membuka produk di dashboard, plus password untuk akun baru. Halaman status pembayaran publik dengan polling dan kirim ulang email.
 - Fondasi penjualan: `Plan::accessEndsAt()`, `EntitlementService`, `Entitlement::effectiveStatus()`, masa tenggang `BILLING_GRACE_DAYS`, command `hellom:billing:expire-subscriptions` (per jam) dan `hellom:billing:backfill-entitlement-ends` (laporan dulu, `--force` untuk menulis). Paket **lifetime** (bayar sekali) didukung penuh.
 - Artefak deploy: `deploy/deploy.sh`, `deploy/ecosystem.config.js` (PM2), contoh Nginx (termasuk proxy `/socket.io`), `deploy/crontab.example`.

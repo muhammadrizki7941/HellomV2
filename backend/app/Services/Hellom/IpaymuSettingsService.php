@@ -13,6 +13,7 @@ class IpaymuSettingsService
     private const CALLBACK_TOKEN = 'hellom_ipaymu_callback_token';
     private const IS_PRODUCTION = 'hellom_ipaymu_is_production';
     private const PAYMENT_METHODS = 'hellom_ipaymu_payment_methods';
+    private const DIRECT_CHANNELS_SETTING = 'hellom_ipaymu_direct_channels';
 
     /** iPaymu payment methods the super admin can toggle (value => label). */
     public const AVAILABLE_METHODS = [
@@ -20,6 +21,23 @@ class IpaymuSettingsService
         'va' => 'Virtual Account / Transfer Bank',
         'cstore' => 'Gerai Retail (Indomaret/Alfamart)',
         'cc' => 'Kartu Kredit',
+    ];
+
+    /**
+     * Channels for iPaymu direct charge (VA number / QRIS shown on our own page):
+     * key => [paymentMethod, paymentChannel, label, group]. `group` is one of
+     * AVAILABLE_METHODS, so a channel is offered only when its group is enabled too.
+     */
+    public const DIRECT_CHANNELS = [
+        'qris' => ['qris', 'qris', 'QRIS', 'qris'],
+        'bca' => ['va', 'bca', 'BCA Virtual Account', 'va'],
+        'bni' => ['va', 'bni', 'BNI Virtual Account', 'va'],
+        'bri' => ['va', 'bri', 'BRI Virtual Account', 'va'],
+        'mandiri' => ['va', 'mandiri', 'Mandiri Virtual Account', 'va'],
+        'permata' => ['va', 'permata', 'Permata Virtual Account', 'va'],
+        'cimb' => ['va', 'cimb', 'CIMB Niaga Virtual Account', 'va'],
+        'indomaret' => ['cstore', 'indomaret', 'Indomaret', 'cstore'],
+        'alfamart' => ['cstore', 'alfamart', 'Alfamart', 'cstore'],
     ];
 
     /**
@@ -55,7 +73,38 @@ class IpaymuSettingsService
             'mode' => $isProduction ? 'production' : 'sandbox',
             'is_ready' => $va !== '' && $apiKey !== '' && $callbackToken !== '',
             'payment_methods' => $this->readPaymentMethods(),
+            'direct_channels' => $this->readDirectChannels(),
         ];
+    }
+
+    /**
+     * Direct-charge channels the buyer can pick: selected by the super admin and
+     * belonging to an enabled payment method group.
+     *
+     * @return array<string,array{0:string,1:string,2:string,3:string}>
+     */
+    public function enabledDirectChannels(): array
+    {
+        $groups = $this->enabledPaymentMethods();
+        $selected = $this->readDirectChannels();
+
+        return array_filter(
+            self::DIRECT_CHANNELS,
+            fn (array $channel, string $key) => in_array($key, $selected, true) && in_array($channel[3], $groups, true),
+            ARRAY_FILTER_USE_BOTH
+        );
+    }
+
+    /** @return array<int,string> */
+    private function readDirectChannels(): array
+    {
+        $decoded = json_decode((string) SystemSetting::get(self::DIRECT_CHANNELS_SETTING, ''), true);
+        if (!is_array($decoded)) {
+            // Default: every channel (preserves prior behaviour).
+            return array_keys(self::DIRECT_CHANNELS);
+        }
+
+        return array_values(array_intersect(array_keys(self::DIRECT_CHANNELS), array_map('strval', $decoded)));
     }
 
     /** Enabled iPaymu payment channels (e.g. ['qris']). Falls back to all if unset/empty. */
@@ -156,6 +205,12 @@ class IpaymuSettingsService
             $current['payment_methods'] = $this->readPaymentMethods();
         }
 
+        if (array_key_exists('direct_channels', $payload) && is_array($payload['direct_channels'])) {
+            $channels = array_values(array_intersect(array_keys(self::DIRECT_CHANNELS), array_map('strval', $payload['direct_channels'])));
+            SystemSetting::set(self::DIRECT_CHANNELS_SETTING, json_encode($channels));
+            $current['direct_channels'] = $channels;
+        }
+
         $current['mode'] = $current['is_production'] ? 'production' : 'sandbox';
         $current['is_ready'] = $current['va'] !== '' && $current['api_key'] !== '' && $current['callback_token'] !== '';
 
@@ -210,6 +265,12 @@ class IpaymuSettingsService
             'callback_token_masked' => $this->maskValue($config['callback_token']),
             'payment_methods' => $config['payment_methods'],
             'available_payment_methods' => self::AVAILABLE_METHODS,
+            'direct_channels' => $config['direct_channels'],
+            'available_direct_channels' => array_map(
+                fn (array $channel, string $key) => ['key' => $key, 'label' => $channel[2], 'group' => $channel[3]],
+                self::DIRECT_CHANNELS,
+                array_keys(self::DIRECT_CHANNELS)
+            ),
         ];
     }
 

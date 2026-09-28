@@ -60,7 +60,8 @@ Lakukan **sekali** saat pertama kali men-deploy hasil refactor:
    php artisan hellom:billing:backfill-entitlement-ends          # laporan: siapa yang LOCKS NOW
    php artisan hellom:billing:backfill-entitlement-ends --force  # setelah diputuskan
    ```
-8. **Periksa data dari celah lama** (read-only, lihat `docs/AUDIT.md` Langkah 0): transaksi `wallet_topup_mock`, invoice `payment_method = mock`, penarikan yang disetujui non-super-admin.
+8. **Pengaturan pembayaran** diisi dari dashboard super admin (Settings → Payment), bukan di kode: kredensial + callback token tiap gateway, centang *production*, pilih gateway aktif dan mode checkout (*Otomatis* agar pembeli langsung ke gateway), channel iPaymu, transfer manual (cadangan), checkout tanpa login. Untuk Xendit, daftarkan URL webhook yang tampil di kartu Xendit beserta verification token yang sama. **Jangan ganti `APP_KEY`** setelah kredensial diisi (tersimpan terenkripsi).
+9. **Periksa data dari celah lama** (read-only, lihat `docs/AUDIT.md` Langkah 0): transaksi `wallet_topup_mock`, invoice `payment_method = mock`, penarikan yang disetujui non-super-admin.
 
 ## 4. Variabel lingkungan penting
 

@@ -14,6 +14,7 @@ import {
 import {
   getAdminManualPaymentConfig,
   getAdminPaymentGatewayConfig,
+  HELLOM_API_BASE,
   getAuthMe,
   getImageUrl,
   getOrganizationTeam,
@@ -65,6 +66,7 @@ export default function AdminSettings() {
     checkout_mode: CheckoutMode;
     member_wallet_enabled: boolean;
     sale_commission_percent: number;
+    guest_checkout_enabled: boolean;
     providers: {
       xendit: ProviderCard & {
         secret_key_masked: string | null;
@@ -75,6 +77,8 @@ export default function AdminSettings() {
         va_masked: string | null;
         api_key_masked: string | null;
         callback_token_masked: string | null;
+        direct_channels?: string[];
+        available_direct_channels?: Array<{ key: string; label: string; group: string }>;
       };
       doku: ProviderCard & {
         client_id_masked: string | null;
@@ -89,6 +93,7 @@ export default function AdminSettings() {
     checkout_mode: 'manual_confirmation',
     member_wallet_enabled: false,
     sale_commission_percent: 5,
+    guest_checkout_enabled: true,
     providers: {
       xendit: {
         provider: 'xendit',
@@ -145,6 +150,7 @@ export default function AdminSettings() {
     callback_token: '',
     is_production: false,
     payment_methods: ['qris', 'va', 'cstore', 'cc'] as string[],
+    direct_channels: [] as string[],
   });
   const ipaymuAvailableMethods: Record<string, string> = {
     qris: 'QRIS',
@@ -248,6 +254,7 @@ export default function AdminSettings() {
         checkout_mode: config.checkout_mode,
         member_wallet_enabled: config.member_wallet_enabled,
         sale_commission_percent: Number(config.sale_commission_percent ?? 5),
+        guest_checkout_enabled: config.guest_checkout_enabled ?? true,
         providers: config.providers,
         manual_payment: manualConfig || undefined,
       });
@@ -265,6 +272,7 @@ export default function AdminSettings() {
         payment_methods: Array.isArray(config.providers.ipaymu.payment_methods) && config.providers.ipaymu.payment_methods.length > 0
           ? config.providers.ipaymu.payment_methods
           : ['qris', 'va', 'cstore', 'cc'],
+        direct_channels: config.providers.ipaymu.direct_channels ?? [],
       });
       setDokuForm({
         client_id: '',
@@ -332,6 +340,7 @@ export default function AdminSettings() {
         checkout_mode: paymentConfig.checkout_mode,
         member_wallet_enabled: paymentConfig.member_wallet_enabled,
         sale_commission_percent: paymentConfig.sale_commission_percent,
+        guest_checkout_enabled: paymentConfig.guest_checkout_enabled,
       });
 
       const providerLabel = result.active_provider === 'ipaymu' ? 'iPaymu' : result.active_provider === 'doku' ? 'DOKU' : 'Xendit';
@@ -363,6 +372,7 @@ export default function AdminSettings() {
               callback_token: ipaymuForm.callback_token || undefined,
               is_production: ipaymuForm.is_production,
               payment_methods: ipaymuForm.payment_methods,
+              direct_channels: ipaymuForm.direct_channels,
             }
           : provider === 'doku'
             ? {
@@ -462,7 +472,7 @@ export default function AdminSettings() {
     setStatusMessage(null);
     try {
       await resetIpaymuGatewayConfig();
-      setIpaymuForm({ va: '', api_key: '', callback_token: '', is_production: false, payment_methods: ['qris', 'va', 'cstore', 'cc'] });
+      setIpaymuForm({ va: '', api_key: '', callback_token: '', is_production: false, payment_methods: ['qris', 'va', 'cstore', 'cc'], direct_channels: [] });
       setStatusMessage('Konfigurasi iPaymu berhasil direset.');
       await loadPayment();
     } catch (resetError) {
@@ -554,7 +564,12 @@ export default function AdminSettings() {
 
         <div className="mt-5 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">
           <p className="font-semibold text-zinc-900">Webhook</p>
-          <p className="mt-1 break-all">{providerConfig.webhook.path}</p>
+          <p className="mt-1 break-all font-mono text-xs text-zinc-800">{HELLOM_API_BASE.replace(/\/api\/v1\/hellom\/?$/, '')}{providerConfig.webhook.path}</p>
+          <p className="mt-1 text-xs text-zinc-500">
+            {isIpaymu || isDoku
+              ? 'Dikirim otomatis di setiap transaksi (lengkap dengan callback token) — tidak perlu didaftarkan di dashboard provider.'
+              : 'Daftarkan URL ini di dashboard Xendit (Settings → Webhooks) dengan verification token yang sama persis dengan callback token di bawah.'}
+          </p>
           <p className="mt-1 text-xs text-zinc-500">
             Callback token {providerConfig.webhook.callback_token_configured ? 'sudah tersimpan' : 'belum tersimpan'}.
           </p>
@@ -654,6 +669,35 @@ export default function AdminSettings() {
                           })}
                         />
                         <span className="font-medium text-zinc-800">{label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 md:col-span-2">
+                <p className="text-sm font-semibold text-zinc-800">Channel di halaman checkout Hellom</p>
+                <p className="mt-1 text-xs text-zinc-500">
+                  Nomor VA / QR ditampilkan langsung di halaman checkout produk digital. Hanya channel yang dicentang dan grup metodenya aktif yang muncul ke pembeli.
+                  Jika semua dimatikan, pembeli diarahkan ke halaman pembayaran iPaymu.
+                </p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                  {(paymentConfig.providers.ipaymu.available_direct_channels ?? []).map((channel) => {
+                    const groupOn = ipaymuForm.payment_methods.includes(channel.group);
+                    const checked = ipaymuForm.direct_channels.includes(channel.key);
+                    return (
+                      <label key={channel.key} className={`flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-sm ${groupOn ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'} ${checked && groupOn ? 'border-zinc-900 bg-white' : 'border-zinc-200 bg-white/60 text-zinc-500'}`}>
+                        <input
+                          type="checkbox"
+                          disabled={!groupOn}
+                          checked={checked}
+                          onChange={(event) => setIpaymuForm((current) => {
+                            const set = new Set(current.direct_channels);
+                            if (event.target.checked) set.add(channel.key); else set.delete(channel.key);
+                            return { ...current, direct_channels: Array.from(set) };
+                          })}
+                        />
+                        <span className="font-medium text-zinc-800">{channel.label}</span>
                       </label>
                     );
                   })}
@@ -923,6 +967,29 @@ export default function AdminSettings() {
                     onChange={(event) => setPaymentConfig((current) => ({ ...current, member_wallet_enabled: event.target.checked }))}
                   />
                   {paymentConfig.member_wallet_enabled ? 'Ditampilkan' : 'Disembunyikan'}
+                </label>
+              </div>
+            </div>
+
+            <div className="mt-5 rounded-3xl border border-zinc-200 bg-zinc-50 p-5">
+              <div className="flex items-start gap-4">
+                <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${paymentConfig.guest_checkout_enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-200 text-zinc-700'}`}>
+                  <Globe className="h-5 w-5" />
+                </div>
+                <div className="flex-1">
+                  <p className="font-semibold text-zinc-900">Checkout tanpa login (produk digital)</p>
+                  <p className="mt-1 text-sm text-zinc-600">
+                    Pengunjung membeli produk digital berbayar hanya dengan email (no. HP opsional); akses dikirim ke email setelah lunas.
+                    Saat dimatikan, pembeli harus login atau daftar dulu.
+                  </p>
+                </div>
+                <label className="inline-flex items-center gap-3 rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700">
+                  <input
+                    type="checkbox"
+                    checked={paymentConfig.guest_checkout_enabled}
+                    onChange={(event) => setPaymentConfig((current) => ({ ...current, guest_checkout_enabled: event.target.checked }))}
+                  />
+                  {paymentConfig.guest_checkout_enabled ? 'Aktif' : 'Nonaktif'}
                 </label>
               </div>
             </div>

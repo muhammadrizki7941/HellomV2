@@ -6,6 +6,7 @@ use App\Mail\DigitalProductAccessMail;
 use App\Models\LoginLink;
 use App\Models\ProductPurchase;
 use App\Services\Hellom\PlatformMailService;
+use App\Support\FrontendUrl;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -75,17 +76,15 @@ class ProductAccessMailer
         }
 
         [$token] = LoginLink::issue($user, "/dashboard/products/{$product->slug}");
-        $frontend = rtrim((string) config('app.frontend_url'), '/');
-
         $result = $this->mail->sendTo((string) $user->email, new DigitalProductAccessMail(
             productName: (string) $product->name,
             transactionCode: (string) $purchase->transaction_code,
             amount: (int) $purchase->amount_paid,
             email: (string) $user->email,
-            accessUrl: $frontend . '/auth/magic?token=' . $token,
+            accessUrl: FrontendUrl::to('/auth/magic?token=' . $token),
             linkValidDays: LoginLink::TTL_DAYS,
             password: $password,
-            loginUrl: $frontend . '/login',
+            loginUrl: FrontendUrl::to('/login'),
             accessPeriod: $purchase->expires_at
                 ? 'Sampai ' . $purchase->expires_at->translatedFormat('d M Y')
                 : 'Selamanya (sekali beli)',

@@ -5,15 +5,15 @@ namespace App\Services\DigitalProducts;
 use App\Models\DigitalProduct;
 use App\Models\ProductPurchase;
 use App\Models\User;
+use App\Services\Billing\PaymentPolicy;
 use App\Services\Hellom\DokuService;
 use App\Services\Hellom\DokuSettingsService;
 use App\Services\Hellom\IpaymuService;
 use App\Services\Hellom\IpaymuSettingsService;
 use App\Services\Hellom\ManualPaymentSettingsService;
-use App\Services\Hellom\PaymentGatewaySettingsService;
 use App\Services\Hellom\XenditService;
-use App\Services\Hellom\XenditSettingsService;
 use App\Services\NotificationService;
+use App\Support\FrontendUrl;
 use Illuminate\Support\Str;
 
 /**
@@ -84,14 +84,12 @@ class ProductCheckoutService
             ], 'Produk berhasil diaktifkan');
         }
 
+        // Which paths are open is decided by the super-admin payment settings (PaymentPolicy).
         $manualOptions = app(ManualPaymentSettingsService::class)->publicOptions();
-        $runtime = $this->runtimeConfig();
-        $manualConfirmationEnabled = (string) ($runtime['checkout_mode'] ?? 'gateway_automatic') === 'manual_confirmation';
-        $manualEnabled = $manualConfirmationEnabled
-            && (bool) $manualOptions['enabled']
-            && count($manualOptions['methods']) > 0;
-        $provider = (string) ($runtime['active_provider'] ?? 'xendit');
-        $gatewayReady = $this->isGatewayReady($provider);
+        $policy = app(PaymentPolicy::class)->checkoutOptions();
+        $manualEnabled = $policy['manual'];
+        $provider = $policy['provider'];
+        $gatewayReady = $policy['gateway'];
         $paymentFlow = (string) ($validated['payment_flow'] ?? '');
         if ($paymentFlow === '') {
             $paymentFlow = $gatewayReady ? 'gateway' : ($manualEnabled ? 'manual' : 'gateway');
@@ -161,7 +159,11 @@ class ProductCheckoutService
         }
 
         if (!$gatewayReady) {
-            return $this->failure('Gateway pembayaran belum siap.', 'PAYMENT_GATEWAY_NOT_READY', 422);
+            return $this->failure(
+                $policy['gateway_ready'] ? 'Pembayaran otomatis sedang tidak diaktifkan. Silakan gunakan transfer manual.' : 'Gateway pembayaran belum siap.',
+                'PAYMENT_GATEWAY_NOT_READY',
+                422
+            );
         }
 
         // In-dashboard direct charge: render VA/QRIS inside Hellom instead of
@@ -242,19 +244,17 @@ class ProductCheckoutService
     public function publicPaymentOptions(): array
     {
         $manualOptions = app(ManualPaymentSettingsService::class)->publicOptions();
-        $runtime = $this->runtimeConfig();
-        $provider = (string) ($runtime['active_provider'] ?? 'xendit');
-        $manualEnabled = (string) ($runtime['checkout_mode'] ?? 'gateway_automatic') === 'manual_confirmation'
-            && (bool) $manualOptions['enabled']
-            && count($manualOptions['methods']) > 0;
+        $policy = app(PaymentPolicy::class)->checkoutOptions();
+        $provider = $policy['provider'];
+        $manualEnabled = $policy['manual'];
 
         return [
             'gateway' => [
                 'provider' => $provider,
-                'ready' => $this->isGatewayReady($provider),
+                'ready' => $policy['gateway'],
                 // iPaymu supports rendering VA/QRIS on our page; others redirect to a hosted page.
                 'channels' => $provider === 'ipaymu'
-                    ? collect($this->ipaymuChannels())->map(fn (array $c, string $key) => ['key' => $key, 'label' => $c[2], 'type' => $c[0]])->values()->all()
+                    ? collect(app(IpaymuSettingsService::class)->enabledDirectChannels())->map(fn (array $c, string $key) => ['key' => $key, 'label' => $c[2], 'type' => $c[0]])->values()->all()
                     : [],
             ],
             'manual' => [
@@ -346,31 +346,6 @@ class ProductCheckoutService
     }
 
     /**
-     * @return array{
-     *   active_provider:string,
-     *   checkout_mode:string,
-     *   member_wallet_enabled:bool
-     * }
-     */
-    private function runtimeConfig(): array
-    {
-        return app(PaymentGatewaySettingsService::class)->getRuntimeConfig();
-    }
-
-    private function isGatewayReady(string $provider): bool
-    {
-        if ($provider === 'ipaymu') {
-            return app(IpaymuSettingsService::class)->isReady();
-        }
-
-        if ($provider === 'doku') {
-            return app(DokuSettingsService::class)->isReady();
-        }
-
-        return app(XenditSettingsService::class)->isReady();
-    }
-
-    /**
      * @param array<string,mixed> $context
      */
     private function preparePurchase(User $user, DigitalProduct $product, ?ProductPurchase $existing, array $context): ProductPurchase
@@ -407,7 +382,7 @@ class ProductCheckoutService
     {
         $url = (string) ($context['return_url'] ?? '');
 
-        return $url !== '' ? $url : url("/hellom/dashboard/products/{$product->slug}");
+        return $url !== '' ? $url : FrontendUrl::to("/dashboard/products/{$product->slug}");
     }
 
     /**
@@ -423,6 +398,7 @@ class ProductCheckoutService
                 'product' => [(string) $product->name],
                 'qty' => [1],
                 'price' => [(int) $product->price],
+                'paymentMethod' => app(IpaymuSettingsService::class)->enabledPaymentMethods(),
                 'referenceId' => (string) $purchase->transaction_code,
                 'description' => ["Pembelian {$product->name}"],
                 'buyerName' => (string) $user->name,
@@ -496,6 +472,8 @@ class ProductCheckoutService
             'locale' => 'id',
             'capture_method' => 'AUTOMATIC',
             'allow_save_payment_method' => 'DISABLED',
+            'success_return_url' => $returnUrl,
+            'cancel_return_url' => $returnUrl,
             'description' => "Pembelian {$product->name}",
             'items' => [
                 [
@@ -535,8 +513,10 @@ class ProductCheckoutService
      */
     private function ipaymuNotifyUrl(array $params): string
     {
+        // IpaymuWebhookController rejects notifications without the callback token.
+        $params['token'] = (string) app(IpaymuSettingsService::class)->getConfig()['callback_token'];
         $base = url('/api/v1/hellom/webhooks/ipaymu');
-        $query = http_build_query($params);
+        $query = http_build_query(array_filter($params, fn ($value) => $value !== '' && $value !== null));
 
         return $query !== '' ? $base . '?' . $query : $base;
     }
@@ -557,34 +537,14 @@ class ProductCheckoutService
     }
 
     /**
-     * Supported iPaymu direct-charge channels mapped to [paymentMethod, paymentChannel, label].
-     *
-     * @return array<string,array{0:string,1:string,2:string}>
-     */
-    private function ipaymuChannels(): array
-    {
-        return [
-            'qris' => ['qris', 'qris', 'QRIS'],
-            'bca' => ['va', 'bca', 'BCA Virtual Account'],
-            'bni' => ['va', 'bni', 'BNI Virtual Account'],
-            'bri' => ['va', 'bri', 'BRI Virtual Account'],
-            'mandiri' => ['va', 'mandiri', 'Mandiri Virtual Account'],
-            'permata' => ['va', 'permata', 'Permata Virtual Account'],
-            'cimb' => ['va', 'cimb', 'CIMB Niaga Virtual Account'],
-            'indomaret' => ['cstore', 'indomaret', 'Indomaret'],
-            'alfamart' => ['cstore', 'alfamart', 'Alfamart'],
-        ];
-    }
-
-    /**
      * @param array<string,mixed> $context
      * @return array<string,mixed>
      */
     private function createIpaymuDirectCharge(ProductPurchase $purchase, DigitalProduct $product, User $user, string $channelKey, array $context): array
     {
-        $channels = $this->ipaymuChannels();
+        $channels = app(IpaymuSettingsService::class)->enabledDirectChannels();
         if (!isset($channels[$channelKey])) {
-            throw new \RuntimeException('Channel pembayaran iPaymu tidak didukung.');
+            throw new \RuntimeException('Metode pembayaran ini sedang tidak tersedia. Silakan pilih metode lain.');
         }
 
         [$method, $channel, $label] = $channels[$channelKey];

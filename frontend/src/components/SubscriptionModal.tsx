@@ -87,6 +87,8 @@ type GatewayStatus = {
   checkout_mode: 'manual_confirmation' | 'gateway_automatic';
   member_wallet_enabled: boolean;
   manual_confirmation: { enabled: boolean; label: string };
+  // Effective path decided by the super-admin settings (backend PaymentPolicy).
+  checkout?: { gateway: boolean; manual: boolean; direct_mode: 'gateway_automatic' | 'manual_confirmation' | 'unavailable' };
   manual_payment?: {
     enabled: boolean;
     notes: string;
@@ -442,11 +444,12 @@ export default function SubscriptionModal({ isOpen, onClose, appName, appSlug, a
     await handleSubscribe(selectedPlan.slug);
   };
 
-  const forceManual = Boolean(gatewayStatus?.manual_payment?.enabled && gatewayStatus.manual_payment.methods?.length > 0);
-  const adjustedCheckoutMode = forceManual ? 'manual_confirmation' : gatewayStatus?.checkout_mode;
-  const isDirectAutoDisabled = paymentFlow === 'direct'
-    && adjustedCheckoutMode === 'gateway_automatic'
-    && !gatewayStatus?.is_ready;
+  // Automatic gateway, or manual confirmation (chosen by the admin, or as backup while the
+  // active gateway is not ready) — decided server-side by PaymentPolicy.
+  const directMode = gatewayStatus?.checkout?.direct_mode ?? gatewayStatus?.checkout_mode;
+  const usesManual = directMode === 'manual_confirmation';
+  const adjustedCheckoutMode = usesManual ? 'manual_confirmation' : 'gateway_automatic';
+  const isDirectAutoDisabled = paymentFlow === 'direct' && directMode === 'unavailable';
   const walletDisabled = !gatewayStatus?.member_wallet_enabled;
   const providerLabel = gatewayStatus?.active_provider === 'ipaymu' ? 'iPaymu' : gatewayStatus?.active_provider === 'doku' ? 'DOKU' : 'Xendit';
   const selectedPromo = selectedPlan ? promoByPlan[selectedPlan.slug] : null;
@@ -560,11 +563,11 @@ export default function SubscriptionModal({ isOpen, onClose, appName, appSlug, a
                   Pembayaran langsung
                 </div>
                 <p className="mt-1 text-xs text-zinc-500">
-                  {forceManual
-                    ? 'Pembayaran manual aktif - masuk antrean konfirmasi owner'
-                    : gatewayStatus?.checkout_mode === 'manual_confirmation'
-                      ? 'Masuk antrean konfirmasi owner'
-                      : gatewayStatus?.is_ready
+                  {usesManual
+                    ? gatewayStatus?.checkout_mode === 'gateway_automatic'
+                      ? `${providerLabel} belum siap - sementara lewat konfirmasi manual owner`
+                      : 'Masuk antrean konfirmasi owner'
+                    : gatewayStatus?.is_ready
                         ? `${providerLabel} ${gatewayStatus.mode} aktif`
                         : `${providerLabel} belum siap penuh`}
                 </p>
@@ -577,7 +580,7 @@ export default function SubscriptionModal({ isOpen, onClose, appName, appSlug, a
               </div>
             )}
 
-            {paymentFlow === 'direct' && ((gatewayStatus?.checkout_mode === 'manual_confirmation' && gatewayStatus.manual_payment?.methods?.length) || (gatewayStatus?.manual_payment?.enabled && gatewayStatus.manual_payment.methods?.length)) ? (
+            {paymentFlow === 'direct' && usesManual && gatewayStatus?.manual_payment?.methods?.length ? (
               <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-4">
                 <p className="text-sm font-semibold text-zinc-950">Pilih metode pembayaran</p>
                 <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -616,14 +619,14 @@ export default function SubscriptionModal({ isOpen, onClose, appName, appSlug, a
                   <p className="font-semibold text-zinc-900">
                     {paymentFlow === 'wallet'
                       ? 'Wallet menjadi jalur tercepat untuk aktivasi.'
-                      : gatewayStatus?.checkout_mode === 'manual_confirmation'
+                      : usesManual
                         ? 'Owner saat ini memakai konfirmasi manual untuk pembayaran langsung.'
                         : `Owner saat ini memakai mode pembayaran otomatis berbasis ${providerLabel}.`}
                   </p>
                   <p className="mt-1">
                     {paymentFlow === 'direct' && isDirectAutoDisabled
                       ? `Mode otomatis dipilih owner, tetapi kredensial ${providerLabel} belum lengkap di backend.`
-                      : paymentFlow === 'direct' && gatewayStatus?.checkout_mode === 'manual_confirmation'
+                      : paymentFlow === 'direct' && usesManual
                         ? 'Instruksi pembayaran manual akan dikirim ke email pembeli dan owner menerima notifikasi untuk proses konfirmasi.'
                         : 'Flow ini memakai jalur billing Hellom yang sama dengan dashboard owner.'}
                   </p>

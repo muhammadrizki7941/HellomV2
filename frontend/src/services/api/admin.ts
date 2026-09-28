@@ -230,6 +230,7 @@ export type AdminPaymentGatewayConfig = {
   checkout_mode: 'manual_confirmation' | 'gateway_automatic';
   member_wallet_enabled: boolean;
   sale_commission_percent: number;
+  guest_checkout_enabled?: boolean;
   providers: {
     xendit: GatewayProviderCard & {
       secret_key_masked: string | null;
@@ -241,6 +242,8 @@ export type AdminPaymentGatewayConfig = {
       api_key_masked: string | null;
       callback_token_masked: string | null;
       payment_methods?: string[];
+      direct_channels?: string[];
+      available_direct_channels?: Array<{ key: string; label: string; group: string }>;
     };
     doku: GatewayProviderCard & {
       client_id_masked: string | null;

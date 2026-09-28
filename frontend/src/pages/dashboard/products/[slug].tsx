@@ -89,19 +89,6 @@ type Purchase = {
   created_at?: string | null;
 };
 
-// Channels supported by the iPaymu direct-charge (in-dashboard) flow.
-const IPAYMU_CHANNELS: Array<{ key: string; label: string; type: 'qris' | 'va' }> = [
-  { key: 'qris', label: 'QRIS (semua e-wallet & m-banking)', type: 'qris' },
-  { key: 'bca', label: 'BCA Virtual Account', type: 'va' },
-  { key: 'bni', label: 'BNI Virtual Account', type: 'va' },
-  { key: 'bri', label: 'BRI Virtual Account', type: 'va' },
-  { key: 'mandiri', label: 'Mandiri Virtual Account', type: 'va' },
-  { key: 'permata', label: 'Permata Virtual Account', type: 'va' },
-  { key: 'cimb', label: 'CIMB Niaga Virtual Account', type: 'va' },
-  { key: 'indomaret', label: 'Indomaret (bayar di kasir)', type: 'va' },
-  { key: 'alfamart', label: 'Alfamart (bayar di kasir)', type: 'va' },
-];
-
 type ManualPaymentMethod = {
   key: string;
   label: string;
@@ -115,6 +102,10 @@ type ManualPaymentMethod = {
 type GatewayStatus = {
   provider?: string;
   is_ready?: boolean;
+  // Effective checkout paths decided by the super-admin settings (PaymentPolicy).
+  checkout?: { gateway: boolean; manual: boolean; direct_mode: string };
+  // iPaymu channels the super admin enabled for on-page VA/QRIS.
+  direct_channels?: Array<{ key: string; label: string; type: string }>;
   supports?: Record<string, boolean>;
   manual_confirmation?: {
     enabled?: boolean;
@@ -329,15 +320,19 @@ export default function ProductSlugPage(): ReactElement {
   const isPendingManual = isPending && purchase?.payment_gateway === 'manual';
   const isPendingGateway = isPending && purchase?.payment_gateway !== 'manual';
   const isFree = product?.type === 'free' || (product?.price || 0) === 0;
-  const gatewayReady = Boolean(gatewayStatus?.is_ready);
-  const isIpaymu = gatewayStatus?.provider === 'ipaymu';
+  const directChannels = useMemo(() => gatewayStatus?.direct_channels ?? [], [gatewayStatus]);
+  // On-page VA/QRIS (iPaymu direct charge) when the admin left at least one channel on;
+  // otherwise the buyer goes to the gateway's hosted page.
+  const usesDirectCharge = gatewayStatus?.provider === 'ipaymu' && directChannels.length > 0;
   const gatewayInstructions = isPendingGateway ? purchase?.payment_instructions || null : null;
-  const manualConfirmationEnabled = Boolean(gatewayStatus?.manual_confirmation?.enabled);
-  const manualEnabled = manualConfirmationEnabled
-    && Boolean(gatewayStatus?.manual_payment?.enabled)
-    && manualMethods.length > 0;
-  const supportsManual = manualEnabled;
-  const canUseGateway = !isFree && gatewayReady;
+  useEffect(() => {
+    if (directChannels.length > 0 && !directChannels.some((channel) => channel.key === gatewayChannel)) {
+      setGatewayChannel(directChannels[0].key);
+    }
+  }, [directChannels, gatewayChannel]);
+
+  const supportsManual = Boolean(gatewayStatus?.checkout?.manual) && manualMethods.length > 0;
+  const canUseGateway = !isFree && Boolean(gatewayStatus?.checkout?.gateway);
   const canUseManual = !isFree && supportsManual;
   const paymentFlowOptions = [canUseGateway, canUseManual].filter(Boolean).length;
 
@@ -522,7 +517,7 @@ export default function ProductSlugPage(): ReactElement {
 
     try {
       const resolvedManualMethod = manualMethod || manualMethods[0]?.key || '';
-      const useDirectGateway = !isFree && paymentFlow === 'gateway' && isIpaymu;
+      const useDirectGateway = !isFree && paymentFlow === 'gateway' && usesDirectCharge;
       const response = await purchaseProduct(product.id, {
         payment_flow: isFree ? undefined : paymentFlow,
         manual_payment_method: !isFree && paymentFlow === 'manual' ? resolvedManualMethod : undefined,
@@ -731,7 +726,7 @@ export default function ProductSlugPage(): ReactElement {
                           Pembayaran via {gatewayLabel(gatewayStatus?.provider)}
                         </div>
                         <p className="mt-1 text-sm text-zinc-600">
-                          {isIpaymu
+                          {usesDirectCharge
                             ? 'Bayar langsung di halaman ini lewat QRIS atau Virtual Account — tanpa keluar dashboard. Status diperbarui otomatis.'
                             : 'Kamu akan diarahkan ke halaman pembayaran aman dan status diperbarui otomatis setelah berhasil.'}
                         </p>
@@ -739,7 +734,7 @@ export default function ProductSlugPage(): ReactElement {
                     </label>
                   )}
 
-                  {canUseGateway && paymentFlow === 'gateway' && isIpaymu && (
+                  {canUseGateway && paymentFlow === 'gateway' && usesDirectCharge && (
                     <div className="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
                       <label htmlFor="gateway-channel" className="text-sm font-semibold text-zinc-900">
                         Pilih metode pembayaran
@@ -750,7 +745,7 @@ export default function ProductSlugPage(): ReactElement {
                         onChange={(event) => setGatewayChannel(event.target.value)}
                         className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-3 text-sm text-zinc-900 outline-none focus:border-zinc-400"
                       >
-                        {IPAYMU_CHANNELS.map((channel) => (
+                        {directChannels.map((channel) => (
                           <option key={channel.key} value={channel.key}>
                             {channel.label}
                           </option>
@@ -1186,8 +1181,8 @@ export default function ProductSlugPage(): ReactElement {
                   <p className="mt-2 text-sm text-zinc-700">
                     {paymentFlow === 'manual'
                       ? `Setelah konfirmasi, kamu akan mendapat instruksi pembayaran via ${paymentMethodLabel(manualMethod, manualMethods)}.`
-                      : isIpaymu
-                        ? `Setelah konfirmasi, instruksi ${IPAYMU_CHANNELS.find((channel) => channel.key === gatewayChannel)?.label || 'pembayaran'} akan tampil langsung di halaman ini.`
+                      : usesDirectCharge
+                        ? `Setelah konfirmasi, instruksi ${directChannels.find((channel) => channel.key === gatewayChannel)?.label || 'pembayaran'} akan tampil langsung di halaman ini.`
                         : `Kamu akan diarahkan ke halaman pembayaran ${gatewayLabel(gatewayStatus?.provider)} dan status diperbarui otomatis.`}
                   </p>
                 </div>

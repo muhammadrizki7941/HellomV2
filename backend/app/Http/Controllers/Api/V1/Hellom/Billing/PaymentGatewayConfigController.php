@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Hellom\Billing;
 
 use App\Http\Controllers\Api\V1\Hellom\BaseApiController;
 use App\Http\Controllers\Api\V1\Hellom\Billing\Concerns\InteractsWithPaymentGateways;
+use App\Services\Billing\PaymentPolicy;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -67,6 +68,21 @@ class PaymentGatewayConfigController extends BaseApiController
             ],
             'manual_payment' => $manualConfig,
             'balance' => $balance,
+            // Channels the super admin enabled for iPaymu direct charge (VA/QRIS on our page).
+            'direct_channels' => $provider === 'ipaymu'
+                ? collect($this->ipaymuSettings()->enabledDirectChannels())
+                    ->map(fn (array $channel, string $key) => ['key' => $key, 'label' => $channel[2], 'type' => $channel[0]])
+                    ->values()
+                    ->all()
+                : [],
+            'guest_checkout_enabled' => (bool) $runtime['guest_checkout_enabled'],
+            // Effective paths for subscription/product checkout (PaymentPolicy): the
+            // frontend follows these instead of re-deriving rules from raw settings.
+            'checkout' => (function () {
+                $policy = app(PaymentPolicy::class)->checkoutOptions();
+
+                return ['gateway' => $policy['gateway'], 'manual' => $policy['manual'], 'direct_mode' => $policy['direct_mode']];
+            })(),
         ], 'Payment gateway status');
     }
 
@@ -98,6 +114,7 @@ class PaymentGatewayConfigController extends BaseApiController
             'checkout_mode' => (string) $runtime['checkout_mode'],
             'member_wallet_enabled' => (bool) $runtime['member_wallet_enabled'],
             'sale_commission_percent' => (float) $runtime['sale_commission_percent'],
+            'guest_checkout_enabled' => (bool) $runtime['guest_checkout_enabled'],
             'providers' => [
                 'xendit' => [
                     ...$xendit,
@@ -142,6 +159,8 @@ class PaymentGatewayConfigController extends BaseApiController
             'payment_method_types' => ['nullable'],
             'payment_methods' => ['nullable', 'array'],
             'payment_methods.*' => ['string', 'max:30'],
+            'direct_channels' => ['nullable', 'array'],
+            'direct_channels.*' => ['string', 'max:30'],
         ]);
 
         $provider = (string) $validated['provider'];
@@ -156,6 +175,7 @@ class PaymentGatewayConfigController extends BaseApiController
                 'callback_token' => $validated['callback_token'] ?? null,
                 'is_production' => $validated['is_production'],
                 'payment_methods' => $validated['payment_methods'] ?? null,
+                'direct_channels' => $validated['direct_channels'] ?? null,
             ]);
         } elseif ($provider === 'doku') {
             $config = $this->dokuSettings()->saveConfig([
@@ -286,6 +306,7 @@ class PaymentGatewayConfigController extends BaseApiController
             'checkout_mode' => ['required', 'in:manual_confirmation,gateway_automatic,xendit_automatic'],
             'member_wallet_enabled' => ['required', 'boolean'],
             'sale_commission_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'guest_checkout_enabled' => ['nullable', 'boolean'],
         ]);
 
         return $this->ok(

@@ -10,13 +10,15 @@ class PaymentGatewaySettingsService
     private const CHECKOUT_MODE = 'hellom_checkout_mode';
     private const MEMBER_WALLET_ENABLED = 'hellom_member_wallet_enabled';
     private const SALE_COMMISSION_PERCENT = 'hellom_sale_commission_percent';
+    private const GUEST_CHECKOUT_ENABLED = 'hellom_guest_checkout_enabled';
 
     /**
      * @return array{
      *   active_provider:string,
      *   checkout_mode:string,
      *   member_wallet_enabled:bool,
-     *   sale_commission_percent:float
+     *   sale_commission_percent:float,
+     *   guest_checkout_enabled:bool
      * }
      */
     public function getRuntimeConfig(): array
@@ -43,6 +45,8 @@ class PaymentGatewaySettingsService
                 : 'manual_confirmation',
             'member_wallet_enabled' => (bool) $memberWalletEnabled,
             'sale_commission_percent' => $commission,
+            // Digital products can be bought without logging in (default on).
+            'guest_checkout_enabled' => filter_var(SystemSetting::get(self::GUEST_CHECKOUT_ENABLED, '1'), FILTER_VALIDATE_BOOLEAN),
         ];
     }
 
@@ -85,6 +89,11 @@ class PaymentGatewaySettingsService
             $commission = max(0.0, min(100.0, (float) $payload['sale_commission_percent']));
             $current['sale_commission_percent'] = $commission;
             SystemSetting::set(self::SALE_COMMISSION_PERCENT, (string) $commission);
+        }
+
+        if (array_key_exists('guest_checkout_enabled', $payload) && $payload['guest_checkout_enabled'] !== null) {
+            $current['guest_checkout_enabled'] = (bool) $payload['guest_checkout_enabled'];
+            SystemSetting::set(self::GUEST_CHECKOUT_ENABLED, $current['guest_checkout_enabled'] ? '1' : '0');
         }
 
         return $current;

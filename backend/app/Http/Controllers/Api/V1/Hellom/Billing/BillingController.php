@@ -14,6 +14,8 @@ use App\Models\User;
 use App\Services\Billing\CheckoutNotifier;
 use App\Services\Hellom\SubscriptionCheckoutActivationService;
 use App\Services\NotificationService;
+use App\Services\Billing\PaymentPolicy;
+use App\Support\FrontendUrl;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -93,9 +95,13 @@ class BillingController extends BaseApiController
         $manualPaymentMethod = isset($validated['manual_payment_method']) ? (string) $validated['manual_payment_method'] : null;
         $manualPaymentOptions = $this->manualPaymentSettings()->publicOptions();
 
-        // If manual payment is enabled, force manual confirmation mode
-        if ($paymentFlow === 'direct' && $manualPaymentOptions['enabled'] && count($manualPaymentOptions['methods']) > 0) {
-            $checkoutMode = 'manual_confirmation';
+        // The super-admin settings decide (PaymentPolicy): automatic gateway, or manual
+        // confirmation — which also serves as backup while the active gateway is not ready.
+        if ($paymentFlow === 'direct') {
+            $directMode = app(PaymentPolicy::class)->checkoutOptions()['direct_mode'];
+            if ($directMode !== 'unavailable') {
+                $checkoutMode = $directMode;
+            }
         }
 
         if ($paymentFlow === 'direct' && $checkoutMode === 'manual_confirmation') {
@@ -259,8 +265,8 @@ class BillingController extends BaseApiController
                             'amount' => (int) $intent->amount,
                             'invoice_number' => (string) ($invoice?->invoice_number ?? $intent->intent_token),
                             'currency' => 'IDR',
-                            'callback_url' => url('/hellom/dashboard/payments'),
-                            'callback_url_result' => url('/hellom/dashboard/payments'),
+                            'callback_url' => FrontendUrl::to('/dashboard/payments'),
+                            'callback_url_result' => FrontendUrl::to('/dashboard/payments'),
                             'language' => 'ID',
                             'auto_redirect' => false,
                             'line_items' => [
@@ -317,6 +323,8 @@ class BillingController extends BaseApiController
                         'locale' => 'id',
                         'capture_method' => 'AUTOMATIC',
                         'allow_save_payment_method' => 'DISABLED',
+                        'success_return_url' => FrontendUrl::to('/dashboard/payments'),
+                        'cancel_return_url' => FrontendUrl::to('/dashboard/payments'),
                         'description' => "Aktivasi {$app->name} - {$plan->name}",
                         'items' => [
                             [
@@ -489,8 +497,8 @@ class BillingController extends BaseApiController
                         'amount' => (int) $validated['amount'],
                         'invoice_number' => $referenceId,
                         'currency' => 'IDR',
-                        'callback_url' => url('/hellom/dashboard/payments'),
-                        'callback_url_result' => url('/hellom/dashboard/payments'),
+                        'callback_url' => FrontendUrl::to('/dashboard/payments'),
+                        'callback_url_result' => FrontendUrl::to('/dashboard/payments'),
                         'language' => 'ID',
                         'auto_redirect' => false,
                         'line_items' => [
@@ -530,6 +538,8 @@ class BillingController extends BaseApiController
                     'locale' => 'id',
                     'capture_method' => 'AUTOMATIC',
                     'allow_save_payment_method' => 'DISABLED',
+                    'success_return_url' => FrontendUrl::to('/dashboard/payments'),
+                    'cancel_return_url' => FrontendUrl::to('/dashboard/payments'),
                     'description' => 'Top up saldo wallet Hellom',
                     'items' => [
                         [

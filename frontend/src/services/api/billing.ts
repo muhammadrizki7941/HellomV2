@@ -59,6 +59,11 @@ export type PaymentGatewayStatus = {
   providers: Record<string, Record<string, unknown>>;
   manual_payment: { enabled: boolean; methods: Array<Record<string, unknown>> } & Record<string, unknown>;
   balance: { currency: string; amount: number } | null;
+  // iPaymu channels enabled by the super admin for on-page VA/QRIS.
+  direct_channels: Array<{ key: string; label: string; type: string }>;
+  guest_checkout_enabled: boolean;
+  // Effective checkout paths decided by the admin settings (backend PaymentPolicy).
+  checkout: { gateway: boolean; manual: boolean; direct_mode: 'gateway_automatic' | 'manual_confirmation' | 'unavailable' };
 };
 
 export function getPaymentGatewayStatus() {

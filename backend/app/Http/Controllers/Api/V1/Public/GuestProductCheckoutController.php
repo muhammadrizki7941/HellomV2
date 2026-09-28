@@ -9,6 +9,8 @@ use App\Models\User;
 use App\Services\DigitalProducts\ProductAccessMailer;
 use App\Services\DigitalProducts\ProductCheckoutService;
 use App\Services\Hellom\ManualPaymentSettingsService;
+use App\Services\Hellom\PaymentGatewaySettingsService;
+use App\Support\FrontendUrl;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -81,7 +83,6 @@ class GuestProductCheckoutController extends BaseApiController
         }
 
         $token = Str::random(48);
-        $frontend = rtrim((string) config('app.frontend_url'), '/');
 
         $result = $checkout->start($user, $product, [
             'payment_flow' => $validated['payment_flow'] ?? null,
@@ -90,7 +91,7 @@ class GuestProductCheckoutController extends BaseApiController
         ], [
             'guest_token_hash' => hash('sha256', $token),
             'buyer_phone' => $phone ?: null,
-            'return_url' => "{$frontend}/produk/checkout/{$token}",
+            'return_url' => FrontendUrl::to("/produk/checkout/{$token}"),
         ]);
 
         if (!$result['ok']) {
@@ -182,10 +183,14 @@ class GuestProductCheckoutController extends BaseApiController
             ->first();
     }
 
-    /** Paid, one-time products only; free and subscription-only products keep the login flow. */
+    /**
+     * Paid, one-time products only, and only while the super admin keeps guest checkout
+     * on (Admin → Settings → Payment). Free and subscription-only products keep the login flow.
+     */
     private function guestCheckoutAllowed(DigitalProduct $product): bool
     {
-        return $product->type !== 'free'
+        return (bool) app(PaymentGatewaySettingsService::class)->getRuntimeConfig()['guest_checkout_enabled']
+            && $product->type !== 'free'
             && $product->type !== 'subscription_locked'
             && (int) $product->price > 0;
     }
