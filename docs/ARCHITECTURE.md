@@ -41,6 +41,10 @@ backend/
 frontend/src/
   App.tsx                        router; halaman di-lazy-load per route
   pages/, components/, layouts/, hooks/
+  layouts/PublicLayout.tsx       situs publik: navbar/footer tetap, transisi curtain antar halaman
+  pages/site/*, components/site/*  halaman publik (/, /tentang, /layanan, /aplikasi[/:slug], /produk,
+                                 /portofolio, /wawasan[/:slug], /kontak) + primitif animasi
+  data/{siteNav,apps}.ts         menu publik + katalog aplikasi (tambah aplikasi di apps.ts)
   services/api/                  klien API per modul (client, auth, organizations, billing, admin, consumer,
                                  landing, store, pos, posCustomer, posStaff, content, member) + index barrel
   lib/hellomApi.ts               barrel kompatibilitas → services/api
@@ -76,6 +80,8 @@ deploy/                          PM2, contoh Nginx, crontab, deploy.sh
 | Member loyalti | tanpa password: lookup nomor HP (`/pos/public/members/*`). |
 
 ## 5. Alur utama
+
+**Situs publik**: semua halaman publik adalah route anak `PublicLayout` (lazy per halaman; chunk halaman lain di-*prefetch* saat idle). Transisi: `AnimatePresence mode="wait"` + curtain (framer-motion `LazyMotion`/`m`, easing `0.76,0,0.24,1`), scroll ke atas setelah halaman lama keluar, Lenis hanya di desktop, preloader sekali per sesi, semua animasi jadi fade 150 ms saat `prefers-reduced-motion`. URL lama tetap jalan: `/#about` dst. → route baru, `/insights[/:slug]` → `/wawasan`, `/contact` → `/kontak`. Route organisasi `/:organizationSlug` tetap di bawahnya, jadi slug `tentang/layanan/aplikasi/portofolio/wawasan/kontak` tidak bisa dipakai organisasi.
 
 **Self-order**: QR meja → `GET /pos/customer/menu/{tableToken}` → `POST /pos/customer/order` (harga dari DB, produk harus milik tenant meja, status `unpaid`) → halaman sukses mem-*poll* `GET /pos/customer/order/{orderNumber}?table_token=…` (token meja wajib; nomor order saja tidak cukup).
 

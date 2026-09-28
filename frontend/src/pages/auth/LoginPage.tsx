@@ -1,9 +1,9 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Eye, EyeOff } from 'lucide-react';
+import { LazyMotion, domAnimation, m, useReducedMotion } from 'framer-motion';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { login, setSession, setActiveOutletId } from '@/lib/hellomApi';
 import useBrand from '@/hooks/useBrand';
-import { AuthLayout } from '@/components/auth';
 import { continuePendingCheckoutAfterAuth } from '@/lib/checkoutIntent';
 
 export default function LoginPage() {
@@ -15,6 +15,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const reduced = useReducedMotion();
 
   const targetApp = searchParams.get('app');
   const subscribeIntent = searchParams.get('subscribe') === '1';
@@ -101,78 +102,118 @@ export default function LoginPage() {
   };
 
   return (
-    <AuthLayout brand={brand} logoSrc={logoSrc} variant="login" footerText={brand.footer_text}>
-      <section
-        className="rounded-[28px] border border-white/[0.08] bg-white/[0.035] p-6 text-[#F5F5F2] shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:p-8"
-      >
-        <div className="mb-6 space-y-2">
-          <p className="text-xs uppercase tracking-[0.3em] text-[#F6B400]">Masuk ke Hellom</p>
-          <h2 className="text-2xl font-semibold" style={{ fontFamily: 'Inter, "Plus Jakarta Sans", "Geist", sans-serif' }}>
-            Selamat datang kembali
-          </h2>
-          <p className="text-sm text-[#8B8B90]">Masuk untuk mengelola bisnis, POS payment, dan produk digital Anda.</p>
-          {contextText && (
-            <div className="rounded-2xl border border-[#F6B400]/30 bg-[#F6B400]/10 px-4 py-3 text-xs font-medium text-[#F5F5F2]">
-              {contextText}
-            </div>
-          )}
-        </div>
+    <LazyMotion features={domAnimation} strict>
+      <div className="relative flex min-h-screen flex-col bg-[#050505] text-[#F5F5F2]">
+        {/* One very soft gold glow + static grain; nothing else competes with the form. */}
+        <div aria-hidden className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_50%_30%,rgba(246,180,0,.10),transparent_45%)]" />
+        <div aria-hidden className="bg-grain pointer-events-none fixed inset-0 opacity-[0.04]" />
 
-        <form className="space-y-4" onSubmit={handleSubmit}>
-          <div>
-            <label className="mb-2 block text-sm font-medium text-white/80">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="h-[54px] w-full rounded-2xl border border-white/[0.10] bg-black/35 px-4 text-[15px] text-white placeholder:text-white/35 focus:border-[#F6B400] focus:outline-none focus:ring-4 focus:ring-[#F6B400]/15"
-              placeholder="nama@email.com"
-            />
-          </div>
+        <header className="relative z-10 px-6 py-6">
+          <Link to="/" className="inline-flex min-h-11 items-center">
+            {logoSrc ? (
+              <img src={logoSrc} alt={brand.app_name || 'Hellom'} className="h-7 w-auto object-contain" />
+            ) : (
+              <span className="text-xl font-black">Hell<span className="text-[#F6B400]">om</span></span>
+            )}
+            <span className="sr-only"> — kembali ke Beranda</span>
+          </Link>
+        </header>
 
-          <div>
-            <label className="mb-2 block text-sm font-medium text-white/80">Password</label>
-            <div className="relative">
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="h-[54px] w-full rounded-2xl border border-white/[0.10] bg-black/35 px-4 pr-12 text-[15px] text-white placeholder:text-white/35 focus:border-[#F6B400] focus:outline-none focus:ring-4 focus:ring-[#F6B400]/15"
-                placeholder="Masukkan password"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-white/45 hover:text-white"
-              >
-                {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-              </button>
-            </div>
-          </div>
-
-          {error && <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="flex h-[54px] w-full items-center justify-center rounded-2xl bg-[#F6B400] text-sm font-bold text-[#050505] shadow-[0_16px_34px_rgba(246,180,0,0.22)] transition-transform duration-200 hover:-translate-y-0.5 hover:bg-[#FFCC47] disabled:opacity-50"
+        <main className="relative z-10 flex flex-1 items-center justify-center px-5 pb-16">
+          <m.section
+            aria-labelledby="judul-masuk"
+            className="w-full max-w-[400px] rounded-2xl border border-white/[0.10] bg-[#0B0B0E]/85 p-7 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl sm:p-8"
+            initial={reduced ? { opacity: 0 } : { opacity: 0, y: 20 }}
+            animate={reduced ? { opacity: 1 } : { opacity: 1, y: 0 }}
+            transition={{ duration: reduced ? 0.15 : 0.6, ease: [0.22, 1, 0.36, 1] }}
           >
-            {loading ? 'Memproses...' : 'Masuk ke Dashboard'}
-          </button>
-        </form>
+            <h1 id="judul-masuk" className="overflow-hidden font-display text-3xl font-medium leading-tight sm:text-4xl">
+              <m.span
+                className="block"
+                initial={reduced ? { opacity: 0 } : { y: '100%' }}
+                animate={reduced ? { opacity: 1 } : { y: '0%' }}
+                transition={{ duration: reduced ? 0.15 : 0.6, ease: [0.22, 1, 0.36, 1], delay: reduced ? 0 : 0.08 }}
+              >
+                Masuk ke Hellom
+              </m.span>
+            </h1>
+            {contextText ? (
+              <p className="mt-4 rounded-xl border border-[#F6B400]/25 bg-[#F6B400]/[0.08] px-4 py-3 text-xs leading-relaxed text-[#E8E8EA]">
+                {contextText}
+              </p>
+            ) : null}
 
-        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 text-sm text-[#8B8B90]">
-          <Link to="/forgot-password" className="hover:text-white">
-            Lupa password?
-          </Link>
-          <Link to={registerHref} className="font-semibold text-[#F6B400] hover:underline">
-            Belum punya akun? Daftar gratis
-          </Link>
-        </div>
-      </section>
-    </AuthLayout>
+            <form className="mt-7 space-y-4" onSubmit={handleSubmit}>
+              <div>
+                <label htmlFor="email" className="mb-2 block text-sm font-medium text-white/80">Email</label>
+                <input
+                  id="email"
+                  type="email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  aria-invalid={Boolean(error)}
+                  className="h-12 w-full rounded-xl border border-white/[0.12] bg-black/40 px-4 text-[15px] text-white placeholder:text-white/35 focus:border-[#F6B400] focus:outline-none focus:ring-4 focus:ring-[#F6B400]/25"
+                  placeholder="nama@email.com"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="password" className="mb-2 block text-sm font-medium text-white/80">Kata sandi</label>
+                <div className="relative">
+                  <input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    aria-invalid={Boolean(error)}
+                    aria-describedby={error ? 'galat-masuk' : undefined}
+                    className="h-12 w-full rounded-xl border border-white/[0.12] bg-black/40 px-4 pr-12 text-[15px] text-white placeholder:text-white/35 focus:border-[#F6B400] focus:outline-none focus:ring-4 focus:ring-[#F6B400]/25"
+                    placeholder="Masukkan kata sandi"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'}
+                    aria-pressed={showPassword}
+                    className="absolute right-1 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-lg text-white/55 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#F6B400]"
+                  >
+                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  </button>
+                </div>
+              </div>
+
+              {error ? (
+                <p id="galat-masuk" role="alert" className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+                  {error}
+                </p>
+              ) : null}
+
+              <button
+                type="submit"
+                disabled={loading}
+                aria-busy={loading}
+                className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#F6B400] text-sm font-bold text-[#050505] transition-colors hover:bg-[#FFCC47] focus:outline-none focus-visible:ring-4 focus-visible:ring-[#F6B400]/40 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
+                {loading ? 'Memproses...' : 'Masuk'}
+              </button>
+            </form>
+
+            <div className="mt-6 flex flex-wrap items-center justify-between gap-3 text-sm">
+              <Link to="/forgot-password" className="inline-flex min-h-11 items-center text-[#A1A1A6] hover:text-white">
+                Lupa kata sandi?
+              </Link>
+              <Link to={registerHref} className="inline-flex min-h-11 items-center font-semibold text-[#F6B400] hover:underline">
+                Daftar
+              </Link>
+            </div>
+          </m.section>
+        </main>
+      </div>
+    </LazyMotion>
   );
 }
-

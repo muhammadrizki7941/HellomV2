@@ -1,22 +1,30 @@
 import { lazy, Suspense } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Navigate, Routes, Route, useParams } from 'react-router-dom';
 import useBrand from '@/hooks/useBrand';
-import LandingPage from '@/pages/public/LandingPage';
+import {
+  AplikasiDetailPage,
+  AplikasiPage,
+  BerandaPage,
+  KontakPage,
+  LayananPage,
+  PortofolioPage,
+  ProdukPage,
+  TentangPage,
+  WawasanDetailPage,
+  WawasanPage,
+} from '@/pages/site';
+const PublicLayout = lazy(() => import('@/layouts/PublicLayout'));
 const PublicPage = lazy(() => import('@/pages/public/PublicPage'));
 const InvitationAcceptPage = lazy(() => import('@/pages/public/InvitationAcceptPage'));
 const LoginPage = lazy(() => import('@/pages/auth/LoginPage'));
 const RegisterPage = lazy(() => import('@/pages/auth/RegisterPage'));
 const ForgotPassword = lazy(() => import('@/pages/auth/ForgotPassword'));
-const ProdukPublicPage = lazy(() => import('@/pages/produk/index'));
 const GuestProductCheckoutPage = lazy(() => import('@/pages/produk/checkout'));
 const GuestCheckoutStatusPage = lazy(() => import('@/pages/produk/checkout-status'));
 const MagicLoginPage = lazy(() => import('@/pages/auth/MagicLoginPage'));
 const FaqPage = lazy(() => import('@/pages/public/FaqPage'));
 const RefundPolicyPage = lazy(() => import('@/pages/public/RefundPolicyPage'));
 const TermsPage = lazy(() => import('@/pages/public/TermsPage'));
-const ContactPage = lazy(() => import('@/pages/public/ContactPage'));
-const InsightsPage = lazy(() => import('@/pages/public/InsightsPage'));
-const InsightDetailPage = lazy(() => import('@/pages/public/InsightDetailPage'));
 const DashboardLayout = lazy(() => import('@/layouts/DashboardLayout'));
 const DashboardHome = lazy(() => import('@/pages/member/DashboardHome'));
 const MemberProfile = lazy(() => import('@/pages/member/MemberProfile'));
@@ -60,6 +68,12 @@ const PosReports = lazy(() => import('@/pages/pos/PosReports'));
 const PosExperienceCenter = lazy(() => import('@/pages/pos/PosExperienceCenter'));
 const PosLayout = lazy(() => import('@/layouts/PosLayout'));
 
+// Old article URLs (/insights/:slug) keep working.
+function InsightRedirect() {
+  const { slug = '' } = useParams();
+  return <Navigate to={`/wawasan/${slug}`} replace />;
+}
+
 function RouteFallback() {
   return (
     <div className="flex min-h-screen items-center justify-center" role="status" aria-label="Memuat">
@@ -74,8 +88,21 @@ export default function App() {
   return (
     <Suspense fallback={<RouteFallback />}>
       <Routes>
-        {/* Public Routes */}
-        <Route path="/" element={<LandingPage />} />
+        {/* Public site: persistent navbar/footer, curtain transitions between pages */}
+        <Route element={<PublicLayout />}>
+          <Route path="/" element={<BerandaPage />} />
+          <Route path="/tentang" element={<TentangPage />} />
+          <Route path="/layanan" element={<LayananPage />} />
+          <Route path="/aplikasi" element={<AplikasiPage />} />
+          <Route path="/aplikasi/:slug" element={<AplikasiDetailPage />} />
+          <Route path="/produk" element={<ProdukPage />} />
+          <Route path="/portofolio" element={<PortofolioPage />} />
+          <Route path="/wawasan" element={<WawasanPage />} />
+          <Route path="/wawasan/:slug" element={<WawasanDetailPage />} />
+          <Route path="/kontak" element={<KontakPage />} />
+        </Route>
+
+        {/* Other public routes */}
         <Route path="/p/demo" element={<PublicPage />} />
         <Route path="/p/landingpage/:organizationSlug" element={<PublicPage />} />
         <Route path="/p/domain/:domain" element={<PublicPage />} />
@@ -93,7 +120,6 @@ export default function App() {
         <Route path="/customer/:organizationSlug/member" element={<MemberPortalPage />} />
         <Route path="/customer/:organizationSlug/order/:tableToken/member" element={<MemberPortalPage />} />
 
-        <Route path="/produk" element={<ProdukPublicPage />} />
         <Route path="/produk/checkout/:token" element={<GuestCheckoutStatusPage />} />
         <Route path="/produk/:slug/checkout" element={<GuestProductCheckoutPage />} />
         <Route path="/auth/magic" element={<MagicLoginPage />} />
@@ -102,9 +128,10 @@ export default function App() {
         <Route path="/faq" element={<FaqPage />} />
         <Route path="/refund-policy" element={<RefundPolicyPage />} />
         <Route path="/terms" element={<TermsPage />} />
-        <Route path="/contact" element={<ContactPage />} />
-        <Route path="/insights" element={<InsightsPage />} />
-        <Route path="/insights/:slug" element={<InsightDetailPage />} />
+        {/* Old URLs from the single-page site */}
+        <Route path="/contact" element={<Navigate to="/kontak" replace />} />
+        <Route path="/insights" element={<Navigate to="/wawasan" replace />} />
+        <Route path="/insights/:slug" element={<InsightRedirect />} />
 
         {/* Short public landing page URL: domain/<org-slug>. Kept as a single-segment
             dynamic route so static routes above (login, produk, dashboard, ...) still win.

@@ -3,7 +3,6 @@ import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Clock, User } from 'lucide-react';
 import useBrand from '@/hooks/useBrand';
 import useSeo from '@/hooks/useSeo';
-import { Footer } from '@/components/landing/Footer';
 import { getImageUrl, getPublicInsightBySlug } from '@/lib/hellomApi';
 
 type ArticleDetail = {
@@ -39,9 +38,9 @@ const formatDate = (date?: string | null) => {
   return new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }).format(new Date(date));
 };
 
-export default function InsightDetailPage() {
+export default function WawasanDetailPage() {
   const { slug } = useParams();
-  const { brand, logoSrc } = useBrand();
+  const { brand } = useBrand();
   const brandName = brand.business_name || brand.app_name || 'Hellom';
 
   const [article, setArticle] = useState<ArticleDetail | null>(null);
@@ -82,7 +81,7 @@ export default function InsightDetailPage() {
   const seoDescription = article?.meta_description || article?.excerpt || '';
   const rawSeoImage = article?.og_image || article?.thumbnail || brand.logo_url;
   const seoImage = rawSeoImage ? getImageUrl(rawSeoImage) : undefined;
-  const canonicalUrl = `/insights/${slug || ''}`;
+  const canonicalUrl = `/wawasan/${slug || ''}`;
 
   useSeo({
     title: seoTitle,
@@ -117,29 +116,9 @@ export default function InsightDetailPage() {
   });
 
   return (
-    <div className="min-h-screen bg-[#050505] text-[#F5F5F2]">
-      <header className="border-b border-white/[0.08] px-6 py-4">
-        <div className="mx-auto flex max-w-3xl items-center justify-between gap-4">
-          <Link to="/" className="flex items-center gap-3">
-            {logoSrc ? (
-              <img src={logoSrc} alt={brandName} className="h-8 w-auto object-contain" />
-            ) : (
-              <span className="text-lg font-bold tracking-tight" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
-                Hell<span className="text-[#F6B400]">OM</span>
-              </span>
-            )}
-          </Link>
-          <Link
-            to="/insights"
-            className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm font-semibold text-zinc-300 hover:bg-white/5"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Semua Artikel
-          </Link>
-        </div>
-      </header>
+    <div className="text-[#F5F5F2]">
 
-      <main className="px-6 py-12">
+      <div className="px-5 pb-20 pt-32 md:px-10 md:pt-40">
         <div className="mx-auto max-w-3xl">
           {loading ? (
             <p className="text-sm text-zinc-500">Memuat artikel...</p>
@@ -147,7 +126,7 @@ export default function InsightDetailPage() {
             <div className="space-y-4 py-16 text-center">
               <h1 className="font-display text-3xl font-medium">Artikel tidak ditemukan</h1>
               <p className="text-sm text-zinc-400">Artikel yang kamu cari mungkin sudah dihapus atau belum dipublikasikan.</p>
-              <Link to="/insights" className="inline-flex items-center gap-2 rounded-lg border border-[#F6B400]/35 px-5 py-3 text-sm font-bold hover:bg-[#F6B400]/10">
+              <Link to="/wawasan" className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[#F6B400]/35 px-5 text-sm font-bold hover:bg-[#F6B400]/10">
                 Lihat artikel lain
               </Link>
             </div>
@@ -161,7 +140,7 @@ export default function InsightDetailPage() {
               <div className="mt-5 flex flex-wrap items-center gap-4 text-xs text-[#8B8B90]">
                 <span className="inline-flex items-center gap-1.5"><User className="h-3.5 w-3.5" /> {article.author || brandName}</span>
                 <span>{formatDate(article.published_at)}</span>
-                <span className="inline-flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" /> {article.read_time || 5} min read</span>
+                <span className="inline-flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" /> {article.read_time || 5} menit baca</span>
               </div>
 
               {article.thumbnail ? (
@@ -184,7 +163,7 @@ export default function InsightDetailPage() {
               ) : null}
 
               <div className="mt-12 border-t border-white/[0.08] pt-6">
-                <Link to="/insights" className="inline-flex items-center gap-2 text-sm font-semibold text-[#F6B400] hover:underline">
+                <Link to="/wawasan" className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-[#F6B400] hover:underline">
                   <ArrowLeft className="h-4 w-4" /> Kembali ke semua artikel
                 </Link>
               </div>
@@ -196,7 +175,7 @@ export default function InsightDetailPage() {
                     {related.map((item) => (
                       <Link
                         key={item.id}
-                        to={`/insights/${item.slug}`}
+                        to={`/wawasan/${item.slug}`}
                         className="group flex flex-col overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.03] transition hover:border-[#F6B400]/40"
                       >
                         <div className="aspect-[16/10] w-full overflow-hidden">
@@ -218,9 +197,7 @@ export default function InsightDetailPage() {
             </article>
           )}
         </div>
-      </main>
-
-      <Footer brand={brand} logoSrc={logoSrc} />
+      </div>
     </div>
   );
 }

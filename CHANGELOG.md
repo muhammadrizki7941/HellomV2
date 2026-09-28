@@ -40,6 +40,7 @@ Audit lengkap dan status per temuan: [docs/AUDIT.md](docs/AUDIT.md). Langkah dep
 - Unit test untuk periode akses dan status entitlement.
 
 ### Diubah
+- **Situs publik dipecah jadi halaman terpisah** (`/`, `/tentang`, `/layanan`, `/aplikasi` + detail, `/produk`, `/portofolio`, `/wawasan` + artikel, `/kontak`) dengan navbar/footer tetap, transisi curtain, katalog aplikasi baru, dan halaman login yang lebih bersih. URL lama di-redirect. JS awal Beranda ±139 KB gzip (sebelumnya ±150 KB), font Google tidak lagi memblokir render (FCP lokal 3,1 s → 0,5 s), foto hero AVIF/WebP (580 KB → 10–17 KB).
 - UI resmi dipindah `plans/UI` → **`frontend/`**; UI Blade lama dipensiunkan (Laravel kini hanya API + shell SPA).
 - `routes/api.php` dipecah per modul (`routes/api/*.php`), route identik.
 - `hellomApi.ts` (1.716 baris) dipecah ke `frontend/src/services/api/*` (export publik identik).
