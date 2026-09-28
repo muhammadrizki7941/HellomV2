@@ -96,15 +96,27 @@ export type PosOrderListItem = {
   table_label: string;
   service_type: string;
   status: string;
+  status_label?: string;
+  // Statuses the server accepts next (forward only, plus cancelled).
+  allowed_next?: string[];
   payment_status: string;
+  payment_method?: string | null;
+  order_source?: string | null;
+  table_bill_id?: number | null;
+  subtotal_amount?: number;
   total_amount: number;
   discount_amount: number;
+  points_discount_amount?: number;
+  service_amount?: number;
+  tax_amount?: number;
+  rounding_amount?: number;
   final_amount: number;
   member_id: number | null;
+  cancel_reason?: string | null;
   created_at: string;
   updated_at: string;
   items_count: number;
-  items: Array<{ id: number; product_name: string; quantity: number; unit_price: number; line_total: number }>;
+  items: Array<{ id: number; product_name: string; quantity: number; unit_price: number; line_total: number; options?: string[] }>;
 };
 
 export type PosReportPeriod = { start: string; end: string; days?: number };
@@ -152,6 +164,11 @@ export type PosTableRecord = {
   code: string;
   name: string | null;
   is_active: boolean;
+  outlet_id?: number | null;
+  token_rotated_at?: string | null;
+  // Old seeded tokens (e.g. "table-1") can be guessed: regenerate and reprint.
+  has_weak_token?: boolean;
+  open_bill_id?: number | null;
   created_at?: string | null;
   updated_at?: string | null;
 };
@@ -363,6 +380,7 @@ export type PosMemberSearchResult = {
   total_points: number;
   total_orders: number;
   total_spent: number;
+  redeemable_points?: number;
 };
 
 export function searchPosMembers(query: { q?: string; keyword?: string }) {
@@ -379,6 +397,11 @@ export type PosLoyaltySettings = {
   points_per_amount: number;
   min_spend_amount: number;
   max_points_per_order: number | null;
+  // Redemption: Rp value of one point (0 = off), limits and expiry (months, null = never).
+  redeem_value_per_point?: number;
+  min_redeem_points?: number;
+  max_redeem_points_per_order?: number | null;
+  points_expire_months?: number | null;
 };
 
 export function getPosLoyaltySettings() {

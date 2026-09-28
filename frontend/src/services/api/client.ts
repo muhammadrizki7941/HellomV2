@@ -76,6 +76,41 @@ type ApiEnvelope<T> = {
   error: unknown;
 };
 
+// One affected cart line in an order error (price changed, out of stock, gone, ...).
+export type ApiProblem = {
+  index?: number;
+  product_id?: number;
+  name?: string;
+  reason?: 'not_found' | 'unavailable' | 'stock' | 'price' | 'options' | string;
+  message?: string;
+  old_price?: number;
+  new_price?: number;
+  available?: number;
+};
+
+// Error thrown by apiRequest/publicApiRequest. Still an Error (message = server message),
+// plus the HTTP status, the error code and cart problems when the server sent them.
+export class ApiError extends Error {
+  status: number;
+  code: string | null;
+  problems: ApiProblem[];
+  data: unknown;
+
+  constructor(message: string, status: number, error: unknown, data: unknown) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    const err = (error && typeof error === 'object' ? error : {}) as { code?: unknown; problems?: unknown };
+    this.code = typeof err.code === 'string' ? err.code : null;
+    this.problems = Array.isArray(err.problems) ? (err.problems as ApiProblem[]) : [];
+    this.data = data;
+  }
+}
+
+function toApiError(response: Response, payload: ApiEnvelope<unknown> | null): ApiError {
+  return new ApiError(payload?.message || `HTTP ${response.status}`, response.status, payload?.error ?? null, payload?.data ?? null);
+}
+
 export async function apiRequest<T>(
   path: string,
   options?: {
@@ -110,8 +145,7 @@ export async function apiRequest<T>(
   }
 
   if (!response.ok || !payload || payload.success !== true) {
-    const message = payload?.message || `HTTP ${response.status}`;
-    throw new Error(message);
+    throw toApiError(response, payload);
   }
 
   return payload.data;
@@ -171,8 +205,7 @@ export async function publicApiRequest<T>(
   const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | null;
 
   if (!response.ok || !payload || payload.success !== true) {
-    const message = payload?.message || `HTTP ${response.status}`;
-    throw new Error(message);
+    throw toApiError(response, payload);
   }
 
   return payload.data;

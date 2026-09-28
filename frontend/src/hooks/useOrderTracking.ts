@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { getCustomerOrderStatus, type PosOrderPayload } from '@/lib/hellomApi';
+import { getCustomerOrderStatus, getCustomerRealtimeToken, type PosOrderPayload } from '@/lib/hellomApi';
+import { subscribeRealtime } from '@/lib/realtime';
 import { isOrderPending } from '@/lib/pos/orderStatus';
 
 export function useOrderTracking(orderNumber: string | undefined, tableToken: string | undefined, intervalMs = 5000) {
@@ -39,6 +40,22 @@ export function useOrderTracking(orderNumber: string | undefined, tableToken: st
     void refresh(false);
   }, [refresh]);
 
+  // Live updates for this table; polling stays as the fallback (slower while the socket is up).
+  const [live, setLive] = useState(false);
+  useEffect(() => {
+    if (!orderNumber || !tableToken) return undefined;
+    return subscribeRealtime({
+      getToken: () => getCustomerRealtimeToken(tableToken),
+      onStatus: setLive,
+      handlers: {
+        'customer.order': (payload) => {
+          const changed = (payload as { order?: { order_number?: string } } | null)?.order?.order_number;
+          if (!changed || changed === orderNumber) void refresh(true);
+        },
+      },
+    });
+  }, [orderNumber, tableToken, refresh]);
+
   useEffect(() => {
     if (!orderNumber || !isOrderPending(order?.status)) {
       return;
@@ -46,12 +63,12 @@ export function useOrderTracking(orderNumber: string | undefined, tableToken: st
 
     const timer = window.setInterval(() => {
       void refresh(true);
-    }, intervalMs);
+    }, live ? Math.max(intervalMs, 30000) : intervalMs);
 
     return () => {
       window.clearInterval(timer);
     };
-  }, [intervalMs, order?.status, orderNumber, refresh]);
+  }, [intervalMs, live, order?.status, orderNumber, refresh]);
 
   return {
     order,

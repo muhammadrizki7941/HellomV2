@@ -16,25 +16,25 @@ type StatusMeta = {
 
 const STATUS_META: Record<OrderStatusKey, StatusMeta> = {
   new: {
-    label: 'Pesanan masuk',
+    label: 'Menunggu konfirmasi',
     description: 'Order sudah diterima sistem dan menunggu diproses tim dapur.',
     badgeClassName: 'bg-amber-100 text-amber-900',
     panelClassName: 'border-amber-200 bg-amber-50',
   },
   accepted: {
-    label: 'Diterima',
+    label: 'Dikonfirmasi',
     description: 'Tim restoran sudah menerima pesanan Anda dan akan mulai menyiapkan.',
     badgeClassName: 'bg-sky-100 text-sky-900',
     panelClassName: 'border-sky-200 bg-sky-50',
   },
   preparing: {
-    label: 'Sedang disiapkan',
+    label: 'Diproses',
     description: 'Pesanan sedang diproses di dapur. Mohon tunggu sebentar.',
     badgeClassName: 'bg-orange-100 text-orange-900',
     panelClassName: 'border-orange-200 bg-orange-50',
   },
   prepared: {
-    label: 'Siap diambil',
+    label: 'Siap',
     description: 'Pesanan sudah siap. Silakan menunggu instruksi penyerahan dari staf.',
     badgeClassName: 'bg-emerald-100 text-emerald-900',
     panelClassName: 'border-emerald-200 bg-emerald-50',

@@ -39,6 +39,11 @@ type LoyaltySettingsForm = {
   points_per_amount: number;
   min_spend_amount: number;
   max_points_per_order: string;
+  // Redemption (Rp per point, 0 = off), limits and expiry.
+  redeem_value_per_point: number;
+  min_redeem_points: number;
+  max_redeem_points_per_order: string;
+  points_expire_months: string;
 };
 
 export default function PosLoyaltySettings() {
@@ -52,6 +57,10 @@ export default function PosLoyaltySettings() {
     points_per_amount: 1000,
     min_spend_amount: 0,
     max_points_per_order: '',
+    redeem_value_per_point: 0,
+    min_redeem_points: 0,
+    max_redeem_points_per_order: '',
+    points_expire_months: '',
   });
   const [formData, setFormData] = useState<RewardRuleForm>({
     name: '',
@@ -82,6 +91,10 @@ export default function PosLoyaltySettings() {
         points_per_amount: settingsResponse.points_per_amount,
         min_spend_amount: settingsResponse.min_spend_amount,
         max_points_per_order: settingsResponse.max_points_per_order ? String(settingsResponse.max_points_per_order) : '',
+        redeem_value_per_point: settingsResponse.redeem_value_per_point ?? 0,
+        min_redeem_points: settingsResponse.min_redeem_points ?? 0,
+        max_redeem_points_per_order: settingsResponse.max_redeem_points_per_order ? String(settingsResponse.max_redeem_points_per_order) : '',
+        points_expire_months: settingsResponse.points_expire_months ? String(settingsResponse.points_expire_months) : '',
       });
     } catch (err) {
       console.error('Failed to load loyalty data:', err);
@@ -173,6 +186,10 @@ export default function PosLoyaltySettings() {
         points_per_amount: settingsForm.points_per_amount,
         min_spend_amount: settingsForm.min_spend_amount,
         max_points_per_order: settingsForm.max_points_per_order ? Number(settingsForm.max_points_per_order) : null,
+        redeem_value_per_point: settingsForm.redeem_value_per_point,
+        min_redeem_points: settingsForm.min_redeem_points,
+        max_redeem_points_per_order: settingsForm.max_redeem_points_per_order ? Number(settingsForm.max_redeem_points_per_order) : null,
+        points_expire_months: settingsForm.points_expire_months ? Number(settingsForm.points_expire_months) : null,
       });
       alert('Setting poin berhasil disimpan');
       await loadRules();
@@ -335,6 +352,38 @@ export default function PosLoyaltySettings() {
                 className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-amber-300 focus:ring-2 focus:ring-amber-300"
               />
               <p className="mt-1 text-xs text-gray-500">Opsional untuk membatasi akumulasi poin dalam satu transaksi.</p>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+            <p className="text-sm font-semibold text-gray-900">Tukar poin & masa berlaku</p>
+            <p className="mt-0.5 text-xs text-gray-500">
+              Poin masuk setelah pesanan dibayar dan ditarik lagi jika pesanan dibatalkan/direfund. Kasir wajib mengetik nama member saat menukar poin.
+            </p>
+            <div className="mt-3 grid gap-4 md:grid-cols-4">
+              {([
+                ['redeem_value_per_point', 'Nilai 1 poin (Rp)', '0 = penukaran mati'],
+                ['min_redeem_points', 'Minimal tukar (poin)', ''],
+                ['max_redeem_points_per_order', 'Maks. tukar per transaksi', 'Kosong = tanpa batas'],
+                ['points_expire_months', 'Poin kedaluwarsa (bulan)', 'Kosong = tidak kedaluwarsa'],
+              ] as const).map(([field, label, hint]) => (
+                <label key={field} className="block text-sm font-medium text-gray-700">
+                  {label}
+                  <input
+                    type="number"
+                    min="0"
+                    value={settingsForm[field]}
+                    onChange={(e) =>
+                      setSettingsForm((current) => ({
+                        ...current,
+                        [field]: field === 'redeem_value_per_point' || field === 'min_redeem_points' ? Number(e.target.value) || 0 : e.target.value,
+                      }))
+                    }
+                    placeholder={hint}
+                    className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-amber-300 focus:ring-2 focus:ring-amber-300"
+                  />
+                </label>
+              ))}
             </div>
           </div>
 

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import OutletOrderSettings from '@/components/pos/OutletOrderSettings';
 import { getImageUrl, getToken, HELLOM_API_BASE } from '@/lib/hellomApi';
 
 interface OrganizationSettings {
@@ -31,7 +32,7 @@ function resolvePreviewUrl(value: string | null | undefined) {
 }
 
 export default function PosSettings() {
-  const [activeTab, setActiveTab] = useState<'identity' | 'payment' | 'tables'>('identity');
+  const [activeTab, setActiveTab] = useState<'identity' | 'payment' | 'order' | 'tables'>('identity');
   const [settings, setSettings] = useState<OrganizationSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -480,6 +481,16 @@ export default function PosSettings() {
           Pembayaran
         </button>
         <button
+          onClick={() => setActiveTab('order')}
+          className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
+            activeTab === 'order'
+              ? 'border-blue-500 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Pesanan & Jam Buka
+        </button>
+        <button
           onClick={() => setActiveTab('tables')}
           className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
             activeTab === 'tables'
@@ -724,6 +735,8 @@ export default function PosSettings() {
           setQrisFile={setQrisFile}
         />
       )}
+
+      {activeTab === 'order' && <OutletOrderSettings />}
 
       {activeTab === 'tables' && (
         <>

@@ -15,7 +15,8 @@ export {
   setActiveOutletId,
   setSession,
 } from './client';
-export type { PosAccess } from './client';
+export type { ApiProblem, PosAccess } from './client';
+export { ApiError } from './client';
 export {
   changePassword,
   forgotPassword,
@@ -311,8 +312,51 @@ export {
   getCustomerMenuByOrganization,
   getCustomerOrderStatus,
   getCustomerOrganizationOutlets,
+  getCustomerTableOrders,
 } from './posCustomer';
-export type { CustomerOutlet, PosCustomerExperiencePayload, PosMenuCategory, PosMenuPayload, PosMenuProduct, PosOrderItem, PosOrderPayload } from './posCustomer';
+export type { CustomerOutlet, PosCustomerExperiencePayload, PosCustomerOutletStatus, PosMenuCategory, PosMenuOption, PosMenuPayload, PosMenuProduct, PosOrderItem, PosOrderPayload } from './posCustomer';
+export {
+  POS_ORDER_STATUS_LABELS,
+  adjustPosMemberPoints,
+  cancelPosOrder,
+  exportPosMembers,
+  getCustomerRealtimeToken,
+  getPosFraudFlags,
+  getPosMemberDetail,
+  getPosMemberDuplicates,
+  getPosMemberLedger,
+  getPosMemberOrders,
+  getPosMemberPage,
+  getPosOutletSettings,
+  getPosRealtimeToken,
+  getPosTableBills,
+  getPosTablesQrSheet,
+  mergePosMembers,
+  payPosTableBill,
+  previewPosOrder,
+  refundPosOrder,
+  regeneratePosTableToken,
+  resolvePosFraudFlag,
+  updatePosOutletSettings,
+} from './posOrders';
+export type {
+  PosCartLine,
+  PosFraudFlag,
+  PosLedgerRow,
+  PosMemberDetail,
+  PosMemberDuplicateGroup,
+  PosMemberListParams,
+  PosMemberRecord,
+  PosOpeningSlot,
+  PosOrderDraft,
+  PosOrderStatus,
+  PosOrderTotals,
+  PosOutletSettings,
+  PosOutletStatus,
+  PosPaginated,
+  PosQrTable,
+  PosTableBill,
+} from './posOrders';
 export {
   checkInPosStaff,
   checkOutPosStaff,

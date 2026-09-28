@@ -4,7 +4,8 @@ import { LayoutDashboard, ShoppingCart, Users, BarChart3, Utensils, Settings, Lo
 import { useState, useEffect, useMemo } from 'react';
 import BottomNav from '@/components/pos/BottomNav';
 import OutletSwitcher from '@/components/pos/OutletSwitcher';
-import { getAuthMe, getPosOrders, getSessionEventName, getSessionUser, getSessionPosAccess, getToken, setSession, clearSession } from '@/lib/hellomApi';
+import { getActiveOutletEventName, getAuthMe, getPosOrders, getPosRealtimeToken, getSessionEventName, getSessionUser, getSessionPosAccess, getToken, setSession, clearSession } from '@/lib/hellomApi';
+import { playOrderChime, setPosRealtimeConnected, subscribeRealtime } from '@/lib/realtime';
 import { usePWAInstall } from '@/hooks/usePWAInstall';
 import {
   getPosOrderListResetAt,
@@ -192,6 +193,38 @@ export default function PosLayout() {
 
     void refreshActiveOrdersCount();
   }, [location.pathname]);
+
+  // Live order feed for the active outlet: chime on new orders, then every POS screen
+  // refreshes through 'pos-orders-updated'. Reconnects when the outlet changes.
+  useEffect(() => {
+    if (!getToken()) return undefined;
+    let unsubscribe: () => void = () => undefined;
+
+    const connect = () => {
+      unsubscribe();
+      setPosRealtimeConnected(false);
+      unsubscribe = subscribeRealtime({
+        getToken: getPosRealtimeToken,
+        onStatus: setPosRealtimeConnected,
+        handlers: {
+          'pos.order': (payload) => {
+            const event = (payload as { event?: string } | null)?.event;
+            if (event === 'order.created') playOrderChime();
+            window.dispatchEvent(new CustomEvent('pos-orders-updated'));
+          },
+        },
+      });
+    };
+
+    connect();
+    window.addEventListener(getActiveOutletEventName(), connect);
+
+    return () => {
+      window.removeEventListener(getActiveOutletEventName(), connect);
+      unsubscribe();
+      setPosRealtimeConnected(false);
+    };
+  }, []);
 
   const handleTabChange = (tab: string) => {
     let path = '';

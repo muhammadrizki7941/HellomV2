@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Search, Plus, Edit2, Trash2, QrCode, Eye, X } from 'lucide-react';
+import { Search, Plus, Edit2, Trash2, QrCode, X, RefreshCw, Printer, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getPosTables, createPosTable, updatePosTable, deletePosTable, getCurrentOrganization } from '@/lib/hellomApi';
+import { getPosTables, createPosTable, updatePosTable, deletePosTable, getCurrentOrganization, getPosTablesQrSheet, regeneratePosTableToken } from '@/lib/hellomApi';
+import { printTableQrSheet } from '@/lib/pos/qrPrint';
 
 type Table = {
   id: number;
@@ -9,6 +10,8 @@ type Table = {
   name: string | null;
   is_active: boolean;
   public_id: string;
+  has_weak_token?: boolean;
+  token_rotated_at?: string | null;
 };
 
 export default function PosTables() {
@@ -112,6 +115,38 @@ export default function PosTables() {
     }
   };
 
+  // New random token: the printed QR of this table stops working immediately.
+  const handleRegenerate = async (table: Table) => {
+    if (!confirm(`Ganti QR meja ${table.code}? QR lama langsung tidak berlaku dan harus dicetak ulang.`)) return;
+    try {
+      await regeneratePosTableToken(table.id);
+      await loadTables();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Gagal mengganti QR');
+    }
+  };
+
+  const handlePrintAll = async () => {
+    try {
+      const sheet = await getPosTablesQrSheet();
+      const slug = sheet.organization.slug || organizationSlug;
+      const ok = await printTableQrSheet({
+        title: sheet.outlet ? `${sheet.organization.name} — ${sheet.outlet.name}` : sheet.organization.name,
+        subtitle: sheet.outlet?.address ?? null,
+        tables: sheet.tables.map((t) => ({
+          code: t.code,
+          name: t.name,
+          url: slug ? `${window.location.origin}/customer/${slug}/order/${t.public_id}` : `${window.location.origin}/customer/order/${t.public_id}`,
+        })),
+      });
+      if (!ok) alert('Izinkan pop-up untuk mencetak QR.');
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Gagal menyiapkan QR');
+    }
+  };
+
+  const weakCount = tables.filter((t) => t.has_weak_token).length;
+
   const generateQRUrl = (table: Table) => {
     if (organizationSlug) {
       return `${window.location.origin}/customer/${organizationSlug}/order/${table.public_id}`;
@@ -128,14 +163,32 @@ export default function PosTables() {
           <h1 className="text-2xl font-bold text-gray-900">Daftar Meja</h1>
           <p className="text-gray-600 mt-1">Manage restaurant tables and QR codes</p>
         </div>
-        <button
-          onClick={handleCreateTable}
-          className="px-4 py-2 bg-amber-400 text-[#111111] rounded-lg hover:bg-amber-500 transition-colors flex items-center gap-2"
-        >
-          <Plus className="w-4 h-4" />
-          Tambah Meja
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => void handlePrintAll()}
+            className="px-4 py-2 bg-white border border-gray-200 text-gray-800 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
+          >
+            <Printer className="w-4 h-4" />
+            Cetak semua QR
+          </button>
+          <button
+            onClick={handleCreateTable}
+            className="px-4 py-2 bg-amber-400 text-[#111111] rounded-lg hover:bg-amber-500 transition-colors flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Tambah Meja
+          </button>
+        </div>
       </div>
+
+      {weakCount > 0 && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <AlertTriangle className="mt-0.5 h-4 w-4 flex-none" />
+          <p>
+            {weakCount} meja masih memakai QR lama yang mudah ditebak. Klik <strong>Ganti QR</strong> pada meja tersebut lalu cetak ulang.
+          </p>
+        </div>
+      )}
 
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
@@ -210,6 +263,14 @@ export default function PosTables() {
                       >
                         <QrCode className="w-4 h-4" />
                         Lihat Kode QR
+                      </button>
+                      <button
+                        onClick={() => void handleRegenerate(table)}
+                        className={cn('mt-1 flex items-center gap-1 text-xs', table.has_weak_token ? 'font-semibold text-red-600' : 'text-gray-500 hover:text-gray-800')}
+                        title="Buat token QR baru (QR lama tidak berlaku)"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        {table.has_weak_token ? 'Ganti QR (lemah)' : 'Ganti QR'}
                       </button>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">

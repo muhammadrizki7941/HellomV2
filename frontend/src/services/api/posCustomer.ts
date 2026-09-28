@@ -16,6 +16,25 @@ export type PosMenuProduct = {
     id: number;
     name: string | null;
   };
+  // Add-ons (only active options/values of this outlet's product).
+  options?: PosMenuOption[];
+};
+
+export type PosMenuOption = {
+  id: number;
+  name: string;
+  type: 'single' | 'multi' | string;
+  is_required: boolean;
+  values: Array<{ id: number; name: string; price_delta: number }>;
+};
+
+// Outlet state shown to the guest (closed / not accepting self-orders).
+export type PosCustomerOutletStatus = {
+  accepts_orders: boolean;
+  is_open: boolean;
+  can_order: boolean;
+  message: string | null;
+  today_hours: string | null;
 };
 
 export type PosMenuCategory = {
@@ -32,7 +51,19 @@ export type PosMenuPayload = {
     name: string;
     tenant_slug?: string | null;
     organization_slug?: string | null;
+    kind?: 'table' | 'counter';
   };
+  outlet?: {
+    id: number;
+    slug: string;
+    name: string;
+    address: string | null;
+    phone: string | null;
+    is_primary: boolean;
+    status?: PosCustomerOutletStatus;
+    pricing?: { tax_percent: number; service_percent: number; rounding_step: number };
+    payment_methods?: string[];
+  } | null;
   categories: PosMenuCategory[];
   experience: PosCustomerExperiencePayload;
 };
@@ -113,6 +144,7 @@ export type PosCustomerExperiencePayload = {
     reservation_count: number;
   };
   payment: {
+    methods?: string[];
     qris_static_enabled: boolean;
     qris_static_image_url: string | null;
     require_paid_before_submit: boolean;
@@ -143,6 +175,7 @@ export type PosOrderPayload = {
   id: number;
   order_number: string;
   status: string;
+  status_label?: string;
   customer_name: string | null;
   table: {
     id: number;
@@ -155,12 +188,27 @@ export type PosOrderPayload = {
   payment_method: string | null;
   payment_status: string | null;
   notes: string | null;
+  subtotal_amount?: number;
+  service_amount?: number;
+  tax_amount?: number;
+  rounding_amount?: number;
+  discount_amount?: number;
   total_amount: number;
   final_amount: number;
+  table_bill_id?: number | null;
+  cancel_reason?: string | null;
   created_at: string | null;
   updated_at: string | null;
   items: PosOrderItem[];
 };
+
+// Orders on the table's open bill (self-order and cashier). Empty for the shop-link counter.
+export function getCustomerTableOrders(tableToken: string) {
+  return publicApiRequest<{
+    bill: { id: number; opened_at: string | null; total_amount: number; unpaid_amount: number } | null;
+    orders: PosOrderPayload[];
+  }>(`/pos/customer/table/${encodeURIComponent(tableToken)}/orders`);
+}
 
 
 export function getCustomerMenu(tableToken: string) {
@@ -179,6 +227,7 @@ export type CustomerOutlet = {
   address: string | null;
   phone: string | null;
   is_primary: boolean;
+  status?: PosCustomerOutletStatus;
 };
 
 export function getCustomerOrganizationOutlets(organizationSlug: string) {
@@ -192,14 +241,18 @@ export function createCustomerOrder(payload: {
   items: Array<{
     product_id: number;
     quantity: number;
+    options?: Array<{ option_id: number; value_id: number }>;
+    // Unit price shown to the guest; the server reports changes instead of charging silently.
+    expected_unit_price?: number;
   }>;
   customer_name?: string;
   customer_phone?: string;
+  register_member?: boolean;
   notes?: string;
   payment_confirmed?: boolean;
   payment_method?: string;
 }) {
-  return publicApiRequest<{ order: PosOrderPayload }>('/pos/customer/order', {
+  return publicApiRequest<{ order: PosOrderPayload; member?: { id: number; name: string; points: number } | null }>('/pos/customer/order', {
     method: 'POST',
     body: payload,
   });

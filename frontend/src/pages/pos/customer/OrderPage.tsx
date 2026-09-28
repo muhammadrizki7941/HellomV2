@@ -22,7 +22,8 @@ import {
   X,
 } from 'lucide-react';
 import useBrand from '@/hooks/useBrand';
-import { useCart } from '@/hooks/useCart';
+import { useCart, type CartOption } from '@/hooks/useCart';
+import { subscribeRealtime } from '@/lib/realtime';
 import { getImageUrl, HELLOM_API_BASE } from '@/lib/hellomApi';
 import {
   claimCustomerPromo,
@@ -31,7 +32,12 @@ import {
   getCustomerMenu,
   getCustomerMenuByOrganization,
   getCustomerOrganizationOutlets,
+  getCustomerRealtimeToken,
+  getCustomerTableOrders,
+  ApiError,
   type CustomerOutlet,
+  type PosCustomerOutletStatus,
+  type PosOrderPayload,
   type PosCustomerExperiencePayload,
   type PosMenuCategory,
   type PosMenuProduct,
@@ -485,6 +491,16 @@ export default function OrderPage() {
   const { brand } = useBrand();
   const [resolvedTableToken, setResolvedTableToken] = useState<string>(tableToken || '');
   const cart = useCart(resolvedTableToken || organizationSlug || 'guest');
+  // Outlet state from the menu: closed / not accepting, and which payment methods it takes.
+  const [outletStatus, setOutletStatus] = useState<PosCustomerOutletStatus | null>(null);
+  const [outletPaymentKeys, setOutletPaymentKeys] = useState<string[] | null>(null);
+  const [isCounter, setIsCounter] = useState(false);
+  const [optionProduct, setOptionProduct] = useState<PosMenuProduct | null>(null);
+  const [cartNotices, setCartNotices] = useState<string[]>([]);
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [registerMember, setRegisterMember] = useState(false);
+  const [tableOrders, setTableOrders] = useState<PosOrderPayload[]>([]);
+  const [tableUnpaid, setTableUnpaid] = useState(0);
   const [menu, setMenu] = useState<PosMenuCategory[]>([]);
   const [tableName, setTableName] = useState('');
   const [tenantSlug, setTenantSlug] = useState<string | null>(organizationSlug || null);
@@ -558,6 +574,9 @@ export default function OrderPage() {
         const nextTableToken = data.table.public_id || tableToken || '';
 
         setMenu(data.categories);
+        setOutletStatus(data.outlet?.status ?? null);
+        setOutletPaymentKeys(data.outlet?.payment_methods ?? data.experience?.payment?.methods ?? null);
+        setIsCounter(data.table.kind === 'counter');
         setExperience(data.experience || DEFAULT_EXPERIENCE);
         setTableName(data.table.name || data.table.code);
         setSelectedCategory(data.categories[0]?.id ?? null);
@@ -612,20 +631,38 @@ export default function OrderPage() {
     }
   };
 
+  // Reload the menu after the server reported a changed cart; update prices, drop what is gone.
+  const refreshCartFromServer = async (removeIds: number[]) => {
+    try {
+      const data = tableToken
+        ? await getCustomerMenu(tableToken)
+        : await getCustomerMenuByOrganization(organizationSlug as string, outletParam);
+      setMenu(data.categories);
+      setOutletStatus(data.outlet?.status ?? null);
+      cart.refreshProducts(new Map(data.categories.flatMap((c) => c.products).map((p) => [p.id, p])), removeIds);
+    } catch {
+      // Keep the cart as is; the guest can retry.
+    }
+  };
+
   const handleSubmitOrder = async () => {
     if (!activeTableToken || !selectedPaymentMethod) return;
 
     setPlacingOrder(true);
+    setCartNotices([]);
     try {
       const response = await createCustomerOrder({
         table_token: activeTableToken,
         items: cart.items.map(item => ({
           product_id: item.product.id,
           quantity: item.quantity,
+          options: item.options.map((o) => ({ option_id: o.option_id, value_id: o.value_id })),
+          expected_unit_price: item.unitPrice,
         })),
-        payment_method: selectedPaymentMethod as any,
+        payment_method: selectedPaymentMethod,
         customer_name: customerName.trim() || undefined,
-        customer_phone: undefined, // Add if needed
+        customer_phone: customerPhone.trim() || undefined,
+        register_member: registerMember && Boolean(customerPhone.trim()) ? true : undefined,
         notes: notes.trim() || undefined,
       });
 
@@ -634,11 +671,73 @@ export default function OrderPage() {
       setOrderStep('success');
       navigate(`${successRouteBase}/success/${orderNumber}`);
     } catch (err) {
-      alert('Gagal membuat pesanan: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      if (err instanceof ApiError && err.code === 'CART_CHANGED') {
+        const notices = err.problems.map((p) => {
+          if (p.reason === 'price') return `${p.name}: harga berubah dari ${formatCurrency(p.old_price ?? 0)} menjadi ${formatCurrency(p.new_price ?? 0)}`;
+          if (p.reason === 'stock') return p.message || `${p.name}: stok tidak cukup`;
+          return p.message || 'Ada menu yang sudah tidak tersedia';
+        });
+        const gone = err.problems.filter((p) => p.reason === 'not_found' || p.reason === 'unavailable').map((p) => p.product_id ?? 0);
+        await refreshCartFromServer(gone);
+        setCartNotices(notices.length ? notices : [err.message]);
+        setOrderStep('menu');
+        setShowCart(true);
+      } else if (err instanceof ApiError && err.code === 'OUTLET_CLOSED') {
+        setOutletStatus((current) => (current ? { ...current, can_order: false, message: err.message } : current));
+        setCartNotices([err.message]);
+        setOrderStep('menu');
+        setShowCart(true);
+      } else {
+        setCartNotices([err instanceof Error ? err.message : 'Gagal membuat pesanan. Coba lagi.']);
+        setOrderStep('menu');
+        setShowCart(true);
+      }
     } finally {
       setPlacingOrder(false);
     }
   };
+
+  // Add straight away, or ask for add-ons first when the product has options.
+  const handleAddProduct = (product: PosMenuProduct) => {
+    if ((product.options?.length ?? 0) > 0) {
+      setOptionProduct(product);
+      return;
+    }
+    cart.addItem(product);
+  };
+
+  // Orders already on this table (self-order and cashier): live via socket, polling as fallback.
+  const tableOrdersToken = resolvedTableToken || tableToken || '';
+  useEffect(() => {
+    if (!tableOrdersToken || isCounter) {
+      setTableOrders([]);
+      return undefined;
+    }
+    let live = false;
+    let stopped = false;
+    const load = async () => {
+      try {
+        const res = await getCustomerTableOrders(tableOrdersToken);
+        if (stopped) return;
+        setTableOrders(res.orders);
+        setTableUnpaid(res.bill?.unpaid_amount ?? 0);
+      } catch {
+        // Ignore; the next tick retries.
+      }
+    };
+    void load();
+    const unsubscribe = subscribeRealtime({
+      getToken: () => getCustomerRealtimeToken(tableOrdersToken),
+      handlers: { 'customer.order': () => void load() },
+      onStatus: (connected) => { live = connected; },
+    });
+    const timer = window.setInterval(() => { if (!live) void load(); }, 15000);
+    return () => {
+      stopped = true;
+      unsubscribe();
+      window.clearInterval(timer);
+    };
+  }, [tableOrdersToken, isCounter]);
 
   useEffect(() => {
     if (loading || typeof window === 'undefined' || !window.location.hash) return;
@@ -697,6 +796,11 @@ export default function OrderPage() {
   const primary = '#1A1A1A';
   const secondary = '#2D2D2D';
   const pendingOrder = experience.pending_order;
+  const payableMethods = useMemo(
+    () => (outletPaymentKeys ? paymentMethods.filter((m) => outletPaymentKeys.includes(m.key === 'qris_static' ? 'qris' : m.key)) : paymentMethods),
+    [outletPaymentKeys, paymentMethods]
+  );
+  const canOrder = outletStatus?.can_order ?? true;
   const activeTableToken = resolvedTableToken || tableToken || '';
   const menuRoute = buildCustomerRoute(activeTableToken, tenantSlug, '#menu');
   const successRouteBase = buildCustomerRoute(activeTableToken, tenantSlug);
@@ -754,15 +858,15 @@ export default function OrderPage() {
 
   // Set default payment method based on available methods
   useEffect(() => {
-    if (paymentMethods.length === 0) return;
-    if (paymentMethods.some((method) => method.key === selectedPaymentMethod)) return;
+    if (payableMethods.length === 0) return;
+    if (payableMethods.some((method) => method.key === selectedPaymentMethod)) return;
 
     // Default to 'cash' if available, otherwise first available method
-    const defaultMethod = paymentMethods.find(m => m.key === 'cash') || paymentMethods[0];
+    const defaultMethod = payableMethods.find(m => m.key === 'cash') || payableMethods[0];
     if (defaultMethod) {
       setSelectedPaymentMethod(defaultMethod.key);
     }
-  }, [paymentMethods, selectedPaymentMethod]);
+  }, [payableMethods, selectedPaymentMethod]);
 
   const handleSectionSelect = (id: string) => {
     if (id === 'akun') {
@@ -809,8 +913,8 @@ export default function OrderPage() {
 
   const handleFeaturedCheckout = () => {
     if (!featuredProduct || !isProductAvailable(featuredProduct)) return;
-    cart.addItem(featuredProduct);
-    setShowCart(true);
+    handleAddProduct(featuredProduct);
+    if (!(featuredProduct.options?.length)) setShowCart(true);
   };
 
   const scrollCategoryRail = (direction: 'left' | 'right') => {
@@ -1106,6 +1210,30 @@ export default function OrderPage() {
         <section id="pesanan" className="mt-8 rounded-[28px] border border-white/75 bg-white p-5 shadow-sm">
           <SectionHeading title="Order Status" description="Check the progress of active orders at this table." />
 
+          {tableOrders.length > 0 && (
+            <div className="mt-4 rounded-[24px] border border-[#E6A800] bg-[#F9F9F9] p-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-[#1A1A1A]">Pesanan di meja ini</p>
+                {tableUnpaid > 0 && <p className="text-xs text-[#888888]">Belum dibayar {formatCurrency(tableUnpaid)}</p>}
+              </div>
+              <div className="mt-3 space-y-2">
+                {tableOrders.map((order) => (
+                  <div key={order.id} className="flex items-center justify-between gap-3 rounded-2xl bg-white px-3 py-2 text-sm">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-[#1A1A1A]">#{order.order_number}</p>
+                      <p className="truncate text-xs text-[#888888]">{order.items.map((i) => `${i.quantity}× ${i.product_name}`).join(', ')}</p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="text-xs font-semibold text-[#1A1A1A]">{order.status_label || statusLabel(order.status)}</p>
+                      <p className="text-xs text-[#888888]">{formatCurrency(order.final_amount)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-3 text-xs text-[#888888]">Mau tambah? Pilih menu lagi — pesanan baru masuk ke tagihan meja yang sama.</p>
+            </div>
+          )}
+
           {pendingOrder ? (
             <div className="mt-4 rounded-[24px] bg-[linear-gradient(135deg,#1A1A1A,#2D2D2D)] p-5 text-white">
               <div className="flex items-start justify-between gap-3">
@@ -1219,6 +1347,13 @@ export default function OrderPage() {
             )}
           </div>
         </section>
+
+        {!canOrder && outletStatus?.message && (
+          <div className="mt-8 rounded-[24px] border border-amber-300 bg-amber-50 px-5 py-4 text-sm text-amber-900">
+            <p className="font-semibold">Belum bisa pesan dari sini</p>
+            <p className="mt-1">{outletStatus.message}</p>
+          </div>
+        )}
 
         <section id="menu" className="mt-8">
           <div
@@ -1466,7 +1601,7 @@ export default function OrderPage() {
                   <ProductCard
                     key={product.id}
                     product={product}
-                    onAdd={() => cart.addItem(product)}
+                    onAdd={() => handleAddProduct(product)}
                     accent={accent}
                     isFeatured={product.id === featuredProduct?.id}
                   />
@@ -1865,21 +2000,33 @@ export default function OrderPage() {
             </div>
 
             <div className="max-h-[calc(88vh-140px)] space-y-5 overflow-y-auto px-5 py-5">
+              {cartNotices.length > 0 && (
+                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                  <p className="font-semibold">Keranjang diperbarui</p>
+                  <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                    {cartNotices.map((notice) => <li key={notice}>{notice}</li>)}
+                  </ul>
+                  <p className="mt-1 text-xs">Periksa lagi lalu kirim ulang.</p>
+                </div>
+              )}
               {cart.items.length === 0 ? (
                 <SoftEmptyCard title="Cart masih kosong" description="Tambahkan menu lebih dulu sebelum checkout." />
               ) : (
                 <>
                   <div className="space-y-3">
                     {cart.items.map((item) => (
-                      <div key={item.product.id} className="rounded-[24px] border border-[#E6A800] p-4">
+                      <div key={item.key} className="rounded-[24px] border border-[#E6A800] p-4">
                         <div className="flex items-start justify-between gap-4">
                           <div>
                             <p className="font-semibold text-[#1A1A1A]">{item.product.name}</p>
-                            <p className="mt-1 text-sm text-[#888888]">{formatCurrency(item.product.price)}</p>
+                            {item.options.length > 0 && (
+                              <p className="mt-1 text-xs text-[#888888]">{item.options.map((o) => o.value_name).join(', ')}</p>
+                            )}
+                            <p className="mt-1 text-sm text-[#888888]">{formatCurrency(item.unitPrice)}</p>
                           </div>
                           <button
                             type="button"
-                            onClick={() => cart.removeItem(item.product.id)}
+                            onClick={() => cart.removeItem(item.key)}
                             className="text-sm font-medium text-[#1A1A1A]"
                           >
                             Hapus
@@ -1887,15 +2034,15 @@ export default function OrderPage() {
                         </div>
                         <div className="mt-4 flex items-center justify-between">
                           <div className="inline-flex items-center gap-3 rounded-full border border-[#E6A800] bg-[#F9F9F9] px-3 py-2">
-                            <button type="button" onClick={() => cart.updateQuantity(item.product.id, item.quantity - 1)}>
+                            <button type="button" onClick={() => cart.updateQuantity(item.key, item.quantity - 1)}>
                               <Minus className="h-4 w-4" />
                             </button>
                             <span className="min-w-6 text-center text-sm font-semibold">{item.quantity}</span>
-                            <button type="button" onClick={() => cart.updateQuantity(item.product.id, item.quantity + 1)}>
+                            <button type="button" onClick={() => cart.updateQuantity(item.key, item.quantity + 1)}>
                               <Plus className="h-4 w-4" />
                             </button>
                           </div>
-                          <p className="font-semibold text-[#1A1A1A]">{formatCurrency(item.product.price * item.quantity)}</p>
+                          <p className="font-semibold text-[#1A1A1A]">{formatCurrency(item.unitPrice * item.quantity)}</p>
                         </div>
                       </div>
                     ))}
@@ -1911,6 +2058,23 @@ export default function OrderPage() {
                         className="mt-2 w-full rounded-2xl border border-[#E6A800] bg-white px-4 py-3 text-sm outline-none placeholder:text-[#888888] focus:border-[#1A1A1A]"
                       />
                     </label>
+
+                    <label className="mt-4 block text-sm font-medium text-[#1A1A1A]">
+                      Nomor HP
+                      <input
+                        type="tel"
+                        value={customerPhone}
+                        onChange={(event) => setCustomerPhone(event.target.value)}
+                        placeholder="Opsional — untuk poin member"
+                        className="mt-2 w-full rounded-2xl border border-[#E6A800] bg-white px-4 py-3 text-sm outline-none placeholder:text-[#888888] focus:border-[#1A1A1A]"
+                      />
+                    </label>
+                    {customerPhone.trim() && (
+                      <label className="mt-2 flex items-center gap-2 text-sm text-[#1A1A1A]">
+                        <input type="checkbox" checked={registerMember} onChange={(event) => setRegisterMember(event.target.checked)} />
+                        Daftarkan saya sebagai member (isi nama di atas)
+                      </label>
+                    )}
 
                     <label className="mt-4 block text-sm font-medium text-[#1A1A1A]">
                       Catatan pesanan
@@ -1936,11 +2100,11 @@ export default function OrderPage() {
                 <button
                   type="button"
                   onClick={() => void handleCheckout()}
-                  disabled={placingOrder}
+                  disabled={placingOrder || !canOrder}
                   className="w-full rounded-2xl px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
                   style={{ backgroundColor: '#1A1A1A', color: '#F5C518' }}
                 >
-                  Lanjut ke pembayaran
+                  {canOrder ? 'Lanjut ke pembayaran' : 'Outlet sedang tidak menerima pesanan'}
                 </button>
               </div>
             )}
@@ -1948,10 +2112,21 @@ export default function OrderPage() {
         </div>
       )}
 
+      {optionProduct && (
+        <OptionPicker
+          product={optionProduct}
+          onClose={() => setOptionProduct(null)}
+          onConfirm={(options) => {
+            cart.addItem(optionProduct, options);
+            setOptionProduct(null);
+          }}
+        />
+      )}
+
       {/* Payment Step */}
       {orderStep === 'payment' && (
         <PaymentSelector
-          methods={paymentMethods}
+          methods={payableMethods}
           selected={selectedPaymentMethod}
           onSelect={(methodKey) => setSelectedPaymentMethod(methodKey)}
           totalAmount={cart.totalPrice}
@@ -1968,12 +2143,100 @@ export default function OrderPage() {
 
 function statusLabel(status: string) {
   const normalized = status.toLowerCase();
-  if (normalized === 'new') return 'New order';
-  if (normalized === 'preparing') return 'Sedang disiapkan';
-  if (normalized === 'prepared') return 'Siap diantar';
+  if (normalized === 'new') return 'Menunggu konfirmasi';
+  if (normalized === 'accepted') return 'Dikonfirmasi';
+  if (normalized === 'preparing') return 'Diproses';
+  if (normalized === 'prepared') return 'Siap';
   if (normalized === 'completed') return 'Selesai';
   if (normalized === 'cancelled') return 'Dibatalkan';
   return status;
+}
+
+// Add-on picker: required groups must be chosen, single groups take one value.
+function OptionPicker({
+  product,
+  onClose,
+  onConfirm,
+}: {
+  product: PosMenuProduct;
+  onClose: () => void;
+  onConfirm: (options: CartOption[]) => void;
+}) {
+  const [chosen, setChosen] = useState<Record<number, number[]>>({});
+  const options = product.options ?? [];
+  const missing = options.filter((o) => o.is_required && !(chosen[o.id]?.length));
+  const selected: CartOption[] = options.flatMap((o) =>
+    (chosen[o.id] ?? []).flatMap((valueId) => {
+      const value = o.values.find((v) => v.id === valueId);
+      return value ? [{ option_id: o.id, value_id: value.id, option_name: o.name, value_name: value.name, price_delta: value.price_delta }] : [];
+    })
+  );
+  const unit = product.price + selected.reduce((sum, o) => sum + o.price_delta, 0);
+
+  const toggle = (optionId: number, valueId: number, single: boolean) => {
+    setChosen((current) => {
+      const list = current[optionId] ?? [];
+      if (single) return { ...current, [optionId]: [valueId] };
+      return { ...current, [optionId]: list.includes(valueId) ? list.filter((v) => v !== valueId) : [...list, valueId] };
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 sm:items-center" onClick={onClose}>
+      <div className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-t-[28px] bg-white p-5 sm:rounded-[28px]" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-lg font-semibold text-[#1A1A1A]">{product.name}</p>
+            <p className="text-sm text-[#888888]">{formatCurrency(product.price)}</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-full p-2 text-[#888888] hover:bg-[#F9F9F9]">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="mt-4 space-y-4">
+          {options.map((option) => {
+            const single = option.type !== 'multi';
+            return (
+              <div key={option.id}>
+                <p className="text-sm font-semibold text-[#1A1A1A]">
+                  {option.name} {option.is_required && <span className="text-red-500">*</span>}
+                  <span className="ml-1 text-xs font-normal text-[#888888]">{single ? 'pilih satu' : 'boleh lebih dari satu'}</span>
+                </p>
+                <div className="mt-2 space-y-2">
+                  {option.values.map((value) => {
+                    const active = (chosen[option.id] ?? []).includes(value.id);
+                    return (
+                      <button
+                        key={value.id}
+                        type="button"
+                        onClick={() => toggle(option.id, value.id, single)}
+                        className={cn(
+                          'flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-sm',
+                          active ? 'border-[#1A1A1A] bg-[#F9F9F9] font-semibold' : 'border-[#E6A800]'
+                        )}
+                      >
+                        <span>{value.name}</span>
+                        <span className="text-[#888888]">{value.price_delta > 0 ? `+${formatCurrency(value.price_delta)}` : 'Gratis'}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <button
+          type="button"
+          disabled={missing.length > 0}
+          onClick={() => onConfirm(selected)}
+          className="mt-5 w-full rounded-2xl px-4 py-3 text-sm font-semibold disabled:opacity-50"
+          style={{ backgroundColor: '#1A1A1A', color: '#F5C518' }}
+        >
+          {missing.length > 0 ? `Pilih ${missing[0].name}` : `Tambah • ${formatCurrency(unit)}`}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function SectionHeading({

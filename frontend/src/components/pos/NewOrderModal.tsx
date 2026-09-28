@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, Plus, Minus, ShoppingCart, User, Star, Gift } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getPosTables, getPosProducts, getPosCategories, createPosOrder, searchPosMembers, createPosMember, calculateLoyaltyPoints, applyReward } from '@/lib/hellomApi';
+import { getPosTables, getPosProducts, getPosCategories, createPosOrder, searchPosMembers, createPosMember, calculateLoyaltyPoints, applyReward, previewPosOrder } from '@/lib/hellomApi';
 import { getImageUrl } from '@/lib/hellomApi';
+import type { PosOrderDraft, PosOrderTotals } from '@/lib/hellomApi';
 
 type Table = {
   id: number;
@@ -100,6 +101,11 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
   const [newMemberName, setNewMemberName] = useState('');
   const [newMemberPhone, setNewMemberPhone] = useState('');
   const [newMemberEmail, setNewMemberEmail] = useState('');
+  // Server-side totals (tax, service, rounding, discounts): what the order will really cost.
+  const [serverTotals, setServerTotals] = useState<PosOrderTotals | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [redeemPoints, setRedeemPoints] = useState('');
+  const [confirmMemberName, setConfirmMemberName] = useState('');
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -165,6 +171,10 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
     setShowAddonModal(false);
     setSelectedProductForAddon(null);
     setSelectedAddons({});
+    setServerTotals(null);
+    setPreviewError(null);
+    setRedeemPoints('');
+    setConfirmMemberName('');
     // Reset member states
     setMemberQuery('');
     setMemberResults([]);
@@ -310,7 +320,46 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
 
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
   const totalPrice = cart.reduce((sum, item) => sum + item.totalPrice, 0);
-  const finalAmount = selectedReward ? Math.max(0, totalPrice - discountAmount) : totalPrice;
+  const redeemPointsNum = Math.max(0, parseInt(redeemPoints.replace(/\D/g, ''), 10) || 0);
+  // The server total is authoritative; the local sum is only shown until it arrives.
+  const finalAmount = serverTotals?.final_amount ?? (selectedReward ? Math.max(0, totalPrice - discountAmount) : totalPrice);
+
+  const buildDraft = (): PosOrderDraft => ({
+    ...(selectedTableId ? { table_id: selectedTableId } : {}),
+    customer_name: selectedMember?.name || customerName || undefined,
+    customer_phone: selectedMember?.phone || customerPhone || undefined,
+    member_id: selectedMember?.id || undefined,
+    reward_rule_id: selectedReward?.id || undefined,
+    redeem_points: selectedMember && redeemPointsNum > 0 ? redeemPointsNum : undefined,
+    confirm_member_name: selectedMember && redeemPointsNum > 0 ? confirmMemberName : undefined,
+    service_type: selectedTableId ? 'dine_in' : 'takeaway',
+    notes: notes || undefined,
+    items: cart.map(item => ({
+      product_id: item.product.id,
+      quantity: item.quantity,
+      options: item.addons.map(addon => ({ option_id: addon.option_id, value_id: addon.value_id })),
+    })),
+  });
+
+  useEffect(() => {
+    if (!isOpen || cart.length === 0) {
+      setServerTotals(null);
+      setPreviewError(null);
+      return undefined;
+    }
+    const timer = window.setTimeout(async () => {
+      try {
+        const res = await previewPosOrder(buildDraft());
+        setServerTotals(res.totals);
+        setPreviewError(null);
+      } catch (err) {
+        setServerTotals(null);
+        setPreviewError(err instanceof Error ? err.message : 'Gagal menghitung total');
+      }
+    }, 350);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, cart, selectedMember?.id, selectedReward?.id, redeemPointsNum, selectedTableId]);
 
   useEffect(() => {
     if (!selectedMember) {
@@ -333,7 +382,8 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
   const getMemberName = (m: any) => m.name || 'Unknown';
   const getMemberPhone = (m: any) => m.phone || '';
   const getMemberEmail = (m: any) => m.email || '';
-  const getMemberPoints = (m: any) => m.total_points || 0;
+  // Spendable balance (the ledger); total_points is lifetime earned.
+  const getMemberPoints = (m: any) => m.redeemable_points ?? m.total_points ?? 0;
   const getMemberOrders = (m: any) => m.total_orders || 0;
 
   // Member search with debounce
@@ -447,34 +497,20 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
   const handleCreateOrder = async () => {
     if (cart.length === 0) return;
 
+    if (selectedMember && redeemPointsNum > 0 && !confirmMemberName.trim()) {
+      setError('Ketik nama member untuk konfirmasi penukaran poin.');
+      return;
+    }
+
     try {
       setLoading(true);
-      const payload = {
-        ...(selectedTableId ? { table_id: selectedTableId } : {}),
-        customer_name: selectedMember?.name || customerName || undefined,
-        customer_phone: selectedMember?.phone || customerPhone || undefined,
-        member_id: selectedMember?.id || undefined,
-        reward_rule_id: selectedReward?.id || undefined,
-        discount_amount: discountAmount || 0,
-        final_amount: finalAmount,
-        service_type: (selectedTableId ? 'dine_in' : 'takeaway') as 'dine_in' | 'takeaway',
-        notes: notes || undefined,
-        items: cart.map(item => ({
-          product_id: item.product.id,
-          quantity: item.quantity,
-          options: item.addons.map(addon => ({
-            option_id: addon.option_id,
-            value_id: addon.value_id,
-          })),
-        })),
-      };
-
-      await createPosOrder(payload);
+      setError(null);
+      await createPosOrder(buildDraft());
 
       onOrderCreated();
       onClose();
     } catch (err) {
-      setError('Failed to create order');
+      setError(err instanceof Error ? err.message : 'Gagal membuat pesanan');
     } finally {
       setLoading(false);
     }
@@ -1056,6 +1092,8 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
                               setSelectedReward(null);
                               setDiscountAmount(0);
                               setPointsToEarn(0);
+                              setRedeemPoints('');
+                              setConfirmMemberName('');
                             }}
                             className="text-gray-400 hover:text-red-500 text-lg px-2 py-1 rounded transition"
                           >
@@ -1066,7 +1104,32 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
                         {/* Info poin yang akan didapat */}
                         {pointsToEarn > 0 && (
                           <div className="mt-2 text-xs text-green-600 bg-green-50 rounded-lg px-3 py-1.5">
-                            ✨ This order will earn <strong>+{pointsToEarn} points</strong> for member
+                            ✨ Perkiraan <strong>+{pointsToEarn} poin</strong> setelah pesanan dibayar
+                          </div>
+                        )}
+
+                        {/* Tukar poin: potongan harga, wajib konfirmasi nama member */}
+                        {getMemberPoints(selectedMember) > 0 && (
+                          <div className="mt-3 rounded-lg border border-blue-200 bg-white p-2.5">
+                            <div className="text-xs font-semibold text-gray-700">Tukar poin (saldo {getMemberPoints(selectedMember)})</div>
+                            <div className="mt-1.5 flex gap-2">
+                              <input
+                                inputMode="numeric"
+                                value={redeemPoints}
+                                onChange={(e) => setRedeemPoints(e.target.value.replace(/\D/g, ''))}
+                                placeholder="Jumlah poin"
+                                className="w-28 rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+                              />
+                              <input
+                                value={confirmMemberName}
+                                onChange={(e) => setConfirmMemberName(e.target.value)}
+                                placeholder="Ketik nama member"
+                                className="flex-1 rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+                              />
+                            </div>
+                            <p className="mt-1 text-[11px] text-gray-500">
+                              Tanyakan nama ke pelanggan, lalu ketik untuk konfirmasi. Poin terpotong saat pesanan dibuat dan kembali jika dibatalkan.
+                            </p>
                           </div>
                         )}
 
@@ -1161,35 +1224,38 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
                 className="flex-shrink-0 sticky bottom-0 border-t border-gray-200 bg-gray-50 p-4 space-y-3"
                 style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
               >
-                <div className="flex justify-between items-center">
-                  <span className="font-semibold text-gray-900">Total Bayar</span>
-                  <div className="text-right">
-                    {selectedReward && discountAmount > 0 ? (
-                      <div className="space-y-1">
-                        <div className="text-sm text-gray-500 line-through">
-                          Rp {totalPrice.toLocaleString('id-ID')}
-                        </div>
-                        <div className="font-bold text-gray-900 text-lg">
-                          Rp {finalAmount.toLocaleString('id-ID')}
-                        </div>
-                        <div className="text-xs text-green-600">
-                          Hemat Rp {discountAmount.toLocaleString('id-ID')}
-                        </div>
-                      </div>
-                    ) : (
-                      <span className="font-bold text-gray-900 text-lg">
-                        Rp {totalPrice.toLocaleString('id-ID')}
-                      </span>
+                {serverTotals && (
+                  <div className="space-y-0.5 text-xs text-gray-600">
+                    <div className="flex justify-between"><span>Subtotal</span><span>Rp {serverTotals.subtotal.toLocaleString('id-ID')}</span></div>
+                    {serverTotals.discount_amount > 0 && (
+                      <div className="flex justify-between text-green-700"><span>Diskon reward</span><span>− Rp {serverTotals.discount_amount.toLocaleString('id-ID')}</span></div>
+                    )}
+                    {serverTotals.points_discount_amount > 0 && (
+                      <div className="flex justify-between text-green-700"><span>Tukar poin</span><span>− Rp {serverTotals.points_discount_amount.toLocaleString('id-ID')}</span></div>
+                    )}
+                    {serverTotals.service_amount > 0 && (
+                      <div className="flex justify-between"><span>Service {serverTotals.service_percent}%</span><span>Rp {serverTotals.service_amount.toLocaleString('id-ID')}</span></div>
+                    )}
+                    {serverTotals.tax_amount > 0 && (
+                      <div className="flex justify-between"><span>Pajak {serverTotals.tax_percent}%</span><span>Rp {serverTotals.tax_amount.toLocaleString('id-ID')}</span></div>
+                    )}
+                    {serverTotals.rounding_amount !== 0 && (
+                      <div className="flex justify-between"><span>Pembulatan</span><span>Rp {serverTotals.rounding_amount.toLocaleString('id-ID')}</span></div>
                     )}
                   </div>
+                )}
+                {previewError && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{previewError}</p>}
+                <div className="flex justify-between items-center">
+                  <span className="font-semibold text-gray-900">Total Bayar</span>
+                  <span className="font-bold text-gray-900 text-lg">Rp {finalAmount.toLocaleString('id-ID')}</span>
                 </div>
 
                 <button
                   onClick={handleCreateOrder}
-                  disabled={loading}
+                  disabled={loading || Boolean(previewError)}
                   className="w-full bg-[#111111] text-white py-3 px-4 rounded-lg font-medium hover:bg-[#2a241d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-base"
                 >
-                  {loading ? 'Creating order...' : `Create Order • Rp ${totalPrice.toLocaleString('id-ID')}`}
+                  {loading ? 'Membuat pesanan...' : `Buat Pesanan • Rp ${finalAmount.toLocaleString('id-ID')}`}
                 </button>
               </div>
             )}
