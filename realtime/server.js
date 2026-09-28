@@ -18,9 +18,8 @@ const ALLOWED_ORIGINS = String(process.env.REALTIME_ALLOWED_ORIGINS || '')
   .filter(Boolean);
 const CORS_ORIGIN = ALLOWED_ORIGINS.length > 0 ? ALLOWED_ORIGINS : true;
 
-// When true, sockets without a valid token (issued by Laravel at
-// GET /api/v1/hellom/realtime/token) are rejected. Default false keeps the
-// legacy Blade screens (anonymous sockets joining tenant_* rooms) working.
+// When true, sockets without a valid token (issued by Laravel) are rejected.
+// Anonymous sockets can join no room either way; they only receive global events.
 const REQUIRE_AUTH = String(process.env.REALTIME_REQUIRE_AUTH || 'false').toLowerCase() === 'true';
 
 if (SECRET === 'change-me') {
@@ -127,13 +126,9 @@ io.on('connection', (socket) => {
 
   socket.emit('server.hello', { time: new Date().toISOString() });
 
-  // Legacy: Blade screens join tenant rooms themselves. Private rooms are only
-  // ever joined through a verified token above.
-  socket.on('join', (room) => {
-    if (room && typeof room === 'string' && room.startsWith('tenant_')) {
-      socket.join(room);
-    }
-  });
+  // Rooms are only ever joined through a verified token above (POS outlet rooms
+  // "tenant:{slug}:outlet:{id}", guest table rooms "table:{id}", user_{id}, admins).
+  // The old anonymous 'join' of tenant_* rooms (Blade era) is gone.
 });
 
 server.listen(PORT, HOST, () => {
