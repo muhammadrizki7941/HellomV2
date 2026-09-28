@@ -695,7 +695,8 @@ export default function PublicPage() {
     const timer = setInterval(async () => {
       try {
         const s = await getLandingOrderStatus(qrCheckout.reference) as { status?: string };
-        if (s?.status === 'paid') {
+        // Emails move a paid order on to "fulfilled"; both mean paid.
+        if (s?.status === 'paid' || s?.status === 'fulfilled') {
           setQrPaid(true);
           clearInterval(timer);
         }
@@ -832,7 +833,9 @@ export default function PublicPage() {
                       >
                         <Upload className="w-4 h-4 rotate-180" /> Download Gambar QR
                       </a>
-                      <p className="mt-3 text-xs text-zinc-400">Jangan tutup halaman ini sampai pembayaran selesai.</p>
+                      <a href={`/pesanan/${encodeURIComponent(qrCheckout.reference)}`} target="_blank" rel="noopener" className="mt-3 block text-xs text-zinc-500 underline">
+                        Buka halaman status pesanan (simpan tautan ini)
+                      </a>
                     </div>
                   )
                 ) : (

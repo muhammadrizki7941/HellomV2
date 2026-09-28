@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import Overview from './landing-builder/Overview';
 import Editor from './landing-builder/Editor';
-import { Layout, BarChart3, Users, RefreshCw } from 'lucide-react';
+import SellerBalance from './landing-builder/SellerBalance';
+import { useSearchParams } from 'react-router-dom';
+import { Layout, BarChart3, Users, RefreshCw, Wallet } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getLandingPageCustomers } from '@/lib/hellomApi';
 import { useEditorChrome } from '@/contexts/editorChrome';
@@ -97,7 +99,11 @@ function CustomersPanel() {
 }
 
 export default function LandingBuilder() {
-  const [activeTab, setActiveTab] = useState<'overview' | 'editor' | 'customers'>('overview');
+  // ?tab=saldo opens the sales balance directly (links from emails).
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<'overview' | 'editor' | 'customers' | 'saldo'>(
+    searchParams.get('tab') === 'saldo' ? 'saldo' : 'overview'
+  );
   const { chromeHidden, setChromeHidden } = useEditorChrome();
 
   // Auto-hide the dashboard chrome (mobile header + these tabs) while editing,
@@ -115,7 +121,7 @@ export default function LandingBuilder() {
         "items-center justify-between border-b border-zinc-200 pb-1",
         chromeHidden ? "hidden lg:flex" : "flex"
       )}>
-        <div className="flex gap-6">
+        <div className="-mx-1 flex gap-6 overflow-x-auto px-1">
           <button
             onClick={() => setActiveTab('overview')}
             className={cn(
@@ -152,6 +158,18 @@ export default function LandingBuilder() {
             <Users className="w-4 h-4" />
             Pelanggan
           </button>
+          <button
+            onClick={() => setActiveTab('saldo')}
+            className={cn(
+              "flex shrink-0 items-center gap-2 pb-3 text-sm font-medium border-b-2 transition-colors",
+              activeTab === 'saldo'
+                ? "border-yellow-400 text-black"
+                : "border-transparent text-zinc-500 hover:text-zinc-900"
+            )}
+          >
+            <Wallet className="w-4 h-4" />
+            Saldo
+          </button>
         </div>
       </div>
 
@@ -177,6 +195,8 @@ export default function LandingBuilder() {
         <div className="min-h-[600px]">
           {activeTab === 'overview' ? (
             <Overview onEdit={() => setActiveTab('editor')} />
+          ) : activeTab === 'saldo' ? (
+            <SellerBalance />
           ) : (
             <CustomersPanel />
           )}

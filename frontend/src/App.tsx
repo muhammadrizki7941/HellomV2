@@ -15,6 +15,7 @@ import {
 } from '@/pages/site';
 const PublicLayout = lazy(() => import('@/layouts/PublicLayout'));
 const PublicPage = lazy(() => import('@/pages/public/PublicPage'));
+const OrderStatusPage = lazy(() => import('@/pages/public/OrderStatusPage'));
 const InvitationAcceptPage = lazy(() => import('@/pages/public/InvitationAcceptPage'));
 const LoginPage = lazy(() => import('@/pages/auth/LoginPage'));
 const RegisterPage = lazy(() => import('@/pages/auth/RegisterPage'));
@@ -45,6 +46,7 @@ const EmailSetting = lazy(() => import('@/pages/admin/settings/EmailSetting'));
 const Notifications = lazy(() => import('@/pages/admin/Notifications'));
 const SystemHealth = lazy(() => import('@/pages/admin/SystemHealth'));
 const FinanceManagement = lazy(() => import('@/pages/admin/FinanceManagement'));
+const AdminSellerFinance = lazy(() => import('@/pages/admin/SellerFinance'));
 const ShowcaseManagement = lazy(() => import('@/pages/admin/ShowcaseManagement'));
 const LandingContentManagement = lazy(() => import('@/pages/admin/LandingContentManagement'));
 const BrandSettings = lazy(() => import('@/pages/admin/BrandSettings'));
@@ -103,6 +105,8 @@ export default function App() {
         </Route>
 
         {/* Other public routes */}
+        {/* Buyer thank-you / order status (payment return URL). */}
+        <Route path="/pesanan/:reference" element={<OrderStatusPage />} />
         <Route path="/p/demo" element={<PublicPage />} />
         <Route path="/p/landingpage/:organizationSlug" element={<PublicPage />} />
         <Route path="/p/domain/:domain" element={<PublicPage />} />
@@ -183,6 +187,7 @@ export default function App() {
           <Route path="products/:id/edit" element={<AdminProductEdit />} />
           <Route path="products/purchases" element={<AdminProductPurchases />} />
           <Route path="finance" element={<FinanceManagement />} />
+          <Route path="keuangan-penjual" element={<AdminSellerFinance />} />
           <Route path="showcase" element={<ShowcaseManagement />} />
           <Route path="landing-content" element={<LandingContentManagement />} />
           <Route path="brand" element={<BrandSettings />} />

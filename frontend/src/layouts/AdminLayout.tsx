@@ -137,6 +137,7 @@ export default function AdminLayout() {
     { icon: FileText, label: 'Landing Content', path: '/admin/landing-content' },
     { icon: Palette, label: 'Brand Settings', path: '/admin/brand' },
     { icon: Wallet, label: 'Finance', path: '/admin/finance' },
+    { icon: Wallet, label: 'Keuangan Penjual', path: '/admin/keuangan-penjual' },
     { icon: Activity, label: 'System Health', path: '/admin/system' },
     { icon: Settings, label: 'Settings', path: '/admin/settings' },
   ];
