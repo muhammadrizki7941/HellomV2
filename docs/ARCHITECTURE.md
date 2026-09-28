@@ -85,9 +85,7 @@ deploy/                          PM2, contoh Nginx, crontab, deploy.sh
 
 **Situs publik**: semua halaman publik adalah route anak `PublicLayout` (lazy per halaman; chunk halaman lain di-*prefetch* saat idle). Transisi: `AnimatePresence mode="wait"` + curtain (framer-motion `LazyMotion`/`m`, easing `0.76,0,0.24,1`), scroll ke atas setelah halaman lama keluar, Lenis hanya di desktop, preloader sekali per sesi, semua animasi jadi fade 150 ms saat `prefers-reduced-motion`. URL lama tetap jalan: `/#about` dst. → route baru, `/insights[/:slug]` → `/wawasan`, `/contact` → `/kontak`. Route organisasi `/:organizationSlug` tetap di bawahnya, jadi slug `tentang/layanan/aplikasi/portofolio/wawasan/kontak` tidak bisa dipakai organisasi.
 
-**Self-order**: QR meja → `GET /pos/customer/menu/{tableToken}` → `POST /pos/customer/order` (harga dari DB, produk harus milik tenant meja, status `unpaid`) → halaman sukses mem-*poll* `GET /pos/customer/order/{orderNumber}?table_token=…` (token meja wajib; nomor order saja tidak cukup).
-
-**Kasir**: `PosOrders` → `PATCH /pos/orders/{id}/status` `{status}` → `POST /pos/orders/{id}/payment` → struk `GET /pos/orders/{id}/receipt`. Poin loyalti diberikan saat order selesai.
+**Order (kasir & self-order)** — detail lengkap di [ALUR_ORDER.md](ALUR_ORDER.md). Satu `Services/Pos/OrderService` (harga dari `PricingService`: add-on, diskon, service, pajak, pembulatan per outlet) untuk `POST /pos/orders` dan `POST /pos/customer/order`. Status dapur maju saja (`OrderStatus`); pembayaran terpisah (`payment_status`), poin hanya setelah lunas lewat ledger `member_point_transactions` (`LoyaltyService`). Efek samping lewat event `App\Events\Pos\Order*` → `Listeners/Pos` (stok di dalam transaksi; socket, poin, audit, fraud setelah commit). Self-order dijaga `SelfOrderGate` (token → meja → outlet aktif, jam buka, batas pending, limiter `hellom-self-order`); order ber-meja masuk `table_bills`. Member milik organisasi, identitas `phone_normalized`.
 
 **Checkout tamu produk digital** (produk berbayar milik platform, tanpa login): `/produk/{slug}/checkout` → `POST /public/products/{slug}/checkout` `{email, phone?, payment_flow, …}` → pembelian ditautkan ke akun ber-email itu (dibuat otomatis bila belum ada, `users.pending_guest_credentials`) → halaman status `/produk/checkout/{token}` mem-*poll* `GET /public/product-checkouts/{token}`. Saat pembelian menjadi `paid` lewat jalur mana pun (webhook, sinkron iPaymu, approval super admin), `ProductPurchaseObserver` (after commit) memanggil `ProductAccessMailer`: satu email berisi link masuk sekali pakai (`login_links`, 7 hari → `/auth/magic` → `POST /auth/magic-login` → `/dashboard/products/{slug}`) dan password baru **hanya** untuk akun yang dibuat oleh checkout tamu. Akun lama tidak pernah diubah password-nya. Produk gratis/berlangganan tetap lewat login. Logika pembayaran bersama ada di `Services/DigitalProducts/ProductCheckoutService` (dipakai juga oleh checkout dashboard).
 
@@ -95,7 +93,8 @@ deploy/                          PM2, contoh Nginx, crontab, deploy.sh
 
 - Laravel memanggil `RealtimeClient::emitToRoom($room, $event, $data)` → `POST {REALTIME_SERVER_URL}/emit` dengan header `X-RT-SECRET`.
 - Browser mengambil token `GET /api/v1/hellom/realtime/token` (berlaku 10 menit, HMAC-SHA256 dengan `REALTIME_SERVER_SECRET`) dan mengirimnya saat handshake; server memverifikasi lalu memasukkan socket ke room privatnya (`user_<id>`, `admins` untuk super admin). Token palsu/kedaluwarsa ditolak.
-- Event saat ini: `admin.notification.created` → room `admins` (bell super admin). Pesanan POS di SPA memakai *polling*.
+- Event saat ini: `admin.notification.created` → room `admins` (bell super admin); `pos.order` → room `tenant:{slug}:outlet:{id}` (token `GET /pos/realtime/token`, dibuka oleh `PosLayout`: bunyi + badge); `customer.order` → room `table:{id}` (token publik `GET /pos/customer/table/{token}/realtime-token`). Klien bersama: `frontend/src/lib/realtime.ts`; polling tetap jadi cadangan.
+- Tidak ada lagi `join` room oleh socket anonim; room hanya dari token.
 - `REALTIME_REQUIRE_AUTH=true` (disarankan) menolak socket tanpa token.
 
 ## 7. Model bisnis & billing
@@ -137,3 +136,5 @@ deploy/                          PM2, contoh Nginx, crontab, deploy.sh
 ## 10. Tes
 
 PHPUnit (`backend/phpunit.xml`) memakai sqlite `:memory:`, tetapi tiga migration memakai `information_schema` MySQL sehingga tes fitur gagal di sqlite. Tes unit (`tests/Unit`) berjalan. Untuk verifikasi backend gunakan DB MySQL terpisah atau skrip `tinker` di dalam transaksi yang di-rollback. **Pastikan `bootstrap/cache/config.php` tidak ada sebelum `php artisan test`** — config ter-cache bisa membuat tes memakai DB sungguhan.
+
+Tes order/member POS (`tests/Pos`) berjalan di MySQL `hellom_pos_test` lewat `php vendor/bin/phpunit -c phpunit.pos.xml` (transaksi di-rollback per tes; tes konkurensi memakai dua proses PHP dan membersihkan datanya sendiri). Cara menyiapkan database tes: [ALUR_ORDER.md §10](ALUR_ORDER.md#10-tes).

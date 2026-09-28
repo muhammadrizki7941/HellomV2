@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased] — Refactor & hardening (branch `refactor/cleanup`, 2026-09-27 … 2026-09-28)
+## [Unreleased] — Refactor & hardening (branch `refactor/cleanup`, 2026-09-27 … 2026-09-29)
 
 Audit lengkap dan status per temuan: [docs/AUDIT.md](docs/AUDIT.md). Langkah deploy khusus rilis ini: [docs/DEPLOY.md §3](docs/DEPLOY.md#3-catatan-khusus-rilis-refactor-branch-refactorcleanup).
 
@@ -15,6 +15,7 @@ Audit lengkap dan status per temuan: [docs/AUDIT.md](docs/AUDIT.md). Langkah dep
 - Secret realtime yang ter-commit diganti placeholder (**rotasi di server wajib**).
 
 ### Diperbaiki (bug)
+- **POS — poin & order (Fase 2B, [docs/AUDIT_POS.md](docs/AUDIT_POS.md))**: poin bisa masuk dua kali (selesai + bayar) dan diberikan sebelum dibayar; status bisa mundur (`completed → new → completed` = poin lagi); poin/stok tidak kembali saat batal; member tidak ditemukan di outlet kedua (scope slug utama vs outlet); `08…`/`628…`/`+62…` dianggap orang berbeda; reward bisa dipakai tanpa memenuhi ambang; laporan menghitung order *selesai* bukan *lunas*; bayar langsung menandai *selesai*; nomor order global 3 digit bisa bentrok; self-order tanpa add-on, tanpa cek jam/ketersediaan saat kirim, tanpa batas spam per meja; link toko memakai meja sungguhan.
 - **POS → Pesanan**: ubah status pesanan selalu gagal 422 (body salah format).
 - **POS → Laporan**: ekspor Excel selalu gagal dan mengabaikan rentang tanggal.
 - **POS → Pesanan**: filter status hanya diterapkan pada 100 pesanan terbaru.
@@ -31,6 +32,12 @@ Audit lengkap dan status per temuan: [docs/AUDIT.md](docs/AUDIT.md). Langkah dep
 - **Billing**: akses paket tahunan tidak pernah berakhir; pembelian tahunan/lifetime via saldo wallet atau Xendit tercatat 1 bulan; webhook lama yang diputar ulang bisa menghidupkan akses kedaluwarsa; bulanan dengan auto-renew mati tidak pernah berakhir.
 
 ### Ditambahkan
+- **Satu mesin order untuk kasir & self-order** ([docs/ALUR_ORDER.md](docs/ALUR_ORDER.md)): `OrderService` + `PricingService` (add-on, diskon, service charge, pajak, pembulatan per outlet; total dari server, pratinjau `POST /pos/orders/preview`), status baku dengan label Indonesia dan transisi maju saja, bayar terpisah dari status dapur, batal (alasan wajib) dan refund (owner/supervisor), event `OrderCreated/Confirmed/StatusChanged/Paid/Voided/Refunded` untuk stok, poin, socket, audit log dan deteksi kecurangan.
+- **Self-order**: QR acak 24 karakter terikat ke outlet + ganti QR + cetak massal; menu mengikuti outlet (add-on, ketersediaan, jam buka, pesan ramah saat tutup); perubahan harga/stok dilaporkan per item (409) dan keranjang diperbarui; limiter per token+IP dan batas pesanan menunggu per meja; konfirmasi kasir bisa dimatikan per outlet; status pesanan realtime untuk tamu; **tagihan meja** (pesanan QR & kasir satu tagihan, bayar sekaligus); metode bayar & branding milik outlet/tenant.
+- **Realtime pesanan**: room `tenant:{slug}:outlet:{id}` (bunyi + badge di POS) dan `table:{id}` (tamu), polling tetap sebagai cadangan.
+- **Member & poin**: member per organisasi dengan nomor HP ternormalisasi (628…), ledger `member_point_transactions` (saldo awal dimigrasi, lock saat tukar, FIFO, kedaluwarsa), tukar poin dengan konfirmasi nama (antarmuka OTP WhatsApp disiapkan), aturan per tenant (nilai poin, min/maks tukar, masa berlaku), ubah poin manual ber-audit, gabung member duplikat manual, sinyal kecurangan, halaman member owner (cari, filter outlet, urutan paling aktif, riwayat poin & pesanan, ekspor Excel).
+- Command `pos:points reconcile|expire` (expire terjadwal harian) dan `pos:report duplicates|orphans|weak-tokens` (read-only).
+- Tes POS di MySQL (`phpunit.pos.xml`, 16 tes): isolasi QR antar outlet/tenant, total kasir = self-order, normalisasi nomor per tenant, poin setelah lunas & ditarik saat refund, dua penukaran bersamaan tidak membuat saldo negatif.
 - Pengaturan pembayaran dari dashboard super admin: channel VA/QRIS iPaymu yang tampil di checkout, tombol checkout tanpa login, URL webhook lengkap beserta petunjuk pendaftaran.
 - **Checkout tamu produk digital**: produk berbayar milik platform bisa dibeli tanpa login (email wajib, no. HP opsional). Setelah lunas, pembeli menerima email berisi link sekali pakai yang langsung membuka produk di dashboard, plus password untuk akun baru. Halaman status pembayaran publik dengan polling dan kirim ulang email.
 - Fondasi penjualan: `Plan::accessEndsAt()`, `EntitlementService`, `Entitlement::effectiveStatus()`, masa tenggang `BILLING_GRACE_DAYS`, command `hellom:billing:expire-subscriptions` (per jam) dan `hellom:billing:backfill-entitlement-ends` (laporan dulu, `--force` untuk menulis). Paket **lifetime** (bayar sekali) didukung penuh.
@@ -58,6 +65,7 @@ Audit lengkap dan status per temuan: [docs/AUDIT.md](docs/AUDIT.md). Langkah dep
 - Log debug di konsol browser yang mencetak data member dan pesanan pelanggan.
 
 ### Catatan upgrade
+- **Fase 2B**: backup DB → catat `SUM(redeemable_points)` → `php artisan migrate` (2 migration aditif) → `php artisan pos:points reconcile` → `pos:report duplicates|orphans|weak-tokens` → restart `hellom-realtime` (server.js berubah) → build frontend. Langkah & SQL verifikasi: [docs/ALUR_ORDER.md §9](docs/ALUR_ORDER.md#9-migrasi-data--verifikasi). Endpoint `POST /pos/orders/{id}/payment` tidak lagi men-set status `completed`.
 - Build frontend dari `frontend/` (`npm ci --include=dev && npm run build`).
 - Migration baru (aditif): `users.role_before_suspension`, `users.pending_guest_credentials`, kolom checkout tamu di `product_purchases`, tabel `login_links`.
 - Jalankan laporan `hellom:billing:backfill-entitlement-ends` sebelum memutuskan `--force`.

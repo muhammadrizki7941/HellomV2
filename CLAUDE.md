@@ -31,7 +31,7 @@ npm run build                             # → ../backend/public/hellom
 # realtime
 node server.js                            # env: PORT, HOST, REALTIME_SERVER_SECRET, REALTIME_ALLOWED_ORIGINS, REALTIME_REQUIRE_AUTH
 ```
-Tes PHPUnit fitur gagal di sqlite (migration memakai `information_schema` MySQL); tes unit jalan. Verifikasi backend dengan skrip `tinker` di `backend/storage/app/*.php` (git-ignored) dalam `DB::beginTransaction()/rollBack()`. **Hapus `bootstrap/cache/config.php` sebelum `php artisan test`.**
+Tes PHPUnit fitur gagal di sqlite (migration memakai `information_schema` MySQL); tes unit jalan. Tes order/member POS: `php vendor/bin/phpunit -c phpunit.pos.xml` (MySQL `hellom_pos_test`, lihat [docs/ALUR_ORDER.md](docs/ALUR_ORDER.md) §10). Verifikasi backend dengan skrip `tinker` di `backend/storage/app/*.php` (git-ignored) dalam `DB::beginTransaction()/rollBack()`. **Hapus `bootstrap/cache/config.php` sebelum `php artisan test`.**
 
 ## Aturan domain yang wajib diingat
 - **Isolasi tenant manual**: global scope `tenant` tidak aktif di API token. Setiap query POS filter `tenant_id` (`posTenantSlug` dari `InjectPosContext`, atau `OutletService::tenantSlugs($org)` untuk level organisasi). Endpoint publik mencari lewat token (`dining_tables.public_id`), bukan ID berurutan.
