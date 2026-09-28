@@ -1,4 +1,5 @@
 import React from 'react';
+import { safeHtml } from '@/lib/safeHtml';
 import {
   FileText, Upload,
   Facebook, Instagram, Music2, AtSign, ShoppingBag, MessageCircle,
@@ -426,7 +427,7 @@ const GifBlock = ({ content, styles }: { content: any, styles: any }) => (
 
 const HtmlBlock = ({ content, styles }: { content: any, styles: any }) => (
   <div className={`${styles.padding} px-4 sm:px-8`} style={styles.container}>
-    <div className="max-w-3xl mx-auto" dangerouslySetInnerHTML={{ __html: content.html || '' }} />
+    <div className="max-w-3xl mx-auto" dangerouslySetInnerHTML={{ __html: safeHtml(content.html) }} />
   </div>
 );
 

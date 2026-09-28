@@ -1314,7 +1314,8 @@ class LandingBuilderController extends BaseApiController
                 'block_key' => (string) $block->block_key,
                 'block_type' => (string) $block->block_type,
                 'sort_order' => (int) $block->sort_order,
-                'content' => $block->content,
+                // Paid delivery links stripped, HTML sanitised: visitors are anonymous.
+                'content' => $block->publicContent(),
             ])
             ->values();
 

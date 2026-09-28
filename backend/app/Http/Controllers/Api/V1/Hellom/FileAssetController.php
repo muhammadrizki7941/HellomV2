@@ -43,7 +43,8 @@ class FileAssetController extends BaseApiController
         }
 
         $validated = $request->validate([
-            'file' => ['required', 'file', 'max:4096', 'mimes:jpg,jpeg,png,webp,gif,svg,pdf'],
+            // No SVG: it can carry scripts and is served from the dashboard origin.
+            'file' => ['required', 'file', 'max:4096', 'mimes:jpg,jpeg,png,webp,gif,pdf'],
         ]);
 
         $file = $validated['file'];

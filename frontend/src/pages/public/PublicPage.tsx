@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { safeHtml } from '@/lib/safeHtml';
 import { useParams, Link } from 'react-router-dom';
 import {
   ShoppingCart, CheckCircle, XCircle, Loader2,
@@ -545,7 +546,7 @@ const RenderGif = ({ content, styles }: { content: any, styles?: any }) => (
 
 const RenderHtml = ({ content, styles }: { content: any, styles?: any }) => (
   <section className="py-12 px-6" style={{ backgroundColor: styles?.backgroundColor, color: styles?.textColor }}>
-    <div className="mx-auto max-w-3xl" dangerouslySetInnerHTML={{ __html: content.html || '' }} />
+    <div className="mx-auto max-w-3xl" dangerouslySetInnerHTML={{ __html: safeHtml(content.html) }} />
   </section>
 );
 

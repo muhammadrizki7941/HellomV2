@@ -53,11 +53,18 @@ server {
     # Public uploads (storage/app/public), no `storage:link` needed
     location ^~ /storage {
         alias /www/wwwroot/hellomspace.com/backend/storage/app/public;
+        # Uploaded SVGs may contain scripts: sandbox them (no script on this origin).
+        if ($uri ~* \.svg$) {
+            add_header Content-Security-Policy "default-src 'none'; style-src 'unsafe-inline'; sandbox" always;
+        }
         try_files $uri =404;
     }
 
     location ^~ /media {
         alias /www/wwwroot/hellomspace.com/backend/storage/app/public;
+        if ($uri ~* \.svg$) {
+            add_header Content-Security-Policy "default-src 'none'; style-src 'unsafe-inline'; sandbox" always;
+        }
         try_files $uri =404;
     }
 

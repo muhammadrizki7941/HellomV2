@@ -21,9 +21,16 @@ Route::get('/media/{path}', function (string $path) {
 		abort(404);
 	}
 
-	return response()->file($disk->path($path), [
+	$headers = [
 		'Cache-Control' => 'public, max-age=31536000',
-	]);
+		'X-Content-Type-Options' => 'nosniff',
+	];
+	// Old SVG uploads can contain scripts: never let them run on this origin.
+	if (Str::endsWith(Str::lower($path), '.svg')) {
+		$headers['Content-Security-Policy'] = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
+	}
+
+	return response()->file($disk->path($path), $headers);
 })->where('path', '.*')->name('media.public');
 
 // Every other GET that is not an API call gets the SPA shell; the React

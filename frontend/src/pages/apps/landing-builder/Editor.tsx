@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { nanoid } from 'nanoid';
-import { Copy, Check, ExternalLink, CheckCircle2 } from 'lucide-react';
+import { Copy, Check, ExternalLink, CheckCircle2, RefreshCw } from 'lucide-react';
 import { arrayMove } from '@dnd-kit/sortable';
 import { cn } from '@/lib/utils';
 import { THEMES, defaultContent } from './constants';
@@ -228,6 +228,10 @@ export default function LandingBuilder() {
   const [currentPageId, setCurrentPageId] = useState<number | null>(null);
   const [currentPageSlug, setCurrentPageSlug] = useState<string>('landing-page');
   const [isSaving, setIsSaving] = useState(false);
+  // Until the saved page is loaded the editor shows defaults; saving then would
+  // overwrite the live page with them, so editing is blocked until 'ready'.
+  const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [saveInfo, setSaveInfo] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   // Full public URL after a successful publish, for the share/copy bar.
@@ -302,10 +306,12 @@ export default function LandingBuilder() {
   useEffect(() => {
     const loadPage = async () => {
       setSaveError(null);
+      setLoadState('loading');
       try {
         const pages = await getLandingPages();
         const first = pages.items?.[0];
         if (!first) {
+          setLoadState('ready');
           return;
         }
 
@@ -338,14 +344,16 @@ export default function LandingBuilder() {
           setBlocks(mappedBlocks);
           setSelectedBlockId(mappedBlocks[0]?.id ?? null);
         }
+        setLoadState('ready');
       } catch (loadError) {
         const message = loadError instanceof Error ? loadError.message : 'Gagal memuat landing page editor';
         setSaveError(message);
+        setLoadState('error');
       }
     };
 
     void loadPage();
-  }, []);
+  }, [loadAttempt]);
 
   const activeTheme = THEMES.find(t => t.id === activeThemeId) || THEMES[0];
 
@@ -480,6 +488,7 @@ export default function LandingBuilder() {
   };
 
   const syncToBackend = async (publish: boolean) => {
+    if (loadState !== 'ready') return;
     setIsSaving(true);
     setSaveError(null);
     setSaveInfo(null);
@@ -573,6 +582,35 @@ export default function LandingBuilder() {
   const handlePublish = () => {
     void syncToBackend(true);
   };
+
+  if (loadState !== 'ready') {
+    return (
+      <div className="mx-auto max-w-3xl space-y-4 p-4" aria-busy={loadState === 'loading'}>
+        {loadState === 'loading' ? (
+          <>
+            <p className="text-sm text-zinc-500">Memuat halaman kamu…</p>
+            <div className="h-12 animate-pulse rounded-xl bg-zinc-200" />
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="h-16 animate-pulse rounded-xl bg-zinc-100" />
+            ))}
+            <div className="mx-auto h-80 w-64 animate-pulse rounded-[2rem] bg-zinc-100" />
+          </>
+        ) : (
+          <div className="rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">
+            <p className="font-semibold">Halaman belum berhasil dimuat.</p>
+            <p className="mt-1">Supaya halaman kamu tidak tertimpa, editor dikunci sampai data termuat. {saveError}</p>
+            <button
+              type="button"
+              onClick={() => setLoadAttempt((n) => n + 1)}
+              className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg bg-black px-4 text-sm font-semibold text-white"
+            >
+              <RefreshCw className="h-4 w-4" /> Coba lagi
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <LanguageProvider>
