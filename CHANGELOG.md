@@ -4,6 +4,14 @@
 
 Audit lengkap dan status per temuan: [docs/AUDIT.md](docs/AUDIT.md). Langkah deploy khusus rilis ini: [docs/DEPLOY.md §3](docs/DEPLOY.md#3-catatan-khusus-rilis-refactor-branch-refactorcleanup).
 
+### Hellom Page — uang penjualan (Fase 2, [docs/AUDIT_LANDING_BUILDER.md](docs/AUDIT_LANDING_BUILDER.md))
+- **Pembayaran diverifikasi ke gateway**: order landing hanya lunas bila status **dan nominal** cocok di API gateway; webhook ganda tidak mengkredit dua kali; tanda tangan DOKU dicek; semua webhook dicatat mentah di `payment_webhook_logs`.
+- **Status order** `pending → paid → fulfilled` (+ `expired/failed/refunded`) dengan transisi terkunci; order kedaluwarsa 24 jam; rekonsiliasi otomatis tiap 5 menit; item order di-snapshot.
+- **Saldo Penjualan** baru (tab *Saldo* di Hellom Page): Tertahan / Tersedia / Diproses / Ditarik, rincian harga–biaya–bersih per penjualan, dari ledger append-only (`balance:reconcile`).
+- **Penarikan**: min Rp50.000, nama rekening harus sama dengan KTP, ganti rekening = tahan 24 jam + email, SLA 1×24 jam, email tiap status, gagal = saldo kembali. Saldo top-up tidak bisa ditarik lagi.
+- **Super admin → Keuangan Penjual**: ringkasan, antrean penarikan dengan penanda SLA (+ bukti transfer), riwayat webhook, rekonsiliasi, pengaturan biaya & masa tahan, export Excel.
+- Halaman status pesanan pembeli `/pesanan/{ref}`.
+
 ### Keamanan
 - **Penarikan dana hanya disetujui super admin.** Sebelumnya pemilik tenant bisa menyetujui (dan memicu payout Xendit) penarikannya sendiri; antrean super admin juga hanya melihat organisasinya sendiri. Kini lintas organisasi dan hanya `super_admin`.
 - **Endpoint billing mock dimatikan** kecuali `BILLING_MOCK_ENABLED=true` (sebelumnya siapa pun bisa menambah saldo / mengaktifkan langganan gratis; UI juga memanggil top-up mock saat gateway belum siap).

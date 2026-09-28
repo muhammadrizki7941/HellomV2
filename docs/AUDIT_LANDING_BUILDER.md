@@ -12,6 +12,30 @@ yang sudah dihapus lagi. Tidak ada data pelanggan yang dibaca/ditampilkan; angka
 
 ---
 
+## Status perbaikan (diperbarui 2026-09-29)
+
+| Fase | ID | Status |
+|---|---|---|
+| Hotfix | LB-18, LB-19, LB-20, LB-30 | ✅ Selesai (`f84c9b4`): field rahasia blok disaring server, HTML disanitasi server + DOMPurify, SVG ditolak/`sandbox`, editor dikunci saat memuat |
+| 2 | LB-01 | ✅ Status & nominal dicek ke API gateway (`getStatus`) sebelum settle; beda nominal/referensi → ditolak & dicatat |
+| 2 | LB-02 | ✅ HMAC DOKU diverifikasi untuk order landing (`lps_`) |
+| 2 | LB-03 | ✅ Pending ≠ gagal; hanya status gateway `failed/expired` yang mengubah order |
+| 2 | LB-04 | ✅ Kedaluwarsa 24 jam (`landing:orders expire`) + rekonsiliasi pending (`landing:orders reconcile`) |
+| 2 | LB-05 | ✅ Rilis dompet lama melewati baris yang sudah dirilis |
+| 2 | LB-07 | ✅ Ledger append-only `seller_balance_ledger` + cache `seller_balances` + `balance:reconcile` |
+| 2 | LB-08 | ✅ Saldo penjualan terpisah; penarikan dompet top-up ditutup (`WITHDRAWAL_MOVED_TO_SELLER_BALANCE`). ⚠️ Top-up mock di dompet lama tetap ada — lihat laporan `seller-balance:opening` |
+| 2 | LB-09 | ✅ Semua aksi penarikan dalam transaksi + `lockForUpdate`; tes konkuren 2 proses |
+| 2 | LB-10 | ✅ Min Rp50.000, biaya, SLA 24 jam (peringatan 20 jam ke super admin), email tiap perubahan status — semua bisa diatur super admin |
+| 2 | LB-11 | ✅ Biaya gateway per metode dicatat per order; rincian harga/biaya/bersih tampil ke penjual |
+| 2 | LB-12 | ✅ FK `landing_page_orders.organization_id` → `restrict` |
+| 2 | LB-13 | ✅ `payment_webhook_logs` (payload mentah, token disamarkan) |
+| 2 | LB-14 | ✅ Email lewat queue (`SendLandingSaleEmails`, afterCommit). Tombol kirim ulang → Fase 3 |
+| 2 | LB-16 | ✅ `returnUrl` dari `FrontendUrl`; error gateway → pesan ramah + log |
+| 2 | LB-28 | ✅ Tes isolasi saldo antar penjual |
+| 2 | UI-02 | ✅ Halaman status `/pesanan/{ref}` untuk semua metode (polling saja) |
+| 2 | UI-05 | ◐ Tab "Tarik Saldo" di Pembayaran diarahkan ke Saldo Penjualan; tabel riwayat dompet → Fase 5 |
+| 3–5 | lainnya | Belum |
+
 ## A. Peta modul
 
 ### File utama
