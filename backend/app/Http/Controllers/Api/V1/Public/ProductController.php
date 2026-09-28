@@ -11,8 +11,10 @@ class ProductController extends BaseApiController
 {
     public function index(): JsonResponse
     {
+        // Regular catalog (/produk). Flagship SaaS apps are listed by flagship() instead.
         $products = DigitalProduct::query()
             ->published()
+            ->flagship(false)
             ->with(['files:id,product_id,label,file_type,version,is_primary'])
             ->select([
                 'id',
@@ -34,6 +36,35 @@ class ProductController extends BaseApiController
             ->get();
 
         return $this->ok($products, 'Public products');
+    }
+
+    /** Flagship SaaS apps for the /aplikasi showcase, with their banners. */
+    public function flagship(): JsonResponse
+    {
+        $apps = DigitalProduct::query()
+            ->published()
+            ->flagship()
+            ->select([
+                'id',
+                'slug',
+                'name',
+                'tagline',
+                'description',
+                'category',
+                'type',
+                'price',
+                'thumbnail_url',
+                'banner_url',
+                'banner_mobile_url',
+                'flagship_app',
+                'tags',
+                'sort_order',
+            ])
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get();
+
+        return $this->ok($apps, 'Flagship apps');
     }
 
     public function show(string $slug): JsonResponse

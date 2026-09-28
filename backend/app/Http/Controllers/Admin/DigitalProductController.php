@@ -63,6 +63,8 @@ class DigitalProductController extends BaseApiController
             'tags' => ['nullable', 'array'],
             'is_published' => ['boolean'],
             'is_featured' => ['boolean'],
+            'is_flagship' => ['boolean'],
+            'flagship_app' => ['nullable', 'string', 'max:64', 'regex:/^[a-z0-9-]+$/'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
         ]);
 
@@ -103,6 +105,8 @@ class DigitalProductController extends BaseApiController
             'tags' => ['nullable', 'array'],
             'is_published' => ['boolean'],
             'is_featured' => ['boolean'],
+            'is_flagship' => ['boolean'],
+            'flagship_app' => ['nullable', 'string', 'max:64', 'regex:/^[a-z0-9-]+$/'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
         ]);
 
@@ -158,6 +162,39 @@ class DigitalProductController extends BaseApiController
         ]);
 
         return $this->ok($product->fresh(), 'Thumbnail uploaded');
+    }
+
+    /**
+     * Banner for the public /aplikasi showcase (flagship apps).
+     * variant=desktop (wide, ~1920×800) or mobile (portrait, ~1080×1350).
+     */
+    public function uploadBanner(Request $request, string $id): JsonResponse
+    {
+        $product = DigitalProduct::query()->findOrFail($id);
+
+        $validated = $request->validate([
+            'variant' => ['required', 'in:desktop,mobile'],
+            'banner' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
+        ]);
+
+        $column = $validated['variant'] === 'mobile' ? 'banner_mobile_url' : 'banner_url';
+        $this->deletePublicUrl($product->{$column});
+        $path = $validated['banner']->store('products/banners', 'public');
+        $product->update([$column => Storage::disk('public')->url($path)]);
+
+        return $this->ok($product->fresh(), 'Banner uploaded');
+    }
+
+    public function deleteBanner(Request $request, string $id): JsonResponse
+    {
+        $product = DigitalProduct::query()->findOrFail($id);
+        $validated = $request->validate(['variant' => ['required', 'in:desktop,mobile']]);
+
+        $column = $validated['variant'] === 'mobile' ? 'banner_mobile_url' : 'banner_url';
+        $this->deletePublicUrl($product->{$column});
+        $product->update([$column => null]);
+
+        return $this->ok($product->fresh(), 'Banner removed');
     }
 
     public function uploadFile(Request $request, string $id): JsonResponse
@@ -275,6 +312,16 @@ class DigitalProductController extends BaseApiController
         }
 
         return $slug;
+    }
+
+    /** Remove a file we stored on the public disk (ignores external URLs). */
+    private function deletePublicUrl(?string $url): void
+    {
+        $path = parse_url((string) $url, PHP_URL_PATH);
+        if (!is_string($path) || !Str::contains($path, '/storage/products/banners/')) {
+            return;
+        }
+        Storage::disk('public')->delete(ltrim(Str::after($path, '/storage/'), '/'));
     }
 
     private function deleteDocFile(string $path): void

@@ -115,6 +115,8 @@ Route::prefix('admin')->name('admin.')->middleware('superAdmin')->group(function
     Route::post('digital-products/{id}/publish', [AdminDigitalProductController::class, 'publish']);
     Route::post('digital-products/{id}/unpublish', [AdminDigitalProductController::class, 'unpublish']);
     Route::post('digital-products/{id}/thumbnail', [AdminDigitalProductController::class, 'uploadThumbnail']);
+    Route::post('digital-products/{id}/banner', [AdminDigitalProductController::class, 'uploadBanner']);
+    Route::delete('digital-products/{id}/banner', [AdminDigitalProductController::class, 'deleteBanner']);
     Route::post('digital-products/{id}/files', [AdminDigitalProductController::class, 'uploadFile']);
     Route::post('digital-products/{id}/docs', [AdminDigitalProductController::class, 'uploadDoc']);
     Route::delete('digital-products/files/{fileId}', [AdminDigitalProductController::class, 'deleteFile']);

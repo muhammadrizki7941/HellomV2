@@ -22,11 +22,15 @@ class DigitalProduct extends Model
         'price',
         'currency',
         'thumbnail_url',
+        'banner_url',
+        'banner_mobile_url',
         'preview_images',
         'tech_stack',
         'tags',
         'is_published',
         'is_featured',
+        'is_flagship',
+        'flagship_app',
         'sort_order',
         'total_purchases',
         'total_downloads',
@@ -38,6 +42,7 @@ class DigitalProduct extends Model
         'tags' => 'array',
         'is_published' => 'boolean',
         'is_featured' => 'boolean',
+        'is_flagship' => 'boolean',
         'deleted_at' => 'datetime',
     ];
 
@@ -59,6 +64,12 @@ class DigitalProduct extends Model
     public function scopePublished($query)
     {
         return $query->where('is_published', true);
+    }
+
+    /** Flagship SaaS apps live on /aplikasi, not in the regular /produk catalog. */
+    public function scopeFlagship($query, bool $flagship = true)
+    {
+        return $query->where('is_flagship', $flagship);
     }
 
     public function scopeFeatured($query)

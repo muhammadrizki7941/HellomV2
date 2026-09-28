@@ -50,6 +50,7 @@ Route::get('/public/insights/{slug}', [LandingContentController::class, 'publicA
 Route::get('/public/brand', [BrandSettingController::class, 'publicShow'])->name('public.brand');
 Route::get('/public/banners', [BannerController::class, 'publicIndex'])->name('public.banners.index');
 Route::get('/public/products', [PublicProductController::class, 'index'])->name('public.products.index');
+Route::get('/public/flagship-apps', [PublicProductController::class, 'flagship'])->name('public.products.flagship');
 Route::get('/public/products/categories', [PublicProductController::class, 'categories'])->name('public.products.categories');
 Route::get('/public/products/{slug}', [PublicProductController::class, 'show'])->name('public.products.show');
 // Guest checkout for platform digital products (no login; access delivered by email)
