@@ -6,6 +6,7 @@
 */
 
 use App\Http\Controllers\Api\V1\Hellom\PayoutProfileController;
+use App\Http\Controllers\Api\V1\Hellom\SellerFinanceController;
 use App\Http\Controllers\Api\V1\Hellom\WalletController;
 use Illuminate\Support\Facades\Route;
 
@@ -36,3 +37,13 @@ Route::post('/admin/payout-profiles/{profileId}/reject', [PayoutProfileControlle
 // Platform finance (super admin only)
 Route::get('/platform/finance-summary', [WalletController::class, 'platformFinanceSummary'])->name('platform.finance_summary');
 Route::post('/platform/payouts', [WalletController::class, 'createPlatformPayout'])->name('platform.payouts.create');
+
+// Saldo penjualan landing page (Fase 2): owner/admin of the current organization.
+// Not behind the app subscription, so sellers can always withdraw what they earned.
+Route::prefix('seller/finance')->name('seller_finance.')->group(function () {
+    Route::get('/summary', [SellerFinanceController::class, 'summary'])->name('summary');
+    Route::get('/ledger', [SellerFinanceController::class, 'ledger'])->name('ledger');
+    Route::get('/withdrawals', [SellerFinanceController::class, 'withdrawals'])->name('withdrawals');
+    Route::post('/withdrawals', [SellerFinanceController::class, 'requestWithdrawal'])->middleware('throttle:10,1')->name('withdrawals.request');
+    Route::post('/withdrawals/{withdrawalId}/cancel', [SellerFinanceController::class, 'cancelWithdrawal'])->name('withdrawals.cancel');
+});

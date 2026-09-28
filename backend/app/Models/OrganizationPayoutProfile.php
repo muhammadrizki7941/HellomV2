@@ -28,6 +28,8 @@ class OrganizationPayoutProfile extends Model
         'review_notes',
         'submitted_at',
         'reviewed_at',
+        'destination_type',
+        'bank_changed_at',
         'metadata',
     ];
 
@@ -36,6 +38,7 @@ class OrganizationPayoutProfile extends Model
         return [
             'submitted_at' => 'datetime',
             'reviewed_at' => 'datetime',
+            'bank_changed_at' => 'datetime',
             'metadata' => 'array',
         ];
     }

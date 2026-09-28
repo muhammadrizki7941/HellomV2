@@ -36,7 +36,9 @@ Route::post('/public/landing/{landingPageId}/customers', [LandingBuilderControll
 // Public buyer checkout for landing-page product/PDF sales (gateway only)
 Route::post('/public/landingpage/{organizationSlug}/orders', [LandingCheckoutController::class, 'publicLandingCheckout'])->middleware('throttle:hellom-public-write')
     ->name('public.landing.orders.checkout');
-Route::get('/public/landingpage/orders/{reference}/status', [LandingSaleController::class, 'status'])
+Route::post('/public/landingpage/orders/{reference}/returned', [LandingSaleController::class, 'returned'])->middleware('throttle:hellom-public-lookup')
+    ->name('public.landing.orders.returned');
+Route::get('/public/landingpage/orders/{reference}/status', [LandingSaleController::class, 'status'])->middleware('throttle:hellom-public-lookup')
     ->name('public.landing.orders.status');
 Route::get('/public/landingpage/orders/{token}/download', [LandingSaleController::class, 'download'])
     ->name('public.landing.orders.download');
@@ -64,9 +66,10 @@ Route::post('/public/product-checkouts/{token}/resend-access', [GuestProductChec
 Route::get('/pos/public/payment-methods/{tenantSlug}', [PosPaymentSettingController::class, 'publicSettings'])->name('pos.public.payment-methods');
 Route::post('/pos/public/members/register', [PosMemberController::class, 'publicRegister'])->middleware('throttle:hellom-public-write')->name('pos.public.members.register');
 Route::get('/pos/public/members/lookup', [PosMemberController::class, 'publicLookup'])->middleware('throttle:hellom-public-lookup')->name('pos.public.members.lookup');
-Route::post('/webhooks/xendit', [XenditWebhookController::class, 'handle'])->name('webhooks.xendit');
-Route::post('/webhooks/ipaymu', [IpaymuWebhookController::class, 'handle'])->name('webhooks.ipaymu');
-Route::post('/webhooks/doku', [DokuWebhookController::class, 'handle'])->name('webhooks.doku');
+// Every raw webhook is logged (payment_webhook_logs) before processing.
+Route::post('/webhooks/xendit', [XenditWebhookController::class, 'handle'])->middleware('logPaymentWebhook:xendit')->name('webhooks.xendit');
+Route::post('/webhooks/ipaymu', [IpaymuWebhookController::class, 'handle'])->middleware('logPaymentWebhook:ipaymu')->name('webhooks.ipaymu');
+Route::post('/webhooks/doku', [DokuWebhookController::class, 'handle'])->middleware('logPaymentWebhook:doku')->name('webhooks.doku');
 
 // Public auth endpoints (no token needed)
 Route::post('/auth/register', [AuthController::class, 'register'])->middleware('throttle:hellom-auth')->name('auth.register');

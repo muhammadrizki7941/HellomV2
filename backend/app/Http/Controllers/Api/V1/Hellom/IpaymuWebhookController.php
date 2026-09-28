@@ -12,7 +12,7 @@ use App\Models\ProductPurchase;
 use App\Models\Subscription;
 use App\Mail\HellomCheckoutStatusMail;
 use App\Services\Hellom\IpaymuSettingsService;
-use App\Services\Hellom\LandingSaleService;
+use App\Services\SellerFinance\LandingPaymentService;
 use App\Services\Hellom\PlatformMailService;
 use App\Services\Hellom\PosProvisioningService;
 use App\Services\Hellom\SubscriptionCheckoutActivationService;
@@ -76,6 +76,30 @@ class IpaymuWebhookController extends BaseApiController
             ]
         );
 
+        // Landing-page sale: the notification only triggers a check with iPaymu's own
+        // transaction API (status, amount, reference); its body is never trusted.
+        if ((string) $metadata['purpose'] === 'landing_sale') {
+            $reference = (string) ($metadata['reference_id'] ?? '');
+            $transactionId = (string) ($payload['trx_id'] ?? $payload['transaction_id'] ?? $payload['transactionId'] ?? '');
+            $request->attributes->set('webhook_log', ['event_id' => $eventId, 'reference' => $reference, 'signature_valid' => true]);
+
+            try {
+                $outcome = app(LandingPaymentService::class)->handleNotification('ipaymu', $reference, $transactionId !== '' ? $transactionId : null);
+            } catch (\Throwable $exception) {
+                report($exception);
+                $paymentEvent->forceFill(['status' => 'failed', 'error_message' => $exception->getMessage()])->save();
+                $request->attributes->set('webhook_log', ['event_id' => $eventId, 'reference' => $reference, 'signature_valid' => true, 'outcome' => 'error', 'error' => $exception->getMessage()]);
+
+                // 5xx so iPaymu retries; the reconcile job also picks the order up.
+                return $this->fail('Verifikasi pembayaran sementara gagal', ['code' => 'GATEWAY_CHECK_FAILED'], 503);
+            }
+
+            $paymentEvent->forceFill(['status' => $outcome === 'processed' ? 'processed' : 'ignored', 'error_message' => $outcome])->save();
+            $request->attributes->set('webhook_log', ['event_id' => $eventId, 'reference' => $reference, 'signature_valid' => true, 'outcome' => $outcome]);
+
+            return $this->ok(['event_id' => $eventId, 'status' => $outcome], 'iPaymu webhook processed');
+        }
+
         if (!$this->isSuccessPayload($payload)) {
             if ($organizationId > 0 && (string) $metadata['purpose'] === 'subscription_checkout') {
                 $intent = $this->resolveSubscriptionIntent($metadata);
@@ -104,9 +128,6 @@ class IpaymuWebhookController extends BaseApiController
                 }
             }
 
-            if ((string) $metadata['purpose'] === 'landing_sale') {
-                app(LandingSaleService::class)->markFailedByReference((string) ($metadata['reference_id'] ?? ''));
-            }
 
             $paymentEvent->forceFill([
                 'status' => 'ignored',
@@ -137,12 +158,6 @@ class IpaymuWebhookController extends BaseApiController
                 }
             }
 
-            if ((string) $metadata['purpose'] === 'landing_sale') {
-                app(LandingSaleService::class)->settlePaidOrderByReference((string) ($metadata['reference_id'] ?? ''), [
-                    'provider' => 'ipaymu',
-                    'gateway_ref' => (string) ($payload['transaction_id'] ?? $payload['transactionId'] ?? $payload['trx_id'] ?? ''),
-                ]);
-            }
 
             $paymentEvent->forceFill([
                 'status' => 'processed',

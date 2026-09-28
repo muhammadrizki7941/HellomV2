@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\V1\Hellom\LandingContentController;
 use App\Http\Controllers\Api\V1\Hellom\PromoCampaignController;
 use App\Http\Controllers\Api\V1\Hellom\ShowcaseController;
 use App\Http\Controllers\Api\V1\Hellom\SuperAdminController;
+use App\Http\Controllers\Api\V1\Hellom\AdminSellerFinanceController;
 use Illuminate\Support\Facades\Route;
 
 // ─── AUTH + superAdmin ───
@@ -127,4 +128,20 @@ Route::prefix('admin')->name('admin.')->middleware('superAdmin')->group(function
     Route::get('product-purchases/{id}', [ProductPurchaseController::class, 'show']);
     Route::post('product-purchases/{id}/approve', [ProductPurchaseController::class, 'approve']);
     Route::post('product-purchases/{id}/refund', [ProductPurchaseController::class, 'refund']);
+    // ─── Keuangan penjual (landing page sales, Fase 2) ───
+    Route::prefix('seller-finance')->name('seller_finance.')->group(function () {
+        Route::get('/summary', [AdminSellerFinanceController::class, 'summary'])->name('summary');
+        Route::get('/withdrawals', [AdminSellerFinanceController::class, 'withdrawals'])->name('withdrawals');
+        Route::post('/withdrawals/{withdrawalId}/approve', [AdminSellerFinanceController::class, 'approve'])->name('withdrawals.approve');
+        Route::post('/withdrawals/{withdrawalId}/mark-paid', [AdminSellerFinanceController::class, 'markPaid'])->name('withdrawals.mark_paid');
+        Route::post('/withdrawals/{withdrawalId}/mark-failed', [AdminSellerFinanceController::class, 'markFailed'])->name('withdrawals.mark_failed');
+        Route::get('/withdrawals/{withdrawalId}/proof', [AdminSellerFinanceController::class, 'proof'])->name('withdrawals.proof');
+        Route::get('/webhooks', [AdminSellerFinanceController::class, 'webhooks'])->name('webhooks');
+        Route::get('/reconciliation', [AdminSellerFinanceController::class, 'reconciliation'])->name('reconciliation');
+        Route::get('/settings', [AdminSellerFinanceController::class, 'settings'])->name('settings');
+        Route::put('/settings', [AdminSellerFinanceController::class, 'updateSettings'])->name('settings.update');
+        Route::patch('/sellers/{organizationId}', [AdminSellerFinanceController::class, 'updateSeller'])->name('sellers.update');
+        Route::post('/sellers/{organizationId}/adjustment', [AdminSellerFinanceController::class, 'adjustment'])->name('sellers.adjustment');
+        Route::get('/export', [AdminSellerFinanceController::class, 'export'])->name('export');
+    });
 });

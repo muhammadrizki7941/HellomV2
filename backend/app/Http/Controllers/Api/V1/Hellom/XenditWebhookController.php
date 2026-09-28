@@ -12,7 +12,7 @@ use App\Models\Subscription;
 use App\Models\WalletWithdrawalRequest;
 use App\Mail\HellomCheckoutStatusMail;
 use App\Services\Billing\EntitlementService;
-use App\Services\Hellom\LandingSaleService;
+use App\Services\SellerFinance\LandingPaymentService;
 use App\Services\Hellom\PlatformMailService;
 use App\Services\Hellom\PosProvisioningService;
 use App\Services\Hellom\SubscriptionCheckoutActivationService;
@@ -101,14 +101,9 @@ class XenditWebhookController extends BaseApiController
                     ?? data_get($payload, 'data.external_id')
                     ?? ''
                 );
-                if ($this->isIncomingPaymentEvent($eventType)) {
-                    app(LandingSaleService::class)->settlePaidOrderByReference($reference, [
-                        'provider' => 'xendit',
-                        'gateway_ref' => (string) ($payload['payment_id'] ?? data_get($payload, 'data.payment_id') ?? data_get($payload, 'id') ?? ''),
-                    ]);
-                } elseif ($this->isSubscriptionFailedEvent($eventType)) {
-                    app(LandingSaleService::class)->markFailedByReference($reference);
-                }
+                // Confirmed with Xendit's session API (status + amount), not from this body.
+                $outcome = app(LandingPaymentService::class)->handleNotification('xendit', $reference);
+                $request->attributes->set('webhook_log', ['event_id' => $eventId, 'reference' => $reference, 'signature_valid' => true, 'outcome' => $outcome]);
             }
 
             if ($organizationId > 0 && $this->isIncomingPaymentEvent($eventType) && !in_array($purpose, ['subscription_checkout', 'landing_sale'], true)) {
@@ -301,6 +296,21 @@ class XenditWebhookController extends BaseApiController
                         ]);
                     });
                 }
+            }
+
+            // Seller sales-balance withdrawals (auto mode) use references "swd_…".
+            $payoutRef = (string) ($payload['reference_id'] ?? data_get($payload, 'data.reference_id') ?? $payload['external_id'] ?? data_get($payload, 'data.external_id') ?? '');
+            if (str_starts_with($payoutRef, 'swd_') && ($this->isWithdrawalPaidEvent($eventType) || $this->isWithdrawalFailedEvent($eventType))) {
+                $sellerWithdrawal = \App\Models\SellerWithdrawal::query()->where('reference', $payoutRef)->first();
+                if ($sellerWithdrawal && $sellerWithdrawal->isOpen()) {
+                    $service = app(\App\Services\SellerFinance\WithdrawalService::class);
+                    if ($this->isWithdrawalPaidEvent($eventType)) {
+                        $service->markPaid($sellerWithdrawal, null, null, (string) ($payload['id'] ?? data_get($payload, 'data.id', '')));
+                    } else {
+                        $service->markFailed($sellerWithdrawal, null, 'Transfer gagal di bank tujuan (' . (string) ($payload['failure_code'] ?? data_get($payload, 'data.failure_code', 'tanpa kode')) . ')');
+                    }
+                }
+                $request->attributes->set('webhook_log', ['event_id' => $eventId, 'reference' => $payoutRef, 'signature_valid' => true, 'outcome' => 'processed']);
             }
 
             if ($this->isWithdrawalPaidEvent($eventType)) {
@@ -530,6 +540,7 @@ class XenditWebhookController extends BaseApiController
         $supported = [
             'disbursement.succeeded',
             'payout.paid',
+            'payout.succeeded',
         ];
 
         return in_array(strtolower($eventType), $supported, true);
@@ -540,6 +551,7 @@ class XenditWebhookController extends BaseApiController
         $supported = [
             'disbursement.failed',
             'payout.failed',
+            'payout.expired',
         ];
 
         return in_array(strtolower($eventType), $supported, true);

@@ -23,6 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'superAdmin' => \App\Http\Middleware\Api\EnsureSuperAdmin::class,
             'injectPosContext' => \App\Http\Middleware\Api\InjectPosContext::class,
             'billing.mock' => \App\Http\Middleware\Api\EnsureBillingMockEnabled::class,
+            'logPaymentWebhook' => \App\Http\Middleware\Api\LogPaymentWebhook::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

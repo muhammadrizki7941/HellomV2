@@ -187,6 +187,13 @@ class WalletController extends BaseApiController
             return $this->fail('Only owner/admin/super admin can request withdrawal', ['code' => 'INSUFFICIENT_ROLE'], 403);
         }
 
+        // Owner decision (Fase 2, Q2): top-up balance is not withdrawable. Earnings from
+        // sales are withdrawn from "Saldo Penjualan" (/seller/finance/withdrawals).
+        // Withdrawals requested before this change are still finished by the admin endpoints.
+        return $this->fail('Saldo top-up tidak bisa ditarik. Penarikan dana hasil penjualan ada di menu Saldo Penjualan.', [
+            'code' => 'WITHDRAWAL_MOVED_TO_SELLER_BALANCE',
+        ], 422);
+
         // KYC gate: KTP + bank account must be verified by Hellom before any withdrawal.
         $profile = OrganizationPayoutProfile::query()
             ->where('organization_id', (int) $organization->id)

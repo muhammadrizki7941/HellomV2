@@ -45,6 +45,7 @@ class PayoutProfileController extends BaseApiController
         $validated = $request->validate([
             'full_name' => ['required', 'string', 'max:150'],
             'nik' => ['required', 'string', 'regex:/^\d{16}$/'],
+            'destination_type' => ['nullable', 'in:bank,ewallet'],
             'bank_code' => ['required', 'string', 'max:30'],
             'bank_name' => ['nullable', 'string', 'max:80'],
             'account_number' => ['required', 'string', 'max:50'],
@@ -59,6 +60,11 @@ class PayoutProfileController extends BaseApiController
             return $this->fail('Verifikasi sedang ditinjau, mohon tunggu.', ['code' => 'KYC_UNDER_REVIEW'], 422);
         }
 
+        // Changing the payout account of a verified profile holds the next withdrawal (Fase 2).
+        $bankChanged = $profile->exists
+            && $profile->bank_code !== null
+            && ((string) $profile->bank_code !== (string) $validated['bank_code'] || (string) $profile->account_number !== (string) $validated['account_number']);
+
         if (isset($validated['ktp_image']) && $validated['ktp_image'] instanceof UploadedFile) {
             // Remove previous private image if any.
             if ($profile->ktp_image_path && $profile->ktp_image_disk) {
@@ -72,6 +78,7 @@ class PayoutProfileController extends BaseApiController
         $profile->fill([
             'full_name' => (string) $validated['full_name'],
             'nik' => (string) $validated['nik'],
+            'destination_type' => (string) ($validated['destination_type'] ?? $profile->destination_type ?? 'bank'),
             'bank_code' => (string) $validated['bank_code'],
             'bank_name' => isset($validated['bank_name']) ? (string) $validated['bank_name'] : $profile->bank_name,
             'account_number' => (string) $validated['account_number'],
@@ -82,7 +89,14 @@ class PayoutProfileController extends BaseApiController
             'submitted_at' => now(),
         ]);
         $profile->organization_id = (int) $organization->id;
+        if ($bankChanged) {
+            $profile->bank_changed_at = now();
+        }
         $profile->save();
+
+        if ($bankChanged) {
+            app(\App\Services\SellerFinance\WithdrawalService::class)->notifyBankChange($profile);
+        }
 
         return $this->ok([
             'profile' => $this->memberPayload($profile),
@@ -243,6 +257,8 @@ class PayoutProfileController extends BaseApiController
             'status' => (string) $profile->status,
             'full_name' => $profile->full_name,
             'nik_masked' => $this->maskTail($profile->nik, 4),
+            'destination_type' => $profile->destination_type ?? 'bank',
+            'bank_changed_at' => $profile->bank_changed_at,
             'bank_code' => $profile->bank_code,
             'bank_name' => $profile->bank_name,
             'account_number_masked' => $this->maskTail($profile->account_number, 4),

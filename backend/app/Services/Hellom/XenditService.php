@@ -40,6 +40,17 @@ class XenditService
     }
 
     /**
+     * Current state of a payment session (status, amount) — used to confirm webhooks
+     * and reconcile landing-page sales.
+     *
+     * @return array<string,mixed>
+     */
+    public function getPaymentSession(string $sessionId): array
+    {
+        return $this->request('GET', '/sessions/' . rawurlencode($sessionId));
+    }
+
+    /**
      * @param array<string,mixed> $payload
      * @return array<string,mixed>
      */

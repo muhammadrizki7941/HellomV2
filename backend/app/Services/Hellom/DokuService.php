@@ -23,10 +23,42 @@ class DokuService
     }
 
     /**
-     * @param array<string,mixed> $payload
+     * Status of a checkout by invoice number (our order reference).
+     *
      * @return array<string,mixed>
      */
-    private function request(string $method, string $path, array $payload): array
+    public function getOrderStatus(string $invoiceNumber): array
+    {
+        return $this->request('GET', '/orders/v1/status/' . rawurlencode($invoiceNumber), null);
+    }
+
+    /**
+     * DOKU signs notifications like requests: HMAC-SHA256 over Client-Id, Request-Id,
+     * Request-Timestamp, Request-Target (the notification path) and Digest (SHA-256 of the body).
+     */
+    public function verifyNotificationSignature(string $clientId, string $requestId, string $timestamp, string $target, string $rawBody, string $signatureHeader): bool
+    {
+        $config = $this->settings->getConfig();
+        if ($config['client_id'] === '' || $config['secret_key'] === '' || !hash_equals((string) $config['client_id'], $clientId)) {
+            return false;
+        }
+        $digest = base64_encode(hash('sha256', $rawBody, true));
+        $expected = 'HMACSHA256=' . base64_encode(hash_hmac('sha256', implode("\n", [
+            'Client-Id:' . $clientId,
+            'Request-Id:' . $requestId,
+            'Request-Timestamp:' . $timestamp,
+            'Request-Target:' . $target,
+            'Digest:' . $digest,
+        ]), $config['secret_key'], true));
+
+        return hash_equals($expected, $signatureHeader);
+    }
+
+    /**
+     * @param array<string,mixed>|null $payload null for GET requests (no body / digest)
+     * @return array<string,mixed>
+     */
+    private function request(string $method, string $path, ?array $payload): array
     {
         $config = $this->settings->getConfig();
 
@@ -34,26 +66,28 @@ class DokuService
             throw new \RuntimeException('DOKU client ID atau secret key belum dikonfigurasi.');
         }
 
-        $body = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        if (!is_string($body)) {
+        $body = $payload === null ? null : json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        if ($payload !== null && !is_string($body)) {
             throw new \RuntimeException('Payload DOKU tidak valid.');
         }
 
         $requestId = (string) Str::uuid();
         $requestTimestamp = now('UTC')->format('Y-m-d\TH:i:s\Z');
-        $digest = base64_encode(hash('sha256', $body, true));
-        $signature = base64_encode(hash_hmac('sha256', implode("\n", [
+        $components = [
             'Client-Id:' . $config['client_id'],
             'Request-Id:' . $requestId,
             'Request-Timestamp:' . $requestTimestamp,
             'Request-Target:' . $path,
-            'Digest:' . $digest,
-        ]), $config['secret_key'], true));
+        ];
+        if ($body !== null) {
+            $components[] = 'Digest:' . base64_encode(hash('sha256', $body, true));
+        }
+        $signature = base64_encode(hash_hmac('sha256', implode("\n", $components), $config['secret_key'], true));
 
         $baseUrl = $config['is_production'] ? 'https://api.doku.com' : 'https://api-sandbox.doku.com';
 
         try {
-            $response = Http::baseUrl($baseUrl)
+            $client = Http::baseUrl($baseUrl)
                 ->acceptJson()
                 ->withHeaders([
                     'Client-Id' => $config['client_id'],
@@ -62,10 +96,11 @@ class DokuService
                     'Signature' => 'HMACSHA256=' . $signature,
                     'Content-Type' => 'application/json',
                 ])
-                ->withBody($body, 'application/json')
-                ->timeout(30)
-                ->send($method, $path)
-                ->throw();
+                ->timeout(30);
+            if ($body !== null) {
+                $client = $client->withBody($body, 'application/json');
+            }
+            $response = $client->send($method, $path)->throw();
         } catch (RequestException $exception) {
             $message = data_get($exception->response?->json(), 'message.0')
                 ?: data_get($exception->response?->json(), 'message')

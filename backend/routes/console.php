@@ -380,3 +380,10 @@ Schedule::command('hellom:billing:expire-subscriptions --limit=500')
 Schedule::command('pos:points expire')
     ->dailyAt('02:30')
     ->withoutOverlapping();
+
+// Landing page sales (Fase 2): lost webhooks, order expiry, balance release, withdrawal SLA.
+Schedule::command('landing:orders reconcile')->everyFiveMinutes()->withoutOverlapping();
+Schedule::command('landing:orders expire')->everyTenMinutes()->withoutOverlapping();
+Schedule::command('landing:orders release')->everyTenMinutes()->withoutOverlapping();
+Schedule::command('landing:orders sla')->everyThirtyMinutes()->withoutOverlapping();
+Schedule::command('balance:reconcile')->dailyAt('03:10')->withoutOverlapping();

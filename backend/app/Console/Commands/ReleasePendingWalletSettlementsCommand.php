@@ -29,8 +29,17 @@ class ReleasePendingWalletSettlementsCommand extends Command
             $limit = 5000;
         }
 
+        // Only entries not released yet: scanning the oldest N rows would stall forever
+        // once N entries were released (audit LB-05).
         $query = OrganizationWalletTransaction::query()
             ->where('type', 'payment_credit_pending')
+            ->whereNotExists(function ($q): void {
+                $q->selectRaw('1')
+                    ->from('organization_wallet_transactions as released')
+                    ->where('released.type', 'payment_settle_release')
+                    ->where('released.reference_type', 'organization_wallet_transactions')
+                    ->whereRaw('released.reference_id = CAST(organization_wallet_transactions.id AS CHAR)');
+            })
             ->orderBy('id')
             ->limit($limit);
 

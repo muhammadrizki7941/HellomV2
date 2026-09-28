@@ -10,7 +10,8 @@ use App\Models\Subscription;
 use App\Mail\HellomCheckoutStatusMail;
 use App\Services\Billing\EntitlementService;
 use App\Services\Hellom\DokuSettingsService;
-use App\Services\Hellom\LandingSaleService;
+use App\Services\Payments\Gateways\DokuGateway;
+use App\Services\SellerFinance\LandingPaymentService;
 use App\Services\Hellom\PlatformMailService;
 use App\Services\Hellom\PosProvisioningService;
 use App\Services\Hellom\SubscriptionCheckoutActivationService;
@@ -58,14 +59,15 @@ class DokuWebhookController extends BaseApiController
 
             // Landing-page product sale (invoice number == order reference "lps_...")
             if (str_starts_with($invoiceNumber, 'lps_')) {
-                if (in_array($status, ['SUCCESS', 'PAID'], true)) {
-                    app(LandingSaleService::class)->settlePaidOrderByReference($invoiceNumber, [
-                        'provider' => 'doku',
-                        'gateway_ref' => (string) ($payment['token_id'] ?? $invoiceNumber),
-                    ]);
-                } elseif (in_array($status, ['EXPIRED', 'FAILED', 'CANCELLED'], true)) {
-                    app(LandingSaleService::class)->markFailedByReference($invoiceNumber);
+                // Money path: require DOKU's HMAC signature, then confirm with DOKU's status API.
+                if (!app(DokuGateway::class)->verifyWebhook($request)) {
+                    $request->attributes->set('webhook_log', ['event_id' => $eventId, 'reference' => $invoiceNumber, 'signature_valid' => false, 'outcome' => 'rejected', 'error' => 'invalid signature']);
+                    $paymentEvent->forceFill(['status' => 'failed', 'error_message' => 'Invalid DOKU signature'])->save();
+
+                    return $this->fail('Invalid DOKU signature', ['code' => 'INVALID_DOKU_SIGNATURE'], 401);
                 }
+                $outcome = app(LandingPaymentService::class)->handleNotification('doku', $invoiceNumber);
+                $request->attributes->set('webhook_log', ['event_id' => $eventId, 'reference' => $invoiceNumber, 'signature_valid' => true, 'outcome' => $outcome]);
 
                 $paymentEvent->forceFill([
                     'status' => 'processed',
