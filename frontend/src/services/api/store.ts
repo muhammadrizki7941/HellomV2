@@ -14,6 +14,28 @@ export function getPublicProducts(params?: Record<string, string | number | bool
   return publicApiRequest<Record<string, unknown>[]>(`/public/products${qs ? `?${qs}` : ''}`);
 }
 
+// Flagship SaaS apps for the /aplikasi showcase (marked "Aplikasi unggulan" by the super admin).
+export type PublicFlagshipApp = {
+  id: number;
+  slug: string;
+  name: string;
+  tagline: string | null;
+  description: string | null;
+  category: string | null;
+  type: string | null;
+  price: number | string | null;
+  thumbnail_url: string | null;
+  banner_url: string | null;
+  banner_mobile_url: string | null;
+  /** Built-in app this product stands for (data/apps.ts slug), e.g. "pos". */
+  flagship_app: string | null;
+  tags: string[] | null;
+};
+
+export function getPublicFlagshipApps() {
+  return publicApiRequest<PublicFlagshipApp[]>('/public/flagship-apps');
+}
+
 export function getPublicProductBySlug(slug: string) {
   return publicApiRequest<Record<string, unknown>>(`/public/products/${encodeURIComponent(slug)}`);
 }
@@ -76,6 +98,20 @@ export function uploadProductThumbnail(id: string | number, formData: FormData) 
   return apiRequest<Record<string, unknown>>(`/admin/digital-products/${id}/thumbnail`, {
     method: 'POST',
     body: formData,
+  });
+}
+
+// Flagship banner: formData with `banner` (image) and `variant` ("desktop" | "mobile").
+export function uploadProductBanner(id: string | number, formData: FormData) {
+  return apiRequest<Record<string, unknown>>(`/admin/digital-products/${id}/banner`, {
+    method: 'POST',
+    body: formData,
+  });
+}
+
+export function deleteProductBanner(id: string | number, variant: 'desktop' | 'mobile') {
+  return apiRequest<Record<string, unknown>>(`/admin/digital-products/${id}/banner?variant=${variant}`, {
+    method: 'DELETE',
   });
 }
 

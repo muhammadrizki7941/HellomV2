@@ -10,6 +10,7 @@ type Product = {
   type: string;
   price: number;
   is_published: boolean;
+  is_flagship?: boolean;
   total_downloads: number;
 };
 
@@ -105,7 +106,14 @@ export default function AdminProducts() {
             ) : (
               items.map((item) => (
                 <tr key={item.id}>
-                  <td className="px-4 py-3 font-semibold text-zinc-900">{item.name}</td>
+                  <td className="px-4 py-3 font-semibold text-zinc-900">
+                    {item.name}
+                    {item.is_flagship ? (
+                      <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800" title="Tampil di /aplikasi, tidak di katalog /produk">
+                        Unggulan
+                      </span>
+                    ) : null}
+                  </td>
                   <td className="px-4 py-3 text-zinc-600">{item.category}</td>
                   <td className="px-4 py-3 text-zinc-600">{item.type}</td>
                   <td className="px-4 py-3 text-zinc-600">Rp {Number(item.price || 0).toLocaleString('id-ID')}</td>

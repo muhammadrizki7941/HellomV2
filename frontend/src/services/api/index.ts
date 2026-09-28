@@ -168,16 +168,20 @@ export {
   getAdminProductPurchases,
   getAdminProducts,
   getProductCategories,
+  getPublicFlagshipApps,
   getPublicProductBySlug,
   getPublicProducts,
   publishProduct,
   refundProductPurchase,
   unpublishProduct,
   updateProduct,
+  deleteProductBanner,
+  uploadProductBanner,
   uploadProductDoc,
   uploadProductFile,
   uploadProductThumbnail,
 } from './store';
+export type { PublicFlagshipApp } from './store';
 export {
   applyReward,
   calculateLoyaltyPoints,

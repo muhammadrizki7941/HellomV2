@@ -12,6 +12,8 @@ import {
   uploadProductDoc,
   uploadProductFile,
   uploadProductThumbnail,
+  uploadProductBanner,
+  deleteProductBanner,
 } from '@/lib/hellomApi';
 
 type ProductFile = {
@@ -42,6 +44,10 @@ type Product = {
   type: string;
   price: number;
   thumbnail_url?: string | null;
+  banner_url?: string | null;
+  banner_mobile_url?: string | null;
+  is_flagship?: boolean;
+  flagship_app?: string | null;
   tech_stack?: string[] | null;
   tags?: string[] | null;
   is_featured: boolean;
@@ -83,6 +89,63 @@ const resolveYoutubeEmbedUrl = (value?: string | null): string | null => {
   }
 };
 
+function BannerField({
+  label,
+  hint,
+  shape,
+  current,
+  pending,
+  onPick,
+  onRemove,
+}: {
+  label: string;
+  hint: string;
+  shape: 'wide' | 'tall';
+  current?: string | null;
+  pending: File | null;
+  onPick: (file: File | null) => void;
+  onRemove: () => void;
+}) {
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!pending) {
+      setPreviewUrl(null);
+      return undefined;
+    }
+    const url = URL.createObjectURL(pending);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [pending]);
+
+  const src = previewUrl ?? (current ? getImageUrl(current) : null);
+
+  return (
+    <div className="text-sm text-zinc-600">
+      <p className="font-medium text-zinc-700">{label}</p>
+      <p className="text-xs text-zinc-500">{hint} · JPG/PNG/WebP, maks 4 MB</p>
+      {src ? (
+        <img
+          src={src}
+          alt=""
+          className={`mt-2 w-full rounded-lg border border-zinc-200 object-cover ${shape === 'tall' ? 'aspect-[4/5] max-w-[180px]' : 'aspect-[12/5]'}`}
+        />
+      ) : null}
+      <input
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        onChange={(event) => onPick(event.target.files ? event.target.files[0] : null)}
+        className="mt-2 block w-full text-sm text-zinc-600"
+      />
+      {current && !pending ? (
+        <button type="button" onClick={onRemove} className="mt-2 text-xs font-medium text-red-600 hover:underline">
+          Hapus banner
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 export default function AdminProductEdit() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -102,9 +165,14 @@ export default function AdminProductEdit() {
     tags: '',
     is_featured: false,
     is_published: false,
+    is_flagship: false,
+    flagship_app: '',
   });
 
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
+  // Flagship banners (public /aplikasi showcase): uploaded after the product is saved.
+  const [bannerFile, setBannerFile] = useState<File | null>(null);
+  const [bannerMobileFile, setBannerMobileFile] = useState<File | null>(null);
   const [docPreviewUrls, setDocPreviewUrls] = useState<Record<number, string>>({});
 
   const [fileForm, setFileForm] = useState({
@@ -150,6 +218,8 @@ export default function AdminProductEdit() {
         tags: (data.tags || []).join(', '),
         is_featured: Boolean(data.is_featured),
         is_published: Boolean(data.is_published),
+        is_flagship: Boolean(data.is_flagship),
+        flagship_app: data.flagship_app || '',
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Gagal memuat produk');
@@ -221,6 +291,8 @@ export default function AdminProductEdit() {
         tags: tagsArray,
         is_featured: form.is_featured,
         is_published: form.is_published,
+        is_flagship: form.is_flagship,
+        flagship_app: form.is_flagship && form.flagship_app ? form.flagship_app : null,
       };
 
       let targetId = product?.id;
@@ -239,9 +311,33 @@ export default function AdminProductEdit() {
         setThumbnailFile(null);
       }
 
+      for (const [file, variant, reset] of [
+        [bannerFile, 'desktop', setBannerFile],
+        [bannerMobileFile, 'mobile', setBannerMobileFile],
+      ] as const) {
+        if (file && targetId) {
+          const formData = new FormData();
+          formData.append('banner', file);
+          formData.append('variant', variant);
+          await uploadProductBanner(targetId, formData);
+          reset(null);
+        }
+      }
+
       await loadProduct();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Gagal menyimpan produk');
+    }
+  };
+
+  const handleRemoveBanner = async (variant: 'desktop' | 'mobile') => {
+    if (!product) return;
+    setError(null);
+    try {
+      await deleteProductBanner(product.id, variant);
+      await loadProduct();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Gagal menghapus banner');
     }
   };
 
@@ -476,6 +572,64 @@ export default function AdminProductEdit() {
               className="mt-2 block w-full text-sm text-zinc-600"
             />
           </label>
+
+          <div className="space-y-4 rounded-xl border border-amber-200 bg-amber-50/60 p-4">
+            <div>
+              <label className="flex items-center gap-2 text-sm font-semibold text-zinc-800">
+                <input
+                  type="checkbox"
+                  checked={form.is_flagship}
+                  onChange={(event) => setForm((prev) => ({ ...prev, is_flagship: event.target.checked }))}
+                />
+                Aplikasi unggulan
+              </label>
+              <p className="mt-1 text-xs text-zinc-500">
+                Tampil istimewa di halaman publik /aplikasi (dengan banner) dan tidak ikut katalog /produk biasa.
+              </p>
+            </div>
+
+            {form.is_flagship && (
+              <>
+                <label className="block text-sm text-zinc-600">
+                  Terhubung ke aplikasi bawaan
+                  <select
+                    value={form.flagship_app}
+                    onChange={(event) => setForm((prev) => ({ ...prev, flagship_app: event.target.value }))}
+                    className="mt-2 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
+                  >
+                    <option value="">Tidak ada — dijual seperti produk digital</option>
+                    <option value="pos">Kasir POS Hellom</option>
+                    <option value="landing-page-builder">Landing Page Builder</option>
+                  </select>
+                  <span className="mt-1 block text-xs text-zinc-500">
+                    Jika terhubung, tombol &ldquo;Coba Sekarang&rdquo; membuka aplikasinya (langganan / gratis).
+                  </span>
+                </label>
+
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <BannerField
+                    label="Banner desktop"
+                    hint="Lebar, disarankan 1920 × 800 px"
+                    shape="wide"
+                    current={product?.banner_url}
+                    pending={bannerFile}
+                    onPick={setBannerFile}
+                    onRemove={() => void handleRemoveBanner('desktop')}
+                  />
+                  <BannerField
+                    label="Banner HP (opsional)"
+                    hint="Tegak, disarankan 1080 × 1350 px"
+                    shape="tall"
+                    current={product?.banner_mobile_url}
+                    pending={bannerMobileFile}
+                    onPick={setBannerMobileFile}
+                    onRemove={() => void handleRemoveBanner('mobile')}
+                  />
+                </div>
+                <p className="text-xs text-zinc-500">Banner diunggah saat Anda menekan Simpan.</p>
+              </>
+            )}
+          </div>
         </div>
       )}
 

@@ -1,13 +1,13 @@
 import { Link } from 'react-router-dom';
 import { ArrowRight, ArrowUpRight } from 'lucide-react';
 import { getImageUrl } from '@/lib/hellomApi';
-import { HELLOM_APPS } from '@/data/apps';
 import HeroPortrait from '@/components/site/HeroPortrait';
 import IntroVideo from '@/components/site/IntroVideo';
 import MagneticLink, { primaryCta, secondaryCta } from '@/components/site/MagneticLink';
 import { SectionLabel, usePageMeta } from '@/components/site/PageHero';
 import { Reveal, RevealText } from '@/components/site/Reveal';
 import useSiteData from '@/components/site/useSiteData';
+import useFlagshipApps from '@/components/site/useFlagshipApps';
 
 // Short teaser for every inner page; each row links to the full page.
 const INDEX_ROWS = [
@@ -21,6 +21,7 @@ const INDEX_ROWS = [
 
 export default function BerandaPage() {
   const { clients, content } = useSiteData();
+  const { apps: flagshipApps } = useFlagshipApps();
   const about = content.about || {};
   usePageMeta(
     'Partner Kreatif untuk Bisnismu',
@@ -118,14 +119,26 @@ export default function BerandaPage() {
             </h2>
           </Reveal>
           <div className="mt-10 grid gap-5 md:grid-cols-2">
-            {HELLOM_APPS.map((app, index) => {
+            {flagshipApps.map((app, index) => {
               const Icon = app.icon;
               return (
-                <Reveal key={app.slug} delay={index * 0.08}>
+                <Reveal key={app.key} delay={index * 0.08}>
                   <Link
-                    to={`/aplikasi/${app.slug}`}
-                    className="group flex h-full flex-col rounded-2xl border border-white/[0.08] bg-white/[0.03] p-8 transition-colors hover:border-[#F6B400]/50"
+                    to={`/aplikasi/${app.key}`}
+                    className="group flex h-full flex-col overflow-hidden rounded-2xl border border-[#F6B400]/20 bg-white/[0.03] transition-colors hover:border-[#F6B400]/50"
                   >
+                    {app.banner ? (
+                      <img
+                        src={app.banner}
+                        alt=""
+                        width={960}
+                        height={400}
+                        loading="lazy"
+                        decoding="async"
+                        className="aspect-[12/5] w-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
+                      />
+                    ) : null}
+                    <div className="flex flex-1 flex-col p-8">
                     <span className="mb-6 flex h-12 w-12 items-center justify-center rounded-xl bg-[#F6B400]/12 text-[#F6B400]">
                       <Icon className="h-6 w-6" />
                     </span>
@@ -134,6 +147,7 @@ export default function BerandaPage() {
                     <span className="mt-6 inline-flex items-center gap-2 text-sm font-bold text-[#F6B400]">
                       Lihat detail <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                     </span>
+                    </div>
                   </Link>
                 </Reveal>
               );

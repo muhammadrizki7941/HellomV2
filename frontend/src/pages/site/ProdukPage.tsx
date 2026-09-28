@@ -1,15 +1,19 @@
-import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ShoppingCart } from 'lucide-react';
 import { getImageUrl, getSessionUser, getToken } from '@/lib/hellomApi';
 import { savePendingCheckoutIntent } from '@/lib/checkoutIntent';
 import PageHero, { usePageMeta } from '@/components/site/PageHero';
 import { Reveal } from '@/components/site/Reveal';
 import useSiteData, { formatProductPrice, type SiteProduct } from '@/components/site/useSiteData';
+import ShareButtons from '@/components/site/ShareButtons';
 
 export default function ProdukPage() {
   const { products, content, loaded } = useSiteData();
   const [category, setCategory] = useState('');
+  // Shared links point at /produk?produk={slug}: scroll to that product and highlight it.
+  const [searchParams] = useSearchParams();
+  const sharedSlug = searchParams.get('produk');
   const isAuthenticated = Boolean(getToken() && getSessionUser());
   const section = content.products || {};
   usePageMeta(
@@ -23,6 +27,14 @@ export default function ProdukPage() {
     [products]
   );
   const visible = category ? products.filter((p) => p.category === category) : products;
+
+  useEffect(() => {
+    if (!loaded || !sharedSlug) return;
+    const timer = window.setTimeout(() => {
+      document.getElementById(`produk-${sharedSlug}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 600);
+    return () => window.clearTimeout(timer);
+  }, [loaded, sharedSlug]);
 
   // Same destinations as before: logged-in buyers use the dashboard checkout,
   // guests use the no-login checkout for paid products, free products need an account.
@@ -83,11 +95,14 @@ export default function ProdukPage() {
               {visible.map((product, index) => {
                 const link = productLink(product);
                 return (
-                  <Reveal as="li" key={product.id} delay={(index % 4) * 0.06}>
+                  <Reveal as="li" key={product.id} delay={(index % 4) * 0.06} className="relative">
                     <Link
+                      id={`produk-${product.slug}`}
                       to={link.to}
                       onClick={link.onClick}
-                      className="group block h-full overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.03] transition-colors hover:border-[#F6B400]/45"
+                      className={`group block h-full scroll-mt-32 overflow-hidden rounded-2xl border bg-white/[0.03] transition-colors hover:border-[#F6B400]/45 ${
+                        sharedSlug === product.slug ? 'border-[#F6B400] ring-2 ring-[#F6B400]/50' : 'border-white/[0.08]'
+                      }`}
                     >
                       <div className="aspect-[1.15] overflow-hidden bg-[#0E0E11]">
                         {product.thumbnail_url ? (
@@ -117,6 +132,13 @@ export default function ProdukPage() {
                         </div>
                       </div>
                     </Link>
+                    <ShareButtons
+                      compact
+                      url={`/produk?produk=${encodeURIComponent(product.slug)}`}
+                      title={product.name}
+                      text={product.tagline || 'Produk digital dari Hellom'}
+                      className="absolute right-3 top-3 z-10"
+                    />
                   </Reveal>
                 );
               })}
