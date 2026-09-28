@@ -22,9 +22,11 @@ class Order extends Model
 
     protected $fillable = [
         'tenant_id',
+        'outlet_id',
         'member_id',
         'order_number',
         'dining_table_id',
+        'table_bill_id',
         'table_label',
         'user_id',
         'customer_name',
@@ -33,9 +35,14 @@ class Order extends Model
         'order_source',
         'status',
         'total_amount',
+        'subtotal_amount',
+        'service_amount',
+        'tax_amount',
+        'rounding_amount',
         'points_earned',
         'points_redeemed',
         'discount_amount',
+        'points_discount_amount',
         'final_amount',
         'redeemed_points',
         'payment_method',
@@ -43,12 +50,31 @@ class Order extends Model
         'payment_amount',
         'payment_change',
         'payment_note',
+        'payment_meta',
         'paid_at',
         'payment_ref',
+        'confirmed_at',
+        'cancelled_at',
+        'cancel_reason',
+        'refunded_at',
+        'refund_amount',
         'notes',
     ];
 
+    public const PAYMENT_UNPAID = 'unpaid';
+    public const PAYMENT_PAID = 'paid';
+    public const PAYMENT_REFUNDED = 'refunded';
+
     protected $casts = [
+        'subtotal_amount' => 'integer',
+        'service_amount' => 'integer',
+        'tax_amount' => 'integer',
+        'rounding_amount' => 'integer',
+        'points_discount_amount' => 'integer',
+        'refund_amount' => 'integer',
+        'confirmed_at' => 'datetime',
+        'cancelled_at' => 'datetime',
+        'refunded_at' => 'datetime',
         'total_amount' => 'integer',
         'points_earned' => 'integer',
         'points_redeemed' => 'integer',
@@ -86,6 +112,21 @@ class Order extends Model
         return $this->hasMany(OrderItem::class);
     }
 
+    public function outlet(): BelongsTo
+    {
+        return $this->belongsTo(Outlet::class);
+    }
+
+    public function tableBill(): BelongsTo
+    {
+        return $this->belongsTo(TableBill::class);
+    }
+
+    public function isPaid(): bool
+    {
+        return $this->payment_status === self::PAYMENT_PAID;
+    }
+
     public function getRouteKeyName(): string
     {
         return 'order_number';
@@ -115,7 +156,10 @@ class Order extends Model
                 }
             }
             if (!$order->order_number) {
-                $order->order_number = static::generateNextOrderNumber();
+                // Per-outlet daily counter with a row lock (see OrderNumberGenerator).
+                $order->order_number = $order->tenant_id
+                    ? app(\App\Services\Pos\OrderNumberGenerator::class)->next((string) $order->tenant_id)
+                    : static::generateNextOrderNumber();
             }
         });
 

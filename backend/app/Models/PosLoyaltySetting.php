@@ -14,6 +14,10 @@ class PosLoyaltySetting extends Model
         'points_per_amount',
         'min_spend_amount',
         'max_points_per_order',
+        'redeem_value_per_point',
+        'min_redeem_points',
+        'max_redeem_points_per_order',
+        'points_expire_months',
     ];
 
     protected $casts = [
@@ -21,6 +25,10 @@ class PosLoyaltySetting extends Model
         'points_per_amount' => 'integer',
         'min_spend_amount' => 'integer',
         'max_points_per_order' => 'integer',
+        'redeem_value_per_point' => 'integer',
+        'min_redeem_points' => 'integer',
+        'max_redeem_points_per_order' => 'integer',
+        'points_expire_months' => 'integer',
     ];
 
     public static function defaults(string $tenantId): array
@@ -87,6 +95,11 @@ class PosLoyaltySetting extends Model
             'max_points_per_order' => $this->max_points_per_order !== null
                 ? (int) $this->max_points_per_order
                 : null,
+            // Redemption: Rp value of one point (0 = redemption off), limits and expiry.
+            'redeem_value_per_point' => (int) ($this->redeem_value_per_point ?? 0),
+            'min_redeem_points' => (int) ($this->min_redeem_points ?? 0),
+            'max_redeem_points_per_order' => $this->max_redeem_points_per_order !== null ? (int) $this->max_redeem_points_per_order : null,
+            'points_expire_months' => $this->points_expire_months !== null ? (int) $this->points_expire_months : null,
         ];
     }
 }
