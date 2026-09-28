@@ -3,6 +3,7 @@ import { ArrowRight, ArrowUpRight } from 'lucide-react';
 import { getImageUrl } from '@/lib/hellomApi';
 import { HELLOM_APPS } from '@/data/apps';
 import HeroPortrait from '@/components/site/HeroPortrait';
+import IntroVideo from '@/components/site/IntroVideo';
 import MagneticLink, { primaryCta, secondaryCta } from '@/components/site/MagneticLink';
 import { SectionLabel, usePageMeta } from '@/components/site/PageHero';
 import { Reveal, RevealText } from '@/components/site/Reveal';
@@ -35,25 +36,30 @@ export default function BerandaPage() {
 
   return (
     <>
-      {/* Hero */}
-      <section className="relative border-b border-white/[0.08] px-5 pb-16 pt-28 md:px-10 md:pb-20 md:pt-32 lg:px-16">
+      {/* Intro: full-screen background video with clickable content on top */}
+      <IntroVideo nextSectionId="sorotan" />
+
+      {/* Hero (now the section after the intro, so it reveals on scroll) */}
+      <section id="sorotan" className="relative scroll-mt-20 border-b border-white/[0.08] px-5 py-20 md:px-10 md:py-28 lg:px-16">
         <div className="mx-auto grid max-w-[1500px] items-center gap-12 md:grid-cols-[0.95fr_1.05fr]">
           <div className="relative z-10">
-            <Reveal onMount className="mb-8 flex items-center gap-3">
+            <Reveal className="mb-8 flex items-center gap-3">
               <span className="h-px w-12 bg-white/[0.15]" />
               <span className="text-[11px] font-bold uppercase tracking-[0.4em] text-[#F6B400]">Kreator · Desainer · Builder</span>
             </Reveal>
             <RevealText
+              as="h2"
+              inView
               lines={['Hellom', <span key="space" className="text-[#F6B400]">Space.</span>]}
               className="font-display text-[3.6rem] font-semibold leading-[0.92] sm:text-8xl lg:text-[8.2rem]"
             />
-            <Reveal onMount delay={0.2}>
+            <Reveal delay={0.2}>
               <p className="mt-6 font-serif text-2xl italic md:text-3xl">Partner kreatif untuk bisnismu</p>
               <p className="mt-6 max-w-xl text-base leading-8 text-[#A1A1A6]">
                 Kami membantu bisnis dan kreator membangun brand, sistem, dan produk digital yang estetik, fungsional, dan berdampak.
               </p>
             </Reveal>
-            <Reveal onMount delay={0.3} className="mt-9 flex flex-col gap-4 sm:flex-row">
+            <Reveal delay={0.3} className="mt-9 flex flex-col gap-4 sm:flex-row">
               <MagneticLink to="/aplikasi" className={primaryCta}>
                 Lihat Aplikasi <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
               </MagneticLink>
@@ -61,7 +67,7 @@ export default function BerandaPage() {
                 Lihat Portofolio <ArrowRight className="h-4 w-4" />
               </Link>
             </Reveal>
-            <Reveal onMount delay={0.4} className="mt-10 grid max-w-xl grid-cols-3 gap-5">
+            <Reveal delay={0.4} className="mt-10 grid max-w-xl grid-cols-3 gap-5">
               {stats.map((stat) => (
                 <div key={stat.label} className="border-r border-white/[0.08] last:border-r-0">
                   <p className="font-display text-2xl text-[#F6B400]">{stat.value}</p>
@@ -71,7 +77,7 @@ export default function BerandaPage() {
             </Reveal>
           </div>
 
-          <Reveal onMount delay={0.15} className="relative">
+          <Reveal delay={0.15} className="relative">
             <div className="relative aspect-[592/478] overflow-hidden rounded-[28px] border border-[#F6B400]/15 bg-[#0E0E11]">
               <HeroPortrait className="h-full w-full object-cover" />
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_55%_18%,rgba(246,180,0,.20),transparent_40%),linear-gradient(to_top,#050505,transparent_45%)]" />

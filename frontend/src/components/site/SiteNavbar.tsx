@@ -26,6 +26,16 @@ export default function SiteNavbar() {
   // Close the mobile menu once the route changes.
   useEffect(() => setOpen(false), [pathname]);
 
+  // Over the home intro video the bar is fully transparent; it gains its backdrop once scrolled.
+  const [atTop, setAtTop] = useState(true);
+  useEffect(() => {
+    const onScroll = () => setAtTop(window.scrollY < 24);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+  const overIntro = pathname === '/' && atTop && !open;
+
   useEffect(() => {
     document.body.style.overflow = open ? 'hidden' : '';
     return () => {
@@ -35,7 +45,11 @@ export default function SiteNavbar() {
 
   return (
     <>
-      <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.06] bg-[#050505]/60 backdrop-blur-xl">
+      <header
+        className={`fixed inset-x-0 top-0 z-50 border-b transition-[background-color,border-color,backdrop-filter] duration-500 ${
+          overIntro ? 'border-transparent bg-transparent' : 'border-white/[0.06] bg-[#050505]/60 backdrop-blur-xl'
+        }`}
+      >
         <div className="mx-auto flex h-20 max-w-[1500px] items-center justify-between px-5 md:px-10 lg:px-16">
           <Link to="/" className="flex min-h-11 items-center">
             <BrandMark />

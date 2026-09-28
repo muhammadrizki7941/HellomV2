@@ -13,15 +13,20 @@ export function RevealText({
   as = 'h1',
   className = '',
   delay = 0,
+  inView = false,
 }: {
   lines: ReactNode[];
   as?: HeadingTag;
   className?: string;
   delay?: number;
+  /** Play when scrolled into view (once) instead of on mount — for titles below the fold. */
+  inView?: boolean;
 }) {
   const Tag = as as ElementType;
-  const baseDelay = useRevealDelay() + delay;
+  const pageDelay = useRevealDelay();
+  const baseDelay = (inView ? 0 : pageDelay) + delay;
   const reduced = useReducedMotion();
+  const shown = reduced ? { opacity: 1 } : { y: '0%' };
 
   return (
     <Tag className={className}>
@@ -30,7 +35,9 @@ export function RevealText({
           <m.span
             className="block"
             initial={reduced ? { opacity: 0 } : { y: '100%' }}
-            animate={reduced ? { opacity: 1 } : { y: '0%' }}
+            {...(inView
+              ? { whileInView: shown, viewport: { once: true, margin: '-10% 0px' } }
+              : { animate: shown })}
             transition={reduced
               ? { duration: 0.15 }
               : { duration: 0.9, ease: EASE_REVEAL, delay: baseDelay + index * LINE_STAGGER }}

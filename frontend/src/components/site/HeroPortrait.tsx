@@ -21,7 +21,7 @@ export default function HeroPortrait({ className = '' }: { className?: string })
         alt="Muhammad Rizki, pendiri Hellom"
         width={592}
         height={478}
-        fetchPriority="high"
+        loading="lazy"
         decoding="async"
         onError={() => setFailed(true)}
         className={className}
