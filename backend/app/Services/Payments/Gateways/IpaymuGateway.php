@@ -14,10 +14,10 @@ use Illuminate\Http\Request;
 use RuntimeException;
 
 /**
- * iPaymu (the active gateway). iPaymu notifications are not signed; they carry our
- * callback token in the URL. The token only lets a notification in — the payment is
- * then confirmed with iPaymu's own transaction API (status, amount, our reference)
- * before anything is marked paid.
+ * iPaymu (the active gateway). Notifications carry our callback token in the URL (newer
+ * iPaymu accounts also send an X-Signature, which we do not rely on). The token only lets
+ * a notification in — the payment is then confirmed with iPaymu's own transaction API
+ * (status, amount, our reference) before anything is marked paid.
  */
 final class IpaymuGateway implements PaymentGateway
 {
@@ -114,15 +114,28 @@ final class IpaymuGateway implements PaymentGateway
             return PaymentStatus::unknown('empty iPaymu response');
         }
 
+        // Codes from docs.ipaymu.com/en/docs/transaction/check-transaction: 0 pending, 1 success,
+        // 2 cancelled, 3 refund, 4 error, 5 failed, 6 success-unsettled, 7 escrow, -2 expired.
+        // The numeric code wins; the text is only a fallback when no code is sent.
+        // Escrow (7) stays pending: the money is not released to the merchant yet.
         $code = data_get($data, 'Status', data_get($data, 'StatusCode'));
+        $code = is_numeric($code) ? (string) (int) $code : null;
         $text = strtolower(trim((string) (data_get($data, 'StatusDesc') ?: data_get($data, 'StatusDescription') ?: '')));
-        $state = match (true) {
-            in_array((string) $code, ['1', '6'], true), in_array($text, ['berhasil', 'success', 'successful', 'paid', 'settled', 'settlement'], true) => PaymentStatus::PAID,
-            (string) $code === '-2', in_array($text, ['expired', 'kadaluarsa', 'kedaluwarsa'], true) => PaymentStatus::EXPIRED,
-            (string) $code === '3', $text === 'refund' => PaymentStatus::REFUNDED,
-            in_array((string) $code, ['2', '4', '5'], true), in_array($text, ['batal', 'gagal', 'failed', 'cancelled', 'error'], true) => PaymentStatus::FAILED,
-            default => PaymentStatus::PENDING,
-        };
+        $state = $code !== null
+            ? match ($code) {
+                '1', '6' => PaymentStatus::PAID,
+                '-2' => PaymentStatus::EXPIRED,
+                '3' => PaymentStatus::REFUNDED,
+                '2', '4', '5' => PaymentStatus::FAILED,
+                default => PaymentStatus::PENDING,
+            }
+            : match (true) {
+                in_array($text, ['berhasil', 'success', 'successful', 'paid'], true) => PaymentStatus::PAID,
+                in_array($text, ['expired', 'kadaluarsa', 'kedaluwarsa'], true) => PaymentStatus::EXPIRED,
+                $text === 'refund' => PaymentStatus::REFUNDED,
+                in_array($text, ['batal', 'gagal', 'failed', 'cancelled', 'error'], true) => PaymentStatus::FAILED,
+                default => PaymentStatus::PENDING,
+            };
 
         $amount = data_get($data, 'Amount', data_get($data, 'amount'));
         $fee = data_get($data, 'Fee', data_get($data, 'fee'));
