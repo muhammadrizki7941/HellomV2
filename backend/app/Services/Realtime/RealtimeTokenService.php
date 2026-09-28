@@ -16,7 +16,20 @@ class RealtimeTokenService
     public const TTL_SECONDS = 600;
 
     /** @return array{token: string, expires_at: int, rooms: array<int, string>}|null null when realtime has no secret */
-    public function issue(User $user): ?array
+    public function issue(User $user, array $extraRooms = []): ?array
+    {
+        return $this->issueFor((int) $user->id, array_values(array_unique([...$this->roomsFor($user), ...$extraRooms])));
+    }
+
+    /**
+     * Token for an explicit room list. Callers must have checked access to every room:
+     * POS outlet rooms (tenant:{slug}:outlet:{id}) via InjectPosContext, guest table
+     * rooms (table:{id}) via a valid QR token. $subject is 0 for guests.
+     *
+     * @param array<int, string> $rooms
+     * @return array{token: string, expires_at: int, rooms: array<int, string>}|null
+     */
+    public function issueFor(int $subject, array $rooms): ?array
     {
         $secret = (string) config('realtime.secret');
         if ($secret === '') {
@@ -24,10 +37,9 @@ class RealtimeTokenService
         }
 
         $expiresAt = now()->addSeconds(self::TTL_SECONDS)->getTimestamp();
-        $rooms = $this->roomsFor($user);
 
         $payload = $this->base64UrlEncode(json_encode([
-            'sub' => (int) $user->id,
+            'sub' => $subject,
             'rooms' => $rooms,
             'exp' => $expiresAt,
         ], JSON_UNESCAPED_SLASHES));

@@ -6,6 +6,7 @@ use App\Models\OrganizationLandingPage;
 use App\Policies\LandingPagePolicy;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
@@ -17,7 +18,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // Proof required to redeem member points (swap for an OTP verifier later).
+        $this->app->bind(\App\Services\Pos\Verification\PointRedemptionVerifier::class, \App\Services\Pos\Verification\NameConfirmationVerifier::class);
     }
 
     /**
@@ -43,6 +45,23 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('hellom-guest-checkout', function (Request $request) {
             return Limit::perMinute(10)->by($request->ip());
         });
+
+        // Self-order submit: per QR token (one table cannot flood the kitchen) and per IP.
+        RateLimiter::for('hellom-self-order', function (Request $request) {
+            $token = (string) $request->input('table_token', $request->route('tableToken') ?? '');
+
+            // The shop-link "counter" token is shared by every online guest, hence the
+            // tighter per-guest limit and the looser per-token one.
+            return [
+                Limit::perMinute(6)->by('table-ip:' . $token . '|' . $request->ip()),
+                Limit::perMinute(30)->by('table:' . $token),
+                Limit::perMinute(20)->by('ip:' . $request->ip()),
+            ];
+        });
+
+        // ─── POS order side effects (stock, points, socket, audit, fraud) ───
+        Event::subscribe(\App\Listeners\Pos\OrderStockSubscriber::class);
+        Event::subscribe(\App\Listeners\Pos\OrderSideEffectsSubscriber::class);
 
         // ─── RBAC: Policy bindings + super-admin bypass ───
         Gate::policy(OrganizationLandingPage::class, LandingPagePolicy::class);

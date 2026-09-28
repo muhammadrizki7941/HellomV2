@@ -375,3 +375,8 @@ Schedule::command('hellom:wallet:release-pending-settlements --limit=300')
 Schedule::command('hellom:billing:expire-subscriptions --limit=500')
     ->hourly()
     ->withoutOverlapping();
+
+// Member points past their expiry (per-organization setting points_expire_months).
+Schedule::command('pos:points expire')
+    ->dailyAt('02:30')
+    ->withoutOverlapping();
