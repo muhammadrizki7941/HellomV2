@@ -6,6 +6,9 @@ use App\Models\PosLoyaltySetting;
 use App\Models\PosRewardRule;
 use App\Models\PosMember;
 use App\Services\OutletService;
+use App\Services\Pos\LoyaltyService;
+use App\Services\Pos\OrderService;
+use App\Services\Pos\PricingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -19,31 +22,32 @@ class PosLoyaltyController extends BasePosController
             'member_id'    => 'nullable|integer',
         ]);
 
+        // Estimate only: points are awarded when the order is paid (LoyaltyService).
         $org = $this->getOrg($request);
-        $tenantSlug = $this->getTenantSlug($org);
+        $loyalty = app(LoyaltyService::class);
+        $pointsEarned = $loyalty->pointsForSpend($loyalty->settingsFor($org), (int) $validated['total_amount']);
 
-        // Aturan poin: default 1 poin per Rp 1.000
-        $settings = PosLoyaltySetting::currentForTenant($tenantSlug);
-        $pointsEarned = $this->calculatePointsToEarn($settings, (int) $validated['total_amount']);
-
-        // Cek reward yang tersedia jika ada member
         $availableRewards = [];
-        if (!empty($validated['member_id'])) {
-            $member = PosMember::where('tenant_id', $tenantSlug)
-                ->find($validated['member_id']);
+        $outlet = $this->posOutlet($request);
+        if (!empty($validated['member_id']) && $outlet) {
+            $member = PosMember::query()->forOrganization($org->id)->find($validated['member_id']);
             if ($member) {
-                $availableRewards = $this->getAvailableRewards($tenantSlug, $member);
+                $availableRewards = app(OrderService::class)->eligibleRewardRules($outlet, $member)
+                    ->map(fn (PosRewardRule $rule) => [
+                        'id' => $rule->id,
+                        'name' => $rule->name,
+                        'description' => $rule->description,
+                        'reward_type' => $rule->reward_type,
+                        'reward_value' => $rule->reward_value,
+                        'product' => $rule->scopedRewardProduct()?->name,
+                    ])->values()->all();
             }
         }
 
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'points_to_earn'    => $pointsEarned,
-                'available_rewards' => $availableRewards,
-            ],
-            'message' => 'Kalkulasi poin berhasil',
-        ]);
+        return $this->success([
+            'points_to_earn' => $pointsEarned,
+            'available_rewards' => $availableRewards,
+        ], 'Kalkulasi poin berhasil');
     }
 
     public function applyReward(Request $request): JsonResponse
@@ -54,37 +58,21 @@ class PosLoyaltyController extends BasePosController
             'total_amount'   => 'required|integer',
         ]);
 
+        // Preview only: the order is priced again (and eligibility re-checked) by OrderService.
         $org = $this->getOrg($request);
-        $tenantSlug = $this->getTenantSlug($org);
-
-        $member = PosMember::where('tenant_id', $tenantSlug)
-            ->findOrFail($validated['member_id']);
-
-        $rule = PosRewardRule::where('tenant_id', $tenantSlug)
-            ->where('is_active', true)
-            ->findOrFail($validated['reward_rule_id']);
-
-        // Hitung diskon
-        $discountAmount = 0;
-        $freeProductId = null;
-
-        switch ($rule->reward_type) {
-            case 'discount_percent':
-                $discountAmount = (int) round(
-                    $validated['total_amount'] * $rule->reward_value / 100
-                );
-                break;
-            case 'discount_fixed':
-                $discountAmount = min($rule->reward_value, $validated['total_amount']);
-                break;
-            case 'free_product':
-                $product = $rule->scopedRewardProduct();
-                $freeProductId = $product?->id;
-                $discountAmount = $product?->price ?? 0;
-                break;
+        $outlet = $this->posOutlet($request);
+        if (!$org || !$outlet) {
+            return $this->error('Konteks POS tidak tersedia', 'CONTEXT_MISSING');
+        }
+        $member = PosMember::query()->forOrganization($org->id)->findOrFail($validated['member_id']);
+        $rule = app(OrderService::class)->eligibleRewardRules($outlet, $member)->firstWhere('id', (int) $validated['reward_rule_id']);
+        if (!$rule) {
+            return $this->error('Reward tidak tersedia untuk member ini', 'REWARD_NOT_ELIGIBLE', null, 422);
         }
 
-        $finalAmount = max(0, $validated['total_amount'] - $discountAmount);
+        $discountAmount = app(PricingService::class)->rewardDiscount($rule, (int) $validated['total_amount']);
+        $freeProductId = $rule->reward_type === 'free_product' ? $rule->scopedRewardProduct()?->id : null;
+        $finalAmount = max(0, (int) $validated['total_amount'] - $discountAmount);
 
         return response()->json([
             'success' => true,
@@ -119,6 +107,11 @@ class PosLoyaltyController extends BasePosController
             'enabled' => 'boolean',
             'min_spend_amount' => 'nullable|integer|min:0|max:2000000000',
             'max_points_per_order' => 'nullable|integer|min:1|max:1000000',
+            // Redemption: Rp per point (0 = off), limits per transaction, expiry in months (null = never).
+            'redeem_value_per_point' => 'sometimes|integer|min:0|max:1000000',
+            'min_redeem_points' => 'sometimes|integer|min:0|max:1000000',
+            'max_redeem_points_per_order' => 'sometimes|nullable|integer|min:1|max:1000000',
+            'points_expire_months' => 'sometimes|nullable|integer|min:1|max:120',
         ]);
 
         $org = $this->getOrg($request);
@@ -133,6 +126,14 @@ class PosLoyaltyController extends BasePosController
             'max_points_per_order' => array_key_exists('max_points_per_order', $validated)
                 ? $validated['max_points_per_order']
                 : $currentSettings->max_points_per_order,
+            'redeem_value_per_point' => $validated['redeem_value_per_point'] ?? $currentSettings->redeem_value_per_point ?? 0,
+            'min_redeem_points' => $validated['min_redeem_points'] ?? $currentSettings->min_redeem_points ?? 0,
+            'max_redeem_points_per_order' => array_key_exists('max_redeem_points_per_order', $validated)
+                ? $validated['max_redeem_points_per_order']
+                : $currentSettings->max_redeem_points_per_order,
+            'points_expire_months' => array_key_exists('points_expire_months', $validated)
+                ? $validated['points_expire_months']
+                : $currentSettings->points_expire_months,
         ]);
 
         return $this->success($settings->toPosPayload(), 'Settings updated');
@@ -216,62 +217,5 @@ class PosLoyaltyController extends BasePosController
         $rule->delete();
 
         return $this->success(null, 'Reward rule deleted');
-    }
-
-    private function calculatePointsToEarn(PosLoyaltySetting $settings, int $amount): int
-    {
-        if (!$settings->enabled) {
-            return 0;
-        }
-
-        if ($amount < (int) $settings->min_spend_amount) {
-            return 0;
-        }
-
-        $pointsPerAmount = max(1, (int) $settings->points_per_amount);
-        $points = (int) floor($amount / $pointsPerAmount);
-
-        if ($settings->max_points_per_order !== null) {
-            $points = min($points, (int) $settings->max_points_per_order);
-        }
-
-        return max(0, $points);
-    }
-
-    private function getAvailableRewards(string $tenantSlug, PosMember $member): array
-    {
-        $rules = PosRewardRule::where('tenant_id', $tenantSlug)
-            ->where('is_active', true)
-            ->get();
-
-        $available = [];
-        foreach ($rules as $rule) {
-            $qualified = false;
-
-            switch ($rule->trigger_type) {
-                case 'points_threshold':
-                    $qualified = $member->total_points >= $rule->trigger_value;
-                    break;
-                case 'orders_threshold':
-                    $qualified = $member->total_orders >= $rule->trigger_value;
-                    break;
-                case 'spend_threshold':
-                    $qualified = $member->total_spent >= $rule->trigger_value;
-                    break;
-            }
-
-            if ($qualified) {
-                $available[] = [
-                    'id'           => $rule->id,
-                    'name'         => $rule->name,
-                    'description'  => $rule->description,
-                    'reward_type'  => $rule->reward_type,
-                    'reward_value' => $rule->reward_value,
-                    'product'      => $rule->scopedRewardProduct()?->name,
-                ];
-            }
-        }
-
-        return $available;
     }
 }

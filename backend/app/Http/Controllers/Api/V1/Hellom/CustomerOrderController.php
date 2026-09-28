@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Hellom;
 
+use App\Listeners\Pos\OrderSideEffectsSubscriber;
 use App\Models\BrandSetting;
 use App\Models\Category;
 use App\Models\DiningTable;
@@ -10,49 +11,64 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Outlet;
 use App\Models\PaymentSetting;
-use App\Models\PosPaymentSetting;
 use App\Models\PosLoyaltySetting;
 use App\Models\Product;
 use App\Models\ReservationSpace;
 use App\Models\SitePromotion;
+use App\Models\TableBill;
+use App\Services\Pos\LoyaltyService;
+use App\Services\Pos\MemberService;
+use App\Services\Pos\OrderService;
+use App\Services\Pos\OrderStatus;
+use App\Services\Pos\OutletSettings;
+use App\Services\Pos\PricingException;
+use App\Services\Pos\SelfOrderGate;
+use App\Services\Realtime\RealtimeTokenService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Validation\Rule;
 
+/**
+ * Public self-order (QR per table, or the shop link which orders through the outlet's
+ * counter pseudo-table). Orders go through the same OrderService as the cashier, so a
+ * cart costs the same everywhere; the menu, prices, hours and payment methods are the
+ * outlet's own.
+ */
 class CustomerOrderController extends BaseApiController
 {
+    public function __construct(
+        private readonly SelfOrderGate $gate,
+        private readonly OrderService $orders,
+        private readonly MemberService $members,
+    ) {
+    }
+
     public function getMenu(string $tableToken): JsonResponse
     {
-        $table = $this->resolveActiveTableByToken($tableToken);
-
-        if (!$table) {
-            return $this->fail('Table not found or inactive', [], 404);
+        $resolved = $this->gate->resolveTable($tableToken);
+        if (!$resolved) {
+            return $this->fail('Meja tidak ditemukan atau QR sudah tidak berlaku. Minta QR terbaru ke kasir.', ['code' => 'TABLE_NOT_FOUND'], 404);
         }
+        [$table, $outlet] = $resolved;
 
-        return $this->menuResponse($table, $tableToken);
+        return $this->menuResponse($table, $outlet, $tableToken);
     }
 
     public function getOrganizationMenu(string $organizationSlug, Request $request): JsonResponse
     {
-        $organization = Organization::query()
-            ->where('slug', $organizationSlug)
-            ->first();
-
+        $organization = Organization::query()->where('slug', $organizationSlug)->first();
         if (!$organization) {
             return $this->fail('Organization not found', [], 404);
         }
 
         // Resolve the chosen outlet (?outlet=slug|id), defaulting to the primary outlet.
-        $tenantId = $this->resolveOutletTenantSlug($organization, $request->query('outlet'));
-        $table = $this->resolvePublicEntryTable($tenantId);
-
-        if (!$table) {
-            return $this->fail('Belum ada meja aktif untuk outlet ini.', [], 404);
+        $outlet = $this->resolveOrganizationOutlet($organization, $request->query('outlet'));
+        if (!$outlet) {
+            return $this->fail('Outlet tidak ditemukan atau tidak aktif.', [], 404);
         }
+        $counter = $this->gate->counterTable($outlet);
 
-        return $this->menuResponse($table, (string) $table->public_id, true);
+        return $this->menuResponse($counter, $outlet, (string) $counter->public_id, true);
     }
 
     /**
@@ -83,6 +99,7 @@ class CustomerOrderController extends BaseApiController
                 'address' => $outlet->address,
                 'phone' => $outlet->phone,
                 'is_primary' => (bool) $outlet->is_primary,
+                'status' => $this->gate->status($outlet),
             ])
             ->values();
 
@@ -95,193 +112,86 @@ class CustomerOrderController extends BaseApiController
         ], 'Outlets retrieved successfully');
     }
 
-    private function resolveOutletTenantSlug(Organization $organization, ?string $outletParam): string
-    {
-        if ($outletParam !== null && $outletParam !== '') {
-            $query = Outlet::query()
-                ->where('organization_id', $organization->id)
-                ->where('is_active', true);
-
-            $outlet = is_numeric($outletParam)
-                ? (clone $query)->where('id', (int) $outletParam)->first()
-                : (clone $query)->where('slug', $outletParam)->first();
-
-            if ($outlet && !empty($outlet->tenant_slug)) {
-                return (string) $outlet->tenant_slug;
-            }
-        }
-
-        $primary = Outlet::query()
-            ->where('organization_id', $organization->id)
-            ->where('is_primary', true)
-            ->first();
-
-        return (string) ($primary?->tenant_slug ?: $organization->pos_tenant_slug ?: $organization->slug);
-    }
-
     public function createOrder(Request $request): JsonResponse
     {
-        // For public customer orders, never require payment confirmation upfront
-        // Customer selects payment method but payment happens later at cashier
-        $requirePayment = false;
-
-        $rules = [
-            'table_token' => 'required|string',
-            'items' => 'required|array|min:1',
-            'items.*.product_id' => 'required|integer|exists:products,id',
-            'items.*.quantity' => 'required|integer|min:1',
-            'customer_name' => 'nullable|string|max:255',
+        $validated = $request->validate([
+            'table_token' => 'required|string|max:64',
+            'items' => 'required|array|min:1|max:50',
+            'items.*.product_id' => 'required|integer',
+            'items.*.quantity' => 'required|integer|min:1|max:99',
+            'items.*.options' => 'nullable|array',
+            'items.*.options.*.option_id' => 'nullable|integer',
+            'items.*.options.*.value_id' => 'nullable|integer',
+            // The unit price the customer saw; a difference is reported back instead of silently charged.
+            'items.*.expected_unit_price' => 'nullable|integer|min:0',
+            'customer_name' => 'nullable|string|max:100',
             'customer_phone' => 'nullable|string|max:20',
-            'notes' => 'nullable|string|max:1000',
-            'payment_method' => ['nullable', 'string', Rule::in(['cash', 'transfer', 'gopay', 'dana', 'qris', 'qris_static'])],
-        ];
+            'register_member' => 'nullable|boolean',
+            'notes' => 'nullable|string|max:500',
+            'payment_method' => 'nullable|string|max:20',
+            'payment_confirmed' => 'nullable|boolean',
+        ]);
 
-        if ($requirePayment) {
-            $rules['payment_confirmed'] = ['required', 'boolean'];
-        } else {
-            $rules['payment_confirmed'] = ['nullable', 'boolean'];
+        $resolved = $this->gate->resolveTable($validated['table_token']);
+        if (!$resolved) {
+            return $this->fail('Meja tidak ditemukan atau QR sudah tidak berlaku. Minta QR terbaru ke kasir.', ['code' => 'TABLE_NOT_FOUND'], 404);
+        }
+        [$table, $outlet] = $resolved;
+
+        $method = $validated['payment_method'] ?? 'cash';
+        if ($method === 'qris_static') {
+            $method = 'qris';
+        }
+        if (!in_array($method, $this->gate->paymentMethods($outlet), true)) {
+            return $this->fail("Metode pembayaran {$method} tidak tersedia di outlet ini.", ['code' => 'PAYMENT_METHOD_UNAVAILABLE'], 422);
         }
 
-        $validated = $request->validate($rules);
-
-        if ($requirePayment && empty($validated['payment_confirmed'])) {
-            return $this->fail('Pembayaran harus dikonfirmasi sebelum pesanan dikirim.', [], 422);
-        }
-
-
-
-        // Find table by public_id
-        $table = DiningTable::where('public_id', $validated['table_token'])
-            ->where('is_active', true)
-            ->first();
-
-        if (!$table) {
-            return $this->fail('Table not found or inactive', [], 404);
-        }
-
-        $tenantId = $table->tenant_id;
-
-        // Get POS payment settings for this tenant
-        $posPaymentSetting = \App\Models\PosPaymentSetting::where('tenant_id', $tenantId)->first();
-
-        // Validate payment method if provided
-        $paymentMethod = $validated['payment_method'] ?? 'cash';
-        if ($paymentMethod === 'qris_static') {
-            if (!$posPaymentSetting || !$posPaymentSetting->qris_enabled) {
-                return $this->fail("Metode pembayaran qris tidak tersedia.", [], 422);
-            }
-        } elseif ($paymentMethod !== 'cash' && (!$posPaymentSetting || !$posPaymentSetting->{$paymentMethod . '_enabled'})) {
-            return $this->fail("Metode pembayaran {$paymentMethod} tidak tersedia.", [], 422);
-        }
-
-        // Validate products belong to same tenant and are available
-        $productIds = collect($validated['items'])->pluck('product_id')->unique();
-        DB::beginTransaction();
         try {
-            $products = Product::withoutGlobalScope('tenant')
-                ->where('tenant_id', $tenantId)
-                ->whereIn('id', $productIds)
-                ->lockForUpdate()
-                ->get()
-                ->keyBy('id');
+            $this->gate->assertCanOrder($outlet, $table);
+            $organization = $this->orders->organizationOf($outlet);
 
-            if ($products->count() !== $productIds->count()) {
-                return $this->fail('Beberapa produk tidak ditemukan.', [], 400);
+            $member = null;
+            $phone = $validated['customer_phone'] ?? null;
+            if ($phone) {
+                if (!empty($validated['register_member'])) {
+                    if (blank($validated['customer_name'] ?? null)) {
+                        throw new PricingException('Isi nama untuk mendaftar member.', [], 'MEMBER_NAME_REQUIRED');
+                    }
+                    [$member] = $this->members->register($organization, $validated['customer_name'], $phone, null, $outlet->id, $outlet->tenant_slug);
+                } else {
+                    $member = $this->members->findByPhone($organization, $phone);
+                }
             }
 
-            // Calculate totals
-            $totalAmount = 0;
-            $orderItems = [];
-
-            foreach ($validated['items'] as $item) {
-                $product = $products[$item['product_id']];
-                if (!$product->is_available) {
-                    return $this->fail("Produk tidak tersedia: {$product->name}", [], 400);
-                }
-
-                if ($product->track_stock) {
-                    $available = (int) ($product->stock ?? 0);
-                    if ($available <= 0) {
-                        return $this->fail("Stok habis untuk: {$product->name}", [], 400);
-                    }
-                    if ($item['quantity'] > $available) {
-                        return $this->fail("Stok tidak cukup untuk: {$product->name}", [], 400);
-                    }
-                }
-
-                $lineTotal = $product->price * $item['quantity'];
-                $totalAmount += $lineTotal;
-
-                $orderItems[] = [
-                    'product_id' => $product->id,
-                    'product_name' => $product->name,
-                    'unit_price' => $product->price,
-                    'base_unit_price' => $product->price,
-                    'options_total' => 0,
-                    'qty' => $item['quantity'],
-                    'line_total' => $lineTotal,
-                ];
-            }
-
-            // Create order
-            $order = Order::create([
-                'tenant_id' => $tenantId,
-                'dining_table_id' => $table->id,
-                'table_label' => $table->name ?: $table->code,
+            $isCounter = $table->kind === DiningTable::KIND_COUNTER;
+            $order = $this->orders->create($outlet, [
+                'items' => $validated['items'],
+                'member' => $member,
+                'source' => OrderService::SOURCE_SELF_ORDER,
+                'dining_table' => $table,
+                'service_type' => $isCounter ? 'takeaway' : 'dine_in',
                 'customer_name' => $validated['customer_name'] ?? null,
-                'service_type' => 'dine_in',
-                'order_source' => 'public_customer',
-                'status' => Order::STATUS_NEW,
-                'payment_method' => $paymentMethod,
-                'payment_status' => 'unpaid',
-                'total_amount' => $totalAmount,
-                'discount_amount' => 0,
-                'final_amount' => $totalAmount,
+                'customer_phone' => $phone,
                 'notes' => $validated['notes'] ?? null,
+                'payment_method' => $method,
+                'auto_confirm' => !OutletSettings::for($outlet)->selfOrderNeedsConfirmation(),
             ]);
-
-            // Create order items
-            foreach ($orderItems as $itemData) {
-                $itemData['order_id'] = $order->id;
-                OrderItem::create($itemData);
-            }
-
-            // Decrement stock for tracked products
-            foreach ($validated['items'] as $item) {
-                $product = $products[$item['product_id']];
-                if ($product->track_stock) {
-                    $product->stock = (int) ($product->stock ?? 0) - (int) $item['quantity'];
-                    $product->save();
-                }
-            }
-
-            $order->load('items');
-
-            DB::commit();
-
-            return $this->ok([
-                'order' => $this->transformOrder($order),
-            ], 'Order created successfully', 201);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            \Log::error('Customer self-order create failed', [
-                'message' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'table_token' => $validated['table_token'] ?? null,
-                'tenant_id' => $tenantId ?? null,
-                'request' => $request->all(),
-            ]);
-            return $this->fail('Failed to create order', [], 500);
+        } catch (PricingException $e) {
+            return $this->orderRuleFailed($e);
         }
+
+        $order->load(['items', 'table']);
+
+        return $this->ok([
+            'order' => $this->transformOrder($order),
+            'member' => $member ? ['id' => $member->id, 'name' => $member->name, 'points' => (int) $member->redeemable_points] : null,
+        ], 'Pesanan terkirim', 201);
     }
 
     public function getOrderStatus(Request $request, string $orderNumber): JsonResponse
     {
-        // Order numbers are sequential across all restaurants, so the number
-        // alone must not reveal an order: the guest also proves the table
-        // (token from the QR code the order was placed from).
+        // Order numbers are sequential per outlet, so the number alone must not reveal
+        // an order: the guest also proves the table (token from the QR code).
         $tableToken = trim((string) $request->query('table_token', ''));
         if ($tableToken === '') {
             return $this->fail('Order not found', [], 404);
@@ -309,12 +219,76 @@ class CustomerOrderController extends BaseApiController
         ], 'Order retrieved successfully');
     }
 
+    /** Every order on the table's open bill (self-order and cashier alike). Not for the shared counter. */
+    public function getTableOrders(string $tableToken): JsonResponse
+    {
+        $resolved = $this->gate->resolveTable($tableToken);
+        if (!$resolved) {
+            return $this->fail('Meja tidak ditemukan', ['code' => 'TABLE_NOT_FOUND'], 404);
+        }
+        [$table] = $resolved;
+        if ($table->kind === DiningTable::KIND_COUNTER) {
+            return $this->ok(['bill' => null, 'orders' => []], 'Tidak ada tagihan meja');
+        }
+
+        $bill = TableBill::query()->where('dining_table_id', $table->id)->where('status', TableBill::STATUS_OPEN)->first();
+        $orders = $bill
+            ? Order::withoutGlobalScope('tenant')->with(['items', 'table'])->where('table_bill_id', $bill->id)->orderBy('id')->get()
+            : collect();
+        $live = $orders->where('status', '!=', Order::STATUS_CANCELLED);
+
+        return $this->ok([
+            'bill' => $bill ? [
+                'id' => $bill->id,
+                'opened_at' => optional($bill->opened_at)->toIso8601String(),
+                'total_amount' => (int) $live->sum('final_amount'),
+                'unpaid_amount' => (int) $live->where('payment_status', Order::PAYMENT_UNPAID)->sum('final_amount'),
+            ] : null,
+            'orders' => $orders->map(fn (Order $o) => $this->transformOrder($o))->values(),
+        ], 'Pesanan meja');
+    }
+
+    /** Socket token that only joins this table's room (status updates without polling). */
+    public function realtimeToken(string $tableToken, RealtimeTokenService $tokens): JsonResponse
+    {
+        $resolved = $this->gate->resolveTable($tableToken);
+        if (!$resolved) {
+            return $this->fail('Meja tidak ditemukan', ['code' => 'TABLE_NOT_FOUND'], 404);
+        }
+        [$table] = $resolved;
+        $room = OrderSideEffectsSubscriber::tableRoom((int) $table->id);
+        $issued = $tokens->issueFor(0, [$room]);
+
+        return $this->ok([
+            'enabled' => $issued !== null,
+            'token' => $issued['token'] ?? null,
+            'expires_at' => $issued['expires_at'] ?? null,
+            'poll_seconds' => 15,
+        ], 'Realtime token');
+    }
+
+    private function resolveOrganizationOutlet(Organization $organization, mixed $outletParam): ?Outlet
+    {
+        $query = Outlet::query()->where('organization_id', $organization->id)->where('is_active', true);
+        if ($outletParam !== null && $outletParam !== '') {
+            $outlet = is_numeric($outletParam)
+                ? (clone $query)->where('id', (int) $outletParam)->first()
+                : (clone $query)->where('slug', (string) $outletParam)->first();
+            if ($outlet && !empty($outlet->tenant_slug)) {
+                return $outlet;
+            }
+        }
+
+        return (clone $query)->orderByDesc('is_primary')->orderBy('sort_order')->orderBy('id')->first();
+    }
+
     private function transformOrder(Order $order): array
     {
         return [
             'id' => $order->id,
             'order_number' => $order->order_number,
             'status' => $order->status,
+            'status_label' => OrderStatus::LABELS[$order->status] ?? $order->status,
             'customer_name' => $order->customer_name,
             'table' => $order->relationLoaded('table') && $order->table
                 ? [
@@ -324,13 +298,20 @@ class CustomerOrderController extends BaseApiController
                 ]
                 : null,
             'table_label' => $order->table_label,
+            'table_bill_id' => $order->table_bill_id,
             'service_type' => $order->service_type,
             'order_source' => $order->order_source,
             'payment_method' => $order->payment_method,
             'payment_status' => $order->payment_status,
             'notes' => $order->notes,
+            'subtotal_amount' => (int) ($order->subtotal_amount ?? $order->total_amount),
+            'service_amount' => (int) $order->service_amount,
+            'tax_amount' => (int) $order->tax_amount,
+            'rounding_amount' => (int) $order->rounding_amount,
+            'discount_amount' => (int) $order->discount_amount,
             'total_amount' => $order->total_amount,
             'final_amount' => $order->final_amount ?? $order->total_amount,
+            'cancel_reason' => $order->cancel_reason,
             'created_at' => optional($order->created_at)?->toIso8601String(),
             'updated_at' => optional($order->updated_at)?->toIso8601String(),
             'items' => $order->items->map(function (OrderItem $item) {
@@ -347,17 +328,17 @@ class CustomerOrderController extends BaseApiController
         ];
     }
 
-    private function menuResponse(DiningTable $table, string $tableToken, bool $preferOrganizationRoot = false): JsonResponse
+    private function menuResponse(DiningTable $table, Outlet $outlet, string $tableToken, bool $preferOrganizationRoot = false): JsonResponse
     {
-        $tenantId = (string) $table->tenant_id;
-        $outlet = $this->resolveOutlet($tenantId);
+        $tenantId = (string) $outlet->tenant_slug;
 
         $products = Product::withoutGlobalScope('tenant')
             ->where('tenant_id', $tenantId)
-            ->with('category')
+            ->with(['category', 'options' => fn ($q) => $q->where('is_active', true)->orderBy('sort_order'), 'options.values'])
             ->orderBy('category_id')
             ->orderBy('sort_order')
-            ->get();
+            ->get()
+            ->reject(fn (Product $product) => $product->hide_when_unavailable && !$product->isAvailableNow());
 
         $categories = Category::withoutGlobalScope('tenant')
             ->where('tenant_id', $tenantId)
@@ -366,14 +347,12 @@ class CustomerOrderController extends BaseApiController
             ->get();
 
         $categoriesWithProducts = $categories->map(function ($category) use ($products) {
-            $categoryProducts = $products->filter(function ($product) use ($category) {
-                return $product->category_id === $category->id;
-            });
+            $categoryProducts = $products->filter(fn ($product) => $product->category_id === $category->id);
 
             return [
                 'id' => $category->id,
                 'name' => $category->name,
-                'products' => $categoryProducts->map(function ($product) {
+                'products' => $categoryProducts->map(function (Product $product) {
                     return [
                         'id' => $product->id,
                         'name' => $product->name,
@@ -388,10 +367,23 @@ class CustomerOrderController extends BaseApiController
                             'id' => $product->category_id,
                             'name' => optional($product->category)->name,
                         ],
+                        'options' => $product->options->map(fn ($option) => [
+                            'id' => $option->id,
+                            'name' => $option->name,
+                            'type' => $option->type,
+                            'is_required' => (bool) $option->is_required,
+                            'values' => $option->values
+                                ->filter(fn ($value) => (bool) ($value->is_active ?? true))
+                                ->map(fn ($value) => ['id' => $value->id, 'name' => $value->name, 'price_delta' => (int) $value->price_delta])
+                                ->values(),
+                        ])->values(),
                     ];
                 })->values(),
             ];
         });
+
+        $settings = OutletSettings::for($outlet);
+        $organization = Organization::query()->find($outlet->organization_id);
 
         return response()->json([
             'success' => true,
@@ -401,33 +393,40 @@ class CustomerOrderController extends BaseApiController
                     'public_id' => $table->public_id,
                     'code' => $table->code,
                     'name' => $table->name,
+                    'kind' => $table->kind ?? DiningTable::KIND_TABLE,
                     'tenant_slug' => $tenantId,
-                    'organization_slug' => $this->resolveOrganizationSlug($tenantId),
+                    'organization_slug' => $organization?->slug,
                 ],
-                'outlet' => $outlet ? [
+                'outlet' => [
                     'id' => $outlet->id,
                     'slug' => $outlet->slug,
                     'name' => $outlet->name,
                     'address' => $outlet->address,
                     'phone' => $outlet->phone,
                     'is_primary' => (bool) $outlet->is_primary,
-                ] : null,
+                    'status' => $this->gate->status($outlet),
+                    'pricing' => [
+                        'tax_percent' => $settings->taxPercent(),
+                        'service_percent' => $settings->servicePercent(),
+                        'rounding_step' => $settings->roundingStep(),
+                    ],
+                    'payment_methods' => $this->gate->paymentMethods($outlet),
+                ],
                 'categories' => $categoriesWithProducts,
-                'experience' => $this->buildCustomerExperience($table, $tableToken, $preferOrganizationRoot),
+                'experience' => $this->buildCustomerExperience($table, $outlet, $organization, $tableToken, $preferOrganizationRoot),
             ],
             'message' => 'Menu retrieved successfully',
         ]);
     }
 
-    private function buildCustomerExperience(DiningTable $table, string $tableToken, bool $preferOrganizationRoot = false): array
+    private function buildCustomerExperience(DiningTable $table, Outlet $outlet, ?Organization $organization, string $tableToken, bool $preferOrganizationRoot = false): array
     {
-        $tenantId = $table->tenant_id;
-        $organization = $this->resolveOrganization($tenantId);
-        $outlet = $this->resolveOutlet($tenantId);
-        $brand = BrandSetting::current();
+        $tenantId = (string) $outlet->tenant_slug;
+        // Platform branding is only a fallback for legacy tables with no organization.
+        $brand = $organization ? null : BrandSetting::current();
         $recentCompletedCutoff = now()->subMinutes(5);
 
-        $pendingOrder = Order::withoutGlobalScope('tenant')
+        $pendingOrder = $table->kind === DiningTable::KIND_COUNTER ? null : Order::withoutGlobalScope('tenant')
             ->with(['items', 'table'])
             ->where('tenant_id', $tenantId)
             ->where('dining_table_id', $table->id)
@@ -446,14 +445,16 @@ class CustomerOrderController extends BaseApiController
             ->limit(6);
 
         if (Schema::hasColumn('site_promotions', 'tenant_id')) {
-            $promoTenantId = $this->resolvePromotionTenantIdentifier($tenantId);
+            $promoTenantId = SitePromotion::tenantColumnUsesString() ? $tenantId : $organization?->id;
             if ($promoTenantId !== null && $promoTenantId !== '') {
                 $promosQuery->where('tenant_id', $promoTenantId);
             }
         }
 
         $promos = $promosQuery->get();
-        $loyaltySettings = PosLoyaltySetting::currentForTenant((string) $tenantId);
+        $loyaltySettings = $organization
+            ? PosLoyaltySetting::currentForTenant(LoyaltyService::organizationSlug($organization))
+            : PosLoyaltySetting::currentForTenant($tenantId);
 
         $reservationsQuery = ReservationSpace::query()
             ->where('is_active', true)
@@ -470,10 +471,8 @@ class CustomerOrderController extends BaseApiController
 
         $ratingData = $brand?->getGoogleMapsRating();
         $paymentSetting = PaymentSetting::current();
-        $posPaymentSetting = PosPaymentSetting::query()
-            ->where('tenant_id', $tenantId)
-            ->first();
-        $whatsappNumber = $outlet?->phone ?: ($organization?->phone ?: ($brand?->whatsapp ?: $brand?->phone));
+        $posPaymentSetting = $this->gate->paymentSetting($outlet);
+        $whatsappNumber = $outlet->phone ?: ($organization?->phone ?: ($brand?->whatsapp ?: $brand?->phone));
         $organizationSlug = $organization?->slug;
         $customerRoot = $preferOrganizationRoot && $organizationSlug
             ? url('/customer/' . $organizationSlug)
@@ -486,22 +485,23 @@ class CustomerOrderController extends BaseApiController
                 'business_name' => $organization?->name ?: ($brand?->business_name ?: 'Self Order'),
                 'tagline' => $organization?->description ?: ($brand?->tagline ?: 'Selamat datang, pilih menu favorit Anda lalu kirim langsung ke dapur.'),
                 'about' => $organization?->description ?: $brand?->about,
-                'phone' => $outlet?->phone ?: ($organization?->phone ?: $brand?->phone),
-                'whatsapp' => $outlet?->phone ?: ($organization?->phone ?: $brand?->whatsapp),
-                'address' => $outlet?->address ?: ($organization?->address ?: $brand?->address),
+                'phone' => $outlet->phone ?: ($organization?->phone ?: $brand?->phone),
+                'whatsapp' => $outlet->phone ?: ($organization?->phone ?: $brand?->whatsapp),
+                'address' => $outlet->address ?: ($organization?->address ?: $brand?->address),
                 'instagram' => $brand?->instagram,
                 'website' => $organization?->website ?: $brand?->website,
+                // Tenants have no colour settings yet: neutral defaults, never the platform's palette.
                 'primary_color' => $brand?->primary_color ?: '#0f172a',
                 'secondary_color' => $brand?->secondary_color ?: '#334155',
                 'accent_color' => $brand?->accent_color ?: '#f59e0b',
                 'background_color' => $brand?->background_color ?: '#f8fafc',
-                'logo_url' => $organization?->logo_path
-                    ? url('storage/' . $organization->logo_path)
+                'logo_url' => ($outlet->logo_path ?: $organization?->logo_path)
+                    ? url('storage/' . ($outlet->logo_path ?: $organization->logo_path))
                     : ($brand?->logoDarkUrl() ?: $brand?->logoLightUrl()),
-                'banner_url' => $organization?->banner_path
-                    ? url('storage/' . $organization->banner_path)
+                'banner_url' => ($outlet->banner_path ?: $organization?->banner_path)
+                    ? url('storage/' . ($outlet->banner_path ?: $organization->banner_path))
                     : $brand?->homeBannerMediaUrl(),
-                'banner_kind' => $organization?->banner_path
+                'banner_kind' => ($outlet->banner_path ?: $organization?->banner_path)
                     ? 'image'
                     : ($brand?->homeBannerIsVideo() ? 'video' : ($brand?->homeBannerMediaUrl() ? 'image' : null)),
                 'google_rating' => $organization ? null : ($ratingData ? [
@@ -509,14 +509,14 @@ class CustomerOrderController extends BaseApiController
                     'user_ratings_total' => (int) ($ratingData['user_ratings_total'] ?? 0),
                 ] : null),
             ],
-            'outlet' => $outlet ? [
+            'outlet' => [
                 'id' => $outlet->id,
                 'slug' => $outlet->slug,
                 'name' => $outlet->name,
                 'address' => $outlet->address,
                 'phone' => $outlet->phone,
                 'is_primary' => (bool) $outlet->is_primary,
-            ] : null,
+            ],
             'routes' => [
                 'legacy_order' => url('/order?table=' . $tableToken),
                 'promo' => $customerRoot . '#promo',
@@ -554,7 +554,7 @@ class CustomerOrderController extends BaseApiController
                     'rent_price' => (int) $space->rent_price,
                     'rent_enabled' => (bool) $space->rent_enabled,
                     'min_menu_total' => (int) $space->min_menu_total,
-                    'estimated_points' => $this->calculateEstimatedPoints($loyaltySettings, ((int) $space->rent_price) + (int) $requiredItemsTotal),
+                    'estimated_points' => app(LoyaltyService::class)->pointsForSpend($loyaltySettings, ((int) $space->rent_price) + (int) $requiredItemsTotal),
                     'images' => $space->images->map(fn ($image) => [
                         'id' => (int) $image->id,
                         'url' => $image->url(),
@@ -572,6 +572,7 @@ class CustomerOrderController extends BaseApiController
                 ];
             })->values()->all(),
             'payment' => [
+                'methods' => $this->gate->paymentMethods($outlet),
                 'qris_static_enabled' => (bool) ($posPaymentSetting?->qris_enabled ?? false),
                 'qris_static_image_url' => $posPaymentSetting?->qris_image_path
                     ? url('storage/' . $posPaymentSetting->qris_image_path)
@@ -597,110 +598,6 @@ class CustomerOrderController extends BaseApiController
             ],
             'pending_order' => $pendingOrder ? $this->transformOrder($pendingOrder) : null,
         ];
-    }
-
-    private function resolveOutlet(string $tenantId): ?Outlet
-    {
-        return Outlet::query()->where('tenant_slug', $tenantId)->first();
-    }
-
-    private function resolveOrganization(string $tenantId): ?Organization
-    {
-        $organization = Organization::query()
-            ->where(function ($query) use ($tenantId) {
-                $query->where('pos_tenant_slug', $tenantId)
-                    ->orWhere('slug', $tenantId);
-            })
-            ->first();
-
-        if ($organization) {
-            return $organization;
-        }
-
-        // Secondary outlets carry their own tenant_slug — resolve org via the outlet.
-        return $this->resolveOutlet($tenantId)?->organization;
-    }
-
-    private function resolveOrganizationSlug(string $tenantId): ?string
-    {
-        return $this->resolveOrganization($tenantId)?->slug;
-    }
-
-    private function resolvePromotionTenantIdentifier(string $tenantId): string|int|null
-    {
-        if (SitePromotion::tenantColumnUsesString()) {
-            return $tenantId;
-        }
-
-        return $this->resolveOrganization($tenantId)?->id;
-    }
-
-    private function resolveActiveTableByToken(string $tableToken): ?DiningTable
-    {
-        return DiningTable::withoutGlobalScope('tenant')
-            ->where('public_id', $tableToken)
-            ->where('is_active', true)
-            ->first();
-    }
-
-    private function resolvePublicEntryTable(string $tenantId): ?DiningTable
-    {
-        $tables = DiningTable::withoutGlobalScope('tenant')
-            ->where('tenant_id', $tenantId)
-            ->where('is_active', true)
-            ->get();
-
-        if ($tables->isEmpty()) {
-            return null;
-        }
-
-        $preferred = $tables
-            ->sortBy(function (DiningTable $table) {
-                return sprintf(
-                    '%03d-%s-%010d',
-                    $this->tablePriorityScore($table),
-                    strtolower((string) ($table->name ?: $table->code ?: '')),
-                    (int) $table->id
-                );
-            })
-            ->first();
-
-        return $preferred;
-    }
-
-    private function tablePriorityScore(DiningTable $table): int
-    {
-        $label = strtolower(trim((string) ($table->name ?: $table->code ?: '')));
-
-        if ($label === '') {
-            return 50;
-        }
-
-        foreach (['public', 'customer', 'guest', 'online', 'umum', 'default'] as $keyword) {
-            if (str_contains($label, $keyword)) {
-                return 0;
-            }
-        }
-
-        return 10;
-    }
-
-    private function calculateEstimatedPoints(PosLoyaltySetting $settings, int $amount): int
-    {
-        if (!$settings->enabled) {
-            return 0;
-        }
-
-        if ($amount < (int) $settings->min_spend_amount) {
-            return 0;
-        }
-
-        $points = (int) floor($amount / max(1, (int) $settings->points_per_amount));
-        if ($settings->max_points_per_order !== null) {
-            $points = min($points, (int) $settings->max_points_per_order);
-        }
-
-        return max(0, $points);
     }
 
     private function formatDeepLinkPhone(string $phone): string

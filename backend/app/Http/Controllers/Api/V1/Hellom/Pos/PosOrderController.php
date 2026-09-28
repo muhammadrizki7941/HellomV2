@@ -2,435 +2,266 @@
 
 namespace App\Http\Controllers\Api\V1\Hellom\Pos;
 
+use App\Listeners\Pos\OrderSideEffectsSubscriber;
+use App\Models\DiningTable;
 use App\Models\Order;
-use App\Models\PosLoyaltySetting;
-use App\Models\Product;
+use App\Models\Outlet;
 use App\Models\PosMember;
-use App\Models\PosPointTransaction;
-use App\Models\PosRedemption;
-use App\Models\PosRewardRule;
+use App\Models\TableBill;
+use App\Services\Pos\OrderService;
+use App\Services\Pos\OrderStatus;
+use App\Services\Pos\OutletSettings;
+use App\Services\Pos\PricingException;
+use App\Services\Realtime\RealtimeTokenService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
+/**
+ * Cashier order endpoints. All money and status rules live in OrderService; this
+ * controller only resolves the outlet, validates input and shapes responses.
+ */
 class PosOrderController extends BasePosController
 {
-    public function store(Request $request): JsonResponse
+    public function __construct(private readonly OrderService $orders)
     {
-        $tenantSlug = $request->attributes->get('posTenantSlug');
-        if (!$tenantSlug) {
-            return $this->error('Kontekst POS tidak tersedia', 'CONTEXT_MISSING');
-        }
-
-        \Log::info('Order creation request', [
-            'tenant' => $tenantSlug,
-            'body' => $request->all(),
-            'user_id' => $request->user()?->id,
-        ]);
-
-        $validated = $request->validate([
-            'table_id' => 'nullable|integer',
-            'customer_name' => 'nullable|string|max:100',
-            'customer_phone' => 'nullable|string|max:20',
-            'service_type' => 'nullable|string|in:dine_in,takeaway',
-            'member_id' => 'nullable|integer',
-            'reward_rule_id' => 'nullable|integer',
-            'discount_amount' => 'nullable|integer|min:0',
-            'final_amount' => 'nullable|integer|min:0',
-            'notes' => 'nullable|string|max:500',
-            'items' => 'required|array|min:1',
-            'items.*.product_id' => 'required|integer',
-            'items.*.quantity' => 'required|integer|min:1',
-            'items.*.notes' => 'nullable|string',
-            'items.*.options' => 'nullable|array',
-            'items.*.options.*.option_id' => 'nullable|integer',
-            'items.*.options.*.value_id' => 'nullable|integer',
-        ]);
-
-        // Validate table_id belongs to tenant if provided
-        if (!empty($validated['table_id'])) {
-            $tableExists = \App\Models\DiningTable::withoutGlobalScope('tenant')
-                ->where('tenant_id', $tenantSlug)
-                ->where('id', $validated['table_id'])
-                ->exists();
-
-            if (!$tableExists) {
-                return $this->error('Meja tidak ditemukan', 'TABLE_NOT_FOUND');
-            }
-        }
-
-        $member = null;
-        if (!empty($validated['member_id'])) {
-            $member = PosMember::where('tenant_id', $tenantSlug)
-                ->find($validated['member_id']);
-
-            if (!$member) {
-                return $this->error('Member tidak ditemukan', 'MEMBER_NOT_FOUND', null, 404);
-            }
-        }
-
-        DB::beginTransaction();
-        try {
-            // Calculate total and validate products
-            $total = 0;
-            $orderItems = [];
-
-            $productIds = collect($validated['items'])->pluck('product_id')->unique();
-            $products = Product::withoutGlobalScope('tenant')
-                ->where('tenant_id', $tenantSlug)
-                ->whereIn('id', $productIds)
-                ->lockForUpdate()
-                ->get()
-                ->keyBy('id');
-
-            if ($products->count() !== $productIds->count()) {
-                return $this->error('Produk tidak ditemukan untuk tenant ini', 'PRODUCT_NOT_FOUND');
-            }
-
-            foreach ($validated['items'] as $item) {
-                $product = $products[$item['product_id']] ?? null;
-
-                if (!$product || !$product->is_available) {
-                    return $this->error("Produk dengan ID {$item['product_id']} tidak ditemukan atau tidak tersedia", 'PRODUCT_NOT_FOUND');
-                }
-
-                if ($product->track_stock) {
-                    $available = (int) ($product->stock ?? 0);
-                    if ($available <= 0) {
-                        return $this->error("Stok habis untuk: {$product->name}", 'OUT_OF_STOCK');
-                    }
-                    if ((int) $item['quantity'] > $available) {
-                        return $this->error("Stok tidak cukup untuk: {$product->name}", 'OUT_OF_STOCK');
-                    }
-                }
-
-                $optionsTotal = 0;
-                $optionsData = [];
-
-                // Process add-ons if provided
-                if (isset($item['options']) && is_array($item['options'])) {
-                    foreach ($item['options'] as $optionData) {
-                        $option = $product->options()->where('id', $optionData['option_id'])->first();
-                        if ($option) {
-                            $value = $option->values()->where('id', $optionData['value_id'])->first();
-                            if ($value) {
-                                $optionsTotal += $value->price_delta;
-                                $optionsData[] = [
-                                    'option_name' => $option->name,
-                                    'value_name' => $value->name,
-                                    'price_delta' => $value->price_delta,
-                                ];
-                            }
-                        }
-                    }
-                }
-
-                $unitPrice = $product->price + $optionsTotal;
-                $subtotal = $unitPrice * $item['quantity'];
-                $total += $subtotal;
-
-                $orderItems[] = [
-                    'product_id' => $product->id,
-                    'product_name' => $product->name,
-                    'unit_price' => $unitPrice,
-                    'base_unit_price' => $product->price,
-                    'options_total' => $optionsTotal,
-                    'qty' => $item['quantity'],
-                    'line_total' => $subtotal,
-                    'selected_options' => $item['options'] ?? [],
-                    'options' => $optionsData,
-                ];
-            }
-
-            $rewardRule = null;
-            $discountAmount = 0;
-            if (!empty($validated['reward_rule_id'])) {
-                if (!$member) {
-                    return $this->error('Reward hanya bisa dipakai oleh member', 'MEMBER_REQUIRED', null, 422);
-                }
-
-                $rewardRule = PosRewardRule::where('tenant_id', $tenantSlug)
-                    ->where('is_active', true)
-                    ->find($validated['reward_rule_id']);
-
-                if (!$rewardRule) {
-                    return $this->error('Reward rule tidak ditemukan', 'REWARD_RULE_NOT_FOUND', null, 404);
-                }
-
-                $discountAmount = $this->calculateRewardDiscount($rewardRule, $total);
-            }
-
-            $finalAmount = max(0, $total - $discountAmount);
-
-            // Get table info if provided
-            $tableLabel = null;
-            if (!empty($validated['table_id'])) {
-                $table = \App\Models\DiningTable::withoutGlobalScope('tenant')
-                    ->where('tenant_id', $tenantSlug)
-                    ->find($validated['table_id']);
-                if ($table) {
-                    $tableLabel = $table->name ?: $table->code;
-                }
-            }
-
-            // Create order
-            $order = Order::create([
-                'tenant_id' => $tenantSlug,
-                'member_id' => $member?->id,
-                'dining_table_id' => $validated['table_id'] ?? null,
-                'table_label' => $tableLabel,
-                'customer_name' => $validated['customer_name'] ?? null,
-                'customer_phone' => $validated['customer_phone'] ?? null,
-                'service_type' => $validated['service_type'] ?? 'dine_in',
-                'order_source' => 'pos',
-                'status' => Order::STATUS_NEW,
-                'payment_status' => 'unpaid',
-                'total_amount' => $total,
-                'points_earned' => 0,
-                'points_redeemed' => 0,
-                'discount_amount' => $discountAmount,
-                'redeemed_points' => 0,
-                'final_amount' => $finalAmount,
-                'notes' => $validated['notes'] ?? null,
-            ]);
-
-            // Create order items
-            foreach ($orderItems as $itemData) {
-                $optionsData = $itemData['options'] ?? [];
-                unset($itemData['options']);
-
-                $orderItem = $order->items()->create($itemData);
-
-                // Create order item options
-                foreach ($optionsData as $optionData) {
-                    $orderItem->options()->create($optionData);
-                }
-            }
-
-            // Decrement stock for tracked products
-            foreach ($validated['items'] as $item) {
-                $product = $products[$item['product_id']];
-                if ($product->track_stock) {
-                    $product->stock = (int) ($product->stock ?? 0) - (int) $item['quantity'];
-                    $product->save();
-                }
-            }
-
-            if ($member && $rewardRule) {
-                PosRedemption::create([
-                    'tenant_id' => $tenantSlug,
-                    'member_id' => $member->id,
-                    'order_id' => $order->id,
-                    'reward_rule_id' => $rewardRule->id,
-                    'points_used' => 0,
-                    'discount_amount' => $discountAmount,
-                    'status' => 'applied',
-                ]);
-            }
-
-            DB::commit();
-
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'order' => [
-                        'id' => $order->id,
-                        'order_number' => $order->order_number,
-                        'status' => $order->status,
-                        'total_amount' => $order->total_amount,
-                        'discount_amount' => $order->discount_amount,
-                        'final_amount' => $order->final_amount,
-                        'items_count' => count($validated['items']),
-                        'customer_name' => $order->customer_name,
-                        'customer_phone' => $order->customer_phone,
-                        'member_id' => $order->member_id,
-                        'table_label' => $order->table_label,
-                        'service_type' => $order->service_type,
-                    ]
-                ],
-                'message' => 'Order created successfully! 🎉',
-            ], 201);
-
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            DB::rollBack();
-            return response()->json([
-                'success' => false,
-                'message' => 'Validasi gagal',
-                'errors'  => $e->errors(),
-            ], 422);
-        } catch (\Exception $e) {
-            DB::rollBack();
-
-            // LOG DETAIL ERROR
-            \Log::error('Order creation failed', [
-                'message'   => $e->getMessage(),
-                'file'      => $e->getFile(),
-                'line'      => $e->getLine(),
-                'tenant'    => $tenantSlug ?? 'unknown',
-                'trace'     => $e->getTraceAsString(),
-                'request'   => $request->all(),
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage(), // ← tampilkan error asli sementara
-                'error'   => [
-                    'code'   => 'ORDER_CREATE_FAILED',
-                    'detail' => $e->getMessage(),
-                    'file'   => $e->getFile(),
-                    'line'   => $e->getLine(),
-                ],
-            ], 400);
-        }
     }
 
-    private function awardPointsForOrder(string $tenantSlug, Order $order): void
+    /** Price a cart exactly as store() would, without saving (server totals are final). */
+    public function preview(Request $request): JsonResponse
     {
-        $member = PosMember::where('tenant_id', $tenantSlug)->find($order->member_id);
-        if (!$member) {
-            return;
+        $outlet = $this->posOutlet($request);
+        if (!$outlet) {
+            return $this->error('Konteks POS tidak tersedia', 'CONTEXT_MISSING');
+        }
+        $validated = $request->validate($this->cartRules());
+
+        try {
+            $input = $this->orderInput($validated, $outlet);
+            $input['preview'] = true;
+            $quote = $this->orders->quote($outlet, $input);
+        } catch (PricingException $e) {
+            return $this->orderRuleFailed($e);
         }
 
-        $spendAmount = max(0, (int) ($order->final_amount ?: ($order->total_amount - $order->discount_amount)));
-        $settings = PosLoyaltySetting::currentForTenant($tenantSlug);
-        $basePoints = $this->calculatePointsToEarn($settings, $spendAmount);
+        return $this->success([
+            'lines' => $quote['lines'],
+            'totals' => $quote['totals'],
+            'redeem_points' => $quote['redeem_points'],
+        ], 'Estimasi total');
+    }
 
-        DB::transaction(function () use ($tenantSlug, $order, $member, $basePoints, $spendAmount) {
-            $rewardRule = PosRedemption::where('tenant_id', $tenantSlug)
-                ->where('order_id', $order->id)
-                ->with('rewardRule')
-                ->latest('id')
-                ->first()?->rewardRule;
+    public function store(Request $request): JsonResponse
+    {
+        $outlet = $this->posOutlet($request);
+        if (!$outlet) {
+            return $this->error('Konteks POS tidak tersedia', 'CONTEXT_MISSING');
+        }
+        $validated = $request->validate($this->cartRules());
 
-            $bonusPoints = $rewardRule?->reward_type === 'bonus_points'
-                ? max(0, (int) $rewardRule->reward_value)
-                : 0;
-            $totalPointsEarned = $basePoints + $bonusPoints;
+        try {
+            $input = $this->orderInput($validated, $outlet);
+            $input += [
+                'source' => OrderService::SOURCE_POS,
+                'dining_table' => $this->resolveTable($outlet, $validated['table_id'] ?? null),
+                'service_type' => $validated['service_type'] ?? 'dine_in',
+                'customer_name' => $validated['customer_name'] ?? null,
+                'customer_phone' => $validated['customer_phone'] ?? null,
+                'notes' => $validated['notes'] ?? null,
+                'user_id' => $request->user()?->id,
+            ];
+            $order = $this->orders->create($outlet, $input);
+        } catch (PricingException $e) {
+            return $this->orderRuleFailed($e);
+        }
 
-            if ($basePoints > 0) {
-                PosPointTransaction::create([
-                    'tenant_id'     => $tenantSlug,
-                    'member_id'     => $member->id,
-                    'order_id'      => $order->id,
-                    'type'          => 'earn',
-                    'points'        => $basePoints,
-                    'balance_after' => $member->total_points + $basePoints,
-                    'description'   => "Poin dari pesanan {$order->order_number}",
-                ]);
-            }
-
-            if ($bonusPoints > 0) {
-                PosPointTransaction::create([
-                    'tenant_id'     => $tenantSlug,
-                    'member_id'     => $member->id,
-                    'order_id'      => $order->id,
-                    'type'          => 'bonus',
-                    'points'        => $bonusPoints,
-                    'balance_after' => $member->total_points + $totalPointsEarned,
-                    'description'   => "Bonus reward dari pesanan {$order->order_number}",
-                ]);
-            }
-
-            $member->increment('total_points', $totalPointsEarned);
-            $member->increment('redeemable_points', $totalPointsEarned);
-            $member->increment('total_orders');
-            $member->increment('total_spent', $spendAmount);
-            $member->update(['last_order_at' => now()]);
-
-            $order->update([
-                'points_earned' => $totalPointsEarned,
-                'final_amount' => $spendAmount,
-            ]);
-        });
+        return $this->success([
+            'order' => $this->present($order) + ['items_count' => $order->items->count()],
+        ], 'Pesanan dibuat', 201);
     }
 
     public function index(Request $request): JsonResponse
     {
         $tenantSlug = $request->attributes->get('posTenantSlug');
         if (!$tenantSlug) {
-            return $this->error('Kontekst POS tidak tersedia', 'CONTEXT_MISSING');
+            return $this->error('Konteks POS tidak tersedia', 'CONTEXT_MISSING');
         }
 
-        $status = $request->query('status'); // Optional status filter
-
+        $status = $request->query('status');
         $query = Order::withoutGlobalScope('tenant')
             ->where('tenant_id', $tenantSlug)
-            ->with(['items', 'table']);
+            ->with(['items.options', 'table']);
 
         if ($status && $status !== 'all') {
-            $query->where('status', $status);
+            $query->where('status', OrderStatus::fromInput((string) $status) ?? $status);
+        }
+        if ($request->filled('payment_status')) {
+            $query->where('payment_status', (string) $request->query('payment_status'));
         }
 
-        $orders = $query->orderByDesc('created_at')
-            ->limit(100)
-            ->get();
+        $orders = $query->orderByDesc('created_at')->limit(100)->get();
 
         return $this->success([
-            'orders' => $orders->map(function ($order) {
-                return [
-                    'id' => $order->id,
-                    'order_number' => $order->order_number,
-                    'customer_name' => $order->customer_name,
-                    'table' => $order->table ? [
-                        'id' => $order->table->id,
-                        'code' => $order->table->code,
-                        'name' => $order->table->name,
-                    ] : null,
-                    'table_label' => $order->table_label,
-                    'service_type' => $order->service_type,
-                    'status' => $order->status,
-                    'payment_status' => $order->payment_status,
-                    'total_amount' => $order->total_amount,
-                    'discount_amount' => $order->discount_amount,
-                    'final_amount' => $order->final_amount,
-                    'member_id' => $order->member_id,
-                    'created_at' => $order->created_at,
-                    'updated_at' => $order->updated_at,
-                    'items_count' => $order->items->count(),
-                    'items' => $order->items->map(function ($item) {
-                        return [
-                            'id' => $item->id,
-                            'product_name' => $item->product_name,
-                            'quantity' => $item->qty,
-                            'unit_price' => $item->unit_price,
-                            'line_total' => $item->line_total,
-                        ];
-                    }),
-                ];
-            }),
+            'orders' => $orders->map(fn (Order $order) => $this->present($order, withItems: true))->values(),
+            'server_time' => now()->toIso8601String(),
         ], 'Orders retrieved');
     }
 
     public function updateStatus(Request $request, string $orderId): JsonResponse
     {
-        $tenantSlug = $request->attributes->get('posTenantSlug');
-        if (!$tenantSlug) {
-            return $this->error('Kontekst POS tidak tersedia', 'CONTEXT_MISSING');
-        }
-
         $validated = $request->validate([
-            'status' => 'required|string|in:new,accepted,preparing,prepared,completed,cancelled',
+            'status' => 'required|string',
+            'reason' => 'nullable|string|max:255',
         ]);
-
-        $order = Order::where('tenant_id', $tenantSlug)->findOrFail($orderId);
-
-        // Award poin jika order selesai dan ada member
-        if ($validated['status'] === 'completed'
-            && $order->member_id
-            && $order->status !== Order::STATUS_COMPLETED) {
-            $this->awardPointsForOrder($tenantSlug, $order);
+        $to = OrderStatus::fromInput($validated['status']);
+        if (!$to) {
+            return $this->error('Status tidak dikenal', 'INVALID_STATUS', null, 422);
+        }
+        $order = $this->findOrder($request, $orderId);
+        if ($to === Order::STATUS_CANCELLED && blank($validated['reason'] ?? null)) {
+            return $this->error('Alasan pembatalan wajib diisi', 'CANCEL_REASON_REQUIRED', null, 422);
         }
 
-        $order->update(['status' => $validated['status']]);
+        try {
+            $order = $this->orders->transition($order, $to, $request->user()?->id, $validated['reason'] ?? null);
+        } catch (PricingException $e) {
+            return $this->orderRuleFailed($e);
+        }
 
-        return $this->success(['order' => $order], 'Order status updated');
+        return $this->success(['order' => $this->present($order)], 'Status pesanan diperbarui');
+    }
+
+    public function cancel(Request $request, string $orderId): JsonResponse
+    {
+        $validated = $request->validate(['reason' => 'required|string|max:255']);
+        $order = $this->findOrder($request, $orderId);
+
+        try {
+            $order = $this->orders->cancel($order, $validated['reason'], $request->user()?->id);
+        } catch (PricingException $e) {
+            return $this->orderRuleFailed($e);
+        }
+
+        return $this->success(['order' => $this->present($order)], 'Pesanan dibatalkan');
+    }
+
+    /** Record payment. The kitchen status is not touched (paid ≠ completed). */
+    public function pay(Request $request, string $orderId): JsonResponse
+    {
+        $validated = $request->validate([
+            'payment_method' => ['required', Rule::in(OrderService::PAYMENT_METHODS)],
+            'payment_amount' => 'required|integer|min:0',
+            'payment_note' => 'nullable|string|max:200',
+        ]);
+        $order = $this->findOrder($request, $orderId);
+
+        try {
+            $order = $this->orders->markPaid($order, $validated['payment_method'], (int) $validated['payment_amount'], $validated['payment_note'] ?? null, $request->user()?->id);
+        } catch (PricingException $e) {
+            return $this->orderRuleFailed($e);
+        }
+
+        return $this->success([
+            'order' => $this->present($order) + [
+                'total_amount' => (int) $order->final_amount,
+                'payment_method' => $order->payment_method,
+                'payment_amount' => (int) $order->payment_amount,
+                'payment_change' => (int) $order->payment_change,
+                'paid_at' => $order->paid_at,
+            ],
+            'change_amount' => (int) $order->payment_change,
+        ], 'Pembayaran tercatat');
+    }
+
+    public function refund(Request $request, string $orderId): JsonResponse
+    {
+        $org = $this->getOrg($request);
+        if (!$org || !$this->isSupervisor($request, $org)) {
+            return $this->error('Hanya owner atau supervisor yang bisa melakukan refund', 'FORBIDDEN', null, 403);
+        }
+        $validated = $request->validate(['reason' => 'required|string|max:255']);
+        $order = $this->findOrder($request, $orderId);
+
+        try {
+            $order = $this->orders->refund($order, $validated['reason'], $request->user()?->id);
+        } catch (PricingException $e) {
+            return $this->orderRuleFailed($e);
+        }
+
+        return $this->success(['order' => $this->present($order)], 'Refund tercatat');
+    }
+
+    /** Open table bills of the active outlet. */
+    public function tableBills(Request $request): JsonResponse
+    {
+        $outlet = $this->posOutlet($request);
+        if (!$outlet) {
+            return $this->error('Konteks POS tidak tersedia', 'CONTEXT_MISSING');
+        }
+        $bills = TableBill::query()
+            ->where('outlet_id', $outlet->id)
+            ->where('status', $request->query('status', TableBill::STATUS_OPEN))
+            ->orderByDesc('opened_at')
+            ->limit(100)
+            ->get();
+        $service = app(\App\Services\Pos\TableBillService::class);
+
+        return $this->success(['bills' => $bills->map(fn (TableBill $bill) => $service->summary($bill))->values()], 'Tagihan meja');
+    }
+
+    public function showTableBill(Request $request, int $billId): JsonResponse
+    {
+        $bill = $this->findBill($request, $billId);
+
+        return $this->success(['bill' => app(\App\Services\Pos\TableBillService::class)->summary($bill)], 'Tagihan meja');
+    }
+
+    public function payTableBill(Request $request, int $billId): JsonResponse
+    {
+        $validated = $request->validate([
+            'payment_method' => ['required', Rule::in(OrderService::PAYMENT_METHODS)],
+            'payment_amount' => 'required|integer|min:0',
+            'payment_note' => 'nullable|string|max:200',
+        ]);
+        $bill = $this->findBill($request, $billId);
+
+        try {
+            $result = $this->orders->payBill($bill, $validated['payment_method'], (int) $validated['payment_amount'], $validated['payment_note'] ?? null, $request->user()?->id);
+        } catch (PricingException $e) {
+            return $this->orderRuleFailed($e);
+        }
+
+        return $this->success([
+            'bill' => app(\App\Services\Pos\TableBillService::class)->summary($result['bill']),
+            'total' => $result['total'],
+            'change_amount' => $result['change'],
+        ], 'Tagihan meja lunas');
+    }
+
+    /** Socket token for this outlet's order room (sound/badge on new orders). */
+    public function realtimeToken(Request $request, RealtimeTokenService $tokens): JsonResponse
+    {
+        $outlet = $this->posOutlet($request);
+        if (!$outlet || !$request->user()) {
+            return $this->error('Konteks POS tidak tersedia', 'CONTEXT_MISSING');
+        }
+        $room = OrderSideEffectsSubscriber::outletRoom((string) $outlet->tenant_slug, (int) $outlet->id);
+        $issued = $tokens->issue($request->user(), [$room]);
+
+        return $this->success([
+            'enabled' => $issued !== null,
+            'token' => $issued['token'] ?? null,
+            'expires_at' => $issued['expires_at'] ?? null,
+            'room' => $room,
+            'poll_seconds' => 15,
+        ], 'Realtime token');
     }
 
     public function receipt(Request $request, int $orderId): JsonResponse
     {
         $tenantSlug = $request->attributes->get('posTenantSlug');
         if (!$tenantSlug) {
-            return $this->error('Kontekst POS tidak tersedia', 'CONTEXT_MISSING');
+            return $this->error('Konteks POS tidak tersedia', 'CONTEXT_MISSING');
         }
 
         $order = Order::withoutGlobalScope('tenant')
@@ -469,6 +300,10 @@ class PosOrderController extends BasePosController
                 ]),
                 'total_amount' => (int) $order->total_amount,
                 'discount_amount' => (int) $order->discount_amount,
+                'points_discount_amount' => (int) $order->points_discount_amount,
+                'service_amount' => (int) $order->service_amount,
+                'tax_amount' => (int) $order->tax_amount,
+                'rounding_amount' => (int) $order->rounding_amount,
                 'final_amount' => (int) ($order->final_amount ?: $order->total_amount),
                 'payment' => [
                     'method' => $order->payment_method,
@@ -491,33 +326,135 @@ class PosOrderController extends BasePosController
         ], 'Receipt retrieved');
     }
 
-    private function calculateRewardDiscount(PosRewardRule $rule, int $totalAmount): int
+    /** @return array<string, mixed> */
+    private function cartRules(): array
     {
-        return match ($rule->reward_type) {
-            'discount_percent' => (int) round($totalAmount * $rule->reward_value / 100),
-            'discount_fixed' => min($rule->reward_value, $totalAmount),
-            'free_product' => (int) ($rule->scopedRewardProduct()?->price ?? 0),
-            'bonus_points' => 0,
-            default => 0,
-        };
+        return [
+            'table_id' => 'nullable|integer',
+            'customer_name' => 'nullable|string|max:100',
+            'customer_phone' => 'nullable|string|max:20',
+            'service_type' => 'nullable|string|in:dine_in,takeaway',
+            'member_id' => 'nullable|integer',
+            'reward_rule_id' => 'nullable|integer',
+            'redeem_points' => 'nullable|integer|min:0',
+            'confirm_member_name' => 'nullable|string|max:100',
+            'notes' => 'nullable|string|max:500',
+            'items' => 'required|array|min:1|max:100',
+            'items.*.product_id' => 'required|integer',
+            'items.*.quantity' => 'required|integer|min:1|max:999',
+            'items.*.notes' => 'nullable|string|max:255',
+            'items.*.options' => 'nullable|array',
+            'items.*.options.*.option_id' => 'nullable|integer',
+            'items.*.options.*.value_id' => 'nullable|integer',
+            // Client-side totals (discount_amount, final_amount) are ignored: the server prices the cart.
+        ];
     }
 
-    private function calculatePointsToEarn(PosLoyaltySetting $settings, int $amount): int
+    /** @return array<string, mixed> */
+    private function orderInput(array $validated, Outlet $outlet): array
     {
-        if (!$settings->enabled) {
-            return 0;
+        $member = null;
+        if (!empty($validated['member_id'])) {
+            $member = PosMember::query()->forOrganization((int) $outlet->organization_id)->find($validated['member_id']);
+            if (!$member) {
+                throw new PricingException('Member tidak ditemukan', [], 'MEMBER_NOT_FOUND', 404);
+            }
         }
 
-        if ($amount < (int) $settings->min_spend_amount) {
-            return 0;
+        return [
+            'items' => $validated['items'],
+            'member' => $member,
+            'reward_rule_id' => $validated['reward_rule_id'] ?? null,
+            'redeem_points' => (int) ($validated['redeem_points'] ?? 0),
+            'verification' => ['confirm_member_name' => $validated['confirm_member_name'] ?? null],
+        ];
+    }
+
+    private function resolveTable(Outlet $outlet, mixed $tableId): ?DiningTable
+    {
+        if (empty($tableId)) {
+            return null;
+        }
+        $table = DiningTable::withoutGlobalScope('tenant')
+            ->where('tenant_id', $outlet->tenant_slug)
+            ->find((int) $tableId);
+        if (!$table) {
+            throw new PricingException('Meja tidak ditemukan', [], 'TABLE_NOT_FOUND', 404);
+        }
+        if (!$table->outlet_id) {
+            $table->forceFill(['outlet_id' => $outlet->id])->save();
         }
 
-        $points = (int) floor($amount / max(1, (int) $settings->points_per_amount));
+        return $table;
+    }
 
-        if ($settings->max_points_per_order !== null) {
-            $points = min($points, (int) $settings->max_points_per_order);
+    private function findOrder(Request $request, string|int $orderId): Order
+    {
+        return Order::withoutGlobalScope('tenant')
+            ->where('tenant_id', (string) $request->attributes->get('posTenantSlug'))
+            ->findOrFail((int) $orderId);
+    }
+
+    private function findBill(Request $request, int $billId): TableBill
+    {
+        return TableBill::query()
+            ->where('tenant_id', (string) $request->attributes->get('posTenantSlug'))
+            ->findOrFail($billId);
+    }
+
+    /** @return array<string, mixed> */
+    private function present(Order $order, bool $withItems = false): array
+    {
+        $data = [
+            'id' => $order->id,
+            'order_number' => $order->order_number,
+            'customer_name' => $order->customer_name,
+            'customer_phone' => $order->customer_phone,
+            'table' => $order->relationLoaded('table') && $order->table ? [
+                'id' => $order->table->id,
+                'code' => $order->table->code,
+                'name' => $order->table->name,
+            ] : null,
+            'table_label' => $order->table_label,
+            'table_bill_id' => $order->table_bill_id,
+            'service_type' => $order->service_type,
+            'order_source' => $order->order_source,
+            'status' => $order->status,
+            'status_label' => OrderStatus::LABELS[$order->status] ?? $order->status,
+            'allowed_next' => OrderStatus::allowedNext((string) $order->status),
+            'payment_status' => $order->payment_status,
+            'payment_method' => $order->payment_method,
+            'subtotal_amount' => (int) ($order->subtotal_amount ?? $order->total_amount),
+            'total_amount' => (int) $order->total_amount,
+            'discount_amount' => (int) $order->discount_amount,
+            'points_discount_amount' => (int) $order->points_discount_amount,
+            'service_amount' => (int) $order->service_amount,
+            'tax_amount' => (int) $order->tax_amount,
+            'rounding_amount' => (int) $order->rounding_amount,
+            'final_amount' => (int) $order->final_amount,
+            'redeemed_points' => (int) $order->redeemed_points,
+            'points_earned' => (int) $order->points_earned,
+            'member_id' => $order->member_id,
+            'notes' => $order->notes,
+            'cancel_reason' => $order->cancel_reason,
+            'created_at' => $order->created_at,
+            'updated_at' => $order->updated_at,
+        ];
+
+        if ($withItems) {
+            $data['items_count'] = $order->items->count();
+            $data['items'] = $order->items->map(fn ($item) => [
+                'id' => $item->id,
+                'product_name' => $item->product_name,
+                'quantity' => $item->qty,
+                'unit_price' => $item->unit_price,
+                'line_total' => $item->line_total,
+                'options' => $item->relationLoaded('options')
+                    ? $item->options->map(fn ($o) => $o->option_name . ': ' . $o->value_name)->values()
+                    : [],
+            ])->values();
         }
 
-        return max(0, $points);
+        return $data;
     }
 }

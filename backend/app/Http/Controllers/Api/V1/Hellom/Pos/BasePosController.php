@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api\V1\Hellom\Pos;
 
 use App\Http\Controllers\Api\V1\BaseApiController;
 use App\Models\Organization;
+use App\Models\Outlet;
+use App\Models\PosStaff;
 use Illuminate\Http\Request;
 
 abstract class BasePosController extends BaseApiController
@@ -25,6 +27,28 @@ abstract class BasePosController extends BaseApiController
     protected function getActiveTenantSlug(Request $request, Organization $org): string
     {
         return (string) ($request->attributes->get('posTenantSlug') ?: $this->getTenantSlug($org));
+    }
+
+    /** Active outlet resolved by InjectPosContext. */
+    protected function posOutlet(Request $request): ?Outlet
+    {
+        $outlet = $request->attributes->get('posOutlet');
+
+        return $outlet instanceof Outlet ? $outlet : null;
+    }
+
+    /**
+     * Owner/admin of the organization, or an outlet staff member with the "admin"
+     * (supervisor) role. Needed for refunds and manual point adjustments.
+     */
+    protected function isSupervisor(Request $request, Organization $org): bool
+    {
+        if ($this->isOrgOwner($request, $org)) {
+            return true;
+        }
+        $staff = $request->attributes->get('posStaff');
+
+        return $staff instanceof PosStaff && (string) $staff->role === 'admin';
     }
 
     /**

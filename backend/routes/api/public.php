@@ -79,7 +79,9 @@ Route::post('/auth/magic-login', [AuthController::class, 'magicLogin'])->middlew
 Route::get('/pos/customer/menu/{tableToken}', [CustomerOrderController::class, 'getMenu']);
 Route::get('/pos/customer/organization/{organizationSlug}/outlets', [CustomerOrderController::class, 'getOrganizationOutlets']);
 Route::get('/pos/customer/organization/{organizationSlug}/menu', [CustomerOrderController::class, 'getOrganizationMenu']);
-Route::post('/pos/customer/order', [CustomerOrderController::class, 'createOrder'])->middleware('throttle:hellom-public-write');
+Route::post('/pos/customer/order', [CustomerOrderController::class, 'createOrder'])->middleware('throttle:hellom-self-order');
 Route::get('/pos/customer/order/{orderNumber}', [CustomerOrderController::class, 'getOrderStatus']);
+Route::get('/pos/customer/table/{tableToken}/orders', [CustomerOrderController::class, 'getTableOrders'])->middleware('throttle:hellom-public-lookup');
+Route::get('/pos/customer/table/{tableToken}/realtime-token', [CustomerOrderController::class, 'realtimeToken'])->middleware('throttle:hellom-public-lookup');
 Route::post('/pos/customer/promos/{promoId}/claim', [PosExperienceController::class, 'claimPromo'])->middleware('throttle:hellom-public-write');
 Route::post('/pos/customer/reservations', [PosExperienceController::class, 'createReservation'])->middleware('throttle:hellom-public-write');

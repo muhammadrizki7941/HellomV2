@@ -66,7 +66,7 @@ class PosReportController extends BasePosController
         // Base query — hanya order COMPLETED
         $baseQuery = Order::withoutGlobalScope('tenant')
             ->whereIn('tenant_id', $slugs)
-            ->where('status', 'completed')
+            ->where('payment_status', 'paid')
             ->whereBetween('created_at', [$startDate, $endDate]);
 
         // Hitung periode sebelumnya untuk perbandingan
@@ -76,7 +76,7 @@ class PosReportController extends BasePosController
 
         $prevQuery = Order::withoutGlobalScope('tenant')
             ->whereIn('tenant_id', $slugs)
-            ->where('status', 'completed')
+            ->where('payment_status', 'paid')
             ->whereBetween('created_at', [$prevStart, $prevEnd]);
 
         // Data periode ini
@@ -87,7 +87,7 @@ class PosReportController extends BasePosController
         $totalItems = OrderItem::whereHas('order', function($q) use ($slugs, $startDate, $endDate) {
             $q->withoutGlobalScope('tenant')
               ->whereIn('tenant_id', $slugs)
-              ->where('status', 'completed')
+              ->where('payment_status', 'paid')
               ->whereBetween('created_at', [$startDate, $endDate]);
         })->sum('qty');
 
@@ -105,7 +105,7 @@ class PosReportController extends BasePosController
         // Breakdown per metode pembayaran
         $paymentBreakdown = Order::withoutGlobalScope('tenant')
             ->whereIn('tenant_id', $slugs)
-            ->where('status', 'completed')
+            ->where('payment_status', 'paid')
             ->whereBetween('created_at', [$startDate, $endDate])
             ->selectRaw('payment_method, COUNT(*) as count, SUM(total_amount) as total')
             ->groupBy('payment_method')
@@ -114,7 +114,7 @@ class PosReportController extends BasePosController
         // Breakdown dine_in vs takeaway
         $serviceBreakdown = Order::withoutGlobalScope('tenant')
             ->whereIn('tenant_id', $slugs)
-            ->where('status', 'completed')
+            ->where('payment_status', 'paid')
             ->whereBetween('created_at', [$startDate, $endDate])
             ->selectRaw('service_type, COUNT(*) as count, SUM(total_amount) as total')
             ->groupBy('service_type')
@@ -123,7 +123,7 @@ class PosReportController extends BasePosController
         // Jam tersibuk (peak hours)
         $peakHours = Order::withoutGlobalScope('tenant')
             ->whereIn('tenant_id', $slugs)
-            ->where('status', 'completed')
+            ->where('payment_status', 'paid')
             ->whereBetween('created_at', [$startDate, $endDate])
             ->selectRaw('HOUR(created_at) as hour, COUNT(*) as count, SUM(total_amount) as total')
             ->groupBy('hour')
@@ -136,7 +136,7 @@ class PosReportController extends BasePosController
         if ($scope['aggregate']) {
             $rows = Order::withoutGlobalScope('tenant')
                 ->whereIn('tenant_id', $slugs)
-                ->where('status', 'completed')
+                ->where('payment_status', 'paid')
                 ->whereBetween('created_at', [$startDate, $endDate])
                 ->selectRaw('tenant_id, COUNT(*) as orders_count, SUM(total_amount) as revenue')
                 ->groupBy('tenant_id')
@@ -201,7 +201,7 @@ class PosReportController extends BasePosController
         $topProducts = OrderItem::query()
             ->join('orders', 'orders.id', '=', 'order_items.order_id')
             ->whereIn('orders.tenant_id', $slugs)
-            ->where('orders.status', 'completed')
+            ->where('orders.payment_status', 'paid')
             ->whereBetween('orders.created_at', [$startDate, $endDate])
             ->selectRaw('
                 order_items.product_name,
@@ -222,7 +222,7 @@ class PosReportController extends BasePosController
             ->join('products', 'products.id', '=', 'order_items.product_id')
             ->join('categories', 'categories.id', '=', 'products.category_id')
             ->whereIn('orders.tenant_id', $slugs)
-            ->where('orders.status', 'completed')
+            ->where('orders.payment_status', 'paid')
             ->whereBetween('orders.created_at', [$startDate, $endDate])
             ->selectRaw('
                 categories.name as category_name,
@@ -263,7 +263,7 @@ class PosReportController extends BasePosController
 
         $dailyData = Order::withoutGlobalScope('tenant')
             ->whereIn('tenant_id', $slugs)
-            ->where('status', 'completed')
+            ->where('payment_status', 'paid')
             ->whereBetween('created_at', [$startDate, $endDate])
             ->selectRaw('
                 DATE(created_at) as date,
@@ -310,7 +310,7 @@ class PosReportController extends BasePosController
 
         $orders = Order::withoutGlobalScope('tenant')
             ->whereIn('tenant_id', $slugs)
-            ->where('status', 'completed')
+            ->where('payment_status', 'paid')
             ->whereBetween('created_at', [$startDate, $endDate])
             ->with(['items', 'table'])
             ->orderBy('created_at')

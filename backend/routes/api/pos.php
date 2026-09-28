@@ -6,13 +6,13 @@
 */
 
 use App\Http\Controllers\Api\V1\Hellom\EntitlementController;
-use App\Http\Controllers\Api\V1\Hellom\OrderController as HellomOrderController;
 use App\Http\Controllers\Api\V1\Hellom\Pos\PosCategoryController;
 use App\Http\Controllers\Api\V1\Hellom\Pos\PosExperienceController;
 use App\Http\Controllers\Api\V1\Hellom\Pos\PosLoyaltyController;
 use App\Http\Controllers\Api\V1\Hellom\Pos\PosMemberController;
 use App\Http\Controllers\Api\V1\Hellom\Pos\PosOrderController;
 use App\Http\Controllers\Api\V1\Hellom\Pos\PosOutletController;
+use App\Http\Controllers\Api\V1\Hellom\Pos\PosOutletSettingsController;
 use App\Http\Controllers\Api\V1\Hellom\Pos\PosPaymentSettingController;
 use App\Http\Controllers\Api\V1\Hellom\Pos\PosProductController;
 use App\Http\Controllers\Api\V1\Hellom\Pos\PosReportController;
@@ -28,11 +28,19 @@ Route::middleware(['canUseApp:pos', 'App\Http\Middleware\Api\InjectPosContext'])
     Route::patch('/pos/outlets/{outletId}', [PosOutletController::class, 'update']);
     Route::delete('/pos/outlets/{outletId}', [PosOutletController::class, 'destroy']);
 
+    // Orders: one engine (OrderService) for cashier and self-order. Payment is separate from kitchen status.
     Route::get('/pos/orders', [PosOrderController::class, 'index']);
     Route::post('/pos/orders', [PosOrderController::class, 'store']);
+    Route::post('/pos/orders/preview', [PosOrderController::class, 'preview']);
     Route::patch('/pos/orders/{orderId}/status', [PosOrderController::class, 'updateStatus']);
-    Route::post('/pos/orders/{orderId}/payment', [HellomOrderController::class, 'confirmPayment']);
+    Route::post('/pos/orders/{orderId}/payment', [PosOrderController::class, 'pay']);
+    Route::post('/pos/orders/{orderId}/cancel', [PosOrderController::class, 'cancel']);
+    Route::post('/pos/orders/{orderId}/refund', [PosOrderController::class, 'refund']);
     Route::get('/pos/orders/{orderId}/receipt', [PosOrderController::class, 'receipt']);
+    Route::get('/pos/table-bills', [PosOrderController::class, 'tableBills']);
+    Route::get('/pos/table-bills/{billId}', [PosOrderController::class, 'showTableBill']);
+    Route::post('/pos/table-bills/{billId}/pay', [PosOrderController::class, 'payTableBill']);
+    Route::get('/pos/realtime/token', [PosOrderController::class, 'realtimeToken']);
     Route::get('/pos/products', [PosProductController::class, 'index']);
     Route::post('/pos/products', [PosProductController::class, 'store']);
     Route::post('/pos/products/{productId}', [PosProductController::class, 'update']); // For FormData with _method spoofing
@@ -48,6 +56,12 @@ Route::middleware(['canUseApp:pos', 'App\Http\Middleware\Api\InjectPosContext'])
     Route::post('/pos/tables', [PosTableController::class, 'store']);
     Route::patch('/pos/tables/{tableId}', [PosTableController::class, 'update']);
     Route::delete('/pos/tables/{tableId}', [PosTableController::class, 'destroy']);
+    Route::get('/pos/tables-qr-sheet', [PosTableController::class, 'qrSheet']);
+    Route::post('/pos/tables/{tableId}/regenerate-token', [PosTableController::class, 'regenerateToken']);
+
+    // Active outlet: tax/service/rounding, self-order behaviour, opening hours.
+    Route::get('/pos/outlet-settings', [PosOutletSettingsController::class, 'show']);
+    Route::put('/pos/outlet-settings', [PosOutletSettingsController::class, 'update']);
 
     Route::get('/pos/payment-settings', [PosPaymentSettingController::class, 'index']);
     Route::post('/pos/payment-settings', [PosPaymentSettingController::class, 'update']);
@@ -56,10 +70,17 @@ Route::middleware(['canUseApp:pos', 'App\Http\Middleware\Api\InjectPosContext'])
     Route::prefix('pos/members')->group(function () {
         Route::get('/', [PosMemberController::class, 'index']);
         Route::get('/search', [PosMemberController::class, 'search']);
+        Route::get('/export', [PosMemberController::class, 'export']);
+        Route::get('/duplicates', [PosMemberController::class, 'duplicates']);
+        Route::post('/merge', [PosMemberController::class, 'merge']);
+        Route::get('/fraud-flags', [PosMemberController::class, 'fraudFlags']);
+        Route::patch('/fraud-flags/{flagId}', [PosMemberController::class, 'resolveFraudFlag']);
         Route::post('/', [PosMemberController::class, 'store']);
         Route::get('/{id}', [PosMemberController::class, 'show']);
         Route::put('/{id}', [PosMemberController::class, 'update']);
         Route::get('/{id}/points', [PosMemberController::class, 'pointHistory']);
+        Route::get('/{id}/orders', [PosMemberController::class, 'orders']);
+        Route::post('/{id}/adjust-points', [PosMemberController::class, 'adjustPoints']);
     });
 
     // Loyalty

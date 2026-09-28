@@ -780,35 +780,33 @@ class PosExperienceController extends BasePosController
         return max(0, $points);
     }
 
+    /**
+     * Same member rules as the cashier and self-order (MemberService): one member per
+     * normalised phone per organization. Without a phone, an existing email match is reused.
+     */
     private function findOrCreateMember(string $tenantSlug, string $name, string $phone, ?string $email): array
     {
-        $query = PosMember::query()->where('tenant_id', $tenantSlug);
-
-        $member = $query->when($phone !== '', fn ($builder) => $builder->where('phone', $phone))
-            ->when($phone === '' && $email, fn ($builder) => $builder->where('email', $email))
-            ->first();
-
-        if ($member) {
-            $member->fill([
-                'name' => $name,
-                'phone' => $phone ?: $member->phone,
-                'email' => $email ?: $member->email,
-            ]);
-            $member->save();
-
-            return [$member, false];
+        $outlet = \App\Models\Outlet::query()->where('tenant_slug', $tenantSlug)->first();
+        $organization = $outlet
+            ? \App\Models\Organization::query()->find($outlet->organization_id)
+            : \App\Models\Organization::query()->where('pos_tenant_slug', $tenantSlug)->first();
+        if (!$organization) {
+            throw new \RuntimeException('Organization not found for tenant ' . $tenantSlug);
         }
 
-        $member = PosMember::updateOrCreate(
-            [
-                'tenant_id' => $tenantSlug,
-                'email'     => $email,
-            ],
-            [
-                'name'  => $name,
-                'phone' => $phone,
-            ]
-        );
-        return [$member, true];
+        if ($phone === '' && $email) {
+            $byEmail = PosMember::query()->forOrganization($organization->id)->where('email', $email)->first();
+            if ($byEmail) {
+                return [$byEmail, false];
+            }
+        }
+
+        [$member, $created] = app(\App\Services\Pos\MemberService::class)
+            ->register($organization, $name, $phone ?: null, $email, $outlet?->id, $tenantSlug);
+        if (!$created && $email && !$member->email) {
+            $member->forceFill(['email' => $email])->save();
+        }
+
+        return [$member, $created];
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Services\Pos\PricingException;
 use Illuminate\Http\JsonResponse;
 
 /**
@@ -54,5 +55,16 @@ class BaseApiController extends Controller
             'message' => $message,
             'error'   => ['code' => $code, 'detail' => $message],
         ], $status);
+    }
+
+    /** Order/pricing rule violation → { error: { code, detail, problems } } with its HTTP status. */
+    protected function orderRuleFailed(PricingException $e): JsonResponse
+    {
+        return response()->json([
+            'success' => false,
+            'data' => null,
+            'message' => $e->getMessage(),
+            'error' => ['code' => $e->errorCode, 'detail' => $e->getMessage(), 'problems' => $e->problems],
+        ], $e->status);
     }
 }
