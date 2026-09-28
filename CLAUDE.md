@@ -42,6 +42,14 @@ Tes PHPUnit fitur gagal di sqlite (migration memakai `information_schema` MySQL)
 - Validasi masih di controller (`$request->validate`) setelah cek otorisasi; kalau memakai Form Request, pindahkan otorisasi ke `authorize()` agar urutan 401/403 → 422 sama.
 - Frontend: tipe respons API mengikuti payload backend; jangan menambah error `tsc`.
 
+## Hellom Page (Landing Builder + toko online) — konteks proyek berjalan
+Audit & status: [docs/AUDIT_LANDING_BUILDER.md](docs/AUDIT_LANDING_BUILDER.md). Dikerjakan per fase (1 audit → 2 uang → 3 produk → 4 builder/publik → 5 poles); **berhenti & minta konfirmasi setelah tiap fase**.
+- Identitas penjual di modul ini = `organization_id` (halaman, blok, order, dompet, KYC) — bukan `pos_tenant_slug` (menunggu konfirmasi Q1 di audit).
+- Uang: BIGINT rupiah; semua perubahan saldo dalam `DB::transaction` + `lockForUpdate`. Semua pembayaran pembeli masuk ke akun gateway Hellom; penjual punya saldo internal dan tarik dana (target: min Rp50.000, SLA 1×24 jam).
+- Order landing: `landing_page_orders`, settle idempoten di `LandingSaleService::settlePaidOrderByReference` (hanya dari webhook). Gateway: Xendit/iPaymu/DOKU (satu aktif, dipilih super admin).
+- Halaman publik saat ini SPA (`PublicPage.tsx`, route `/:organizationSlug`) di origin yang sama dengan dashboard → konten penjual **tidak boleh** dirender sebagai HTML mentah.
+- Aturan brief: teks UI Bahasa Indonesia santai-profesional; FormData PUT/PATCH = POST + `_method`; boolean FormData pakai `filter_var(..., FILTER_VALIDATE_BOOLEAN)`; migration non-destruktif dengan `down()`; jangan `storage:link`; setelah perubahan instruksikan `php artisan optimize:clear`; jangan sentuh POS kecuali kode bersama (jelaskan dampak dulu).
+
 ## Aturan kerja
 1. Jangan membaca, menampilkan, atau meng-commit `.env`, kredensial, API key, atau data pelanggan.
 2. Jangan mengubah migration yang sudah dijalankan; buat migration baru. Jangan jalankan perintah penghapus data (`migrate:fresh`, `db:wipe`, `truncate`, `tenants:seed-demo --truncate`, `orders:purge-legacy --force`).
