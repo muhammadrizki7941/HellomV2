@@ -46,7 +46,7 @@ frontend/src/
                                  /portofolio, /wawasan[/:slug], /kontak) + primitif animasi
   data/{siteNav,apps}.ts         menu publik + katalog aplikasi (tambah aplikasi di apps.ts)
   public/assets/intro/           video intro Beranda: intro-landscape.mp4 + poster intro-landscape.webp (16:9);
-                                 desktop penuh layar, HP = frame sinematik 16:9; boleh kosong (fallback gradien)
+                                 tampil utuh dalam frame sinematik 16:9 di semua layar; boleh kosong (fallback gelap)
   services/api/                  klien API per modul (client, auth, organizations, billing, admin, consumer,
                                  landing, store, pos, posCustomer, posStaff, content, member) + index barrel
   lib/hellomApi.ts               barrel kompatibilitas → services/api
