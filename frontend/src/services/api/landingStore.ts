@@ -65,6 +65,8 @@ export type CheckoutInput = {
   fields?: Record<string, string>;
   shipping?: { recipient_name: string; phone: string; address: string; city: string; province?: string; postal_code: string; notes?: string };
   attribution?: Record<string, string>;
+  /** Cloudflare Turnstile token, only when the server answered CAPTCHA_REQUIRED. */
+  captcha_token?: string;
 };
 
 export type CheckoutResult = {

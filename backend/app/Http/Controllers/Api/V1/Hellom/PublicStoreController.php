@@ -15,6 +15,7 @@ use App\Services\Landing\LandingStats;
 use App\Services\Landing\OrderAccessService;
 use App\Services\Landing\PaymentStarter;
 use App\Services\Landing\SellerTrust;
+use App\Services\Security\CheckoutCaptcha;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -70,7 +71,7 @@ class PublicStoreController extends BaseApiController
         return $this->ok($this->checkout->quote($product, (int) ($validated['quantity'] ?? 1), $validated['coupon_code'] ?? null), 'Rincian harga');
     }
 
-    public function checkout(Request $request, string $publicId, PaymentStarter $payments): JsonResponse
+    public function checkout(Request $request, string $publicId, PaymentStarter $payments, CheckoutCaptcha $captcha): JsonResponse
     {
         [$product, $organization] = $this->findProduct($publicId);
         if (!$product) {
@@ -83,8 +84,16 @@ class PublicStoreController extends BaseApiController
             return $this->fail('Pembayaran sedang tidak tersedia. Silakan coba lagi nanti.', ['code' => 'GATEWAY_NOT_READY'], 422);
         }
         $validated = $request->validate($this->checkout->rules($product));
+        // Repeated checkouts from one IP: Turnstile (only when keys are configured).
+        if ($captcha->required($request) && !$captcha->verify($request->input('captcha_token'), $request)) {
+            return $this->fail('Satu langkah lagi: centang verifikasi di bawah lalu tekan Bayar.', [
+                'code' => 'CAPTCHA_REQUIRED',
+                'site_key' => $captcha->siteKey(),
+            ], 422);
+        }
 
         $order = $this->checkout->createOrder($product, $validated);
+        $captcha->recordCheckout($request);
         try {
             $payment = $payments->start($order, $validated['payment_method'] ?? null);
         } catch (RuntimeException $e) {

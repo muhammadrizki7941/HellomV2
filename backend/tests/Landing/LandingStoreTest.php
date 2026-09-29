@@ -86,6 +86,32 @@ class LandingStoreTest extends SellerFinanceTestCase
         return $plain;
     }
 
+    public function test_repeated_checkouts_need_turnstile_when_configured(): void
+    {
+        $product = $this->product($this->seller());
+        // Keys empty: never asked.
+        for ($i = 0; $i < 4; $i++) {
+            $this->checkout($product)->assertCreated();
+        }
+
+        config(['services.turnstile.site_key' => 'site-e2e', 'services.turnstile.secret_key' => 'secret-e2e']);
+        for ($i = 0; $i < 3; $i++) {
+            $this->checkout($product, ['buyer_email' => "b{$i}@example.test"])->assertCreated();
+        }
+        $this->checkout($product, ['buyer_email' => 'b9@example.test'])->assertStatus(422)
+            ->assertJsonPath('error.code', 'CAPTCHA_REQUIRED')->assertJsonPath('error.site_key', 'site-e2e');
+
+        $this->fakeGateway();
+        Http::fake(['challenges.cloudflare.com/*' => Http::sequence()
+            ->push(['success' => false, 'error-codes' => ['invalid-input-response']])
+            ->push(['success' => true])]);
+        $url = "/api/v1/hellom/public/landing-products/{$product->public_id}/checkout";
+        $body = ['buyer_name' => 'Sari Pembeli', 'buyer_email' => 'b9@example.test'];
+        $this->postJson($url, $body + ['captcha_token' => 'palsu'])->assertStatus(422)->assertJsonPath('error.code', 'CAPTCHA_REQUIRED');
+        $this->postJson($url, $body + ['captcha_token' => 'asli'])->assertCreated();
+        Http::assertSent(fn (\Illuminate\Http\Client\Request $r) => str_contains($r->url(), 'turnstile') && $r['secret'] === 'secret-e2e' && $r['response'] === 'asli');
+    }
+
     public function test_drive_link_is_encrypted_validated_and_never_public(): void
     {
         $seller = $this->seller();

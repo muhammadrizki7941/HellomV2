@@ -44,6 +44,12 @@ return [
         'model' => env('GEMINI_MODEL', 'gemini-2.0-flash'),
     ],
 
+    // Cloudflare Turnstile on repeated Hellom Page checkouts; empty = off.
+    'turnstile' => [
+        'site_key' => env('TURNSTILE_SITE_KEY', ''),
+        'secret_key' => env('TURNSTILE_SECRET_KEY', ''),
+    ],
+
     // Only used when iPaymu is in sandbox mode (never in production mode).
     'ipaymu' => [
         'sandbox_url' => env('IPAYMU_SANDBOX_URL', 'https://sandbox.ipaymu.com'),

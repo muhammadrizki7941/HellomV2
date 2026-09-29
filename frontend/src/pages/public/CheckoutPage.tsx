@@ -7,6 +7,7 @@ import { EMAIL_PATTERN, suggestEmail } from '@/lib/emailTypo';
 import { captureAttributionFromUrl, firePurchase, getPixelConsent, loadSellerPixels, readAttribution, setPixelConsent, trackSellerEvent } from '@/lib/sellerPixels';
 import { ApiError, checkoutLandingProduct, getLandingOrderPublicStatus, getPublicLandingProduct, quoteLandingProduct } from '@/lib/hellomApi';
 import type { CheckoutQuote, CheckoutResult, PaymentOption, PublicProductPage } from '@/lib/hellomApi';
+import TurnstileWidget from '@/components/checkout/TurnstileWidget';
 
 // Buyer checkout for a Hellom Page product (/beli/:productId), no login. Mobile-first:
 // one page, big sticky pay button. Prices come from the server (quote); the order is
@@ -35,6 +36,8 @@ export default function CheckoutPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Turnstile, only after the server asks for it (repeated checkouts). `round` remounts it after a failed try.
+  const [captcha, setCaptcha] = useState<{ siteKey: string; token: string | null; round: number } | null>(null);
   const [qr, setQr] = useState<CheckoutResult | null>(null);
   const [qrPaid, setQrPaid] = useState(false);
   // Pixel consent (only when the shop uses ad pixels).
@@ -148,6 +151,7 @@ export default function CheckoutPage() {
         buyer_phone: buyer.phone.trim() || undefined,
         fields: product.checkout_fields.length ? fields : undefined,
         shipping: product.type === 'physical' ? { ...shipping, province: shipping.province || undefined, notes: shipping.notes || undefined } : undefined,
+        captcha_token: captcha?.token ?? undefined,
       });
       if (result.mode === 'qris') {
         setQr(result);
@@ -157,6 +161,10 @@ export default function CheckoutPage() {
         return;
       }
     } catch (err) {
+      if (err instanceof ApiError && err.code === 'CAPTCHA_REQUIRED' && typeof err.details.site_key === 'string') {
+        const siteKey = err.details.site_key;
+        setCaptcha((c) => ({ siteKey, token: null, round: (c?.round ?? 0) + 1 }));
+      }
       if (err instanceof ApiError && Object.keys(err.fieldErrors).length) {
         setErrors(Object.fromEntries(Object.entries(err.fieldErrors).map(([k, v]) => [k, v[0]])));
       }
@@ -391,6 +399,13 @@ export default function CheckoutPage() {
           </div>
         </section>
 
+        {captcha && (
+          <section className="rounded-3xl bg-white p-4 ring-1 ring-zinc-100" aria-label="Verifikasi">
+            <p className="mb-2 text-sm text-zinc-600">Demi keamanan, pastikan kamu bukan robot.</p>
+            <TurnstileWidget key={captcha.round} siteKey={captcha.siteKey} onToken={(token) => setCaptcha((c) => (c ? { ...c, token } : c))} />
+          </section>
+        )}
+
         {/* Summary */}
         <section className="rounded-3xl bg-white p-4 text-sm ring-1 ring-zinc-100">
           <dl className="space-y-2">
@@ -435,7 +450,7 @@ export default function CheckoutPage() {
             </div>
             <button
               type="submit"
-              disabled={submitting || !product.available || !method}
+              disabled={submitting || !product.available || !method || (captcha !== null && !captcha.token)}
               className="ml-auto flex min-h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-zinc-900 px-4 text-base font-bold text-white disabled:opacity-40"
             >
               {submitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <Lock className="h-4 w-4" />}

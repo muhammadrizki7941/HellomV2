@@ -93,6 +93,8 @@ export type ApiProblem = {
 export class ApiError extends Error {
   status: number;
   code: string | null;
+  /** The whole `error` object of the envelope (extra fields such as `site_key`). */
+  details: Record<string, unknown>;
   problems: ApiProblem[];
   data: unknown;
   // Laravel validation (422): field → messages, e.g. { "delivery_url": ["…"] }.
@@ -104,6 +106,7 @@ export class ApiError extends Error {
     this.status = status;
     const err = (error && typeof error === 'object' ? error : {}) as { code?: unknown; problems?: unknown };
     this.code = typeof err.code === 'string' ? err.code : null;
+    this.details = err as Record<string, unknown>;
     this.problems = Array.isArray(err.problems) ? (err.problems as ApiProblem[]) : [];
     this.data = data;
     this.fieldErrors = fieldErrors;
