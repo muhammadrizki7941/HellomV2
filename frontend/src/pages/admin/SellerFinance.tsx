@@ -629,6 +629,7 @@ function SettingsTab() {
           {field('Peringatan SLA (jam)', 'sla_warn_hours')}
           {field('Tahan setelah ganti rekening (jam)', 'bank_change_hold_hours')}
           {field('Batas bayar pesanan (jam)', 'order_expiry_hours')}
+          {field('Batas bayar produk fisik (jam)', 'physical_order_expiry_hours', 'Stok ditahan selama menunggu bayar')}
         </div>
       </section>
 

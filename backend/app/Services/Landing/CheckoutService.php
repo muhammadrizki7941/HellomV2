@@ -102,7 +102,7 @@ final class CheckoutService
         }
         $customFields = $this->customFieldValues($product, (array) ($input['fields'] ?? []));
         $quantity = $this->clampQuantity($product, (int) ($input['quantity'] ?? 1));
-        $expiryHours = max(1, (int) $this->settings->get('order_expiry_hours'));
+        $expiryHours = max(1, (int) $this->settings->get($product->type === LandingProduct::TYPE_PHYSICAL ? 'physical_order_expiry_hours' : 'order_expiry_hours'));
 
         return DB::transaction(function () use ($product, $input, $quantity, $customFields, $expiryHours): LandingPageOrder {
             $locked = LandingProduct::query()->lockForUpdate()->find($product->id);

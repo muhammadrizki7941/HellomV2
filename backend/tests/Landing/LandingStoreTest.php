@@ -151,6 +151,8 @@ class LandingStoreTest extends SellerFinanceTestCase
         $this->assertSame(160000, (int) $order->subtotal_amount);
         $this->assertSame(16000, (int) $order->discount_amount);
         $this->assertSame(159000, (int) $order->amount);
+        // Physical products hold stock, so they expire sooner (default 6 hours instead of 24).
+        $this->assertEqualsWithDelta(now()->addHours(6)->timestamp, $order->expires_at->timestamp, 60);
         $this->assertSame(0, (int) $product->fresh()->stock);
         $this->assertSame(1, (int) LandingCoupon::query()->where('code', 'HEMAT10')->value('used_count'));
 

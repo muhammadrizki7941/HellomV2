@@ -162,6 +162,7 @@ export type SellerFinanceSettings = {
   withdrawal_fee_flat: number;
   withdrawal_mode: 'manual' | 'auto';
   order_expiry_hours: number;
+  physical_order_expiry_hours: number;
   sla_hours: number;
   sla_warn_hours: number;
   bank_change_hold_hours: number;

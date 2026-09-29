@@ -78,6 +78,38 @@ class EntitlementService
             ->update(['status' => 'expired']);
     }
 
+    /**
+     * Cancel a subscription that should never have given access (e.g. paid with test
+     * money) and end the app access it granted now — unless another active
+     * subscription of the same app still covers the organization.
+     */
+    public function revoke(Subscription $subscription, CarbonInterface $now, string $reason): void
+    {
+        $meta = is_array($subscription->metadata) ? $subscription->metadata : [];
+        $meta['revoked'] = ['at' => $now->toISOString(), 'reason' => $reason, 'previous_status' => $subscription->status];
+        $subscription->forceFill(['status' => 'cancelled', 'metadata' => $meta])->save();
+
+        $stillCovered = Subscription::query()
+            ->where('organization_id', (int) $subscription->organization_id)
+            ->where('app_id', (int) $subscription->app_id)
+            ->whereKeyNot($subscription->id)
+            ->where('status', 'active')
+            ->where(fn ($q) => $q->whereNull('ends_at')->orWhere('ends_at', '>', $now))
+            ->orderByRaw('ends_at IS NULL DESC')
+            ->orderByDesc('ends_at')
+            ->first();
+
+        $entitlements = Entitlement::query()
+            ->where('organization_id', (int) $subscription->organization_id)
+            ->where('app_id', (int) $subscription->app_id)
+            ->whereIn('status', ['active', 'trialing']);
+        if ($stillCovered) {
+            $entitlements->update(['ends_at' => $stillCovered->ends_at, 'plan_id' => $stillCovered->plan_id]);
+        } else {
+            $entitlements->update(['status' => 'expired', 'ends_at' => $now]);
+        }
+    }
+
     /** Grant access that lasts exactly as long as $subscription. */
     public function grantForSubscription(Subscription $subscription, CarbonInterface $startsAt): Entitlement
     {

@@ -45,6 +45,8 @@ final class FinanceSettings
         'withdrawal_fee_flat' => 0,
         'withdrawal_mode' => 'manual',   // manual | auto (auto needs a gateway with disbursement)
         'order_expiry_hours' => 24,
+        // Physical products reserve stock while unpaid, so their orders expire sooner (owner decision after Fase 3).
+        'physical_order_expiry_hours' => 6,
         'sla_hours' => 24,
         'sla_warn_hours' => 20,
         'bank_change_hold_hours' => 24,
@@ -84,7 +86,7 @@ final class FinanceSettings
         }
 
         $intKeys = ['platform_fee_flat', 'min_margin_flat', 'hold_days', 'new_seller_hold_days', 'new_seller_days', 'min_withdrawal',
-            'withdrawal_fee_flat', 'order_expiry_hours', 'sla_hours', 'sla_warn_hours', 'bank_change_hold_hours'];
+            'withdrawal_fee_flat', 'order_expiry_hours', 'physical_order_expiry_hours', 'sla_hours', 'sla_warn_hours', 'bank_change_hold_hours'];
         foreach ($intKeys as $key) {
             if (array_key_exists($key, $input)) {
                 $current[$key] = max(0, (int) $input[$key]);
@@ -104,6 +106,7 @@ final class FinanceSettings
             }
         }
         $current['order_expiry_hours'] = max(1, min(168, (int) $current['order_expiry_hours']));
+        $current['physical_order_expiry_hours'] = max(1, min((int) $current['order_expiry_hours'], (int) $current['physical_order_expiry_hours']));
         $current['sla_warn_hours'] = min((int) $current['sla_warn_hours'], (int) $current['sla_hours']);
 
         $store = array_intersect_key($current, self::DEFAULTS);

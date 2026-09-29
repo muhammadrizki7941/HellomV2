@@ -202,6 +202,7 @@ class AdminSellerFinanceController extends BaseApiController
             'withdrawal_fee_flat' => ['sometimes', 'integer', 'min:0', 'max:100000'],
             'withdrawal_mode' => ['sometimes', 'in:manual,auto'],
             'order_expiry_hours' => ['sometimes', 'integer', 'min:1', 'max:168'],
+            'physical_order_expiry_hours' => ['sometimes', 'integer', 'min:1', 'max:168'],
             'sla_hours' => ['sometimes', 'integer', 'min:1', 'max:168'],
             'sla_warn_hours' => ['sometimes', 'integer', 'min:1', 'max:168'],
             'bank_change_hold_hours' => ['sometimes', 'integer', 'min:0', 'max:168'],
