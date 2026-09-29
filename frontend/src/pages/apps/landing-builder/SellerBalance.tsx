@@ -121,11 +121,11 @@ export default function SellerBalance() {
     <div className="space-y-4 pb-24 lg:pb-0">
       {/* Available balance */}
       <section className="rounded-3xl bg-zinc-900 p-5 text-white">
-        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-zinc-400">
+        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-white/60">
           <Wallet className="h-4 w-4" /> Saldo tersedia
         </div>
         <p className="mt-2 text-3xl font-bold">{rupiah(balance.available)}</p>
-        <p className="mt-1 text-xs text-zinc-400">Siap ditarik ke {account.bank_name || account.bank_code || 'rekening kamu'}</p>
+        <p className="mt-1 text-xs text-white/60">Siap ditarik ke {account.bank_name || account.bank_code || 'rekening kamu'}</p>
         <button
           type="button"
           onClick={() => setShowWithdraw(true)}
@@ -160,7 +160,7 @@ export default function SellerBalance() {
       {/* Payout account */}
       <section className="rounded-2xl bg-white p-4 ring-1 ring-zinc-100">
         <div className="flex items-start gap-3">
-          {account.can_withdraw ? <ShieldCheck className="mt-0.5 h-5 w-5 text-emerald-600" /> : <AlertTriangle className="mt-0.5 h-5 w-5 text-amber-500" />}
+          {account.can_withdraw ? <ShieldCheck className="mt-0.5 h-5 w-5 text-emerald-700" /> : <AlertTriangle className="mt-0.5 h-5 w-5 text-amber-500" />}
           <div className="min-w-0 flex-1 text-sm">
             <p className="font-semibold text-zinc-900">Rekening penarikan</p>
             {account.bank_code ? (
@@ -224,7 +224,7 @@ export default function SellerBalance() {
                     <p className="mt-1 text-xs text-amber-700">Tertahan sampai {dateTime(row.available_at)}</p>
                   )}
                 </div>
-                <p className={cn('shrink-0 text-sm font-bold', row.amount >= 0 ? 'text-emerald-600' : 'text-zinc-900')}>
+                <p className={cn('shrink-0 text-sm font-bold', row.amount >= 0 ? 'text-emerald-700' : 'text-zinc-900')}>
                   {row.amount >= 0 ? '+' : '−'}{rupiah(Math.abs(row.amount))}
                 </p>
               </li>

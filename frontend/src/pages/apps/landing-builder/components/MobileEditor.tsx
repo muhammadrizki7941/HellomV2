@@ -326,7 +326,7 @@ export const MobileEditor: React.FC<MobileEditorProps> = ({
       {isPreview ? (
         <main className="flex-1 overflow-y-auto overflow-x-hidden">
           <div
-            className="min-h-full w-full"
+            className="hl-light min-h-full w-full"
             style={{ backgroundColor: activeTheme.colors.backgroundColor }}
           >
             {blocks.map((block) => (
@@ -406,7 +406,7 @@ export const MobileEditor: React.FC<MobileEditorProps> = ({
                 {/* Notch */}
                 <div className="absolute top-2 left-1/2 -translate-x-1/2 w-20 h-4 bg-zinc-900 rounded-b-xl z-10" />
                 <div
-                  className="relative h-[460px] overflow-y-auto overflow-x-hidden rounded-[1.6rem] bg-white"
+                  className="hl-light relative h-[460px] overflow-y-auto overflow-x-hidden rounded-[1.6rem] bg-white"
                   style={{ backgroundColor: activeTheme.colors.backgroundColor }}
                 >
                   {blocks.length === 0 ? (

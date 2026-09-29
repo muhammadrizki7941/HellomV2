@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Outlet, NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, Layout, ShoppingCart, LogOut, User, CreditCard, Menu, X, Lock, Settings, Sparkles, ArrowRight, Grid, Package, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { ColorSchemeToggle, useDashboardColorScheme } from '@/lib/colorScheme';
 import { cn } from '@/lib/utils';
 import { clearSession, getAuthMe, getMemberDashboardCards, getPaymentGatewayStatus, getSessionEventName, getSessionUser, getToken, logout, setSession } from '@/lib/hellomApi';
 import { BRAND_LOGO_PATH, BRAND_NAME, getBrandLogo } from '@/lib/branding';
@@ -41,6 +42,7 @@ const FALLBACK_APPS: DashboardApp[] = [
 ];
 
 export default function DashboardLayout() {
+  useDashboardColorScheme();
   const navigate = useNavigate();
   const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -343,8 +345,9 @@ export default function DashboardLayout() {
         </nav>
 
         <div className="p-4 border-t border-zinc-100">
+          <ColorSchemeToggle className="mb-2" />
           <div className="flex items-center gap-2 px-4 py-3">
-            <Link to="/dashboard/profile" className="flex min-w-0 flex-1 items-center gap-3 rounded-lg transition-colors group hover:bg-zinc-50">
+            <Link to="/dashboard/profile" className="flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-lg transition-colors group hover:bg-zinc-50">
               <div className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-500 border border-zinc-200 group-hover:border-yellow-400 group-hover:text-yellow-600 transition-colors">
                 <User className="w-4 h-4" />
               </div>
@@ -353,7 +356,7 @@ export default function DashboardLayout() {
                 <p className="text-xs text-zinc-500 truncate">{userEmail}</p>
               </div>
             </Link>
-            <button onClick={() => void handleLogout()} className="text-zinc-400 hover:text-red-600 transition-colors p-1" title="Logout">
+            <button onClick={() => void handleLogout()} className="flex h-11 w-11 items-center justify-center text-zinc-400 hover:text-red-600 transition-colors" title="Keluar" aria-label="Keluar">
               <LogOut className="w-4 h-4" />
             </button>
           </div>

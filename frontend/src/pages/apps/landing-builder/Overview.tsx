@@ -86,7 +86,8 @@ export default function Overview({ onEdit, onOpenOrders, onOpenProducts, onOpenS
                 )}
               >
                 {linkCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                {linkCopied ? 'Tersalin' : 'Salin link'}
+                <span className="sm:hidden">{linkCopied ? 'Tersalin' : 'Salin'}</span>
+                <span className="hidden sm:inline">{linkCopied ? 'Tersalin' : 'Salin link'}</span>
               </button>
               <a
                 href={shareUrl}
@@ -103,7 +104,8 @@ export default function Overview({ onEdit, onOpenOrders, onOpenProducts, onOpenS
             onClick={isPublished || !onboarding ? onEdit : () => setWizardOpen(true)}
             className="flex-1 md:flex-none flex min-h-11 items-center justify-center gap-2 px-4 bg-black text-white font-bold rounded-lg hover:bg-zinc-800 transition-colors shadow-sm"
           >
-            {isPublished || !onboarding ? 'Edit halaman' : 'Buat halaman'}
+            <span className="sm:hidden">{isPublished || !onboarding ? 'Edit' : 'Buat'}</span>
+            <span className="hidden sm:inline">{isPublished || !onboarding ? 'Edit halaman' : 'Buat halaman'}</span>
           </button>
         </div>
       </div>

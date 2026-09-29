@@ -443,7 +443,7 @@ export const DesktopEditor: React.FC<DesktopEditorProps> = ({
           {/* Center: Canvas */}
           <main className="flex-1 overflow-y-auto bg-zinc-100 p-6 lg:p-8 relative">
             <div className={cn(
-              "mx-auto min-h-[800px] shadow-sm transition-all duration-300 bg-white relative",
+              "hl-light mx-auto min-h-[800px] shadow-sm transition-all duration-300 bg-white relative",
               isPreview ? "shadow-2xl max-w-5xl" : (sidebarOpen ? "max-w-5xl" : "max-w-7xl")
             )}
             style={{ backgroundColor: activeTheme.colors.backgroundColor }}
@@ -514,7 +514,7 @@ export const DesktopEditor: React.FC<DesktopEditorProps> = ({
         {/* Drag ghost */}
         <DragOverlay dropAnimation={null}>
           {activeBlock ? (
-            <div className="overflow-hidden rounded-lg opacity-90 shadow-2xl ring-2 ring-yellow-400 pointer-events-none">
+            <div className="hl-light overflow-hidden rounded-lg opacity-90 shadow-2xl ring-2 ring-yellow-400 pointer-events-none">
               <BlockRenderer block={activeBlock} theme={activeTheme} />
             </div>
           ) : paletteCatalog ? (

@@ -25,6 +25,19 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Playfair+Display:ital,wght@0,500;0,600;1,500;1,600&display=swap" media="print" onload="this.media='all'" />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Playfair+Display:ital,wght@0,500;0,600;1,500;1,600&display=swap" /></noscript>
 
+    <!-- Dashboard dark mode before first paint (see src/lib/colorScheme.tsx) -->
+    <script>
+      try {
+        var hlTheme = localStorage.getItem('hellom_theme');
+        if (location.pathname.indexOf('/dashboard') === 0) {
+          document.documentElement.classList.add('hl-dash');
+          if (hlTheme === 'dark' || (hlTheme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('hl-dark');
+          }
+        }
+      } catch (e) {}
+    </script>
+
     <!-- Service Worker registration (production only) -->
     <script type="module">
       if ('serviceWorker' in navigator) {
