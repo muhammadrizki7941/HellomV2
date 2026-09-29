@@ -10,6 +10,7 @@ Audit lengkap dan status per temuan: [docs/AUDIT.md](docs/AUDIT.md). Langkah dep
 - **UI HP**: audit otomatis 360 px — tidak ada scroll ke samping, semua tombol ≥ 44 px, input ≥ 16 px (iPhone tidak zoom); formulir KTP & rekening bisa dibuka langsung dan tetap tersedia walau dompet top-up dimatikan; halaman toko belum terbit berbahasa Indonesia; warna tombol tema Ocean/Sunset lebih kontras.
 - **Produksi**: `GET /api/health`, worker queue PM2 `hellom-queue` (`QUEUE_CONNECTION=database`), heartbeat scheduler, index order/ledger, backup harian `deploy/backup.sh`. Lihat `docs/DEPLOY.md` §3c.
 - **Tes**: perjalanan lengkap di browser `backend/tests/e2e` (16/16) + checklist uji manual HP `docs/TESTING_HELLOM_PAGE.md`.
+- **Setelah konfirmasi pemilik**: mode gelap dashboard (Terang/Gelap/Ikuti sistem, di menu samping); KTP & rekening pindah ke tab Saldo Hellom Page (bisa ganti rekening); captcha Cloudflare Turnstile untuk checkout berulang; gambar halaman toko memakai `srcset` (salinan 480/960 px); teks abu-abu dashboard lebih kontras.
 
 ### Hellom Page — builder & halaman publik (Fase 4)
 - **Halaman toko dirender server** (`hellomspace.com/{username}` dan `/{username}/{produk}`): HTML ringan dengan CSS inline, meta WhatsApp/Facebook (Open Graph), tombol bagikan (salin link, WhatsApp, QR), laporkan, halaman 404/toko nonaktif. Lighthouse mobile 100/100/100/100. **Butuh perubahan Nginx** (lihat `docs/DEPLOY.md` §3b).

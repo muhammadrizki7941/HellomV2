@@ -11,7 +11,7 @@ mkdirSync(SHOTS, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const PORT = 9337;
 const chrome = spawn(process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe', [
-  '--headless=new', `--remote-debugging-port=${PORT}`, `--user-data-dir=${process.env.TEMP}\cdp-e2e-audit`,
+  '--headless=new', `--remote-debugging-port=${PORT}`, `--user-data-dir=${process.env.TEMP}\\cdp-e2e-audit`,
   '--no-first-run', '--window-size=360,740', 'about:blank',
 ], { stdio: 'ignore' });
 async function json(url, method = 'GET') {
@@ -189,6 +189,9 @@ try {
   await audit('lb-withdraw-sheet', `${APP}/dashboard/apps/landing-builder?tab=saldo`, async () => { await sleep(1200); await tab.click('Tarik dana'); });
   await audit('lb-editor', `${APP}/dashboard/apps/landing-builder?tab=editor`, () => sleep(2500));
   await audit('lb-onboarding', `${APP}/dashboard/apps/landing-builder`, async () => { await sleep(1500); await tab.click('Atur'); });
+  await audit('lb-payout-sheet', `${APP}/dashboard/apps/landing-builder?tab=saldo&rekening=1`, () => sleep(1200));
+  await audit('lb-payout-change', null, async () => { await tab.click('Ganti rekening'); await sleep(600); });
+  await audit('menu-with-theme-toggle', `${APP}/dashboard`, async () => { await tab.eval(`document.querySelector('[aria-label="Buka menu"]').click(); true`); });
   await audit('payments-rekening', `${APP}/dashboard/payments?tab=rekening`);
   await audit('payments-overview', `${APP}/dashboard/payments`, () => sleep(1500));
   await audit('payments-topup', null, async () => { await tab.click('Isi Saldo'); await sleep(800); });

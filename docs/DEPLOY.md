@@ -90,8 +90,10 @@ Urutan sekali jalan setelah `git pull` + `composer install` + `php artisan migra
 3. **Health**: `GET https://hellomspace.com/api/health` → 200 `ok` / 503 `degraded` (database, cache, heartbeat scheduler < 5 menit, antrean tertunda < 10 menit, jumlah job gagal). Pasang di uptime monitor (UptimeRobot/BetterStack). Setelah cron aktif, heartbeat muncul dalam 1 menit.
 4. **Index database** baru: `php artisan migrate --force` (migration `2026_10_04_000001_add_landing_performance_indexes`, hanya menambah index).
 5. **Nginx**: tambahkan `Strict-Transport-Security` & `Referrer-Policy` (lihat contoh) setelah HTTPS stabil. Halaman toko mengirim CSP sendiri dari Laravel.
-6. `IPAYMU_SANDBOX_URL` **jangan diisi di produksi** (hanya untuk tes lokal; mode produksi iPaymu selalu ke `my.ipaymu.com`).
-7. `php artisan optimize:clear` setelah deploy (membersihkan cache halaman toko lama).
+6. **Captcha checkout**: buat widget Cloudflare Turnstile (mode *Managed*, domain `hellomspace.com`), isi `TURNSTILE_SITE_KEY` & `TURNSTILE_SECRET_KEY` di `backend/.env`, lalu `php artisan config:cache`. Kosong = captcha mati (rate limit tetap jalan).
+7. **Gambar lama**: `php artisan landing:image-variants` (laporan) lalu `--force` (menulis salinan 480w/960w, file asli tidak diubah) dan `php artisan optimize:clear`.
+8. `IPAYMU_SANDBOX_URL` **jangan diisi di produksi** (hanya untuk tes lokal; mode produksi iPaymu selalu ke `my.ipaymu.com`).
+9. `php artisan optimize:clear` setelah deploy (membersihkan cache halaman toko lama).
 
 ## 4. Variabel lingkungan penting
 
@@ -107,6 +109,7 @@ Urutan sekali jalan setelah `git pull` + `composer install` + `php artisan migra
 | | `IPAYMU_*`, `XENDIT_*`, `DOKU_*` | kredensial gateway; callback token acak panjang (atau diisi via dashboard super admin) |
 | | `PLATFORM_SALE_COMMISSION_PERCENT`, `WALLET_MIN_WITHDRAWAL`, `WALLET_SETTLEMENT_DELAY_HOURS` | kebijakan platform |
 | | `CORS_ALLOWED_ORIGINS` | boleh dikosongkan di produksi (same-origin) |
+| | `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | kunci Cloudflare Turnstile (captcha checkout berulang); kosong = mati |
 | `frontend/.env.production` | `VITE_HELLOM_API_BASE`, `VITE_REALTIME_PUBLIC_URL` | lihat §2 |
 | `realtime/.env` | `REALTIME_SERVER_SECRET`, `REALTIME_ALLOWED_ORIGINS`, `REALTIME_REQUIRE_AUTH`, `HOST`, `PORT` | lihat §2 |
 

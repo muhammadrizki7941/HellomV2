@@ -307,17 +307,20 @@ try {
     if (!onb.data?.checklist?.email_verified) throw new Error('not verified');
   });
 
-  await step('12. isi data KTP & rekening', async () => {
-    await tab.go(`${APP}/dashboard/payments?tab=rekening`);
-    await tab.waitFor(tab.bodyHas('Kirim Verifikasi'), 'kyc form', 15000).catch(async (e) => { throw new Error(e.message + ' :: ' + (await tab.eval('document.body.innerText.slice(0, 1500)')).replace(/\s+/g, ' ')); });
+  await step('12. isi data KTP & rekening (dari checklist → Saldo)', async () => {
+    await tab.go(`${APP}/dashboard/apps/landing-builder`);
+    await tab.waitFor(tab.bodyHas('Data diri & rekening'), 'checklist');
+    await tab.eval(`(() => { const li = [...document.querySelectorAll('li')].find(l => l.innerText.includes('Data diri & rekening')); li.querySelector('a').click(); return true; })()`);
+    await tab.waitFor(`${tab.bodyHas('KTP & rekening')} && ${tab.bodyHas('Kirim untuk diverifikasi')}`, 'kyc sheet', 15000);
     await tab.fill('label:Nama sesuai KTP', 'Rina Kreasi');
-    await tab.fill('label:NIK (16 digit)', '3201010101010002');
-    await tab.fill('label:Kode Bank', 'BCA');
-    await tab.fill('label:No. Rekening', '1234567890');
-    await tab.fill('label:Nama Pemilik Akun', 'RINA KREASI');
+    await tab.fill('label:NIK (16 angka)', '3201010101010002');
+    await tab.fill('label:Kode bank', 'BCA');
+    await tab.fill('label:Nomor rekening', '1234567890');
+    await tab.fill('label:Nama pemilik rekening', 'RINA KREASI');
+    if (!(await tab.eval(noOverflow))) throw new Error('horizontal overflow');
     await tab.shot('15-kyc');
-    await tab.mustClick('Kirim Verifikasi');
-    await tab.waitFor(`/ditinjau|menunggu|pending/i.test(document.body.innerText)`, 'kyc submitted', 15000);
+    await tab.mustClick('Kirim untuk diverifikasi');
+    await tab.waitFor(`/ditinjau|Data terkirim/i.test(document.body.innerText)`, 'kyc submitted', 15000);
   });
 
   await step('13. super admin menyetujui KYC', async () => {

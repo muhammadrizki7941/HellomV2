@@ -8,7 +8,9 @@ with local stand-ins for iPaymu and email. Nothing reaches a real gateway or inb
 | `seed.php` | iPaymu in sandbox mode + a super admin; `cleanup` removes everything the journey created. Refuses any DB other than `hellom_pos_test`. |
 | `mocks.mjs` | iPaymu sandbox API on `:8020` (create payment, check transaction, payment page that sends the notify webhook) + SMTP sink on `:1025` (`GET :8020/mails`). |
 | `journey.mjs` | 16 steps at 390 px: register → onboarding (username, template, Drive product) → file product → SSR page + CSP → buyer checkout without login → sandbox payment → webhook → access email → access page / download → balance → email verification → KYC → admin approves → withdraw Rp50.000 → admin marks paid → seller sees it. |
-| `ui-audit.mjs` | 360 px audit of ~29 public + dashboard pages: horizontal scroll, tap targets < 44 px, form fonts < 16 px. Run after `journey.mjs`, before cleanup. |
+| `ui-audit.mjs` | 360 px audit of 32 public + dashboard pages: horizontal scroll, tap targets < 44 px, form fonts < 16 px. Run after `journey.mjs`, before cleanup. |
+| `dark-audit.mjs [light]` | Dashboard dark (or light) mode: text contrast < 4.5:1 on 20 views, screenshots, public pages must stay light. |
+| `captcha.mjs` | Turnstile on repeated checkouts in the browser. Start the :8010 server with `CACHE_STORE=database` and Cloudflare's test keys `TURNSTILE_SITE_KEY=1x00000000000000000000AA TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA` (always pass; calls challenges.cloudflare.com). |
 
 Screenshots and results go to `backend/storage/app/e2e_shots/`, `e2e_full_result.json`, `e2e_ui_audit.json` (git-ignored).
 
@@ -31,7 +33,9 @@ DB_DATABASE=hellom_pos_test APP_URL=http://127.0.0.1:8010 FRONTEND_URL=http://12
 node tests/e2e/journey.mjs        # expect "16/16 steps OK"
 node tests/e2e/ui-audit.mjs       # expect no OVERFLOW, small:0, font:0
 DB_DATABASE=hellom_pos_test php artisan balance:reconcile
+node tests/e2e/dark-audit.mjs && node tests/e2e/dark-audit.mjs light   # expect 0 low-contrast
 DB_DATABASE=hellom_pos_test php tests/e2e/seed.php cleanup
+DB_DATABASE=hellom_pos_test CACHE_STORE=database php artisan cache:clear  # after captcha.mjs
 ```
 
 `CACHE_STORE=array` keeps the test server's page cache out of the dev cache. Ports 8000/3000
