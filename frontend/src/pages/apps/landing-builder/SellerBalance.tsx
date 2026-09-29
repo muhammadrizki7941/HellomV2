@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { AlertTriangle, ArrowDownToLine, CheckCircle2, Clock3, Loader2, ShieldCheck, Wallet, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -11,6 +11,7 @@ import {
   sendEmailVerification,
 } from '@/lib/hellomApi';
 import type { SellerFinanceSummary, SellerLedgerRow, SellerWithdrawalRow } from '@/lib/hellomApi';
+import PayoutAccountSheet from './PayoutAccountSheet';
 
 // "Saldo Penjualan": money from landing-page sales. Mobile-first.
 const rupiah = (value: number) => `Rp ${Math.round(value || 0).toLocaleString('id-ID')}`;
@@ -36,10 +37,13 @@ export default function SellerBalance() {
   const [toast, setToast] = useState<string | null>(null);
   const [sendingVerification, setSendingVerification] = useState(false);
   const [searchParams] = useSearchParams();
+  // ?rekening=1 (checklist, emails) opens the KTP & rekening sheet.
+  const [showPayout, setShowPayout] = useState(searchParams.get('rekening') === '1');
 
   // Back from the verification link (?email_verified=1).
   useEffect(() => {
     if (searchParams.get('email_verified') === '1') setToast('Email kamu sudah terverifikasi ✅');
+    if (searchParams.get('rekening') === '1') setShowPayout(true);
   }, [searchParams]);
 
   const verifyEmail = async () => {
@@ -165,11 +169,9 @@ export default function SellerBalance() {
               <p className="mt-0.5 text-zinc-600">Belum ada rekening.</p>
             )}
             {account.blocked_reason && <p className="mt-1 text-amber-700">{account.blocked_reason}</p>}
-            {!account.verified && (
-              <Link to="/dashboard/payments?tab=rekening" className="mt-2 inline-flex min-h-11 items-center font-semibold text-zinc-900 underline">
-                Lengkapi verifikasi KTP & rekening
-              </Link>
-            )}
+            <button type="button" onClick={() => setShowPayout(true)} className="mt-2 inline-flex min-h-11 items-center font-semibold text-zinc-900 underline">
+              {account.verified ? 'Lihat / ganti rekening' : 'Lengkapi KTP & rekening'}
+            </button>
             {!account.email_verified && (
               <button
                 type="button"
@@ -276,6 +278,17 @@ export default function SellerBalance() {
           onClose={() => setShowWithdraw(false)}
           onDone={async (message) => {
             setShowWithdraw(false);
+            setToast(message);
+            await load();
+          }}
+        />
+      )}
+
+      {showPayout && (
+        <PayoutAccountSheet
+          onClose={() => setShowPayout(false)}
+          onSaved={async (message) => {
+            setShowPayout(false);
             setToast(message);
             await load();
           }}

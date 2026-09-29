@@ -122,6 +122,10 @@ export default function LandingBuilder() {
   const [searchParams, setSearchParams] = useSearchParams();
   const requested = searchParams.get('tab') as Tab | null;
   const [activeTab, setActiveTabState] = useState<Tab>(requested && TABS.some((t) => t.key === requested) ? requested : 'overview');
+  // In-app links (?tab=saldo&rekening=1 from the checklist) switch tabs without a remount.
+  useEffect(() => {
+    if (requested && TABS.some((t) => t.key === requested)) setActiveTabState(requested);
+  }, [requested]);
   const setActiveTab = (tab: Tab) => {
     setActiveTabState(tab);
     setSearchParams(tab === 'overview' ? {} : { tab }, { replace: true });

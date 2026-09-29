@@ -20,8 +20,6 @@ import {
   getWalletOverview,
   getWalletTransactions,
   getPayoutPolicy,
-  getPayoutProfile,
-  submitPayoutProfile,
   pollWalletBalance,
   reconcileCheckout,
   type PaymentGatewayStatus,
@@ -92,15 +90,8 @@ export default function Payments() {
 
   const [withdrawAmount, setWithdrawAmount] = useState('');
 
-  // KYC payout profile (KTP + bank) — required by Hellom before any withdrawal.
-  const [payoutProfile, setPayoutProfile] = useState<Record<string, any> | null>(null);
-  const [kyc, setKyc] = useState({ destination_type: 'bank' as 'bank' | 'ewallet', full_name: '', nik: '', bank_code: '', bank_name: '', account_number: '', account_name: '' });
-  const [kycFile, setKycFile] = useState<File | null>(null);
-  const [kycSubmitting, setKycSubmitting] = useState(false);
 
   const MIN_WITHDRAWAL = 100000;
-  const kycStatus = String(payoutProfile?.status || 'unverified');
-  const kycVerified = kycStatus === 'verified';
 
   const [selectedApp, setSelectedApp] = useState<{ name: string; slug: string } | null>(null);
   const [gatewayPaymentUrl, setGatewayPaymentUrl] = useState<string | null>(null);
@@ -117,15 +108,13 @@ export default function Payments() {
     setLoading(true);
     setError(null);
     try {
-      const [overview, trx, catalog, gateway, profileRes] = await Promise.all([
+      const [overview, trx, catalog, gateway] = await Promise.all([
         getWalletOverview(),
         getWalletTransactions({ limit: 20 }),
         getCatalogApps().catch(() => ({ items: [] as AppCard[] })),
         getPaymentGatewayStatus().catch(() => null),
-        getPayoutProfile().catch(() => ({ profile: null })),
       ]);
 
-      setPayoutProfile((profileRes as { profile?: Record<string, any> | null }).profile ?? null);
       setRequesterRole(String((overview as { requester_role?: string }).requester_role || 'member'));
       setAvailableBalance(overview.wallet.available_balance || 0);
       setPendingBalance(overview.wallet.pending_balance || 0);
@@ -214,34 +203,6 @@ export default function Payments() {
     void loadEstimates();
     return () => { cancelled = true; };
   }, [depositAmount, withdrawAmount]);
-
-  const handleSubmitKyc = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setKycSubmitting(true);
-    setError(null);
-    setSuccessMessage(null);
-    try {
-      const form = new FormData();
-      form.append('destination_type', kyc.destination_type);
-      form.append('full_name', kyc.full_name.trim());
-      form.append('nik', kyc.nik.trim());
-      form.append('bank_code', kyc.bank_code.trim());
-      if (kyc.bank_name.trim()) form.append('bank_name', kyc.bank_name.trim());
-      form.append('account_number', kyc.account_number.trim());
-      form.append('account_name', kyc.account_name.trim());
-      if (kycFile) form.append('ktp_image', kycFile);
-
-      await submitPayoutProfile(form);
-      setSuccessMessage('Verifikasi terkirim. Data KTP & rekening kamu sedang ditinjau admin Hellom.');
-      setKycFile(null);
-      await loadPage();
-    } catch (submitError) {
-      const message = submitError instanceof Error ? submitError.message : 'Gagal mengirim verifikasi';
-      setError(message);
-    } finally {
-      setKycSubmitting(false);
-    }
-  };
 
   const handleTopupSession = async (amount: number, source: string) => {
     setSubmitting(true);
@@ -603,100 +564,30 @@ export default function Payments() {
       {tab === 'withdraw' && (
         <div className="mx-auto max-w-3xl rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm md:p-8">
           <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-sky-900">
-            <p className="font-semibold">Uang hasil penjualan sekarang ada di Saldo Penjualan</p>
+            <p className="font-semibold">Penarikan & rekening ada di Saldo Penjualan</p>
             <p className="mt-1">
-              Saldo isi ulang dipakai untuk membayar layanan Hellom dan tidak bisa ditarik. Hasil penjualan dari halaman
-              Hellom Page kamu masuk ke Saldo Penjualan, lengkap dengan rincian harga, biaya, dan dana bersih.
+              Saldo isi ulang dipakai untuk membayar layanan Hellom dan tidak bisa ditarik. Hasil penjualan Hellom Page,
+              data KTP & rekening, dan penarikan dana sekarang diatur di menu Saldo pada Hellom Page.
             </p>
-            <Link
-              to="/dashboard/apps/landing-builder?tab=saldo"
-              className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-xl bg-zinc-950 px-4 text-sm font-semibold text-white"
-            >
-              <Wallet className="h-4 w-4" /> Buka Saldo Penjualan
-            </Link>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Link
+                to="/dashboard/apps/landing-builder?tab=saldo"
+                className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-zinc-950 px-4 text-sm font-semibold text-white"
+              >
+                <Wallet className="h-4 w-4" /> Buka Saldo Penjualan
+              </Link>
+              <Link
+                to="/dashboard/apps/landing-builder?tab=saldo&rekening=1"
+                className="inline-flex min-h-11 items-center rounded-xl border border-sky-300 bg-white px-4 text-sm font-semibold text-sky-900"
+              >
+                KTP & rekening
+              </Link>
+            </div>
           </div>
           {!canManagePayouts && (
             <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
               Akun Anda belum memiliki akses untuk melakukan penarikan saldo. Hubungi pemilik organisasi untuk informasi lebih lanjut.
             </div>
-          )}
-
-          {/* KYC status banner */}
-          {canManagePayouts && (
-            <div className={cn(
-              'mt-6 rounded-2xl border px-4 py-3 text-sm',
-              kycVerified ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
-                : kycStatus === 'pending' ? 'border-amber-200 bg-amber-50 text-amber-900'
-                : kycStatus === 'rejected' ? 'border-red-200 bg-red-50 text-red-800'
-                : 'border-zinc-200 bg-zinc-50 text-zinc-700',
-            )}>
-              {kycVerified && <span>✅ Rekening terverifikasi: <strong>{payoutProfile?.bank_code} · {payoutProfile?.account_number_masked}</strong> a.n. {payoutProfile?.account_name}.</span>}
-              {kycStatus === 'pending' && <span>⏳ Verifikasi KTP & rekening sedang ditinjau admin Hellom. Penarikan terbuka setelah disetujui.</span>}
-              {kycStatus === 'rejected' && <span>❌ Verifikasi ditolak{payoutProfile?.review_notes ? `: ${payoutProfile.review_notes}` : ''}. Perbaiki data lalu kirim ulang di bawah.</span>}
-              {kycStatus === 'unverified' && <span>🔒 Untuk menarik saldo, verifikasi KTP & rekening kamu dulu (wajib, demi keamanan).</span>}
-            </div>
-          )}
-
-          {/* KYC submission form — when not yet verified (and not awaiting review) */}
-          {canManagePayouts && !kycVerified && kycStatus !== 'pending' && (
-            <form onSubmit={handleSubmitKyc} className="mt-8 space-y-4">
-              <h3 className="text-sm font-bold text-zinc-800">Verifikasi KTP & Rekening</h3>
-              <div className="flex gap-2" role="radiogroup" aria-label="Tujuan pencairan">
-                {([['bank', 'Rekening bank'], ['ewallet', 'E-wallet']] as const).map(([value, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    role="radio"
-                    aria-checked={kyc.destination_type === value}
-                    onClick={() => setKyc((k) => ({ ...k, destination_type: value }))}
-                    className={cn(
-                      'min-h-11 flex-1 rounded-xl border px-3 text-sm font-semibold transition',
-                      kyc.destination_type === value ? 'border-zinc-950 bg-zinc-950 text-white' : 'border-zinc-300 bg-white text-zinc-700',
-                    )}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="space-y-1.5 text-sm">
-                  <span className="font-semibold text-zinc-700">Nama sesuai KTP</span>
-                  <input required value={kyc.full_name} onChange={(e) => setKyc((k) => ({ ...k, full_name: e.target.value }))} className="w-full rounded-xl border border-zinc-300 px-3 py-2.5 text-base outline-none focus:border-amber-400" />
-                </label>
-                <label className="space-y-1.5 text-sm">
-                  <span className="font-semibold text-zinc-700">NIK (16 digit)</span>
-                  <input required inputMode="numeric" maxLength={16} value={kyc.nik} onChange={(e) => setKyc((k) => ({ ...k, nik: e.target.value.replace(/\D/g, '') }))} className="w-full rounded-xl border border-zinc-300 px-3 py-2.5 text-base outline-none focus:border-amber-400" />
-                </label>
-                <label className="space-y-1.5 text-sm">
-                  <span className="font-semibold text-zinc-700">{kyc.destination_type === 'ewallet' ? 'E-wallet' : 'Kode Bank'}</span>
-                  <input required value={kyc.bank_code} onChange={(e) => setKyc((k) => ({ ...k, bank_code: e.target.value }))} placeholder={kyc.destination_type === 'ewallet' ? 'DANA / OVO / GOPAY' : 'BCA'} className="w-full rounded-xl border border-zinc-300 px-3 py-2.5 text-base outline-none focus:border-amber-400" />
-                </label>
-                <label className="space-y-1.5 text-sm">
-                  <span className="font-semibold text-zinc-700">Nama Bank (opsional)</span>
-                  <input value={kyc.bank_name} onChange={(e) => setKyc((k) => ({ ...k, bank_name: e.target.value }))} placeholder="Bank Central Asia" className="w-full rounded-xl border border-zinc-300 px-3 py-2.5 text-base outline-none focus:border-amber-400" />
-                </label>
-                <label className="space-y-1.5 text-sm">
-                  <span className="font-semibold text-zinc-700">{kyc.destination_type === 'ewallet' ? 'No. HP e-wallet' : 'No. Rekening'}</span>
-                  <input required inputMode="numeric" value={kyc.account_number} onChange={(e) => setKyc((k) => ({ ...k, account_number: e.target.value }))} className="w-full rounded-xl border border-zinc-300 px-3 py-2.5 text-base outline-none focus:border-amber-400" />
-                </label>
-                <label className="space-y-1.5 text-sm">
-                  <span className="font-semibold text-zinc-700">Nama Pemilik Akun (harus sama dengan KTP)</span>
-                  <input required value={kyc.account_name} onChange={(e) => setKyc((k) => ({ ...k, account_name: e.target.value }))} className="w-full rounded-xl border border-zinc-300 px-3 py-2.5 text-base outline-none focus:border-amber-400" />
-                </label>
-              </div>
-              <label className="space-y-1.5 text-sm block">
-                <span className="font-semibold text-zinc-700">Foto KTP</span>
-                <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => setKycFile(e.target.files?.[0] ?? null)} className="w-full text-sm" />
-                <span className="text-xs text-zinc-500">Data KTP disimpan privat dan hanya dipakai untuk verifikasi penarikan.</span>
-              </label>
-              <button
-                type="submit"
-                disabled={kycSubmitting}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-zinc-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:opacity-60"
-              >
-                {kycSubmitting ? 'Mengirim...' : 'Kirim Verifikasi'}
-              </button>
-            </form>
           )}
 
           <div className="mt-8 rounded-3xl border border-zinc-200 bg-zinc-50 p-5">

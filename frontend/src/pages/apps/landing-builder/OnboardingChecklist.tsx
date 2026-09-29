@@ -49,7 +49,7 @@ export default function OnboardingChecklist({ data, onStartWizard, onOpenProduct
     { key: 'email_verified', label: 'Verifikasi email', hint: c.email_verified ? 'Email terverifikasi.' : 'Wajib sebelum menarik dana.', done: c.email_verified,
       action: <button type="button" onClick={() => void resend()} disabled={sending} className={actionClass}>{sending && <Loader2 className="h-4 w-4 animate-spin" />} Kirim link</button> },
     { key: 'payout', label: 'Data diri & rekening', hint: payoutHint[c.payout_status] ?? payoutHint.none, done: c.payout_status === 'verified',
-      action: <Link to="/dashboard/payments?tab=rekening" className={actionClass}>{c.payout_status === 'pending' ? 'Lihat' : 'Lengkapi'} <ChevronRight className="h-4 w-4" /></Link> },
+      action: <Link to="/dashboard/apps/landing-builder?tab=saldo&rekening=1" className={actionClass}>{c.payout_status === 'pending' ? 'Lihat' : 'Lengkapi'} <ChevronRight className="h-4 w-4" /></Link> },
     { key: 'pixel', label: 'Pasang pixel iklan', hint: c.pixel ? 'Pixel aktif.' : 'Opsional: ukur hasil iklan Meta, Google, atau TikTok.', done: c.pixel, optional: true,
       action: <button type="button" onClick={onOpenSettings} className={actionClass}>Pasang <ChevronRight className="h-4 w-4" /></button> },
   ];
