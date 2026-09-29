@@ -3,6 +3,7 @@
 namespace App\Services\SellerFinance;
 
 use App\Jobs\SendLandingSaleEmails;
+use App\Jobs\SendMetaPurchaseEvent;
 use App\Models\LandingPageOrder;
 use App\Models\PlatformFinanceLedger;
 use App\Services\Landing\CheckoutService;
@@ -152,6 +153,8 @@ final class LandingPaymentService
 
         if ($outcome === 'processed') {
             SendLandingSaleEmails::dispatch((int) $order->id)->afterCommit();
+            // Seller's Meta Conversions API (no-op when the seller has no pixel + token).
+            SendMetaPurchaseEvent::dispatch((int) $order->id)->afterCommit();
         }
 
         return $outcome;

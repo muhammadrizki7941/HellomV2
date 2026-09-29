@@ -17,6 +17,10 @@ class OrganizationLandingPage extends Model
         'status',
         'content',
         'published_at',
+        'is_home',
+        'seo_title',
+        'seo_description',
+        'seo_image',
     ];
 
     protected function casts(): array
@@ -24,7 +28,18 @@ class OrganizationLandingPage extends Model
         return [
             'content' => 'array',
             'published_at' => 'datetime',
+            'draft_document' => 'array',
+            'draft_revision' => 'integer',
+            'draft_saved_at' => 'datetime',
+            'published_version_id' => 'integer',
+            'is_home' => 'boolean',
         ];
+    }
+
+    /** The live snapshot the public page renders (Fase 4: draft and published are separate). */
+    public function publishedVersion(): BelongsTo
+    {
+        return $this->belongsTo(LandingPageVersion::class, 'published_version_id');
     }
 
     public function organization(): BelongsTo

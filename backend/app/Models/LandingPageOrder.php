@@ -90,6 +90,8 @@ class LandingPageOrder extends Model
         'shipping_courier',
         'tracking_number',
         'shipped_at',
+        'attribution',
+        'source',
     ];
 
     protected function casts(): array
@@ -126,6 +128,9 @@ class LandingPageOrder extends Model
             'inventory_released_at' => 'datetime',
             'emails_sent_at' => 'datetime',
             'email_resend_count' => 'integer',
+            'attribution' => 'array',
+            'purchase_tracked_at' => 'datetime',
+            'capi_sent_at' => 'datetime',
         ];
     }
 

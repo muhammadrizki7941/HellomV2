@@ -12,7 +12,10 @@ use App\Models\Organization;
 use App\Models\OrganizationLandingPage;
 use App\Models\CustomerLandingpage;
 use App\Models\User;
+use App\Services\Landing\LandingDocumentService;
+use App\Services\Landing\LandingShop;
 use App\Services\Landing\SellerTrust;
+use App\Support\Landing\BlockSchema;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -49,6 +52,11 @@ class LandingBuilderController extends BaseApiController
             'slug' => ['nullable', 'string', 'max:160'],
             'content' => ['nullable', 'array'],
         ]);
+
+        $quota = app(LandingShop::class)->pageQuota($organizationId);
+        if (OrganizationLandingPage::query()->where('organization_id', $organizationId)->count() >= $quota) {
+            return $this->fail("Paket kamu bisa punya {$quota} halaman. Upgrade paket Hellom Page untuk menambah halaman.", ['code' => 'PAGE_QUOTA', 'quota' => $quota], 422);
+        }
 
         $slug = $this->uniqueSlug(
             $organizationId,
@@ -121,12 +129,19 @@ class LandingBuilderController extends BaseApiController
             return $this->fail('Landing page not found', ['code' => 'LANDING_PAGE_NOT_FOUND'], 404);
         }
 
-        $page->forceFill([
-            'status' => 'published',
-            'published_at' => now(),
-        ])->save();
-
-        $this->snapshotVersion($page, 'published');
+        // Pre-Fase 4 clients edit landing_blocks: publish those as a snapshot version
+        // (the public page renders only published versions; quota and cache handled there).
+        $documents = app(LandingDocumentService::class);
+        $page->forceFill(['draft_document' => BlockSchema::normalize($documents->fromLegacyBlocks($page)), 'draft_saved_at' => now()])->save();
+        try {
+            $documents->publish($page, $request->user());
+        } catch (\RuntimeException $e) {
+            if ($e->getMessage() === 'PAGE_QUOTA') {
+                return $this->fail('Paket kamu sudah mencapai batas halaman terbit. Upgrade paket Hellom Page untuk menambah halaman.', ['code' => 'PAGE_QUOTA'], 422);
+            }
+            throw $e;
+        }
+        $page->refresh();
         $this->trackPublishActivation($page);
 
         return $this->ok($this->pagePayload($page), 'Landing page published');
@@ -652,12 +667,9 @@ class LandingBuilderController extends BaseApiController
             return $this->fail('Landing page not found', ['code' => 'LANDING_PAGE_NOT_FOUND'], 404);
         }
 
-        $page->forceFill([
-            'status' => 'draft',
-            'published_at' => null,
-        ])->save();
+        app(LandingDocumentService::class)->unpublish($page);
 
-        return $this->ok($this->pagePayload($page), 'Landing page unpublished');
+        return $this->ok($this->pagePayload($page->fresh()), 'Landing page unpublished');
     }
 
     public function destroy(Request $request, int $id): JsonResponse
@@ -1210,13 +1222,18 @@ class LandingBuilderController extends BaseApiController
 
     public function publicShowByOrganization(string $organizationSlug): JsonResponse
     {
-        $page = OrganizationLandingPage::query()
-            ->whereHas('organization', fn($query) => $query->where('slug', $organizationSlug))
-            ->where('status', 'published')
-            ->orderByRaw("CASE WHEN slug = 'landing-page' THEN 0 ELSE 1 END")
-            ->orderByDesc('published_at')
-            ->orderByDesc('id')
-            ->first();
+        $shop = app(LandingShop::class);
+        $organization = $shop->findByUsername($organizationSlug);
+        $live = $organization ? $shop->livePages($organization) : collect();
+        $page = $live->firstWhere('is_home', true) ?? $live->first()
+            // Shops published before Fase 4 (no snapshot yet) keep working through their blocks.
+            ?? OrganizationLandingPage::query()
+                ->whereHas('organization', fn($query) => $query->where('slug', $organizationSlug))
+                ->where('status', 'published')
+                ->orderByDesc('is_home')
+                ->orderByDesc('published_at')
+                ->orderByDesc('id')
+                ->first();
 
         if (!$page) {
             return $this->fail('Published landing page not found', ['code' => 'PUBLISHED_LANDING_PAGE_NOT_FOUND'], 404);
@@ -1317,12 +1334,21 @@ class LandingBuilderController extends BaseApiController
         $title = (string) ($hero['title'] ?? $page->title);
         $description = (string) ($hero['subtitle'] ?? 'Landing page published via Hellom Landing Builder');
 
-        $blockModels = LandingBlock::query()
-            ->where('landing_page_id', (int) $page->id)
-            ->where('is_visible', true)
-            ->orderBy('sort_order')
-            ->orderBy('id')
-            ->get();
+        $document = app(LandingDocumentService::class)->published($page);
+        $blockModels = $document !== null
+            ? collect($document['blocks'])->reject(fn ($b) => $b['hidden'])->values()->map(fn ($b, $i) => (new LandingBlock([
+                'block_key' => $b['id'],
+                'block_type' => $b['type'],
+                'sort_order' => $i,
+                'is_visible' => true,
+                'content' => $b['content'] + ['styles' => $b['styles']],
+            ]))->forceFill(['id' => $b['id']]))
+            : LandingBlock::query()
+                ->where('landing_page_id', (int) $page->id)
+                ->where('is_visible', true)
+                ->orderBy('sort_order')
+                ->orderBy('id')
+                ->get();
 
         // Blocks linked to a landing product (content.productId = public id) get its
         // current public data from the database: price, stock, image. Never delivery data.
@@ -1338,7 +1364,7 @@ class LandingBuilderController extends BaseApiController
                 $productId = is_array($block->content) ? ($block->content['productId'] ?? null) : null;
 
                 return [
-                    'id' => (int) $block->id,
+                    'id' => is_numeric($block->id) ? (int) $block->id : (string) $block->id,
                     'block_key' => (string) $block->block_key,
                     'block_type' => (string) $block->block_type,
                     'sort_order' => (int) $block->sort_order,

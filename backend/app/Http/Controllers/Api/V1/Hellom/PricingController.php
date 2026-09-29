@@ -58,6 +58,7 @@ class PricingController extends BaseApiController
                     'billing_cycles' => $plan->billing_cycles ?? [],
                     'duration_days' => $plan->duration_days,
                     'max_outlets' => (int) ($plan->max_outlets ?? 1),
+                    'max_landing_pages' => $plan->max_landing_pages !== null ? (int) $plan->max_landing_pages : null,
                     'is_recommended' => (bool) ($plan->is_recommended ?? false),
                     'sort_order' => (int) ($plan->sort_order ?? 0),
                     'is_current' => $plan->slug === $currentPlanSlug,

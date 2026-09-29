@@ -18,6 +18,8 @@ class LandingPageVersion extends Model
         'title',
         'slug',
         'content',
+        'document',
+        'created_by_user_id',
         'published_at',
     ];
 
@@ -25,6 +27,7 @@ class LandingPageVersion extends Model
     {
         return [
             'content' => 'array',
+            'document' => 'array',
             'published_at' => 'datetime',
             'version_no' => 'integer',
         ];

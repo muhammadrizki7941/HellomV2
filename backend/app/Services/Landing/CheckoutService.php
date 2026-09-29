@@ -77,6 +77,9 @@ final class CheckoutService
             'buyer_phone' => [$phoneRequired ? 'required' : 'nullable', 'string', 'max:20', 'regex:/^\+?[0-9\s-]{8,20}$/'],
             'fields' => ['nullable', 'array'],
             'fields.*' => ['nullable', 'string', 'max:2000'],
+            // Ad attribution captured on the public page (UTM, click ids, referrer).
+            'attribution' => ['nullable', 'array'],
+            'attribution.*' => ['nullable', 'max:200'],
         ];
         if ($product->type === LandingProduct::TYPE_PHYSICAL) {
             $rules += [
@@ -137,6 +140,7 @@ final class CheckoutService
             $coupon?->increment('used_count');
 
             $estimate = $this->fees->split($total, null);
+            $attribution = $this->attribution($input['attribution'] ?? null);
             $productName = Str::limit((string) $locked->name, 200, '');
             $order = LandingPageOrder::query()->create([
                 'organization_id' => (int) $locked->organization_id,
@@ -164,6 +168,8 @@ final class CheckoutService
                 'reference_id' => 'lps_' . Str::upper(Str::random(18)),
                 'expires_at' => now()->addHours($expiryHours),
                 'metadata' => ['fee_estimate' => $estimate],
+                'attribution' => $attribution,
+                'source' => LandingStats::sourceLabel($attribution['utm_source'] ?? $attribution['referrer'] ?? ''),
             ]);
             $order->forceFill(['inventory_reserved_at' => now()])->save();
 
@@ -227,6 +233,23 @@ final class CheckoutService
         }
         $product->sold_count = (int) $product->sold_count + $quantity;
         $product->save();
+    }
+
+    /** Known attribution keys only, short strings. */
+    private function attribution(mixed $input): ?array
+    {
+        if (!is_array($input)) {
+            return null;
+        }
+        $keys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'fbclid', 'gclid', 'ttclid', 'referrer', 'landing'];
+        $out = [];
+        foreach ($keys as $key) {
+            if (isset($input[$key]) && is_scalar($input[$key]) && trim((string) $input[$key]) !== '') {
+                $out[$key] = Str::limit(trim((string) $input[$key]), 150, '');
+            }
+        }
+
+        return $out ?: null;
     }
 
     private function clampQuantity(LandingProduct $product, int $quantity): int

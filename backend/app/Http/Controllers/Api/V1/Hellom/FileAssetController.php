@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Hellom;
 
 use App\Models\FileAsset;
 use App\Models\User;
+use App\Support\ImageOptimizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -78,15 +79,27 @@ class FileAssetController extends BaseApiController
         }
 
         $folder = sprintf('landing-builder/%d', $organizationId);
-        $storedPath = $file->store($folder, 'public');
+        $extension = strtolower((string) $file->getClientOriginalExtension());
+        $mime = $file->getMimeType();
+        // Photos become WebP (max 1600px, EXIF removed) so public pages stay light; GIF/PDF unchanged.
+        if (in_array($extension, ['jpg', 'jpeg', 'png', 'webp'], true)) {
+            try {
+                $storedPath = ImageOptimizer::storeWebp($file, $folder);
+                $mime = 'image/webp';
+            } catch (\RuntimeException $e) {
+                return $this->fail($e->getMessage(), ['code' => 'IMAGE_UNREADABLE'], 422);
+            }
+        } else {
+            $storedPath = $file->store($folder, 'public');
+        }
 
         $asset = FileAsset::query()->create([
             'organization_id' => $organizationId,
             'app_slug' => 'landing_builder',
             'disk' => 'public',
             'path' => $storedPath,
-            'mime_type' => $file->getMimeType(),
-            'size_bytes' => (int) $file->getSize(),
+            'mime_type' => $mime,
+            'size_bytes' => (int) (Storage::disk('public')->size($storedPath) ?: $file->getSize()),
             'original_name' => $file->getClientOriginalName(),
             'content_hash' => $contentHash,
             'is_public' => true,

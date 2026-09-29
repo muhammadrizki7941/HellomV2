@@ -57,6 +57,10 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('hellom-landing-mail', function (Request $request) {
             return [Limit::perMinute(5)->by($request->ip()), Limit::perHour(30)->by($request->ip())];
         });
+        // Hellom Page stats beacons (visit/click); generous, one visitor makes several.
+        RateLimiter::for('hellom-landing-events', function (Request $request) {
+            return Limit::perMinute(120)->by($request->ip());
+        });
         // "Laporkan" from public pages.
         RateLimiter::for('hellom-landing-report', function (Request $request) {
             return Limit::perHour(10)->by($request->ip());

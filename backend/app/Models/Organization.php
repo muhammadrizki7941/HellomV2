@@ -49,6 +49,30 @@ class Organization extends Model
         return $this->hasOne(Outlet::class)->where('is_primary', true);
     }
 
+    protected static function booted(): void
+    {
+        // The slug doubles as the Hellom Page address until a username is chosen, so it
+        // may not be a reserved word (/login, /admin…) or another shop's username.
+        static::creating(function (Organization $organization): void {
+            $base = (string) $organization->slug;
+            if ($base === '') {
+                return;
+            }
+            $slug = $base;
+            for ($i = 2; in_array($slug, config('landing.reserved_usernames', []), true)
+                || static::query()->where('slug', $slug)->orWhere('landing_username', $slug)->exists(); $i++) {
+                $slug = $base . '-' . $i;
+            }
+            $organization->slug = $slug;
+        });
+    }
+
+    /** Hellom Page public address: hellomspace.com/{landing username}; the org slug stays for POS links. */
+    public function landingUsername(): string
+    {
+        return (string) ($this->landing_username ?: $this->slug);
+    }
+
     /** Hellom Page: visitor reports about this seller. */
     public function landingReports(): HasMany
     {

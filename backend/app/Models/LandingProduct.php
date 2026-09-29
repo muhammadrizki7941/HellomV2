@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Landing\LandingShop;
 use App\Support\SafeHtml;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -36,7 +37,7 @@ class LandingProduct extends Model
     ];
 
     protected $fillable = [
-        'organization_id', 'public_id', 'type', 'name', 'description', 'image_path', 'price', 'compare_at_price',
+        'organization_id', 'public_id', 'slug', 'type', 'name', 'description', 'image_path', 'price', 'compare_at_price',
         'stock', 'is_active', 'require_phone', 'checkout_fields', 'delivery_mode', 'delivery_url', 'delivery_note',
         'access_max_opens', 'access_days', 'download_limit', 'shipping_mode', 'shipping_fee', 'weight_grams', 'sort_order',
     ];
@@ -70,7 +71,21 @@ class LandingProduct extends Model
     {
         static::creating(function (LandingProduct $product): void {
             $product->public_id ??= Str::lower(Str::random(12));
+            if (!$product->slug) {
+                // hellomspace.com/{username}/{slug}; unique per shop, kept when the name changes (links stay valid).
+                $base = Str::limit(Str::slug((string) $product->name) ?: 'produk', 100, '');
+                $slug = $base;
+                $taken = fn (string $s) => static::withTrashed()->where('organization_id', $product->organization_id)->where('slug', $s)->exists()
+                    || OrganizationLandingPage::query()->where('organization_id', $product->organization_id)->where('slug', $s)->exists();
+                for ($i = 2; $taken($slug); $i++) {
+                    $slug = $base . '-' . $i;
+                }
+                $product->slug = $slug;
+            }
         });
+        // Price/stock/image changes show on the cached public pages right away.
+        static::saved(fn (LandingProduct $product) => app(LandingShop::class)->bumpCache((int) $product->organization_id));
+        static::deleted(fn (LandingProduct $product) => app(LandingShop::class)->bumpCache((int) $product->organization_id));
         static::saving(function (LandingProduct $product): void {
             if (is_string($product->description) && $product->isDirty('description')) {
                 $product->description = SafeHtml::clean($product->description);
@@ -134,6 +149,7 @@ class LandingProduct extends Model
     {
         return [
             'id' => $this->public_id,
+            'slug' => $this->slug,
             'type' => $this->type,
             'type_label' => self::TYPE_LABELS[$this->type] ?? $this->type,
             'name' => $this->name,

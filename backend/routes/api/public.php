@@ -65,6 +65,13 @@ Route::post('/public/landing-orders/lookup', [PublicStoreController::class, 'loo
     ->name('public.landing.orders.lookup');
 Route::post('/public/landing-reports', [PublicStoreController::class, 'report'])->middleware('throttle:hellom-landing-report')
     ->name('public.landing.reports.store');
+// Fase 4: stats beacons, QR of a shop link, one-time Purchase pixel event for the thank-you page.
+Route::post('/public/landing-events', [PublicStoreController::class, 'event'])->middleware('throttle:hellom-landing-events')
+    ->name('public.landing.events');
+Route::get('/public/landing-qr', [PublicStoreController::class, 'qr'])->middleware('throttle:hellom-public-lookup')
+    ->name('public.landing.qr');
+Route::post('/public/landingpage/orders/{reference}/purchase-event', [PublicStoreController::class, 'purchaseEvent'])->middleware('throttle:hellom-public-lookup')
+    ->name('public.landing.orders.purchase_event');
 Route::get('/public/email/verify/{id}/{hash}', [EmailVerificationController::class, 'verify'])->middleware('throttle:hellom-public-lookup')
     ->name('public.email.verify');
 Route::get('/public/showcase/portfolios', [ShowcaseController::class, 'publicPortfolios'])->name('public.showcase.portfolios');

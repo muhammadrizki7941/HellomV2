@@ -6,14 +6,19 @@ use App\Jobs\SendLandingSaleEmails;
 use App\Models\LandingPageOrder;
 use App\Models\LandingProduct;
 use App\Models\LandingReport;
+use App\Models\LandingTrackingSetting;
 use App\Models\Organization;
 use App\Models\OrganizationLandingPage;
 use App\Services\Landing\CheckoutService;
+use App\Services\Landing\LandingShop;
+use App\Services\Landing\LandingStats;
 use App\Services\Landing\OrderAccessService;
 use App\Services\Landing\PaymentStarter;
 use App\Services\Landing\SellerTrust;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
+use SimpleSoftwareIO\QrCode\Facades\QrCode;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
@@ -47,6 +52,7 @@ class PublicStoreController extends BaseApiController
             'seller' => $this->trust->publicSeller($organization),
             'payment_options' => $payments->options(),
             'min_total' => CheckoutService::MIN_TOTAL,
+            'tracking' => LandingTrackingSetting::query()->find($organization->id)?->publicIds() ?? [],
         ], 'Produk');
     }
 
@@ -196,6 +202,73 @@ class PublicStoreController extends BaseApiController
         ]);
 
         return $this->ok(['received' => true], 'Terima kasih, laporan kamu sudah kami terima dan akan ditinjau tim Hellom.', 201);
+    }
+
+    /** Stats beacon from public pages (visit, product view, click, checkout start). */
+    public function event(Request $request, LandingShop $shop, LandingStats $stats): JsonResponse
+    {
+        $validated = $request->validate([
+            'username' => ['required', 'string', 'max:40'],
+            'metric' => ['required', 'in:' . implode(',', LandingStats::METRICS)],
+            'page_id' => ['nullable', 'integer'],
+            'product_id' => ['nullable', 'string', 'max:24'],
+            'dimension' => ['nullable', 'string', 'max:200'],
+            'source' => ['nullable', 'string', 'max:200'],
+        ]);
+        $organization = $shop->findByUsername($validated['username']);
+        if (!$organization) {
+            return $this->ok(['recorded' => false], 'Diabaikan');
+        }
+        $pageId = !empty($validated['page_id'])
+            ? OrganizationLandingPage::query()->where('organization_id', $organization->id)->whereKey($validated['page_id'])->value('id') : null;
+        $productId = !empty($validated['product_id'])
+            ? LandingProduct::query()->where('organization_id', $organization->id)->where('public_id', $validated['product_id'])->value('id') : null;
+        $dimension = $validated['metric'] === 'visit' ? LandingStats::sourceLabel($validated['source'] ?? '') : (string) ($validated['dimension'] ?? '');
+        $stats->record((int) $organization->id, $validated['metric'], $pageId, $productId, $dimension, $request->ip() . '|' . $request->userAgent());
+
+        return $this->ok(['recorded' => true], 'OK');
+    }
+
+    /** QR code (SVG) of a Hellom Page address, for the "Unduh QR" button. */
+    public function qr(Request $request): Response|JsonResponse
+    {
+        $url = (string) $request->query('url', '');
+        $host = parse_url($url, PHP_URL_HOST);
+        $allowed = array_filter([parse_url((string) config('app.frontend_url'), PHP_URL_HOST), parse_url((string) config('app.url'), PHP_URL_HOST), $request->getHost()]);
+        if (!in_array($host, $allowed, true) || strlen($url) > 300) {
+            return $this->fail('Hanya link Hellom yang bisa dibuat QR', ['code' => 'QR_URL_NOT_ALLOWED'], 422);
+        }
+        $svg = QrCode::format('svg')->size(512)->margin(1)->errorCorrection('M')->generate($url);
+
+        return response((string) $svg, 200, ['Content-Type' => 'image/svg+xml', 'Cache-Control' => 'public, max-age=86400', 'Content-Security-Policy' => "default-src 'none'; style-src 'unsafe-inline'"]);
+    }
+
+    /**
+     * Browser "Purchase" event for the seller's pixels, handed out once per order: the
+     * thank-you page asks after the payment is confirmed; a refresh gets fire=false. The
+     * same event_id is used by the server-side Conversions API (deduplication).
+     */
+    public function purchaseEvent(string $reference): JsonResponse
+    {
+        $order = LandingPageOrder::query()->where('reference_id', $reference)->first();
+        if (!$order || !$order->isPaid()) {
+            return $this->ok(['fire' => false], 'Belum lunas');
+        }
+        $claimed = LandingPageOrder::query()->whereKey($order->id)->whereNull('purchase_tracked_at')->update(['purchase_tracked_at' => now()]);
+        if ($claimed === 0) {
+            return $this->ok(['fire' => false], 'Sudah dikirim');
+        }
+        $tracking = LandingTrackingSetting::query()->find($order->organization_id)?->publicIds() ?? [];
+
+        return $this->ok([
+            'fire' => $tracking !== [],
+            'event_id' => 'purchase_' . $order->reference_id,
+            'value' => (int) $order->amount,
+            'currency' => 'IDR',
+            'content_ids' => array_filter([LandingProduct::withTrashed()->whereKey($order->product_id)->value('public_id')]),
+            'content_name' => (string) $order->product_name,
+            'tracking' => $tracking,
+        ], 'Purchase');
     }
 
     /** @return array{0: ?LandingProduct, 1: ?Organization} */

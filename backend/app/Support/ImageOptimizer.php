@@ -16,7 +16,13 @@ final class ImageOptimizer
     public static function storeWebp(UploadedFile $file, string $folder, int $maxWidth = 1600, int $quality = 80): string
     {
         $data = file_get_contents($file->getRealPath());
-        $image = $data !== false ? @imagecreatefromstring($data) : false;
+
+        return self::storeWebpFromBinary($data === false ? '' : $data, $folder, $maxWidth, $quality);
+    }
+
+    public static function storeWebpFromBinary(string $data, string $folder, int $maxWidth = 1600, int $quality = 80): string
+    {
+        $image = $data !== '' ? @imagecreatefromstring($data) : false;
         if ($image === false) {
             throw new RuntimeException('Gambar tidak bisa dibaca. Pakai JPG, PNG, atau WebP.');
         }
