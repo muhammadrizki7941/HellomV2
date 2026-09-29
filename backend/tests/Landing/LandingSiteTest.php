@@ -143,6 +143,17 @@ class LandingSiteTest extends SellerFinanceTestCase
         $this->get('/login')->assertOk()->assertHeaderMissing('ETag');
     }
 
+    public function test_button_colors_stay_readable(): void
+    {
+        $renderer = app(\App\Services\Landing\LandingRenderer::class);
+        $this->assertSame('#c2410c', $renderer->theme(['preset' => 'sunset'])['primary']);
+        $this->assertSame('#ffffff', $renderer->theme(['preset' => 'sunset'])['buttonText']);
+        // Seller picked white text on yellow: unreadable → black.
+        $this->assertSame('#000000', $renderer->theme(['preset' => 'minimal', 'primary' => '#ffff00', 'buttonText' => '#ffffff'])['buttonText']);
+        // A readable custom choice is kept.
+        $this->assertSame('#ffffff', $renderer->theme(['preset' => 'minimal', 'primary' => '#1e3a8a', 'buttonText' => '#ffffff'])['buttonText']);
+    }
+
     public function test_onboarding_checklist_follows_the_shop(): void
     {
         $seller = $this->seller(verifiedPayout: false);

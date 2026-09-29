@@ -19,12 +19,12 @@ final class LandingRenderer
     /** Theme presets (same ids as the editor's THEMES); a document's own colors override them. */
     public const PRESETS = [
         'industrial' => ['background' => '#ffffff', 'text' => '#18181b', 'primary' => '#facc15', 'buttonText' => '#000000'],
-        'ocean' => ['background' => '#f0f9ff', 'text' => '#0c4a6e', 'primary' => '#0ea5e9', 'buttonText' => '#ffffff'],
+        'ocean' => ['background' => '#f0f9ff', 'text' => '#0c4a6e', 'primary' => '#0369a1', 'buttonText' => '#ffffff'],
         'forest' => ['background' => '#fcfdf5', 'text' => '#1a2e05', 'primary' => '#4d7c0f', 'buttonText' => '#ffffff'],
         'luxury' => ['background' => '#09090b', 'text' => '#fafafa', 'primary' => '#d4af37', 'buttonText' => '#000000'],
         'minimal' => ['background' => '#fafafa', 'text' => '#18181b', 'primary' => '#18181b', 'buttonText' => '#ffffff'],
         'blush' => ['background' => '#fff7f5', 'text' => '#3f1d24', 'primary' => '#e11d48', 'buttonText' => '#ffffff'],
-        'sunset' => ['background' => '#fffbeb', 'text' => '#422006', 'primary' => '#ea580c', 'buttonText' => '#ffffff'],
+        'sunset' => ['background' => '#fffbeb', 'text' => '#422006', 'primary' => '#c2410c', 'buttonText' => '#ffffff'],
     ];
 
     public const FONTS = [
@@ -117,6 +117,10 @@ final class LandingRenderer
             'primary' => $theme['primary'] ?? $preset['primary'],
             'buttonText' => $theme['buttonText'] ?? $preset['buttonText'],
         ];
+        // Unreadable button (custom colors, contrast < 3:1): switch to black or white text.
+        if ($this->contrast($colors['primary'], $colors['buttonText']) < 3) {
+            $colors['buttonText'] = $this->contrast($colors['primary'], '#000000') >= $this->contrast($colors['primary'], '#ffffff') ? '#000000' : '#ffffff';
+        }
         $dark = $this->luminance($colors['background']) < 0.35;
 
         return $colors + [
@@ -211,6 +215,27 @@ final class LandingRenderer
         }
 
         return str_starts_with($url, '/') ? FrontendUrl::to($url) : $url;
+    }
+
+    /** WCAG contrast ratio between two hex colors (1–21). */
+    private function contrast(string $a, string $b): float
+    {
+        $rel = function (string $hex): float {
+            $hex = ltrim($hex, '#');
+            if (strlen($hex) === 3) {
+                $hex = $hex[0] . $hex[0] . $hex[1] . $hex[1] . $hex[2] . $hex[2];
+            }
+            [$r, $g, $b] = array_map(function ($c) {
+                $v = hexdec($c) / 255;
+
+                return $v <= 0.03928 ? $v / 12.92 : (($v + 0.055) / 1.055) ** 2.4;
+            }, str_split(substr($hex . '000000', 0, 6), 2));
+
+            return 0.2126 * $r + 0.7152 * $g + 0.0722 * $b;
+        };
+        [$x, $y] = [$rel($a), $rel($b)];
+
+        return (max($x, $y) + 0.05) / (min($x, $y) + 0.05);
     }
 
     private function luminance(string $hex): float

@@ -18,9 +18,9 @@ export const THEMES = [
     colors: {
       backgroundColor: '#f0f9ff', // Sky-50
       textColor: '#0c4a6e', // Sky-900
-      buttonColor: '#0ea5e9', // Sky-500
+      buttonColor: '#0369a1', // Sky-700 (white text ≥ 4.5:1)
       buttonTextColor: '#ffffff',
-      accentColor: '#0ea5e9'
+      accentColor: '#0369a1'
     }
   },
   {
@@ -47,7 +47,7 @@ export const THEMES = [
   {
     id: 'sunset',
     name: 'Sunset',
-    colors: { backgroundColor: '#fffbeb', textColor: '#422006', buttonColor: '#ea580c', buttonTextColor: '#ffffff', accentColor: '#ea580c' }
+    colors: { backgroundColor: '#fffbeb', textColor: '#422006', buttonColor: '#c2410c', buttonTextColor: '#ffffff', accentColor: '#c2410c' }
   },
   {
     id: 'luxury',
