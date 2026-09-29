@@ -195,13 +195,13 @@ export default function DashboardLayout() {
         "lg:hidden fixed top-0 left-0 right-0 h-16 bg-white border-b border-zinc-200 flex items-center justify-between px-4 z-30",
         chromeHidden && "hidden"
       )}>
-        <Link to="/" className="flex items-center gap-2">
+        <Link to="/" className="flex min-h-11 items-center gap-2">
           <img src={getBrandLogo(brand?.logo_url)} alt={brand?.app_name || BRAND_NAME} draggable={false} loading="lazy" className="w-8 h-8 rounded-lg object-cover border border-zinc-200" />
           <span className="text-xl font-bold tracking-tight">{brand?.app_name || BRAND_NAME}</span>
         </Link>
         <div className="flex items-center gap-2">
           <NotificationBell />
-          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 text-zinc-600">
+          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} aria-label={isSidebarOpen ? 'Tutup menu' : 'Buka menu'} aria-expanded={isSidebarOpen} className="flex h-11 w-11 items-center justify-center text-zinc-600">
             {isSidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
           </button>
         </div>

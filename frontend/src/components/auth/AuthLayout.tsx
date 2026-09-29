@@ -25,11 +25,11 @@ export const AuthLayout = ({ brand, logoSrc, variant, children, footerText }: Au
 
       <div className="relative mx-auto w-full max-w-[1440px] px-4 py-8 sm:px-6 lg:px-10 lg:py-12">
         <div className="mb-8 flex items-center justify-between">
-          <a href="/" className="text-2xl font-black tracking-normal text-white">
+          <a href="/" className="inline-flex min-h-11 items-center text-2xl font-black tracking-normal text-white">
             Hell<span className="text-[#F6B400]">om</span>
           </a>
-          <a href="/" className="rounded-lg border border-white/[0.10] px-4 py-2 text-xs font-bold text-white/70 transition hover:border-[#F6B400]/40 hover:text-white">
-            Back Home
+          <a href="/" className="inline-flex min-h-11 items-center rounded-lg border border-white/[0.10] px-4 text-xs font-bold text-white/70 transition hover:border-[#F6B400]/40 hover:text-white">
+            Beranda
           </a>
         </div>
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -63,7 +63,9 @@ const txTypeLabel = (type: string) => {
 };
 
 export default function Payments() {
-  const [activeTab, setActiveTab] = useState<TabMode>('overview');
+  // ?tab=rekening opens "Rekening & Penarikan" (KYC), linked from Hellom Page Saldo/checklist.
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<TabMode>(searchParams.get('tab') === 'rekening' ? 'withdraw' : 'overview');
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -266,23 +268,23 @@ export default function Payments() {
     }
   };
 
-  if (!loading && !gatewayStatus?.member_wallet_enabled) {
-    return (
-      <div className="mx-auto max-w-4xl space-y-6 p-4 md:p-8">
-        <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6">
-          <h1 className="text-2xl font-bold text-amber-900">Dompet Digital Tidak Tersedia</h1>
-          <p className="mt-3 text-sm leading-6 text-amber-800">
-            Fitur dompet digital sedang tidak aktif. Anda tetap bisa mengaktifkan aplikasi berbayar melalui metode pembayaran lain.
-          </p>
-        </div>
-      </div>
-    );
-  }
+  // Top-up wallet switched off by the admin: only "Rekening & Penarikan" stays, because
+  // Hellom Page sellers still need it for KTP & bank verification (Saldo Penjualan).
+  const walletOff = !loading && !gatewayStatus?.member_wallet_enabled;
+  const tab: TabMode = walletOff ? 'withdraw' : activeTab;
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
+      {walletOff && (
+        <div className="rounded-3xl border border-amber-200 bg-amber-50 p-5">
+          <h1 className="text-xl font-bold text-amber-900">Rekening & Penarikan</h1>
+          <p className="mt-2 text-sm leading-6 text-amber-800">
+            Dompet digital (isi saldo) sedang tidak aktif. Kamu tetap bisa melengkapi data KTP & rekening untuk menarik Saldo Penjualan.
+          </p>
+        </div>
+      )}
       {/* Hero — dark banner */}
-      <div className="rounded-3xl border border-zinc-200 bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-800 p-5 text-white shadow-xl shadow-zinc-950/10 sm:p-6">
+      {!walletOff && <div className="rounded-3xl border border-zinc-200 bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-800 p-5 text-white shadow-xl shadow-zinc-950/10 sm:p-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-2xl">
             <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-amber-200">
@@ -316,27 +318,28 @@ export default function Payments() {
             </div>
           </div>
         </div>
-      </div>
+      </div>}
 
       {/* Tabs */}
       <div className="flex flex-wrap items-center gap-2">
-        {(['overview', 'deposit', 'withdraw'] as TabMode[]).map((tab) => (
+        {((walletOff ? ['withdraw'] : ['overview', 'deposit', 'withdraw']) as TabMode[]).map((tabKey) => (
           <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
+            key={tabKey}
+            onClick={() => setActiveTab(tabKey)}
             className={cn(
-              'rounded-2xl px-4 py-2.5 text-sm font-semibold transition',
-              activeTab === tab
+              'min-h-11 rounded-2xl px-4 py-2.5 text-sm font-semibold transition',
+              tab === tabKey
                 ? 'bg-zinc-950 text-white'
                 : 'border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50'
             )}
           >
-            {tab === 'overview' ? 'Ringkasan' : tab === 'deposit' ? 'Isi Saldo' : 'Rekening & Penarikan'}
+            {tabKey === 'overview' ? 'Ringkasan' : tabKey === 'deposit' ? 'Isi Saldo' : 'Rekening & Penarikan'}
           </button>
         ))}
         <button
           onClick={() => void loadPage()}
-          className="ml-auto rounded-2xl border border-zinc-200 bg-white p-2.5 text-zinc-700 transition hover:bg-zinc-50"
+          className="ml-auto flex h-11 w-11 items-center justify-center rounded-2xl border border-zinc-200 bg-white text-zinc-700 transition hover:bg-zinc-50"
+          aria-label="Muat ulang"
           title="Refresh"
         >
           <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
@@ -359,7 +362,7 @@ export default function Payments() {
       )}
 
       {/* ── Overview ── */}
-      {activeTab === 'overview' && (
+      {tab === 'overview' && (
         <div className="space-y-6">
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {[
@@ -476,7 +479,7 @@ export default function Payments() {
       )}
 
       {/* ── Isi Saldo (Deposit) ── */}
-      {activeTab === 'deposit' && (
+      {tab === 'deposit' && (
         <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
           <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
             <h2 className="text-xl font-bold text-zinc-950">Isi Saldo</h2>
@@ -535,7 +538,7 @@ export default function Payments() {
                       min="10000"
                       value={depositAmount}
                       onChange={(event) => setDepositAmount(Number(event.target.value) || 0)}
-                      className="w-full rounded-2xl border border-zinc-300 px-4 py-3 text-zinc-900 outline-none transition focus:border-amber-400"
+                      className="w-full rounded-2xl border border-zinc-300 px-4 py-3 text-base text-zinc-900 outline-none transition focus:border-amber-400"
                     />
                   </label>
                   {(vaEstimatedFee !== null || vaEstimatedNet !== null) && (
@@ -597,7 +600,7 @@ export default function Payments() {
       )}
 
       {/* ── Tarik Saldo (Withdraw) ── */}
-      {activeTab === 'withdraw' && (
+      {tab === 'withdraw' && (
         <div className="mx-auto max-w-3xl rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm md:p-8">
           <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-sky-900">
             <p className="font-semibold">Uang hasil penjualan sekarang ada di Saldo Penjualan</p>
@@ -658,27 +661,27 @@ export default function Payments() {
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="space-y-1.5 text-sm">
                   <span className="font-semibold text-zinc-700">Nama sesuai KTP</span>
-                  <input required value={kyc.full_name} onChange={(e) => setKyc((k) => ({ ...k, full_name: e.target.value }))} className="w-full rounded-xl border border-zinc-300 px-3 py-2.5 outline-none focus:border-amber-400" />
+                  <input required value={kyc.full_name} onChange={(e) => setKyc((k) => ({ ...k, full_name: e.target.value }))} className="w-full rounded-xl border border-zinc-300 px-3 py-2.5 text-base outline-none focus:border-amber-400" />
                 </label>
                 <label className="space-y-1.5 text-sm">
                   <span className="font-semibold text-zinc-700">NIK (16 digit)</span>
-                  <input required inputMode="numeric" maxLength={16} value={kyc.nik} onChange={(e) => setKyc((k) => ({ ...k, nik: e.target.value.replace(/\D/g, '') }))} className="w-full rounded-xl border border-zinc-300 px-3 py-2.5 outline-none focus:border-amber-400" />
+                  <input required inputMode="numeric" maxLength={16} value={kyc.nik} onChange={(e) => setKyc((k) => ({ ...k, nik: e.target.value.replace(/\D/g, '') }))} className="w-full rounded-xl border border-zinc-300 px-3 py-2.5 text-base outline-none focus:border-amber-400" />
                 </label>
                 <label className="space-y-1.5 text-sm">
                   <span className="font-semibold text-zinc-700">{kyc.destination_type === 'ewallet' ? 'E-wallet' : 'Kode Bank'}</span>
-                  <input required value={kyc.bank_code} onChange={(e) => setKyc((k) => ({ ...k, bank_code: e.target.value }))} placeholder={kyc.destination_type === 'ewallet' ? 'DANA / OVO / GOPAY' : 'BCA'} className="w-full rounded-xl border border-zinc-300 px-3 py-2.5 outline-none focus:border-amber-400" />
+                  <input required value={kyc.bank_code} onChange={(e) => setKyc((k) => ({ ...k, bank_code: e.target.value }))} placeholder={kyc.destination_type === 'ewallet' ? 'DANA / OVO / GOPAY' : 'BCA'} className="w-full rounded-xl border border-zinc-300 px-3 py-2.5 text-base outline-none focus:border-amber-400" />
                 </label>
                 <label className="space-y-1.5 text-sm">
                   <span className="font-semibold text-zinc-700">Nama Bank (opsional)</span>
-                  <input value={kyc.bank_name} onChange={(e) => setKyc((k) => ({ ...k, bank_name: e.target.value }))} placeholder="Bank Central Asia" className="w-full rounded-xl border border-zinc-300 px-3 py-2.5 outline-none focus:border-amber-400" />
+                  <input value={kyc.bank_name} onChange={(e) => setKyc((k) => ({ ...k, bank_name: e.target.value }))} placeholder="Bank Central Asia" className="w-full rounded-xl border border-zinc-300 px-3 py-2.5 text-base outline-none focus:border-amber-400" />
                 </label>
                 <label className="space-y-1.5 text-sm">
                   <span className="font-semibold text-zinc-700">{kyc.destination_type === 'ewallet' ? 'No. HP e-wallet' : 'No. Rekening'}</span>
-                  <input required inputMode="numeric" value={kyc.account_number} onChange={(e) => setKyc((k) => ({ ...k, account_number: e.target.value }))} className="w-full rounded-xl border border-zinc-300 px-3 py-2.5 outline-none focus:border-amber-400" />
+                  <input required inputMode="numeric" value={kyc.account_number} onChange={(e) => setKyc((k) => ({ ...k, account_number: e.target.value }))} className="w-full rounded-xl border border-zinc-300 px-3 py-2.5 text-base outline-none focus:border-amber-400" />
                 </label>
                 <label className="space-y-1.5 text-sm">
                   <span className="font-semibold text-zinc-700">Nama Pemilik Akun (harus sama dengan KTP)</span>
-                  <input required value={kyc.account_name} onChange={(e) => setKyc((k) => ({ ...k, account_name: e.target.value }))} className="w-full rounded-xl border border-zinc-300 px-3 py-2.5 outline-none focus:border-amber-400" />
+                  <input required value={kyc.account_name} onChange={(e) => setKyc((k) => ({ ...k, account_name: e.target.value }))} className="w-full rounded-xl border border-zinc-300 px-3 py-2.5 text-base outline-none focus:border-amber-400" />
                 </label>
               </div>
               <label className="space-y-1.5 text-sm block">

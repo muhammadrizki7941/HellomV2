@@ -267,7 +267,7 @@ export default function DashboardHome() {
             <h3 className="flex items-center gap-2 font-bold text-zinc-900">
               <Clock className="h-4 w-4" /> Riwayat Transaksi
             </h3>
-            <Link to="/dashboard/payments" className="text-sm text-zinc-500 hover:text-zinc-900">
+            <Link to="/dashboard/payments" className="inline-flex min-h-11 items-center text-sm text-zinc-500 hover:text-zinc-900">
               Lihat Semua
             </Link>
           </div>

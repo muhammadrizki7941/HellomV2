@@ -99,7 +99,7 @@ function OrdersList() {
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
           <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cari no. pesanan, nama, email, WA" className={cn(inputClass, 'pl-9')} />
         </form>
-        <button type="button" onClick={() => void doExport()} disabled={exporting} aria-label="Export Excel" className="flex min-h-12 items-center gap-2 rounded-xl border border-zinc-300 bg-white px-3 text-sm font-semibold disabled:opacity-50">
+        <button type="button" onClick={() => void doExport()} disabled={exporting} aria-label="Export Excel" className="flex min-h-12 min-w-12 items-center justify-center gap-2 rounded-xl border border-zinc-300 bg-white px-3 text-sm font-semibold disabled:opacity-50">
           {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}<span className="hidden sm:inline">Excel</span>
         </button>
       </div>
@@ -332,7 +332,7 @@ function BuyersList() {
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
           <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari nama, email, WA" className={cn(inputClass, 'pl-9')} />
         </form>
-        <button type="button" disabled={exporting} onClick={async () => { setExporting(true); try { saveBlob(await exportSellerBuyers(), 'pembeli.xlsx'); } catch (err) { setError(err instanceof Error ? err.message : 'Export gagal'); } setExporting(false); }} className="flex min-h-12 items-center gap-2 rounded-xl border border-zinc-300 bg-white px-3 text-sm font-semibold disabled:opacity-50" aria-label="Export Excel">
+        <button type="button" disabled={exporting} onClick={async () => { setExporting(true); try { saveBlob(await exportSellerBuyers(), 'pembeli.xlsx'); } catch (err) { setError(err instanceof Error ? err.message : 'Export gagal'); } setExporting(false); }} className="flex min-h-12 min-w-12 items-center justify-center gap-2 rounded-xl border border-zinc-300 bg-white px-3 text-sm font-semibold disabled:opacity-50" aria-label="Export Excel">
           {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}<span className="hidden sm:inline">Excel</span>
         </button>
       </div>

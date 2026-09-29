@@ -84,8 +84,9 @@ export default function NotificationBell() {
     <div className="relative">
       <button
         onClick={() => setIsOpen(current => !current)}
-        className="relative rounded-xl border border-zinc-200 bg-white p-2 text-zinc-600 transition-colors hover:border-zinc-300 hover:text-zinc-900"
+        className="relative flex h-11 w-11 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 transition-colors hover:border-zinc-300 hover:text-zinc-900"
         title="Notifikasi"
+        aria-label="Notifikasi"
       >
         <Bell className="h-5 w-5" />
         {unreadCount > 0 && (

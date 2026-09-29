@@ -109,7 +109,7 @@ export default function LoginPage() {
         <div aria-hidden className="bg-grain pointer-events-none fixed inset-0 opacity-[0.04]" />
 
         <header className="relative z-10 px-6 py-6">
-          <Link to="/" className="inline-flex min-h-11 items-center">
+          <Link to="/" className="inline-flex min-h-11 min-w-11 items-center">
             {logoSrc ? (
               <img src={logoSrc} alt={brand.app_name || 'Hellom'} className="h-7 w-auto object-contain" />
             ) : (
@@ -154,7 +154,7 @@ export default function LoginPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   aria-invalid={Boolean(error)}
-                  className="h-12 w-full rounded-xl border border-white/[0.12] bg-black/40 px-4 text-[15px] text-white placeholder:text-white/35 focus:border-[#F6B400] focus:outline-none focus:ring-4 focus:ring-[#F6B400]/25"
+                  className="h-12 w-full rounded-xl border border-white/[0.12] bg-black/40 px-4 text-base text-white placeholder:text-white/35 focus:border-[#F6B400] focus:outline-none focus:ring-4 focus:ring-[#F6B400]/25"
                   placeholder="nama@email.com"
                 />
               </div>
@@ -171,7 +171,7 @@ export default function LoginPage() {
                     required
                     aria-invalid={Boolean(error)}
                     aria-describedby={error ? 'galat-masuk' : undefined}
-                    className="h-12 w-full rounded-xl border border-white/[0.12] bg-black/40 px-4 pr-12 text-[15px] text-white placeholder:text-white/35 focus:border-[#F6B400] focus:outline-none focus:ring-4 focus:ring-[#F6B400]/25"
+                    className="h-12 w-full rounded-xl border border-white/[0.12] bg-black/40 px-4 pr-12 text-base text-white placeholder:text-white/35 focus:border-[#F6B400] focus:outline-none focus:ring-4 focus:ring-[#F6B400]/25"
                     placeholder="Masukkan kata sandi"
                   />
                   <button
@@ -207,7 +207,7 @@ export default function LoginPage() {
               <Link to="/forgot-password" className="inline-flex min-h-11 items-center text-[#A1A1A6] hover:text-white">
                 Lupa kata sandi?
               </Link>
-              <Link to={registerHref} className="inline-flex min-h-11 items-center font-semibold text-[#F6B400] hover:underline">
+              <Link to={registerHref} className="inline-flex min-h-11 items-center px-1 font-semibold text-[#F6B400] hover:underline">
                 Daftar
               </Link>
             </div>

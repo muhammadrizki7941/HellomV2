@@ -107,7 +107,7 @@ export default function RegisterPage() {
                 required
                 value={organizationName}
                 onChange={(e) => setOrganizationName(e.target.value)}
-                className="h-[54px] w-full rounded-2xl border border-white/[0.10] bg-black/35 px-4 text-[15px] text-white placeholder:text-white/35 focus:border-[#F6B400] focus:outline-none focus:ring-4 focus:ring-[#F6B400]/15"
+                className="h-[54px] w-full rounded-2xl border border-white/[0.10] bg-black/35 px-4 text-base text-white placeholder:text-white/35 focus:border-[#F6B400] focus:outline-none focus:ring-4 focus:ring-[#F6B400]/15"
                 placeholder="Contoh: Toko Kopi Senja"
               />
             </div>
@@ -126,7 +126,7 @@ export default function RegisterPage() {
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="h-[54px] w-full rounded-2xl border border-white/[0.10] bg-black/35 px-4 text-[15px] text-white placeholder:text-white/35 focus:border-[#F6B400] focus:outline-none focus:ring-4 focus:ring-[#F6B400]/15"
+              className="h-[54px] w-full rounded-2xl border border-white/[0.10] bg-black/35 px-4 text-base text-white placeholder:text-white/35 focus:border-[#F6B400] focus:outline-none focus:ring-4 focus:ring-[#F6B400]/15"
               placeholder="Contoh: Budi Santoso"
             />
           </div>
@@ -138,7 +138,7 @@ export default function RegisterPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="h-[54px] w-full rounded-2xl border border-white/[0.10] bg-black/35 px-4 text-[15px] text-white placeholder:text-white/35 focus:border-[#F6B400] focus:outline-none focus:ring-4 focus:ring-[#F6B400]/15"
+              className="h-[54px] w-full rounded-2xl border border-white/[0.10] bg-black/35 px-4 text-base text-white placeholder:text-white/35 focus:border-[#F6B400] focus:outline-none focus:ring-4 focus:ring-[#F6B400]/15"
               placeholder="nama@email.com"
             />
           </div>
@@ -152,13 +152,14 @@ export default function RegisterPage() {
                 minLength={8}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="h-[54px] w-full rounded-2xl border border-white/[0.10] bg-black/35 px-4 pr-12 text-[15px] text-white placeholder:text-white/35 focus:border-[#F6B400] focus:outline-none focus:ring-4 focus:ring-[#F6B400]/15"
+                className="h-[54px] w-full rounded-2xl border border-white/[0.10] bg-black/35 px-4 pr-12 text-base text-white placeholder:text-white/35 focus:border-[#F6B400] focus:outline-none focus:ring-4 focus:ring-[#F6B400]/15"
                 placeholder="Minimal 8 karakter"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-white/45 hover:text-white"
+                aria-label={showPassword ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'}
+                className="absolute right-1 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center text-white/45 hover:text-white"
               >
                 {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
               </button>

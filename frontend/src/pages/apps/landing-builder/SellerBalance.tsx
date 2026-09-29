@@ -166,7 +166,7 @@ export default function SellerBalance() {
             )}
             {account.blocked_reason && <p className="mt-1 text-amber-700">{account.blocked_reason}</p>}
             {!account.verified && (
-              <Link to="/dashboard/payments" className="mt-2 inline-flex min-h-11 items-center font-semibold text-zinc-900 underline">
+              <Link to="/dashboard/payments?tab=rekening" className="mt-2 inline-flex min-h-11 items-center font-semibold text-zinc-900 underline">
                 Lengkapi verifikasi KTP & rekening
               </Link>
             )}

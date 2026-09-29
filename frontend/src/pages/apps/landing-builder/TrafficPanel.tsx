@@ -30,7 +30,7 @@ export default function TrafficPanel() {
         </div>
         <div className="inline-flex rounded-xl bg-zinc-100 p-1">
           {([7, 30, 90] as const).map((d) => (
-            <button key={d} type="button" onClick={() => setDays(d)} className={cn('min-h-10 rounded-lg px-3 text-sm font-semibold', days === d ? 'bg-white shadow-sm' : 'text-zinc-500')}>{d} hari</button>
+            <button key={d} type="button" onClick={() => setDays(d)} className={cn('min-h-11 rounded-lg px-3 text-sm font-semibold', days === d ? 'bg-white shadow-sm' : 'text-zinc-500')}>{d} hari</button>
           ))}
         </div>
       </div>

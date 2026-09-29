@@ -820,10 +820,13 @@ export default function PublicPage() {
   if (blocks.length === 0) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
-        <h1 className="text-2xl font-bold mb-2">Page Not Found</h1>
-        <p className="text-zinc-500 mb-2">This page hasn't been published yet.</p>
+        <h1 className="text-2xl font-bold mb-2">Halaman belum tersedia</h1>
+        <p className="text-zinc-500 mb-2">Toko ini belum menerbitkan halamannya, atau alamatnya salah ketik.</p>
         {loadError && <p className="text-sm text-red-600 mb-6">{loadError}</p>}
-        <Link to="/dashboard/apps/landing-builder" className="px-6 py-2 bg-black text-white rounded-lg">Go to Builder</Link>
+        <div className="mt-4 flex flex-wrap justify-center gap-2">
+          <Link to="/cek-pesanan" className="inline-flex min-h-11 items-center rounded-lg border border-zinc-200 px-5 font-semibold">Cek pesanan saya</Link>
+          <Link to="/" className="inline-flex min-h-11 items-center rounded-lg bg-black px-5 font-semibold text-white">Ke Hellom</Link>
+        </div>
       </div>
     );
   }

@@ -100,7 +100,7 @@ export const PromoBanner = ({ items, variant, className }: PromoBannerProps) => 
           {banner.subtitle ? <p className="text-xs text-white/70 sm:text-sm">{banner.subtitle}</p> : null}
           <a
             href={ctaLink}
-            className="inline-flex items-center gap-2 rounded-full bg-[#FACC15] px-4 py-2 text-xs font-semibold text-[#111111] transition-transform duration-200 hover:-translate-y-0.5"
+            className="inline-flex min-h-11 items-center gap-2 rounded-full bg-[#FACC15] px-4 text-xs font-semibold text-[#111111] transition-transform duration-200 hover:-translate-y-0.5"
           >
             {ctaText}
             <ArrowRight className="h-3.5 w-3.5" />
