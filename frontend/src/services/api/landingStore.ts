@@ -43,6 +43,7 @@ export type PublicProductPage = {
   seller: PublicSeller;
   payment_options: PaymentOption[];
   min_total: number;
+  tracking?: Record<string, string>; // seller pixel ids (public)
 };
 
 export type CheckoutQuote = {
@@ -63,6 +64,7 @@ export type CheckoutInput = {
   buyer_phone?: string;
   fields?: Record<string, string>;
   shipping?: { recipient_name: string; phone: string; address: string; city: string; province?: string; postal_code: string; notes?: string };
+  attribution?: Record<string, string>;
 };
 
 export type CheckoutResult = {

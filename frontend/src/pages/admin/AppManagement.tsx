@@ -51,6 +51,7 @@ type AdminPlanItem = {
   billing_cycles?: string[] | null;
   duration_days?: number | null;
   max_outlets?: number | null;
+  max_landing_pages?: number | null;
   is_visible?: boolean;
   is_recommended?: boolean;
   sort_order?: number;
@@ -85,6 +86,7 @@ type PlanFormState = {
   billingYearly: boolean;
   duration_days: string;
   max_outlets: string;
+  max_landing_pages: string;
   is_visible: boolean;
   is_recommended: boolean;
   sort_order: number;
@@ -117,6 +119,7 @@ const INITIAL_PLAN_FORM: PlanFormState = {
   billingYearly: false,
   duration_days: '30',
   max_outlets: '1',
+  max_landing_pages: '',
   is_visible: true,
   is_recommended: false,
   sort_order: 0,
@@ -282,6 +285,7 @@ export default function AppManagement() {
         billingYearly: Boolean(plan.billing_cycles?.includes('yearly')),
         duration_days: plan.duration_days ? String(plan.duration_days) : '',
         max_outlets: plan.max_outlets ? String(plan.max_outlets) : '1',
+        max_landing_pages: plan.max_landing_pages ? String(plan.max_landing_pages) : '',
         is_visible: plan.is_visible ?? true,
         is_recommended: Boolean(plan.is_recommended),
         sort_order: Number(plan.sort_order || 0),
@@ -346,6 +350,7 @@ export default function AppManagement() {
         billing_cycles: billingCycles,
         duration_days: planForm.duration_days ? Number(planForm.duration_days) : null,
         max_outlets: planForm.max_outlets ? Number(planForm.max_outlets) : 1,
+        max_landing_pages: planForm.max_landing_pages ? Number(planForm.max_landing_pages) : null,
         is_visible: planForm.is_visible,
         is_recommended: planForm.is_recommended,
         sort_order: planForm.sort_order,
@@ -923,6 +928,19 @@ export default function AppManagement() {
                     placeholder="Jumlah outlet/cabang yang boleh dibuat"
                   />
                   <span className="block text-xs text-zinc-500">Berlaku untuk paket POS. Mis. 1 = single outlet, 3 = sampai 3 cabang.</span>
+                </label>
+
+                <label className="space-y-2 text-sm">
+                  <span className="font-medium text-zinc-700">Maksimal halaman (Hellom Page)</span>
+                  <input
+                    type="number"
+                    min="1"
+                    value={planForm.max_landing_pages}
+                    onChange={(event) => setPlanForm((current) => ({ ...current, max_landing_pages: event.target.value }))}
+                    className="w-full rounded-2xl border border-zinc-300 px-4 py-3 text-zinc-900 outline-none transition focus:border-amber-400"
+                    placeholder="Kosong = 1 halaman (gratis)"
+                  />
+                  <span className="block text-xs text-zinc-500">Berlaku untuk paket Landing Page Builder. Harga paket ini = biaya langganan multi-halaman.</span>
                 </label>
               </div>
 

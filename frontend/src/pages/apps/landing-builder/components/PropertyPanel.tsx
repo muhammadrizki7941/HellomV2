@@ -7,6 +7,8 @@ import {
 import { Block, BlockStyles } from '../types';
 import { useLang } from '../i18n';
 import LinkedProductPicker from './LinkedProductPicker';
+import { uploadLandingAsset } from '@/lib/hellomApi';
+import { useSellerProducts } from '../sellerProducts';
 
 interface PropertyPanelProps {
   selectedBlock: Block | undefined;
@@ -27,6 +29,8 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
 }) => {
   const { t } = useLang();
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadingIdx, setUploadingIdx] = useState<number | null>(null);
+  const { products: sellerProducts } = useSellerProducts();
 
   if (!selectedBlock) {
     return (
@@ -41,21 +45,25 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
   const patch = (changes: Record<string, any>) => updateBlockContent(block.id, { ...block.content, ...changes });
 
   const MAX_SLIDER_IMAGE_BYTES = 1024 * 1024; // 1 MB
-  const uploadSliderImage = (idx: number, file: File | undefined) => {
+  // Images go to the server (stored as WebP), never inline base64 in the page.
+  const uploadSliderImage = async (idx: number, file: File | undefined) => {
     if (!file) return;
     if (file.size > MAX_SLIDER_IMAGE_BYTES) {
       setUploadError(t('pp.slider.tooLarge'));
       return;
     }
     setUploadError(null);
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const url = ev.target?.result as string;
+    setUploadingIdx(idx);
+    try {
+      const { url } = await uploadLandingAsset(file);
       const images = [...(block.content.images || [])];
       images[idx] = { ...images[idx], url };
       patch({ images });
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Upload gagal');
+    } finally {
+      setUploadingIdx(null);
+    }
   };
   const hasButtonColor = block.content.buttonText !== undefined
     || ['product', 'button', 'countdown'].includes(block.type);
@@ -747,17 +755,89 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
           </div>
         )}
 
-        {/* Slider editor */}
-        {block.type === 'slider' && (
-          <div className="space-y-4 pt-4 border-t border-zinc-100">
+        {/* Profile (link-in-bio header) */}
+        {block.type === 'profile' && (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-zinc-700">Nama</label>
+              <input type="text" value={block.content.name || ''} onChange={(e) => patch({ name: e.target.value })} className={inputClass} placeholder="Nama kamu / toko" maxLength={80} />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-zinc-700">Bio</label>
+              <textarea value={block.content.bio || ''} onChange={(e) => patch({ bio: e.target.value })} rows={3} maxLength={300} className={`${inputClass} resize-none`} />
+            </div>
+            {(['avatarUrl', 'coverUrl'] as const).map((field) => (
+              <div key={field} className="space-y-2">
+                <label className="text-xs font-bold text-zinc-700">{field === 'avatarUrl' ? 'Foto profil' : 'Foto sampul (opsional)'}</label>
+                <div className="flex items-center gap-2">
+                  {block.content[field] ? <img src={block.content[field]} alt="" className={field === 'avatarUrl' ? 'h-12 w-12 rounded-full object-cover' : 'h-12 w-20 rounded-lg object-cover'} /> : null}
+                  <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-100 px-3 text-sm hover:bg-zinc-200">
+                    <Upload className="h-4 w-4 text-zinc-600" /> Upload
+                    <input type="file" className="hidden" accept="image/jpeg,image/png,image/webp" onChange={(e) => handleFileUpload(e, field)} />
+                  </label>
+                  {block.content[field] && <button type="button" onClick={() => patch({ [field]: '' })} className="p-2 text-red-500 hover:bg-red-50 rounded" aria-label="Hapus"><Trash2 className="h-4 w-4" /></button>}
+                </div>
+              </div>
+            ))}
             <label className="flex items-center gap-2 text-xs font-bold text-zinc-700">
-              <input type="checkbox" checked={!!block.content.autoplay} onChange={(e) => patch({ autoplay: e.target.checked })} />
-              {t('pp.slider.autoplay')}
+              <input type="checkbox" checked={block.content.showVerified !== false} onChange={(e) => patch({ showVerified: e.target.checked })} />
+              Tampilkan lencana Penjual Terverifikasi (jika sudah terverifikasi)
             </label>
+          </div>
+        )}
+
+        {/* Catalog */}
+        {block.type === 'catalog' && (
+          <div className="space-y-4">
+            <label className="flex items-center gap-2 text-sm font-semibold text-zinc-700">
+              <input type="checkbox" checked={block.content.showAll !== false} onChange={(e) => patch({ showAll: e.target.checked })} className="h-5 w-5" />
+              Tampilkan semua produk aktif
+            </label>
+            {block.content.showAll === false && (
+              <div className="space-y-1 rounded-lg border border-zinc-200 p-2">
+                {(sellerProducts ?? []).length === 0 && <p className="text-xs text-zinc-500">Belum ada produk. Tambahkan di tab Produk.</p>}
+                {(sellerProducts ?? []).map((p) => {
+                  const ids: string[] = block.content.productIds || [];
+                  const on = ids.includes(p.id);
+                  return (
+                    <label key={p.id} className="flex min-h-11 items-center gap-2 text-sm">
+                      <input type="checkbox" checked={on} className="h-5 w-5" onChange={() => patch({ productIds: on ? ids.filter((x) => x !== p.id) : [...ids, p.id] })} />
+                      <span className="flex-1 truncate">{p.name}</span><span className="text-xs text-zinc-500">Rp {p.price.toLocaleString('id-ID')}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-zinc-700">Kolom di layar besar</label>
+              <select value={block.content.columns || 2} onChange={(e) => patch({ columns: Number(e.target.value) })} className={inputClass}>
+                <option value={2}>2 kolom</option>
+                <option value={3}>3 kolom</option>
+              </select>
+            </div>
+          </div>
+        )}
+
+        {/* Slider / gallery images */}
+        {(block.type === 'slider' || block.type === 'gallery') && (
+          <div className="space-y-4 pt-4 border-t border-zinc-100">
+            {block.type === 'slider' ? (
+              <label className="flex items-center gap-2 text-xs font-bold text-zinc-700">
+                <input type="checkbox" checked={!!block.content.autoplay} onChange={(e) => patch({ autoplay: e.target.checked })} />
+                {t('pp.slider.autoplay')}
+              </label>
+            ) : (
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-zinc-700">Kolom</label>
+                <select value={block.content.columns || 3} onChange={(e) => patch({ columns: Number(e.target.value) })} className={inputClass}>
+                  <option value={2}>2</option><option value={3}>3</option><option value={4}>4</option>
+                </select>
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-zinc-700">{t('pp.slider.images')}</label>
               <button
-                onClick={() => patch({ images: [...(block.content.images || []), { url: 'https://picsum.photos/seed/new/1200/600', caption: '' }] })}
+                onClick={() => patch({ images: [...(block.content.images || []), { url: '', caption: '' }] })}
                 className="inline-flex items-center gap-1 px-2 py-1 text-xs font-bold rounded-lg bg-zinc-900 text-white"
               >
                 <Plus className="w-3 h-3" /> {t('pp.add')}
@@ -781,12 +861,12 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
                     placeholder={t('pp.slider.imageUrl')}
                   />
                   <label className="p-2 bg-zinc-100 border border-zinc-200 rounded cursor-pointer hover:bg-zinc-200" title={t('pp.slider.upload')}>
-                    <Upload className="w-4 h-4 text-zinc-600" />
+                    {uploadingIdx === idx ? <span className="block h-4 w-4 animate-spin rounded-full border-2 border-zinc-400 border-t-transparent" /> : <Upload className="w-4 h-4 text-zinc-600" />}
                     <input
                       type="file"
                       className="hidden"
-                      accept="image/*"
-                      onChange={(e) => { uploadSliderImage(idx, e.target.files?.[0]); e.target.value = ''; }}
+                      accept="image/jpeg,image/png,image/webp"
+                      onChange={(e) => { void uploadSliderImage(idx, e.target.files?.[0]); e.target.value = ''; }}
                     />
                   </label>
                   <button onClick={() => patch({ images: (block.content.images || []).filter((_: any, i: number) => i !== idx) })} className="p-2 text-red-500 hover:bg-red-50 rounded">

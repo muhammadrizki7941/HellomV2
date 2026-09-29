@@ -4,6 +4,7 @@ import { BadgeCheck, CheckCircle2, Loader2, Lock, Minus, Plus, QrCode, ShieldChe
 import { cn } from '@/lib/utils';
 import { safeHtml } from '@/lib/safeHtml';
 import { EMAIL_PATTERN, suggestEmail } from '@/lib/emailTypo';
+import { captureAttributionFromUrl, firePurchase, loadSellerPixels, readAttribution, trackSellerEvent } from '@/lib/sellerPixels';
 import { ApiError, checkoutLandingProduct, getLandingOrderPublicStatus, getPublicLandingProduct, quoteLandingProduct } from '@/lib/hellomApi';
 import type { CheckoutQuote, CheckoutResult, PaymentOption, PublicProductPage } from '@/lib/hellomApi';
 
@@ -47,11 +48,14 @@ export default function CheckoutPage() {
   }, []);
 
   useEffect(() => {
+    captureAttributionFromUrl();
     getPublicLandingProduct(productId)
       .then((data) => {
         setPage(data);
         setMethod(data.payment_options[0] ?? null);
         document.title = `${data.product.name} · Checkout`;
+        loadSellerPixels(data.tracking);
+        trackSellerEvent('InitiateCheckout', { value: data.product.price, content_ids: [data.product.id], content_name: data.product.name });
       })
       .catch((err) => setLoadError({
         message: err instanceof Error ? err.message : 'Produk tidak ditemukan',
@@ -80,6 +84,7 @@ export default function CheckoutPage() {
         if (status.status === 'paid' || status.status === 'fulfilled') {
           setQrPaid(true);
           window.clearInterval(timer);
+          await firePurchase(qr.reference_id);
           if (status.access_path) window.location.href = status.access_path;
         }
       } catch {
@@ -124,8 +129,10 @@ export default function CheckoutPage() {
       return;
     }
     setSubmitting(true);
+    trackSellerEvent('AddPaymentInfo', { value: total, content_ids: [product.id], content_name: product.name });
     try {
       const result = await checkoutLandingProduct(productId, {
+        attribution: readAttribution(),
         quantity,
         coupon_code: couponCode || undefined,
         payment_method: method,

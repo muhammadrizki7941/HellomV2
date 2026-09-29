@@ -35,6 +35,21 @@ export const THEMES = [
     }
   },
   {
+    id: 'minimal',
+    name: 'Minimal',
+    colors: { backgroundColor: '#fafafa', textColor: '#18181b', buttonColor: '#18181b', buttonTextColor: '#ffffff', accentColor: '#18181b' }
+  },
+  {
+    id: 'blush',
+    name: 'Blush Creator',
+    colors: { backgroundColor: '#fff7f5', textColor: '#3f1d24', buttonColor: '#e11d48', buttonTextColor: '#ffffff', accentColor: '#e11d48' }
+  },
+  {
+    id: 'sunset',
+    name: 'Sunset',
+    colors: { backgroundColor: '#fffbeb', textColor: '#422006', buttonColor: '#ea580c', buttonTextColor: '#ffffff', accentColor: '#ea580c' }
+  },
+  {
     id: 'luxury',
     name: 'Midnight Luxury',
     colors: {
@@ -48,6 +63,25 @@ export const THEMES = [
 ];
 
 export const defaultContent: Record<BlockType, any> = {
+  profile: {
+    name: '',
+    bio: 'Tulis perkenalan singkat: siapa kamu dan apa yang kamu jual.',
+    avatarUrl: '',
+    coverUrl: '',
+    showVerified: true
+  },
+  catalog: {
+    title: 'Produk Saya',
+    showAll: true,
+    productIds: [],
+    columns: 2,
+    buttonText: 'Beli'
+  },
+  gallery: {
+    title: '',
+    columns: 3,
+    images: []
+  },
   hero: {
     title: "Headline yang Menarik Perhatian",
     subtitle: "Jelaskan nilai utama produk Anda di sini. Buat pengunjung tertarik untuk mengetahui lebih lanjut.",
@@ -76,29 +110,26 @@ export const defaultContent: Record<BlockType, any> = {
     body: "Tulis cerita brand Anda di sini. Mengapa orang harus memilih produk Anda? Apa yang membuat Anda berbeda?"
   },
   banner: {
-    imageUrl: "https://picsum.photos/seed/banner/1200/400",
+    imageUrl: "",
     title: "Promo Spesial Hari Ini",
     subtitle: "Diskon hingga 50% untuk semua produk.",
     textColor: "#ffffff",
     overlayOpacity: 0.5
   },
+  // Pick a product from the Produk tab; price, stock and image come from there.
   product: {
-    imageUrl: "https://picsum.photos/seed/product/400/400",
-    name: "Nama Produk Premium",
-    price: "Rp 199.000",
-    description: "Deskripsi singkat produk yang menjelaskan keunggulan dan spesifikasi utama.",
-    buttonText: "Beli Sekarang",
-    productUrl: "#"
+    productId: null,
+    buttonText: "Beli Sekarang"
   },
   video: {
-    videoUrl: "https://www.youtube.com/embed/dQw4w9WgXcQ", // Default placeholder
+    videoUrl: "",
     title: "Video Perkenalan"
   },
   text: {
     body: "Tulis teks paragraf Anda di sini. Anda bisa menggunakan blok ini untuk artikel, pengumuman, atau informasi detail lainnya."
   },
   image: {
-    imageUrl: "https://picsum.photos/seed/image/800/600",
+    imageUrl: "",
     caption: "Caption gambar opsional"
   },
   pdf: {
@@ -168,11 +199,7 @@ export const defaultContent: Record<BlockType, any> = {
   },
   slider: {
     autoplay: true,
-    images: [
-      { url: "https://picsum.photos/seed/slide1/1200/600", caption: "" },
-      { url: "https://picsum.photos/seed/slide2/1200/600", caption: "" },
-      { url: "https://picsum.photos/seed/slide3/1200/600", caption: "" }
-    ]
+    images: []
   },
   countdown: {
     title: "Promo Berakhir Dalam",
@@ -180,7 +207,7 @@ export const defaultContent: Record<BlockType, any> = {
     targetDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
   },
   gif: {
-    gifUrl: "https://media.giphy.com/media/3o7TKsQ8gqVrUqmXSU/giphy.gif",
+    gifUrl: "",
     caption: "Caption GIF opsional"
   },
   html: {

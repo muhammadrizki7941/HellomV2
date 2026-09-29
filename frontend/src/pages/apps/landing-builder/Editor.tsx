@@ -1,726 +1,439 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { nanoid } from 'nanoid';
-import { Copy, Check, ExternalLink, CheckCircle2, RefreshCw } from 'lucide-react';
+import { AlertTriangle, Check, CheckCircle2, ChevronDown, Copy, ExternalLink, Eye, FileStack, History, Loader2, RefreshCw } from 'lucide-react';
 import { arrayMove } from '@dnd-kit/sortable';
 import { cn } from '@/lib/utils';
 import { THEMES, defaultContent } from './constants';
 import { Block, BlockType, BlockStyles, BLOCK_TYPES } from './types';
 import { LanguageProvider } from './i18n';
 import {
-  createLandingPage,
-  createLandingPageBlock,
-  deleteLandingPageBlock,
-  getLandingPageBlocks,
-  getLandingPages,
-  getPricingMatrix,
-  getSessionUser,
-  publishLandingPage,
-  updateLandingPage,
+  ApiError,
+  createLandingSitePage,
+  getLandingDraft,
+  getLandingPreviewLink,
+  getLandingSite,
+  publishLandingSitePage,
+  restoreLandingVersion,
+  saveLandingDraft,
+  uploadLandingAsset,
 } from '@/lib/hellomApi';
+import type { LandingDocument, LandingSite, LandingSitePage } from '@/lib/hellomApi';
 import { MobileEditor } from './components/MobileEditor';
 import { DesktopEditor } from './components/DesktopEditor';
-import { AiModal } from './components/AiModal';
 import { SettingsModal } from './components/SettingsModal';
+import type { ThemeOptions } from './components/SettingsModal';
+import { HistoryDialog, PagesDialog, PreviewDialog, TemplatesDialog } from './components/EditorDialogs';
+import type { PageTemplate } from './templates';
 
-const textByTone = (tone: string) => {
-  if (tone === 'santai') {
-    return {
-      heroButton: 'Cek Penawaran',
-      ctaButton: 'Chat Sekarang',
-      proofTitle: 'Kenapa banyak pelanggan suka?',
-      urgency: 'Slot promo terbatas untuk periode ini.',
-    };
-  }
+/**
+ * Hellom Page editor (Fase 4). The page is one JSON document: every change is autosaved
+ * as a draft (revision-checked, so another tab cannot silently overwrite it) and nothing
+ * reaches the public page until "Terbitkan", which stores a version (see Riwayat).
+ */
+type SaveState = 'saved' | 'dirty' | 'saving' | 'error' | 'conflict';
+const AUTOSAVE_MS = 1500;
+const PAGE_KEY = 'hellom_landing_editor_page';
 
-  if (tone === 'persuasif') {
-    return {
-      heroButton: 'Ambil Promo Hari Ini',
-      ctaButton: 'Klaim Penawaran',
-      proofTitle: 'Alasan pelanggan memilih kami',
-      urgency: 'Jangan tunggu sampai kompetitor bergerak lebih dulu.',
-    };
-  }
-
-  return {
-    heroButton: 'Konsultasi Gratis',
-    ctaButton: 'Hubungi Tim Kami',
-    proofTitle: 'Keunggulan yang siap dipakai',
-    urgency: 'Mulai dari langkah kecil yang paling berdampak.',
-  };
-};
-
-const pickThemeForTone = (tone: string) => {
-  if (tone === 'santai') return 'ocean';
-  if (tone === 'persuasif') return 'luxury';
-  return 'industrial';
-};
-
-const buildAdvancedLandingBlocks = (
-  prompt: { name: string; description: string; tone: string },
-  ensureProduct: (content: Record<string, unknown>) => Record<string, unknown>
-): Block[] => {
-  const productName = prompt.name.trim() || 'Produk Unggulan';
-  const description = prompt.description.trim() || 'Solusi praktis untuk membantu pelanggan mendapatkan hasil yang lebih cepat dan lebih rapi.';
-  const toneCopy = textByTone(prompt.tone);
-  const shortDescription = description.length > 145 ? `${description.slice(0, 142).trim()}...` : description;
-  const heroTitle = prompt.tone === 'persuasif'
-    ? `${productName} yang bikin pelanggan cepat yakin`
-    : `${productName} untuk pengalaman yang lebih berkelas`;
-
-  return [
-    {
-      id: nanoid(),
-      type: 'hero',
-      content: {
-        ...defaultContent.hero,
-        title: heroTitle,
-        subtitle: shortDescription,
-        buttonText: toneCopy.heroButton,
-        showButton: true,
-      },
-      styles: {
-        paddingY: 'py-24',
-        textAlign: 'center',
-      },
-    },
-    {
-      id: nanoid(),
-      type: 'banner',
-      content: {
-        ...defaultContent.banner,
-        imageUrl: `https://picsum.photos/seed/${encodeURIComponent(productName)}-hero/1400/520`,
-        title: `Penawaran spesial untuk ${productName}`,
-        subtitle: toneCopy.urgency,
-        overlayOpacity: 0.62,
-      },
-      styles: {
-        paddingY: 'py-24',
-      },
-    },
-    {
-      id: nanoid(),
-      type: 'content',
-      content: {
-        ...defaultContent.content,
-        title: `Tentang ${productName}`,
-        body: `${description}\n\nLanding page ini dirancang untuk menjelaskan manfaat utama, membangun kepercayaan, menampilkan penawaran, dan mengarahkan pengunjung ke aksi yang jelas.`,
-      },
-      styles: {
-        paddingY: 'py-20',
-        textAlign: 'left',
-      },
-    },
-    {
-      id: nanoid(),
-      type: 'features',
-      content: {
-        ...defaultContent.features,
-        title: toneCopy.proofTitle,
-        items: [
-          { title: 'Value jelas', desc: 'Pesan utama langsung mudah dipahami sejak layar pertama.' },
-          { title: 'Mudah dipercaya', desc: 'Susunan konten membantu calon pelanggan merasa lebih aman.' },
-          { title: 'Siap konversi', desc: 'CTA diarahkan ke tindakan berikutnya tanpa membingungkan.' },
-          { title: 'Rapi di mobile', desc: 'Struktur section tetap nyaman dibaca di layar kecil.' },
-          { title: 'Cocok untuk promo', desc: 'Tersedia area penawaran, katalog, dan tombol kontak.' },
-          { title: 'Bisa diedit cepat', desc: 'Setiap blok bisa disesuaikan dari editor tanpa coding.' },
-        ],
-      },
-      styles: {
-        paddingY: 'py-20',
-      },
-    },
-    {
-      id: nanoid(),
-      type: 'product',
-      content: ensureProduct({
-        ...defaultContent.product,
-        imageUrl: `https://picsum.photos/seed/${encodeURIComponent(productName)}-product/720/720`,
-        name: productName,
-        price: 'Rp 149.000',
-        description: shortDescription,
-        buttonText: 'Beli Sekarang',
-        paymentType: 'gateway',
-      }),
-      styles: {
-        paddingY: 'py-20',
-      },
-    },
-    {
-      id: nanoid(),
-      type: 'text',
-      content: {
-        ...defaultContent.text,
-        body: `Cocok untuk:\n- Campaign launching produk baru\n- Promo musiman atau paket bundling\n- Pengumpulan lead via WhatsApp\n- Validasi penawaran sebelum iklan dijalankan`,
-      },
-      styles: {
-        paddingY: 'py-16',
-        textAlign: 'left',
-      },
-    },
-    {
-      id: nanoid(),
-      type: 'pdf',
-      content: ensureProduct({
-        ...defaultContent.pdf,
-        title: `Download katalog ${productName}`,
-        description: 'Tambahkan katalog, price list, atau company profile agar pengunjung bisa menyimpan informasi lengkap.',
-        accessType: 'free',
-      }),
-      styles: {
-        paddingY: 'py-16',
-      },
-    },
-    {
-      id: nanoid(),
-      type: 'form',
-      content: {
-        ...defaultContent.form,
-        title: `Daftar minat ${productName}`,
-        subtitle: 'Kumpulkan nama, nomor HP, email, atau kebutuhan khusus calon pelanggan langsung dari landing page.',
-      },
-      styles: {
-        paddingY: 'py-20',
-      },
-    },
-    {
-      id: nanoid(),
-      type: 'social',
-      content: {
-        ...defaultContent.social,
-      },
-      styles: {
-        paddingY: 'py-12',
-      },
-    },
-    {
-      id: nanoid(),
-      type: 'cta',
-      content: {
-        ...defaultContent.cta,
-        title: `Siap mulai dengan ${productName}?`,
-        subtitle: 'Arahkan pengunjung ke WhatsApp, checkout, atau konsultasi agar peluang tidak berhenti di halaman.',
-        buttonText: toneCopy.ctaButton,
-        actionType: 'whatsapp',
-        whatsappNumber: '',
-        whatsappMessage: `Halo, saya tertarik dengan ${productName}. Bisa dibantu informasinya?`,
-      },
-      styles: {
-        paddingY: 'py-24',
-      },
-    },
-  ];
-};
+const toBlocks = (doc: LandingDocument): Block[] =>
+  (doc.blocks || [])
+    .filter((b) => BLOCK_TYPES.includes(b.type as BlockType))
+    .map((b) => ({ id: b.id, type: b.type as BlockType, hidden: !!b.hidden, content: (b.content || {}) as Record<string, any>, styles: (b.styles || {}) as BlockStyles }));
 
 export default function LandingBuilder() {
-  type CheckoutDefault = {
-    appSlug: string;
-    appName: string;
-    planSlug: string;
-    planName: string;
-  };
-
+  const [site, setSite] = useState<LandingSite | null>(null);
+  const [page, setPage] = useState<LandingSitePage | null>(null);
+  const [blocks, setBlocks] = useState<Block[]>([]);
   const [activeThemeId, setActiveThemeId] = useState<string>('industrial');
-  const [blocks, setBlocks] = useState<Block[]>([
-    { id: '1', type: 'hero', content: defaultContent.hero }
-  ]);
-  const [selectedBlockId, setSelectedBlockId] = useState<string | null>('1');
+  const [themeOptions, setThemeOptions] = useState<ThemeOptions>({ font: 'sans', buttonShape: 'rounded', buttonStyle: 'solid' });
+  const [pageSettings, setPageSettings] = useState({ whatsappNumber: '', whatsappMessage: 'Halo, saya tertarik dengan produk Anda.', showFloatingWhatsapp: false });
+  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [isPreview, setIsPreview] = useState(false);
-  const [currentPageId, setCurrentPageId] = useState<number | null>(null);
-  const [currentPageSlug, setCurrentPageSlug] = useState<string>('landing-page');
-  const [isSaving, setIsSaving] = useState(false);
-  // Until the saved page is loaded the editor shows defaults; saving then would
-  // overwrite the live page with them, so editing is blocked until 'ready'.
+  // The editor is locked until the draft is loaded (never save defaults over a real page).
   const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
-  const [saveInfo, setSaveInfo] = useState<string | null>(null);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  // Full public URL after a successful publish, for the share/copy bar.
-  const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
+  const [saveState, setSaveState] = useState<SaveState>('saved');
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string; url?: string } | null>(null);
+  const [publishing, setPublishing] = useState(false);
+  const [dialog, setDialog] = useState<'none' | 'settings' | 'templates' | 'history' | 'pages' | 'preview'>('none');
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
-  const [checkoutDefault, setCheckoutDefault] = useState<CheckoutDefault | null>(null);
-  
-  // AI Generator State
-  const [showAiModal, setShowAiModal] = useState(false);
-  const [aiPrompt, setAiPrompt] = useState({
-    name: '',
-    description: '',
-    tone: 'professional'
-  });
-  const [isGenerating, setIsGenerating] = useState(false);
-
-  // Page Settings (WhatsApp Widget)
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [pageSettings, setPageSettings] = useState({
-    whatsappNumber: '',
-    whatsappMessage: 'Halo, saya tertarik dengan produk Anda.',
-    showFloatingWhatsapp: false
-  });
-
-  // Mobile / tablet detection.
-  // Use the touch-friendly editor for anything below a real desktop width (1024px),
-  // so large phones, phablets, foldables and tablets no longer get the cramped
-  // desktop editor. Listen to orientation changes too (landscape phones).
   const [isMobile, setIsMobile] = useState(false);
 
+  const revisionRef = useRef<number | null>(null);
+  const loadedRef = useRef(false);          // skip the autosave triggered by loading
+  const savingRef = useRef<Promise<void> | null>(null);
+  const timerRef = useRef<number | undefined>(undefined);
+  const docRef = useRef<LandingDocument | null>(null);
+
   useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 1024);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    window.addEventListener('orientationchange', checkMobile);
-    return () => {
-      window.removeEventListener('resize', checkMobile);
-      window.removeEventListener('orientationchange', checkMobile);
-    };
+    const check = () => setIsMobile(window.innerWidth < 1024);
+    check();
+    window.addEventListener('resize', check);
+    window.addEventListener('orientationchange', check);
+    return () => { window.removeEventListener('resize', check); window.removeEventListener('orientationchange', check); };
   }, []);
 
-  useEffect(() => {
-    const loadCheckoutDefaults = async () => {
-      try {
-        const matrix = await getPricingMatrix();
-        const withPlans = (matrix.items || []).find((item) => (item.plans || []).length > 0);
-        if (!withPlans) {
-          setCheckoutDefault(null);
-          return;
-        }
+  const buildDocument = useCallback((): LandingDocument => ({
+    theme: { preset: activeThemeId, ...themeOptions },
+    settings: pageSettings,
+    blocks: blocks.map((b) => {
+      const { styles: _legacy, ...content } = (b.content || {}) as Record<string, unknown>;
+      return { id: b.id, type: b.type, hidden: !!b.hidden, content, styles: (b.styles || {}) as Record<string, unknown> };
+    }),
+  }), [activeThemeId, themeOptions, pageSettings, blocks]);
 
-        const targetPlan = withPlans.plans.find((plan) => !plan.is_current) || withPlans.plans[0];
-        if (!targetPlan) {
-          setCheckoutDefault(null);
-          return;
-        }
+  const applyDocument = (doc: LandingDocument) => {
+    loadedRef.current = false;
+    const next = toBlocks(doc);
+    setBlocks(next);
+    setSelectedBlockId(next[0]?.id ?? null);
+    const preset = doc.theme?.preset;
+    setActiveThemeId(preset && THEMES.some((t) => t.id === preset) ? preset : 'industrial');
+    setThemeOptions({ font: doc.theme?.font ?? 'sans', buttonShape: doc.theme?.buttonShape ?? 'rounded', buttonStyle: doc.theme?.buttonStyle ?? 'solid' });
+    setPageSettings((s) => ({ ...s, whatsappNumber: doc.settings?.whatsappNumber ?? '', whatsappMessage: doc.settings?.whatsappMessage ?? s.whatsappMessage, showFloatingWhatsapp: !!doc.settings?.showFloatingWhatsapp }));
+  };
 
-        setCheckoutDefault({
-          appSlug: withPlans.app.slug,
-          appName: withPlans.app.name,
-          planSlug: targetPlan.slug,
-          planName: targetPlan.name,
-        });
-      } catch {
-        setCheckoutDefault(null);
-      }
-    };
-
-    void loadCheckoutDefaults();
+  const openPage = useCallback(async (target: LandingSitePage) => {
+    const draft = await getLandingDraft(target.id);
+    revisionRef.current = draft.revision;
+    setPage(draft.page ?? target);
+    setSavedAt(draft.saved_at);
+    setSaveState('saved');
+    applyDocument(draft.document);
+    localStorage.setItem(PAGE_KEY, String(target.id));
   }, []);
 
+  const refreshSite = useCallback(async () => {
+    const next = await getLandingSite();
+    setSite(next);
+    setPage((current) => (current ? next.pages.find((p) => p.id === current.id) ?? current : current));
+    return next;
+  }, []);
+
+  // Load the shop, then the remembered (or home) page's draft.
   useEffect(() => {
-    const loadPage = async () => {
-      setSaveError(null);
+    let alive = true;
+    (async () => {
       setLoadState('loading');
+      setLoadError(null);
       try {
-        const pages = await getLandingPages();
-        const first = pages.items?.[0];
-        if (!first) {
-          setLoadState('ready');
-          return;
+        let current = await getLandingSite();
+        if (current.pages.length === 0) {
+          await createLandingSitePage({ title: 'Halaman Utama' });
+          current = await getLandingSite();
         }
-
-        setCurrentPageId(first.id);
-        setCurrentPageSlug(first.slug);
-
-        const remoteTheme = String((first.content as Record<string, unknown> | null)?.theme || activeThemeId);
-        if (THEMES.some((theme) => theme.id === remoteTheme)) {
-          setActiveThemeId(remoteTheme);
-        }
-
-        const remoteSettings = (first.content as Record<string, unknown> | null)?.settings as Partial<typeof pageSettings> | undefined;
-        if (remoteSettings) {
-          setPageSettings((current) => ({
-            ...current,
-            ...remoteSettings,
-          }));
-        }
-
-        const blocksResult = await getLandingPageBlocks(first.id);
-        if ((blocksResult.items || []).length > 0) {
-          const mappedBlocks: Block[] = blocksResult.items.map((row) => ({
-            id: String(row.id),
-            type: (BLOCK_TYPES.includes(row.block_type as BlockType)
-              ? row.block_type
-              : 'content') as BlockType,
-            content: row.content || {},
-            styles: (row.content as Record<string, unknown> | null)?.styles as BlockStyles | undefined,
-          }));
-          setBlocks(mappedBlocks);
-          setSelectedBlockId(mappedBlocks[0]?.id ?? null);
-        }
-        setLoadState('ready');
-      } catch (loadError) {
-        const message = loadError instanceof Error ? loadError.message : 'Gagal memuat landing page editor';
-        setSaveError(message);
+        if (!alive) return;
+        setSite(current);
+        const remembered = Number(localStorage.getItem(PAGE_KEY));
+        const target = current.pages.find((p) => p.id === remembered) ?? current.pages.find((p) => p.is_home) ?? current.pages[0];
+        await openPage(target);
+        if (alive) setLoadState('ready');
+      } catch (err) {
+        if (!alive) return;
+        setLoadError(err instanceof Error ? err.message : 'Halaman belum bisa dimuat');
         setLoadState('error');
       }
-    };
+    })();
+    return () => { alive = false; };
+  }, [loadAttempt, openPage]);
 
-    void loadPage();
-  }, [loadAttempt]);
-
-  const activeTheme = THEMES.find(t => t.id === activeThemeId) || THEMES[0];
-
-  const ensureProductCheckoutContent = (content: Record<string, unknown>) => {
-    if (!checkoutDefault) {
-      return content;
+  const save = useCallback(async (): Promise<void> => {
+    if (!page || loadState !== 'ready') return;
+    if (savingRef.current) {
+      await savingRef.current; // one save at a time; the next one sends the newest document
     }
+    const doc = docRef.current ?? buildDocument();
+    setSaveState('saving');
+    const run = (async () => {
+      try {
+        const saved = await saveLandingDraft(page.id, doc, revisionRef.current);
+        revisionRef.current = saved.revision;
+        setSavedAt(saved.saved_at);
+        setSaveState(docRef.current === doc ? 'saved' : 'dirty');
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 409) {
+          setSaveState('conflict');
+        } else {
+          setSaveState('error');
+          setNotice({ kind: 'error', text: err instanceof Error ? err.message : 'Draft belum tersimpan' });
+        }
+        throw err;
+      }
+    })();
+    savingRef.current = run.then(() => undefined, () => undefined).finally(() => { savingRef.current = null; });
+    await run;
+  }, [page, loadState, buildDocument]);
 
-    return {
-      ...content,
-      appSlug: (content.appSlug as string | undefined) || checkoutDefault.appSlug,
-      appName: (content.appName as string | undefined) || checkoutDefault.appName,
-      planSlug: (content.planSlug as string | undefined) || checkoutDefault.planSlug,
-      planName: (content.planName as string | undefined) || checkoutDefault.planName,
-    };
-  };
-
+  // Autosave after edits (debounced).
   useEffect(() => {
-    if (!checkoutDefault) {
-      return;
+    if (loadState !== 'ready') return undefined;
+    docRef.current = buildDocument();
+    if (!loadedRef.current) {
+      loadedRef.current = true;
+      return undefined;
     }
+    if (saveState === 'conflict') return undefined;
+    setSaveState('dirty');
+    window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => { void save().catch(() => undefined); }, AUTOSAVE_MS);
+    return () => window.clearTimeout(timerRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blocks, activeThemeId, themeOptions, pageSettings, loadState]);
 
-    setBlocks((prev) => {
-      let changed = false;
-      const next = prev.map((block) => {
-        if (block.type !== 'product' && block.type !== 'pdf') {
-          return block;
-        }
+  // Warn before leaving with unsaved edits.
+  useEffect(() => {
+    const onLeave = (e: BeforeUnloadEvent) => {
+      if (saveState === 'dirty' || saveState === 'saving') {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', onLeave);
+    return () => window.removeEventListener('beforeunload', onLeave);
+  }, [saveState]);
 
-        const updatedContent = ensureProductCheckoutContent(block.content as Record<string, unknown>);
-        if (
-          (updatedContent.appSlug as string | undefined) !== (block.content as Record<string, unknown>).appSlug ||
-          (updatedContent.planSlug as string | undefined) !== (block.content as Record<string, unknown>).planSlug
-        ) {
-          changed = true;
-          return { ...block, content: updatedContent };
-        }
-
-        return block;
-      });
-
-      return changed ? next : prev;
-    });
-  }, [checkoutDefault]);
-
-  const handleAiGenerate = () => {
-    setIsGenerating(true);
-    // Simulate AI generation delay
-    setTimeout(() => {
-      const newBlocks = buildAdvancedLandingBlocks(aiPrompt, ensureProductCheckoutContent);
-      setActiveThemeId(pickThemeForTone(aiPrompt.tone));
-      setBlocks(newBlocks);
-      setSelectedBlockId(newBlocks[0]?.id ?? null);
-      setIsGenerating(false);
-      setShowAiModal(false);
-    }, 2000);
+  const flush = async () => {
+    window.clearTimeout(timerRef.current);
+    if (saveState === 'dirty' || saveState === 'error') await save();
+    else if (savingRef.current) await savingRef.current;
   };
 
-  const createBlock = (type: BlockType): Block => {
-    const defaultBlockContent = { ...defaultContent[type] };
-    const content = type === 'product' || type === 'pdf'
-      ? ensureProductCheckoutContent(defaultBlockContent as Record<string, unknown>)
-      : defaultBlockContent;
-    return { id: nanoid(), type, content };
+  const handlePublish = async () => {
+    if (!page) return;
+    setPublishing(true);
+    setNotice(null);
+    try {
+      await flush();
+      const result = await publishLandingSitePage(page.id);
+      setPage(result.page);
+      await refreshSite();
+      setNotice({ kind: 'ok', text: result.page.is_live ? 'Halaman terbit! Bagikan link ini:' : 'Terbit, tapi halaman ini melebihi kuota paket kamu sehingga belum tayang.', url: result.page.url });
+    } catch (err) {
+      setNotice({ kind: 'error', text: err instanceof Error ? err.message : 'Belum bisa diterbitkan' });
+    } finally {
+      setPublishing(false);
+    }
   };
 
+  const openPreview = async () => {
+    if (!page) return;
+    try {
+      await flush();
+      const { url } = await getLandingPreviewLink(page.id);
+      setPreviewUrl(url);
+      setDialog('preview');
+    } catch (err) {
+      setNotice({ kind: 'error', text: err instanceof Error ? err.message : 'Pratinjau belum bisa dibuka' });
+    }
+  };
+
+  const switchPage = async (target: LandingSitePage) => {
+    try {
+      await flush();
+      await openPage(target);
+      setDialog('none');
+    } catch (err) {
+      setNotice({ kind: 'error', text: err instanceof Error ? err.message : 'Halaman belum bisa dibuka' });
+    }
+  };
+
+  const applyTemplate = (template: PageTemplate) => {
+    if (blocks.length > 0 && !window.confirm(`Ganti isi draft dengan template "${template.name}"?`)) return;
+    const next = template.blocks();
+    setBlocks(next);
+    setSelectedBlockId(next[0]?.id ?? null);
+    setActiveThemeId(template.themeId);
+    setThemeOptions(template.options);
+    setDialog('none');
+  };
+
+  const restore = async (versionId: number, versionNo: number) => {
+    if (!page) return;
+    try {
+      await flush();
+      const draft = await restoreLandingVersion(page.id, versionId);
+      revisionRef.current = draft.revision;
+      setSavedAt(draft.saved_at);
+      applyDocument(draft.document);
+      setSaveState('saved');
+      setDialog('none');
+      setNotice({ kind: 'ok', text: `Versi ${versionNo} dikembalikan ke draft. Tekan Terbitkan untuk menayangkannya.` });
+    } catch (err) {
+      setNotice({ kind: 'error', text: err instanceof Error ? err.message : 'Versi belum bisa dikembalikan' });
+    }
+  };
+
+  // ── Block operations ──
+  const createBlock = (type: BlockType): Block => ({ id: nanoid(10), type, content: structuredClone(defaultContent[type] ?? {}) });
   const addBlock = (type: BlockType) => {
-    const newBlock = createBlock(type);
-    setBlocks([...blocks, newBlock]);
-    setSelectedBlockId(newBlock.id);
+    const nb = createBlock(type);
+    setBlocks((prev) => [...prev, nb]);
+    setSelectedBlockId(nb.id);
   };
-
   const addBlockAt = (type: BlockType, index: number) => {
-    const newBlock = createBlock(type);
-    setBlocks((prev) => {
-      const next = [...prev];
-      const safeIndex = Math.max(0, Math.min(index, next.length));
-      next.splice(safeIndex, 0, newBlock);
-      return next;
-    });
-    setSelectedBlockId(newBlock.id);
+    const nb = createBlock(type);
+    setBlocks((prev) => { const next = [...prev]; next.splice(Math.max(0, Math.min(index, next.length)), 0, nb); return next; });
+    setSelectedBlockId(nb.id);
   };
-
-  const updateBlockContent = (id: string, newContent: any) => {
-    setBlocks(blocks.map(b => b.id === id ? { ...b, content: newContent } : b));
-  };
-
-  const updateBlockStyles = (id: string, newStyles: BlockStyles) => {
-    setBlocks(blocks.map(b => b.id === id ? { ...b, styles: { ...b.styles, ...newStyles } } : b));
-  };
-
+  const updateBlockContent = (id: string, content: any) => setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, content } : b)));
+  const updateBlockStyles = (id: string, styles: BlockStyles) => setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, styles: { ...b.styles, ...styles } } : b)));
   const moveBlock = (index: number, direction: 'up' | 'down') => {
-    if (direction === 'up' && index === 0) return;
-    if (direction === 'down' && index === blocks.length - 1) return;
-    
-    const newBlocks = [...blocks];
-    const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    [newBlocks[index], newBlocks[targetIndex]] = [newBlocks[targetIndex], newBlocks[index]];
-    setBlocks(newBlocks);
+    const target = direction === 'up' ? index - 1 : index + 1;
+    setBlocks((prev) => (target < 0 || target >= prev.length ? prev : arrayMove(prev, index, target)));
   };
-
-  const reorderBlocks = (oldIndex: number, newIndex: number) => {
-    setBlocks((items) => arrayMove(items, oldIndex, newIndex));
-  };
-
+  const reorderBlocks = (oldIndex: number, newIndex: number) => setBlocks((prev) => arrayMove(prev, oldIndex, newIndex));
   const deleteBlock = (id: string) => {
-    setBlocks(blocks.filter(b => b.id !== id));
+    setBlocks((prev) => prev.filter((b) => b.id !== id));
     if (selectedBlockId === id) setSelectedBlockId(null);
   };
+  const duplicateBlock = (id: string) => {
+    setBlocks((prev) => {
+      const index = prev.findIndex((b) => b.id === id);
+      if (index < 0) return prev;
+      const copy: Block = { ...structuredClone(prev[index]), id: nanoid(10) };
+      const next = [...prev];
+      next.splice(index + 1, 0, copy);
+      setSelectedBlockId(copy.id);
+      return next;
+    });
+  };
+  const toggleHidden = (id: string) => setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, hidden: !b.hidden } : b)));
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, fieldName: string, isStyle = false) => {
+  // Images/PDF are uploaded to the server (WebP), never stored inline.
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, fieldName: string, isStyle = false) => {
     const file = e.target.files?.[0];
-    if (file && selectedBlockId) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const result = event.target?.result as string;
-        const selectedBlock = blocks.find(b => b.id === selectedBlockId);
-        if (selectedBlock) {
-          if (isStyle) {
-             updateBlockStyles(selectedBlockId, { [fieldName]: result });
-          } else {
-            updateBlockContent(selectedBlockId, { 
-              ...selectedBlock.content, 
-              [fieldName]: result,
-              fileName: fieldName === 'fileUrl' ? file.name : selectedBlock.content.fileName
-            });
-          }
-        }
-      };
-      reader.readAsDataURL(file);
+    e.target.value = '';
+    const blockId = selectedBlockId;
+    if (!file || !blockId) return;
+    if (file.size > 8 * 1024 * 1024) {
+      setNotice({ kind: 'error', text: 'File maksimal 8 MB.' });
+      return;
+    }
+    try {
+      const { url } = await uploadLandingAsset(file);
+      if (isStyle) updateBlockStyles(blockId, { [fieldName]: url } as BlockStyles);
+      else setBlocks((prev) => prev.map((b) => (b.id === blockId ? { ...b, content: { ...b.content, [fieldName]: url, ...(fieldName === 'fileUrl' ? { fileName: file.name } : {}) } } : b)));
+    } catch (err) {
+      setNotice({ kind: 'error', text: err instanceof Error ? err.message : 'Upload gagal' });
     }
   };
 
-  const syncToBackend = async (publish: boolean) => {
-    if (loadState !== 'ready') return;
-    setIsSaving(true);
-    setSaveError(null);
-    setSaveInfo(null);
-    setPublishedUrl(null);
-    setLinkCopied(false);
-    try {
-      let pageId = currentPageId;
-      let pageSlug = currentPageSlug;
-
-      if (!pageId) {
-        const created = await createLandingPage({
-          title: 'Landing Page',
-          slug: pageSlug,
-          content: { theme: activeThemeId, settings: pageSettings },
-        });
-        pageId = created.id;
-        pageSlug = created.slug;
-        setCurrentPageId(pageId);
-        setCurrentPageSlug(pageSlug);
-      }
-
-      await updateLandingPage(pageId, {
-        title: 'Landing Page',
-        slug: pageSlug,
-        content: { theme: activeThemeId, settings: pageSettings },
-      });
-
-      const existing = await getLandingPageBlocks(pageId);
-      for (const oldBlock of existing.items || []) {
-        await deleteLandingPageBlock(pageId, oldBlock.id);
-      }
-
-      for (let index = 0; index < blocks.length; index += 1) {
-        const block = blocks[index];
-        const blockContent = block.type === 'product' || block.type === 'pdf'
-          ? ensureProductCheckoutContent(block.content as Record<string, unknown>)
-          : block.content;
-
-        await createLandingPageBlock(pageId, {
-          block_key: `ui_${index + 1}_${block.type}`,
-          block_type: block.type,
-          sort_order: index,
-          is_visible: true,
-          content: {
-            ...blockContent,
-            styles: block.styles,
-          },
-        });
-      }
-
-      if (publish) {
-        await publishLandingPage(pageId);
-        const orgSlug = getSessionUser<{ current_organization?: { slug?: string } }>()?.current_organization?.slug;
-        const publicPath = orgSlug ? `/${orgSlug}` : `/${pageSlug}`;
-        setPublishedUrl(`${window.location.origin}${publicPath}`);
-      } else {
-        setSaveInfo('Draft berhasil disimpan.');
-      }
-    } catch (syncError) {
-      const message = syncError instanceof Error ? syncError.message : 'Gagal sync landing editor';
-      setSaveError(message);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const copyPublishedLink = async () => {
-    if (!publishedUrl) return;
-    try {
-      await navigator.clipboard.writeText(publishedUrl);
-    } catch {
-      // Fallback for non-secure contexts / older browsers.
-      const textarea = document.createElement('textarea');
-      textarea.value = publishedUrl;
-      textarea.style.position = 'fixed';
-      textarea.style.opacity = '0';
-      document.body.appendChild(textarea);
-      textarea.focus();
-      textarea.select();
-      try { document.execCommand('copy'); } catch { /* ignore */ }
-      document.body.removeChild(textarea);
-    }
+  const copyLink = async (url: string) => {
+    try { await navigator.clipboard.writeText(url); } catch { window.prompt('Salin link:', url); }
     setLinkCopied(true);
     window.setTimeout(() => setLinkCopied(false), 2000);
   };
 
-  const handleSave = () => {
-    void syncToBackend(false);
-  };
-
-  const handlePublish = () => {
-    void syncToBackend(true);
-  };
-
-  if (loadState !== 'ready') {
+  if (loadState !== 'ready' || !page || !site) {
     return (
       <div className="mx-auto max-w-3xl space-y-4 p-4" aria-busy={loadState === 'loading'}>
-        {loadState === 'loading' ? (
-          <>
-            <p className="text-sm text-zinc-500">Memuat halaman kamu…</p>
-            <div className="h-12 animate-pulse rounded-xl bg-zinc-200" />
-            {[0, 1, 2].map((i) => (
-              <div key={i} className="h-16 animate-pulse rounded-xl bg-zinc-100" />
-            ))}
-            <div className="mx-auto h-80 w-64 animate-pulse rounded-[2rem] bg-zinc-100" />
-          </>
-        ) : (
+        {loadState === 'error' ? (
           <div className="rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">
             <p className="font-semibold">Halaman belum berhasil dimuat.</p>
-            <p className="mt-1">Supaya halaman kamu tidak tertimpa, editor dikunci sampai data termuat. {saveError}</p>
-            <button
-              type="button"
-              onClick={() => setLoadAttempt((n) => n + 1)}
-              className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg bg-black px-4 text-sm font-semibold text-white"
-            >
+            <p className="mt-1">Supaya halaman kamu tidak tertimpa, editor dikunci sampai data termuat. {loadError}</p>
+            <button type="button" onClick={() => setLoadAttempt((n) => n + 1)} className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg bg-black px-4 text-sm font-semibold text-white">
               <RefreshCw className="h-4 w-4" /> Coba lagi
             </button>
           </div>
+        ) : (
+          <>
+            <p className="text-sm text-zinc-500">Memuat halaman kamu…</p>
+            <div className="h-12 animate-pulse rounded-xl bg-zinc-200" />
+            {[0, 1, 2].map((i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-zinc-100" />)}
+          </>
         )}
       </div>
     );
   }
 
+  const activeTheme = THEMES.find((t) => t.id === activeThemeId) || THEMES[0];
+  const statusLabel = {
+    saved: savedAt ? `Tersimpan ${new Date(savedAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}` : 'Tersimpan',
+    dirty: 'Belum tersimpan…',
+    saving: 'Menyimpan…',
+    error: 'Gagal menyimpan',
+    conflict: 'Diubah di tempat lain',
+  }[saveState];
+  const editorProps = {
+    blocks, selectedBlockId, setSelectedBlockId, activeTheme, addBlock, updateBlockContent, updateBlockStyles, reorderBlocks, deleteBlock, duplicateBlock, toggleHidden,
+    handleFileUpload: (e: React.ChangeEvent<HTMLInputElement>, field: string, isStyle?: boolean) => { void handleFileUpload(e, field, isStyle); },
+    isPreview, setIsPreview,
+    setShowAiModal: (open: boolean) => setDialog(open ? 'templates' : 'none'),
+    setShowSettingsModal: (open: boolean) => setDialog(open ? 'settings' : 'none'),
+    onSave: () => { void flush().then(() => setNotice({ kind: 'ok', text: 'Draft tersimpan. Belum tayang sampai kamu tekan Terbitkan.' })).catch(() => undefined); },
+    onPublish: () => { void handlePublish(); },
+    isSaving: publishing || saveState === 'saving',
+    pageSettings,
+  };
+
   return (
     <LanguageProvider>
-      {saveError && (
-        <div className="mb-3 p-3 rounded-lg bg-red-50 border border-red-100 text-sm text-red-600">{saveError}</div>
-      )}
-      {saveInfo && (
-        <div className="mb-3 p-3 rounded-lg bg-green-50 border border-green-100 text-sm text-green-700">{saveInfo}</div>
-      )}
-      {publishedUrl && (
-        <div className="mb-3 p-3 rounded-xl bg-green-50 border border-green-100">
-          <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-green-700">
-            <CheckCircle2 className="w-4 h-4 shrink-0" />
-            Publish berhasil! Bagikan link ini ke sosmed kamu:
-          </p>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <input
-              readOnly
-              value={publishedUrl}
-              onFocus={(e) => e.currentTarget.select()}
-              onClick={(e) => e.currentTarget.select()}
-              className="min-w-0 flex-1 rounded-lg border border-green-200 bg-white px-3 py-2 text-sm text-zinc-700 outline-none focus:border-green-400"
-            />
-            <div className="flex shrink-0 gap-2">
-              <button
-                onClick={() => void copyPublishedLink()}
-                className={cn(
-                  'inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition-colors sm:flex-none',
-                  linkCopied ? 'bg-green-600 text-white' : 'bg-black text-white hover:bg-zinc-800',
-                )}
-              >
-                {linkCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                {linkCopied ? 'Tersalin!' : 'Salin Link'}
-              </button>
-              <a
-                href={publishedUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 sm:flex-none"
-              >
-                <ExternalLink className="w-4 h-4" /> Buka
-              </a>
-            </div>
-          </div>
+      {/* Page bar: which page, autosave state, preview, history, publish result */}
+      <div className="mb-2 flex flex-wrap items-center gap-2 px-2 lg:px-0">
+        <button type="button" onClick={() => setDialog('pages')} className="flex min-h-11 max-w-[60%] items-center gap-1 rounded-xl border border-zinc-200 bg-white px-3 text-sm font-semibold">
+          <FileStack className="h-4 w-4 shrink-0" /><span className="truncate">{page.title}</span><ChevronDown className="h-4 w-4 shrink-0" />
+        </button>
+        <span className={cn('flex items-center gap-1 text-xs', saveState === 'error' || saveState === 'conflict' ? 'text-rose-600' : 'text-zinc-500')} aria-live="polite">
+          {saveState === 'saving' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : saveState === 'saved' ? <Check className="h-3.5 w-3.5" /> : null}
+          {statusLabel}
+          {page.status === 'published' && page.has_unpublished_changes && saveState === 'saved' && <span className="text-amber-700"> · belum diterbitkan</span>}
+        </span>
+        <div className="ml-auto flex gap-1">
+          <button type="button" onClick={() => void openPreview()} aria-label="Pratinjau" className="flex min-h-11 items-center gap-1 rounded-xl border border-zinc-200 bg-white px-3 text-sm font-semibold"><Eye className="h-4 w-4" /><span className="hidden sm:inline">Pratinjau</span></button>
+          <button type="button" onClick={() => setDialog('history')} className="flex min-h-11 items-center gap-1 rounded-xl border border-zinc-200 bg-white px-3 text-sm font-semibold" aria-label="Riwayat terbit"><History className="h-4 w-4" /><span className="hidden sm:inline">Riwayat</span></button>
+        </div>
+      </div>
+
+      {saveState === 'conflict' && (
+        <div className="mx-2 mb-2 flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 lg:mx-0">
+          <AlertTriangle className="h-4 w-4" /> Halaman ini baru diubah dari tab atau perangkat lain.
+          <button type="button" onClick={() => setLoadAttempt((n) => n + 1)} className="min-h-11 font-semibold underline">Muat versi terbaru</button>
         </div>
       )}
-      {isMobile ? (
-        <MobileEditor 
-          blocks={blocks}
-          selectedBlockId={selectedBlockId}
-          setSelectedBlockId={setSelectedBlockId}
-          activeTheme={activeTheme}
-          addBlock={addBlock}
-          updateBlockContent={updateBlockContent}
-          updateBlockStyles={updateBlockStyles}
-          moveBlock={moveBlock}
-          reorderBlocks={reorderBlocks}
-          deleteBlock={deleteBlock}
-          handleFileUpload={handleFileUpload}
-          isPreview={isPreview}
-          setIsPreview={setIsPreview}
-          setShowAiModal={setShowAiModal}
-          setShowSettingsModal={setShowSettingsModal}
-          onSave={handleSave}
-          onPublish={handlePublish}
-          isSaving={isSaving}
-          pageSettings={pageSettings}
-        />
-      ) : (
-        <DesktopEditor 
-          blocks={blocks}
-          selectedBlockId={selectedBlockId}
-          setSelectedBlockId={setSelectedBlockId}
-          activeTheme={activeTheme}
-          activeThemeId={activeThemeId}
-          setActiveThemeId={setActiveThemeId}
-          THEMES={THEMES}
-          addBlock={addBlock}
-          addBlockAt={addBlockAt}
-          updateBlockContent={updateBlockContent}
-          updateBlockStyles={updateBlockStyles}
-          reorderBlocks={reorderBlocks}
-          deleteBlock={deleteBlock}
-          handleFileUpload={handleFileUpload}
-          isPreview={isPreview}
-          setIsPreview={setIsPreview}
-          setShowAiModal={setShowAiModal}
-          setShowSettingsModal={setShowSettingsModal}
-          onSave={handleSave}
-          onPublish={handlePublish}
-          isSaving={isSaving}
-          pageSettings={pageSettings}
-        />
+      {notice && (
+        <div className={cn('mx-2 mb-2 rounded-xl border p-3 text-sm lg:mx-0', notice.kind === 'ok' ? 'border-green-100 bg-green-50 text-green-800' : 'border-red-100 bg-red-50 text-red-700')}>
+          <div className="flex items-start justify-between gap-2">
+            <p className="flex items-center gap-1.5 font-medium">{notice.kind === 'ok' && <CheckCircle2 className="h-4 w-4 shrink-0" />}{notice.text}</p>
+            <button type="button" onClick={() => setNotice(null)} className="text-xs underline">Tutup</button>
+          </div>
+          {notice.url && (
+            <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+              <input readOnly value={notice.url} onFocus={(e) => e.currentTarget.select()} className="min-h-11 min-w-0 flex-1 rounded-lg border border-green-200 bg-white px-3 text-sm text-zinc-700" />
+              <div className="flex gap-2">
+                <button type="button" onClick={() => void copyLink(notice.url!)} className="inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-lg bg-black px-3 text-sm font-semibold text-white">
+                  {linkCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}{linkCopied ? 'Tersalin!' : 'Salin link'}
+                </button>
+                <a href={notice.url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 text-sm font-semibold"><ExternalLink className="h-4 w-4" /> Buka</a>
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
-      <AiModal 
-        isOpen={showAiModal}
-        onClose={() => setShowAiModal(false)}
-        onGenerate={handleAiGenerate}
-        isGenerating={isGenerating}
-        prompt={aiPrompt}
-        setPrompt={setAiPrompt}
-      />
+      {isMobile ? (
+        <MobileEditor {...editorProps} moveBlock={moveBlock} />
+      ) : (
+        <DesktopEditor {...editorProps} activeThemeId={activeThemeId} setActiveThemeId={setActiveThemeId} THEMES={THEMES} addBlockAt={addBlockAt} />
+      )}
 
       <SettingsModal
-        isOpen={showSettingsModal}
-        onClose={() => setShowSettingsModal(false)}
+        isOpen={dialog === 'settings'}
+        onClose={() => setDialog('none')}
         settings={pageSettings}
         setSettings={setPageSettings}
+        themeId={activeThemeId}
+        setThemeId={setActiveThemeId}
+        themeOptions={themeOptions}
+        setThemeOptions={setThemeOptions}
       />
+      {dialog === 'templates' && <TemplatesDialog onClose={() => setDialog('none')} onApply={applyTemplate} />}
+      {dialog === 'history' && <HistoryDialog pageId={page.id} onClose={() => setDialog('none')} onRestore={restore} />}
+      {dialog === 'preview' && previewUrl && <PreviewDialog url={previewUrl} onClose={() => setDialog('none')} />}
+      {dialog === 'pages' && (
+        <PagesDialog site={site} currentPageId={page.id} onClose={() => setDialog('none')} onChanged={async () => { await refreshSite(); }} onOpenPage={(p) => void switchPage(p)} />
+      )}
     </LanguageProvider>
   );
 }

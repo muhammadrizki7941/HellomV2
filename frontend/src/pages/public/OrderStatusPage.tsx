@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowRight, CheckCircle2, Clock3, Loader2, Mail, XCircle } from 'lucide-react';
 import { getLandingOrderPublicStatus, reportLandingOrderReturn } from '@/lib/hellomApi';
+import { firePurchase } from '@/lib/sellerPixels';
 import type { LandingOrderStatus } from '@/lib/hellomApi';
 
 // Buyer lands here after the payment page. The page only watches the order: it is marked
@@ -43,6 +44,7 @@ export default function OrderStatusPage() {
         if (stopped) return;
         setOrder(data);
         setError(null);
+        if (data.status === 'paid' || data.status === 'fulfilled') void firePurchase(reference);
         if (data.status === 'pending') timer = window.setTimeout(load, POLL_MS);
       } catch (err) {
         if (stopped) return;

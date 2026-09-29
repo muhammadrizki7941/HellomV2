@@ -1,4 +1,7 @@
 export type BlockType =
+  | 'profile'
+  | 'catalog'
+  | 'gallery'
   | 'hero'
   | 'features'
   | 'cta'
@@ -34,6 +37,8 @@ export interface BlockStyles {
 export interface Block {
   id: string;
   type: BlockType;
+  /** Hidden blocks stay in the draft but are not shown on the public page. */
+  hidden?: boolean;
   content: Record<string, any>;
   styles?: BlockStyles;
 }
@@ -41,6 +46,9 @@ export interface Block {
 // All block types known to the builder. Used for save/load whitelists so adding
 // a new block in one place keeps editor + public renderer in sync.
 export const BLOCK_TYPES: BlockType[] = [
+  'profile',
+  'catalog',
+  'gallery',
   'hero',
   'features',
   'cta',

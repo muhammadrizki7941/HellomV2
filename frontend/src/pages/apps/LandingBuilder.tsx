@@ -5,8 +5,10 @@ import SellerBalance from './landing-builder/SellerBalance';
 import ProductsPanel from './landing-builder/ProductsPanel';
 import OrdersPanel from './landing-builder/OrdersPanel';
 import CouponsPanel from './landing-builder/CouponsPanel';
+import TrafficPanel from './landing-builder/TrafficPanel';
+import ShopSettingsPanel from './landing-builder/ShopSettingsPanel';
 import { useSearchParams } from 'react-router-dom';
-import { Layout, BarChart3, Users, RefreshCw, Wallet, Package, ReceiptText, TicketPercent } from 'lucide-react';
+import { Layout, BarChart3, Users, RefreshCw, Wallet, Package, ReceiptText, TicketPercent, LineChart, Settings2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getLandingPageCustomers } from '@/lib/hellomApi';
 import { useEditorChrome } from '@/contexts/editorChrome';
@@ -101,7 +103,7 @@ function CustomersPanel() {
   );
 }
 
-type Tab = 'overview' | 'produk' | 'pesanan' | 'kupon' | 'editor' | 'customers' | 'saldo';
+type Tab = 'overview' | 'produk' | 'pesanan' | 'kupon' | 'editor' | 'customers' | 'saldo' | 'statistik' | 'pengaturan';
 
 const TABS: Array<{ key: Tab; label: string; icon: typeof Layout }> = [
   { key: 'overview', label: 'Overview', icon: BarChart3 },
@@ -111,6 +113,8 @@ const TABS: Array<{ key: Tab; label: string; icon: typeof Layout }> = [
   { key: 'kupon', label: 'Kupon', icon: TicketPercent },
   { key: 'customers', label: 'Pelanggan', icon: Users },
   { key: 'saldo', label: 'Saldo', icon: Wallet },
+  { key: 'statistik', label: 'Statistik', icon: LineChart },
+  { key: 'pengaturan', label: 'Pengaturan', icon: Settings2 },
 ];
 
 export default function LandingBuilder() {
@@ -184,6 +188,8 @@ export default function LandingBuilder() {
           {activeTab === 'kupon' && <CouponsPanel />}
           {activeTab === 'saldo' && <SellerBalance />}
           {activeTab === 'customers' && <CustomersPanel />}
+          {activeTab === 'statistik' && <TrafficPanel />}
+          {activeTab === 'pengaturan' && <ShopSettingsPanel />}
         </div>
       )}
     </div>

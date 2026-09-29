@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   Plus, Settings, Eye, Save, Globe,
   Sparkles, Check, Trash2, MessageCircle, GripVertical,
-  PanelLeftClose, PanelLeftOpen, Languages, Copy
+  PanelLeftClose, PanelLeftOpen, Languages, Copy, EyeOff
 } from 'lucide-react';
 import {
   DndContext,
@@ -46,6 +46,8 @@ interface DesktopEditorProps {
   updateBlockStyles: (id: string, newStyles: BlockStyles) => void;
   reorderBlocks: (oldIndex: number, newIndex: number) => void;
   deleteBlock: (id: string) => void;
+  duplicateBlock: (id: string) => void;
+  toggleHidden: (id: string) => void;
   handleFileUpload: (e: React.ChangeEvent<HTMLInputElement>, fieldName: string, isStyle?: boolean) => void;
   isPreview: boolean;
   setIsPreview: (v: boolean) => void;
@@ -155,6 +157,7 @@ const SortableBlock = ({
   setSelectedBlockId,
   deleteBlock,
   duplicateBlock,
+  toggleHidden,
   activeTheme,
   isPreview
 }: any) => {
@@ -210,6 +213,13 @@ const SortableBlock = ({
           >
             <Copy className="w-4 h-4" />
           </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); toggleHidden(block.id); }}
+            className={cn('rounded p-1.5 hover:bg-zinc-100', block.hidden ? 'text-yellow-600' : 'text-zinc-500')}
+            title={block.hidden ? 'Tampilkan' : 'Sembunyikan'}
+          >
+            {block.hidden ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+          </button>
           <div className="mx-1 h-4 w-px bg-zinc-200" />
           <button
             onClick={(e) => { e.stopPropagation(); deleteBlock(block.id); }}
@@ -240,6 +250,8 @@ export const DesktopEditor: React.FC<DesktopEditorProps> = ({
   updateBlockStyles,
   reorderBlocks,
   deleteBlock,
+  duplicateBlock,
+  toggleHidden,
   handleFileUpload,
   isPreview,
   setIsPreview,
@@ -317,12 +329,6 @@ export const DesktopEditor: React.FC<DesktopEditorProps> = ({
     const target = direction === 'up' ? index - 1 : index + 1;
     if (target < 0 || target >= blocks.length) return;
     reorderBlocks(index, target);
-  };
-
-  const duplicateBlock = (id: string) => {
-    const index = blocks.findIndex((b) => b.id === id);
-    if (index < 0 || !addBlockAt) return;
-    addBlockAt(blocks[index].type, index + 1);
   };
 
   const insertAt = (type: BlockType, index: number) => {
@@ -465,6 +471,7 @@ export const DesktopEditor: React.FC<DesktopEditorProps> = ({
                         setSelectedBlockId={setSelectedBlockId}
                         deleteBlock={deleteBlock}
                         duplicateBlock={duplicateBlock}
+                        toggleHidden={toggleHidden}
                         activeTheme={activeTheme}
                         isPreview={isPreview}
                       />

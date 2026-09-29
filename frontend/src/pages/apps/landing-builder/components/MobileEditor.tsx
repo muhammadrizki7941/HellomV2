@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   Plus, Settings, ChevronDown, ChevronUp,
   Sparkles, Eye, Globe, ArrowUp, ArrowDown, Trash2, MessageCircle, Save,
-  Pencil, GripVertical, Smartphone, PanelTopClose, PanelTopOpen,
+  Pencil, GripVertical, Smartphone, PanelTopClose, PanelTopOpen, Copy, EyeOff,
 } from 'lucide-react';
 import {
   DndContext,
@@ -41,6 +41,8 @@ interface MobileEditorProps {
   moveBlock: (index: number, direction: 'up' | 'down') => void;
   reorderBlocks: (oldIndex: number, newIndex: number) => void;
   deleteBlock: (id: string) => void;
+  duplicateBlock: (id: string) => void;
+  toggleHidden: (id: string) => void;
   handleFileUpload: (e: React.ChangeEvent<HTMLInputElement>, fieldName: string, isStyle?: boolean) => void;
   isPreview: boolean;
   setIsPreview: (v: boolean) => void;
@@ -87,12 +89,14 @@ interface SortableBlockRowProps {
   onEdit: () => void;
   onMove: (direction: 'up' | 'down') => void;
   onDelete: () => void;
+  onDuplicate: () => void;
+  onToggleHidden: () => void;
   t: (key: string) => string;
 }
 
 /** A draggable block row in the Lynk-style list. The grip is the drag handle. */
 const SortableBlockRow: React.FC<SortableBlockRowProps> = ({
-  block, index, total, selectedBlockId, menuOpen, onToggleMenu, onEdit, onMove, onDelete, t,
+  block, index, total, selectedBlockId, menuOpen, onToggleMenu, onEdit, onMove, onDelete, onDuplicate, onToggleHidden, t,
 }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: block.id });
   const Icon = BLOCK_ICON[block.type] || GripVertical;
@@ -120,12 +124,12 @@ const SortableBlockRow: React.FC<SortableBlockRowProps> = ({
         >
           <GripVertical className="w-4 h-4" />
         </button>
-        <span className="flex items-center justify-center w-9 h-9 rounded-xl bg-yellow-50 text-yellow-600 shrink-0">
+        <span className={cn('flex items-center justify-center w-9 h-9 rounded-xl shrink-0', block.hidden ? 'bg-zinc-100 text-zinc-400' : 'bg-yellow-50 text-yellow-600')}>
           <Icon className="w-4 h-4" />
         </span>
         <button onClick={onEdit} className="flex-1 min-w-0 text-left">
           <p className="text-sm font-semibold text-zinc-800 truncate">{name}</p>
-          <p className="text-[11px] text-zinc-400 truncate">{typeLabel} · {t('mobile.tapToEdit')}</p>
+          <p className="text-[11px] text-zinc-400 truncate">{typeLabel} · {block.hidden ? 'Disembunyikan' : t('mobile.tapToEdit')}</p>
         </button>
         <button
           onClick={onToggleMenu}
@@ -149,7 +153,7 @@ const SortableBlockRow: React.FC<SortableBlockRowProps> = ({
             onClick={() => onMove('up')}
             disabled={index === 0}
             title={t('mobile.moveUp')}
-            className="w-9 h-9 flex items-center justify-center bg-zinc-100 text-zinc-600 rounded-xl disabled:opacity-30"
+            className="w-11 h-11 flex items-center justify-center bg-zinc-100 text-zinc-600 rounded-xl disabled:opacity-30"
           >
             <ArrowUp className="w-4 h-4" />
           </button>
@@ -157,14 +161,31 @@ const SortableBlockRow: React.FC<SortableBlockRowProps> = ({
             onClick={() => onMove('down')}
             disabled={index === total - 1}
             title={t('mobile.moveDown')}
-            className="w-9 h-9 flex items-center justify-center bg-zinc-100 text-zinc-600 rounded-xl disabled:opacity-30"
+            className="w-11 h-11 flex items-center justify-center bg-zinc-100 text-zinc-600 rounded-xl disabled:opacity-30"
           >
             <ArrowDown className="w-4 h-4" />
           </button>
           <button
+            onClick={onDuplicate}
+            title="Duplikat"
+            aria-label="Duplikat blok"
+            className="w-11 h-11 flex items-center justify-center bg-zinc-100 text-zinc-600 rounded-xl"
+          >
+            <Copy className="w-4 h-4" />
+          </button>
+          <button
+            onClick={onToggleHidden}
+            title={block.hidden ? 'Tampilkan' : 'Sembunyikan'}
+            aria-label={block.hidden ? 'Tampilkan blok' : 'Sembunyikan blok'}
+            className={cn('w-11 h-11 flex items-center justify-center rounded-xl', block.hidden ? 'bg-yellow-400 text-black' : 'bg-zinc-100 text-zinc-600')}
+          >
+            {block.hidden ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+          </button>
+          <button
             onClick={onDelete}
             title={t('mobile.delete')}
-            className="w-9 h-9 flex items-center justify-center bg-red-50 text-red-500 rounded-xl"
+            aria-label={t('mobile.delete')}
+            className="w-11 h-11 flex items-center justify-center bg-red-50 text-red-500 rounded-xl"
           >
             <Trash2 className="w-4 h-4" />
           </button>
@@ -185,6 +206,8 @@ export const MobileEditor: React.FC<MobileEditorProps> = ({
   moveBlock,
   reorderBlocks,
   deleteBlock,
+  duplicateBlock,
+  toggleHidden,
   handleFileUpload,
   isPreview,
   setIsPreview,
@@ -240,7 +263,7 @@ export const MobileEditor: React.FC<MobileEditorProps> = ({
           className="flex items-center gap-1.5 px-2.5 py-1.5 text-purple-600 bg-purple-50 rounded-lg text-xs font-semibold shrink-0"
         >
           <Sparkles className="w-3.5 h-3.5" />
-          AI
+          Template
         </button>
 
         {/* Right: actions */}
@@ -356,6 +379,8 @@ export const MobileEditor: React.FC<MobileEditorProps> = ({
                         onEdit={() => openEditor(block.id)}
                         onMove={(direction) => moveBlock(index, direction)}
                         onDelete={() => { deleteBlock(block.id); setOpenMenuId(null); }}
+                        onDuplicate={() => { duplicateBlock(block.id); setOpenMenuId(null); }}
+                        onToggleHidden={() => toggleHidden(block.id)}
                         t={t}
                       />
                     ))}

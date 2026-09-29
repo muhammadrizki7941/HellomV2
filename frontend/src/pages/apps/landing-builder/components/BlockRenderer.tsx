@@ -3,9 +3,10 @@ import { safeHtml } from '@/lib/safeHtml';
 import {
   FileText, Upload,
   Facebook, Instagram, Music2, AtSign, ShoppingBag, MessageCircle,
-  Star, Quote, Check, ChevronDown, ArrowRight
+  Star, Quote, Check, ChevronDown, ArrowRight, BadgeCheck, EyeOff, ImagePlus
 } from 'lucide-react';
 import { Block, BlockStyles } from '../types';
+import { useSellerProducts } from '../sellerProducts';
 
 const useBlockStyles = (blockStyles: BlockStyles | undefined, theme: any) => {
   return {
@@ -425,6 +426,65 @@ const GifBlock = ({ content, styles }: { content: any, styles: any }) => (
   </div>
 );
 
+const ProfileBlock = ({ content, styles }: { content: any, styles: any }) => (
+  <div className={`${styles.padding} px-4 sm:px-8`} style={{ ...styles.container, textAlign: 'center' }}>
+    {content.coverUrl && <div className="-mx-4 -mt-10 mb-[-48px] h-32 bg-cover bg-center sm:-mx-8" style={{ backgroundImage: `url(${content.coverUrl})` }} />}
+    <div className="mx-auto max-w-md">
+      {content.avatarUrl
+        ? <img src={content.avatarUrl} alt="" className="mx-auto h-24 w-24 rounded-full border-4 border-white object-cover" />
+        : <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full text-3xl font-bold" style={styles.button}>{(content.name || 'T').slice(0, 1).toUpperCase()}</div>}
+      <h2 className="mt-3 text-2xl font-bold">{content.name || 'Nama toko kamu'}</h2>
+      {content.showVerified !== false && <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700"><BadgeCheck className="h-3.5 w-3.5" /> Tampil jika terverifikasi</p>}
+      {content.bio && <p className="mt-2 whitespace-pre-line text-sm opacity-75">{content.bio}</p>}
+    </div>
+  </div>
+);
+
+const CatalogBlock = ({ content, styles }: { content: any, styles: any }) => {
+  const { products } = useSellerProducts();
+  const list = (products ?? []).filter((p) => p.is_active && (content.showAll !== false || (content.productIds ?? []).includes(p.id)));
+  return (
+    <div className={`${styles.padding} px-4 sm:px-8`} style={styles.container}>
+      <div className="mx-auto max-w-4xl">
+        {content.title && <h2 className="mb-5 text-center text-2xl font-bold">{content.title}</h2>}
+        {products === null ? (
+          <div className="grid grid-cols-2 gap-3">{[0, 1].map((i) => <div key={i} className="h-48 animate-pulse rounded-2xl bg-zinc-100" />)}</div>
+        ) : list.length === 0 ? (
+          <p className="rounded-2xl border border-dashed border-current/20 p-6 text-center text-sm opacity-60">Belum ada produk aktif. Tambahkan di tab Produk.</p>
+        ) : (
+          <div className={`grid gap-3 ${Number(content.columns) >= 3 ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2'}`}>
+            {list.map((p) => (
+              <div key={p.id} className="overflow-hidden rounded-2xl bg-white text-left text-zinc-900 shadow-sm">
+                {p.image_url ? <img src={p.image_url} alt="" className="aspect-square w-full object-cover" /> : <div className="flex aspect-square items-center justify-center bg-zinc-100"><ShoppingBag className="h-8 w-8 text-zinc-300" /></div>}
+                <div className="space-y-1 p-3">
+                  <p className="line-clamp-2 text-sm font-semibold">{p.name}</p>
+                  <p className="text-sm font-bold">Rp {p.price.toLocaleString('id-ID')}</p>
+                  <span className="block rounded-lg py-2 text-center text-xs font-bold" style={styles.button}>{content.buttonText || 'Beli'}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const GalleryBlock = ({ content, styles }: { content: any, styles: any }) => (
+  <div className={`${styles.padding} px-4 sm:px-8`} style={styles.container}>
+    <div className="mx-auto max-w-4xl">
+      {content.title && <h2 className="mb-4 text-center text-2xl font-bold">{content.title}</h2>}
+      {(content.images ?? []).length === 0 ? (
+        <div className="flex h-32 items-center justify-center rounded-2xl border border-dashed border-current/20 text-sm opacity-60"><ImagePlus className="mr-2 h-5 w-5" /> Tambahkan foto</div>
+      ) : (
+        <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(4, Math.max(2, Number(content.columns) || 3))}, minmax(0, 1fr))` }}>
+          {(content.images ?? []).map((img: { url?: string }, i: number) => img.url ? <img key={i} src={img.url} alt="" className="aspect-square w-full rounded-xl object-cover" /> : null)}
+        </div>
+      )}
+    </div>
+  </div>
+);
+
 const HtmlBlock = ({ content, styles }: { content: any, styles: any }) => (
   <div className={`${styles.padding} px-4 sm:px-8`} style={styles.container}>
     <div className="max-w-3xl mx-auto" dangerouslySetInnerHTML={{ __html: safeHtml(content.html) }} />
@@ -432,9 +492,24 @@ const HtmlBlock = ({ content, styles }: { content: any, styles: any }) => (
 );
 
 export const BlockRenderer = ({ block, theme }: { block: Block, theme: any }) => {
+  const inner = <BlockBody block={block} theme={theme} />;
+  if (!block.hidden) return inner;
+  // Hidden blocks stay in the draft, dimmed in the editor, and are not shown on the public page.
+  return (
+    <div className="relative">
+      <div className="pointer-events-none opacity-35">{inner}</div>
+      <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-zinc-900 px-2.5 py-1 text-xs font-semibold text-white"><EyeOff className="h-3.5 w-3.5" /> Disembunyikan</span>
+    </div>
+  );
+};
+
+const BlockBody = ({ block, theme }: { block: Block, theme: any }) => {
   const styles = useBlockStyles(block.styles, theme);
 
   switch (block.type) {
+    case 'profile': return <ProfileBlock content={block.content} styles={styles} />;
+    case 'catalog': return <CatalogBlock content={block.content} styles={styles} />;
+    case 'gallery': return <GalleryBlock content={block.content} styles={styles} />;
     case 'hero': return <HeroBlock content={block.content} styles={styles} />;
     case 'features': return <FeaturesBlock content={block.content} styles={styles} />;
     case 'cta': return <CtaBlock content={block.content} styles={styles} />;

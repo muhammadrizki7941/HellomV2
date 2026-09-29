@@ -1,7 +1,7 @@
 import {
   Layout, Type, Image as ImageIcon, MousePointer2, Video, ShoppingBag,
   FileText, Share2, ClipboardList, LayoutGrid, AlignLeft, ArrowRight,
-  Minus, Quote, HelpCircle, List, Images, Hourglass, Wand2, Code2,
+  Minus, Quote, HelpCircle, List, Images, Hourglass, Wand2, Code2, UserCircle, Store, GalleryHorizontal,
   LucideIcon,
 } from 'lucide-react';
 import { BlockType } from './types';
@@ -19,6 +19,8 @@ export interface BlockCatalogItem {
 
 // Order here = display order inside each category / "All" tab.
 export const BLOCK_CATALOG: BlockCatalogItem[] = [
+  { type: 'profile', icon: UserCircle, labelKey: 'block.profile.label', descKey: 'block.profile.desc', categories: ['popular'] },
+  { type: 'catalog', icon: Store, labelKey: 'block.catalog.label', descKey: 'block.catalog.desc', categories: ['popular', 'order', 'sales'] },
   { type: 'text', icon: Type, labelKey: 'block.text.label', descKey: 'block.text.desc', categories: ['popular', 'sales'] },
   { type: 'image', icon: ImageIcon, labelKey: 'block.image.label', descKey: 'block.image.desc', categories: ['popular', 'other'] },
   { type: 'hero', icon: Layout, labelKey: 'block.hero.label', descKey: 'block.hero.desc', categories: ['popular', 'sales'] },
@@ -38,6 +40,7 @@ export const BLOCK_CATALOG: BlockCatalogItem[] = [
   { type: 'countdown', icon: Hourglass, labelKey: 'block.countdown.label', descKey: 'block.countdown.desc', categories: ['sales'] },
 
   { type: 'video', icon: Video, labelKey: 'block.video.label', descKey: 'block.video.desc', categories: ['other', 'sales'] },
+  { type: 'gallery', icon: GalleryHorizontal, labelKey: 'block.gallery.label', descKey: 'block.gallery.desc', categories: ['other'] },
   { type: 'slider', icon: Images, labelKey: 'block.slider.label', descKey: 'block.slider.desc', categories: ['other'] },
   { type: 'gif', icon: Wand2, labelKey: 'block.gif.label', descKey: 'block.gif.desc', categories: ['other'] },
   { type: 'social', icon: Share2, labelKey: 'block.social.label', descKey: 'block.social.desc', categories: ['other'] },
