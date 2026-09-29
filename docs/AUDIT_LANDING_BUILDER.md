@@ -55,7 +55,18 @@ yang sudah dihapus lagi. Tidak ada data pelanggan yang dibaca/ditampilkan; angka
 | 4 | PF-03 | ✅ Meta Pixel, GA4, Google Ads, TikTok (ID divalidasi), dimuat setelah halaman idle; PageView/ViewContent/InitiateCheckout/AddPaymentInfo/Purchase; Purchase sekali per pesanan + Conversions API dengan event_id sama; UTM/fbclid/gclid/ttclid disimpan di pesanan |
 | 4 | PF-04 | ◐ Upload gambar → WebP maks 1600 px, lazy load; `srcset` multi-ukuran belum (Fase 5) |
 | 4 | UI-03 | ◐ Aksi blok di HP 44 px (naik/turun/duplikat/sembunyikan/hapus); ikon header editor lama masih 32 px (Fase 5) |
-| 5 | LB-27, LB-25 captcha, UI sisa | Belum |
+| 5 | LB-24 | ✅ Semua endpoint Hellom Page (editor lama & baru, pelanggan/leads, domain, upload, produk, pesanan, saldo) hanya owner/admin toko (`shopManager` / `ResolvesSellerOrganization`); kasir/anggota POS → 403. Tes isolasi antar penjual + kasir |
+| 5 | LB-25 | ◐ Limiter checkout per IP (10/menit) + per email/produk (20/jam); checkout blok lama ikut limiter tamu; login juga dibatasi per IP; kirim ulang email penjual dibatasi. **Captcha belum** — butuh keputusan penyedia (Q-F5-2) |
+| 5 | LB-27 | ✅ CSP berbasis hash + `strict-dynamic` di semua halaman toko (termasuk pratinjau & halaman status), `frame-ancestors`, `object-src 'none'`, `base-uri 'none'`, `Permissions-Policy`; HSTS & Referrer-Policy di contoh Nginx. Diuji: 0 pelanggaran dengan pixel aktif |
+| 5 | UI-03, UI-04, UI-05, UI-06 | ✅ Audit otomatis 360 px (29 halaman publik & dashboard): tanpa scroll horizontal, 0 target < 44 px, 0 input < 16 px. Header dashboard HP, login/daftar, tab Pembayaran, chip statistik, export; skeleton + empty state + pesan error Indonesia; formulir KTP & rekening bisa dibuka langsung (`?tab=rekening`) dan tetap ada walau dompet top-up dimatikan |
+| 5 | Onboarding | ✅ Wizard 3 langkah (username → template → produk pertama → terbit & bagikan) + checklist progres di Overview (username, produk, halaman, email, KTP & rekening, pixel) |
+| 5 | Kontras | ✅ Tema Ocean/Sunset: teks tombol putih < 4,5:1 → warna digelapkan; warna kustom < 3:1 otomatis teks hitam/putih. Lighthouse Accessibility 100 |
+| 5 | Produksi | ✅ Worker queue PM2 `hellom-queue`, cron + heartbeat, `GET /api/health`, index order/ledger, `deploy/backup.sh` harian, `composer audit` 0 advisory |
+| 5 | E2E | ✅ `backend/tests/e2e/journey.mjs` 16/16: daftar → wizard → produk Drive & file → terbit → checkout tanpa login → bayar sandbox → webhook → email akses → saldo → tarik Rp50.000 → selesai. Checklist HP: `docs/TESTING_HELLOM_PAGE.md` |
+| 5 | PF-04 | ◐ Gambar WebP maks 1600 px + lazy load; `srcset` multi-ukuran belum (RENDAH; Lighthouse Performance 98–100) |
+
+**Ringkasan Fase 5: semua temuan KRITIS (LB-18, LB-19, LB-01) dan TINGGI (LB-02…05, LB-06, LB-07, LB-08, LB-20, LB-21, LB-22, LB-29, LB-30, UI-02, PF-01, PF-02) berstatus selesai.** Sisa: LB-25 captcha (keputusan penyedia) dan PF-04 `srcset` (RENDAH).
+
 **Catatan Google Drive (Fase 3).** Produk Drive memakai link "Siapa saja yang memiliki link". Link asli tidak pernah dikirim ke halaman publik, API publik, atau sebelum lunas, tetapi setelah pembeli membukanya **tetap bisa diteruskan** ke orang lain. Batas buka dan masa berlaku hanya membatasi halaman akses Hellom. Mode lanjutan disiapkan tapi belum dibangun: `landing_products.delivery_mode = google_grant` → penjual menghubungkan akun Google (OAuth, scope `drive.file`/`drive`), dan saat lunas sistem memberi izin *reader* ke email pembeli lewat Drive API (`permissions.create`), lalu mencabutnya saat refund/kedaluwarsa.
 
 ## A. Peta modul

@@ -80,7 +80,18 @@ Urutan sekali jalan setelah `git pull` + `composer install` + `php artisan migra
    php artisan landing:products-from-blocks           # blok produk lama → produk (keputusan pemilik: boleh --force)
    php artisan landing:documents-backfill             # halaman lama → draft + versi terbit (wajib --force sebelum Nginx diubah)
    ```
-5. Toko yang slug organisasinya kata terlarang (mis. `hellom`) muncul di laporan `landing:documents-backfill`; pemiliknya memilih username di tab Pengaturan.
+5. Toko yang slug organisasinya kata terlarang (mis. `hellom`) muncul di laporan `landing:documents-backfill`; pemiliknya memilih username di tab Pengaturan. Untuk toko Hellom sendiri (org 16): `php artisan landing:set-username 16 hellom-id`.
+6. Paket **Hellom Page Pro** (`landing_pro_monthly`, dibuat tersembunyi oleh migration): atur harga & tampilkan di Admin › App Management.
+
+### 3c. Produksi (Fase 5): queue, cron, backup, health
+
+1. **Queue worker**: `QUEUE_CONNECTION=database` di `backend/.env`, lalu `pm2 startOrReload deploy/ecosystem.config.js --update-env && pm2 save` (proses `hellom-queue`). Email akses/penjualan/penarikan, email verifikasi, Meta CAPI, dan rekonsiliasi berjalan di sini — webhook tidak menunggu SMTP. `deploy.sh` menjalankan `queue:restart` tiap rilis.
+2. **Cron** (`deploy/crontab.example`): `schedule:run` tiap menit **dan** backup harian 02:15 (`deploy/backup.sh`: `mysqldump --single-transaction` + `storage/app`, simpan 14 hari di `BACKUP_DIR` di luar web root, mode 600). Set `BACKUP_RCLONE_REMOTE` untuk salinan di luar VPS. Uji sekali: `bash deploy/backup.sh` lalu `gzip -t` file hasilnya; **coba restore** ke database cadangan minimal sekali.
+3. **Health**: `GET https://hellomspace.com/api/health` → 200 `ok` / 503 `degraded` (database, cache, heartbeat scheduler < 5 menit, antrean tertunda < 10 menit, jumlah job gagal). Pasang di uptime monitor (UptimeRobot/BetterStack). Setelah cron aktif, heartbeat muncul dalam 1 menit.
+4. **Index database** baru: `php artisan migrate --force` (migration `2026_10_04_000001_add_landing_performance_indexes`, hanya menambah index).
+5. **Nginx**: tambahkan `Strict-Transport-Security` & `Referrer-Policy` (lihat contoh) setelah HTTPS stabil. Halaman toko mengirim CSP sendiri dari Laravel.
+6. `IPAYMU_SANDBOX_URL` **jangan diisi di produksi** (hanya untuk tes lokal; mode produksi iPaymu selalu ke `my.ipaymu.com`).
+7. `php artisan optimize:clear` setelah deploy (membersihkan cache halaman toko lama).
 
 ## 4. Variabel lingkungan penting
 
@@ -89,7 +100,7 @@ Urutan sekali jalan setelah `git pull` + `composer install` + `php artisan migra
 | `backend/.env` | `APP_ENV` / `APP_DEBUG` | `production` / `false` (wajib) |
 | | `APP_URL`, `FRONTEND_URL` | `https://hellomspace.com` |
 | | `DB_*` | kredensial MySQL |
-| | `QUEUE_CONNECTION` | `sync` atau `database` (saat ini tidak ada job ber-queue; bila memakai `database`, aktifkan worker di `deploy/ecosystem.config.js`) |
+| | `QUEUE_CONNECTION` | `database` + worker PM2 `hellom-queue` (§3c). `sync` hanya untuk lokal |
 | | `REALTIME_SERVER_URL` / `REALTIME_PUBLIC_URL` / `REALTIME_SERVER_SECRET` | `http://127.0.0.1:3001` / `https://hellomspace.com` / secret baru |
 | | `BILLING_MOCK_ENABLED` | `false` (jangan pernah `true`) |
 | | `BILLING_GRACE_DAYS` | `0` (atau sesuai kebijakan) |
@@ -108,7 +119,9 @@ Daftar lengkap ada di masing-masing `.env.example`.
 - [ ] `APP_ENV=production`, `APP_DEBUG=false`, `BILLING_MOCK_ENABLED` tidak `true`
 - [ ] Secret realtime sudah dirotasi dan sama di backend & realtime
 - [ ] Callback token iPaymu/Xendit/DOKU terisi (bukan `dev_*`)
-- [ ] Cron `schedule:run` aktif (`php artisan schedule:list` menampilkan 4 jadwal)
+- [ ] Cron `schedule:run` aktif (`php artisan schedule:list`, termasuk `health:heartbeat`) dan `GET /api/health` = 200
+- [ ] PM2 `hellom-queue` online; `failed` di `/api/health` = 0
+- [ ] Backup harian jalan dan sudah pernah diuji restore
 - [ ] PM2 `hellom-realtime` online dan `pm2 save` sudah dijalankan
 - [ ] Nginx mem-proxy `/socket.io` dan `sw.js` tidak di-cache
 - [ ] Backup database sebelum `migrate --force`

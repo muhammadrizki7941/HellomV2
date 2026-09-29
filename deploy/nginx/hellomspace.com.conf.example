@@ -24,6 +24,10 @@ server {
 
     add_header X-Frame-Options "SAMEORIGIN";
     add_header X-Content-Type-Options "nosniff";
+    # HTTPS only from now on (browsers remember it for a year; no includeSubDomains, so
+    # other subdomains are not affected). Shop pages get their own CSP from Laravel (PageSecurity).
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     charset utf-8;
     client_max_body_size 20m;
 

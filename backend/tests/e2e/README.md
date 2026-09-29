@@ -1,0 +1,41 @@
+# Hellom Page end-to-end (browser)
+
+Full seller + buyer journey in headless Chrome, **on the test database only** (`hellom_pos_test`),
+with local stand-ins for iPaymu and email. Nothing reaches a real gateway or inbox.
+
+| File | What it does |
+|---|---|
+| `seed.php` | iPaymu in sandbox mode + a super admin; `cleanup` removes everything the journey created. Refuses any DB other than `hellom_pos_test`. |
+| `mocks.mjs` | iPaymu sandbox API on `:8020` (create payment, check transaction, payment page that sends the notify webhook) + SMTP sink on `:1025` (`GET :8020/mails`). |
+| `journey.mjs` | 16 steps at 390 px: register → onboarding (username, template, Drive product) → file product → SSR page + CSP → buyer checkout without login → sandbox payment → webhook → access email → access page / download → balance → email verification → KYC → admin approves → withdraw Rp50.000 → admin marks paid → seller sees it. |
+| `ui-audit.mjs` | 360 px audit of ~29 public + dashboard pages: horizontal scroll, tap targets < 44 px, form fonts < 16 px. Run after `journey.mjs`, before cleanup. |
+
+Screenshots and results go to `backend/storage/app/e2e_shots/`, `e2e_full_result.json`, `e2e_ui_audit.json` (git-ignored).
+
+## Run (from `backend/`, Git Bash)
+
+```bash
+rm -f bootstrap/cache/config.php
+DB_DATABASE=hellom_pos_test php artisan migrate
+DB_DATABASE=hellom_pos_test php tests/e2e/seed.php
+
+# three terminals
+node tests/e2e/mocks.mjs
+DB_DATABASE=hellom_pos_test APP_URL=http://127.0.0.1:8010 FRONTEND_URL=http://127.0.0.1:3010 \
+  CORS_ALLOWED_ORIGINS=http://127.0.0.1:3010 IPAYMU_SANDBOX_URL=http://127.0.0.1:8020 \
+  MAIL_MAILER=smtp MAIL_HOST=127.0.0.1 MAIL_PORT=1025 MAIL_SCHEME=smtp MAIL_USERNAME= MAIL_PASSWORD= \
+  QUEUE_CONNECTION=sync CACHE_STORE=array PHP_CLI_SERVER_WORKERS=4 \
+  php artisan serve --host=127.0.0.1 --port=8010
+(cd ../frontend && VITE_HELLOM_API_BASE=http://127.0.0.1:8010/api/v1/hellom npx vite --host 127.0.0.1 --port 3010 --strictPort)
+
+node tests/e2e/journey.mjs        # expect "16/16 steps OK"
+node tests/e2e/ui-audit.mjs       # expect no OVERFLOW, small:0, font:0
+DB_DATABASE=hellom_pos_test php artisan balance:reconcile
+DB_DATABASE=hellom_pos_test php tests/e2e/seed.php cleanup
+```
+
+`CACHE_STORE=array` keeps the test server's page cache out of the dev cache. Ports 8000/3000
+(the normal dev servers) are not used. Set `CHROME_PATH` if Chrome is elsewhere.
+
+In production the shop page and the SPA share one domain; here the SSR page is on :8010 and the SPA
+on :3010, so the journey follows "Beli" links by path on :3010.

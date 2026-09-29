@@ -4,6 +4,13 @@
 
 Audit lengkap dan status per temuan: [docs/AUDIT.md](docs/AUDIT.md). Langkah deploy khusus rilis ini: [docs/DEPLOY.md §3](docs/DEPLOY.md#3-catatan-khusus-rilis-refactor-branch-refactorcleanup).
 
+### Hellom Page — poles & siap produksi (Fase 5)
+- **Onboarding penjual baru** 3 langkah (username → template → produk pertama → halaman terbit & siap dibagikan) + checklist *Siapkan toko kamu* di Overview (username, produk, halaman, verifikasi email, KTP & rekening, pixel).
+- **Keamanan**: CSP di halaman toko (hash + `strict-dynamic`, pixel iklan tetap jalan setelah persetujuan), editor lama/pelanggan/domain/upload hanya pemilik & admin toko (kasir POS ditolak), rate limit login per IP, kirim ulang email & checkout lama; paket keamanan Laravel/Guzzle/Symfony/CommonMark diperbarui (`composer audit` bersih).
+- **UI HP**: audit otomatis 360 px — tidak ada scroll ke samping, semua tombol ≥ 44 px, input ≥ 16 px (iPhone tidak zoom); formulir KTP & rekening bisa dibuka langsung dan tetap tersedia walau dompet top-up dimatikan; halaman toko belum terbit berbahasa Indonesia; warna tombol tema Ocean/Sunset lebih kontras.
+- **Produksi**: `GET /api/health`, worker queue PM2 `hellom-queue` (`QUEUE_CONNECTION=database`), heartbeat scheduler, index order/ledger, backup harian `deploy/backup.sh`. Lihat `docs/DEPLOY.md` §3c.
+- **Tes**: perjalanan lengkap di browser `backend/tests/e2e` (16/16) + checklist uji manual HP `docs/TESTING_HELLOM_PAGE.md`.
+
 ### Hellom Page — builder & halaman publik (Fase 4)
 - **Halaman toko dirender server** (`hellomspace.com/{username}` dan `/{username}/{produk}`): HTML ringan dengan CSS inline, meta WhatsApp/Facebook (Open Graph), tombol bagikan (salin link, WhatsApp, QR), laporkan, halaman 404/toko nonaktif. Lighthouse mobile 100/100/100/100. **Butuh perubahan Nginx** (lihat `docs/DEPLOY.md` §3b).
 - **Editor**: draft tersimpan otomatis dan tidak mengubah halaman tayang sampai *Terbitkan*; riwayat versi & kembalikan; pratinjau asli (HP/Desktop); duplikat & sembunyikan blok; blok baru Profil, Katalog Produk, Galeri; 5 template; tema (huruf, bentuk & gaya tombol); upload gambar jadi WebP (bukan lagi base64 di halaman).
