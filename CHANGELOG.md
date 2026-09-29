@@ -4,6 +4,16 @@
 
 Audit lengkap dan status per temuan: [docs/AUDIT.md](docs/AUDIT.md). Langkah deploy khusus rilis ini: [docs/DEPLOY.md §3](docs/DEPLOY.md#3-catatan-khusus-rilis-refactor-branch-refactorcleanup).
 
+### Hellom Page — jualan & produk digital (Fase 3)
+- **Produk** (tab *Produk*): Google Drive, upload file (maks 10 MB, disimpan privat), link/akses, produk fisik (ongkir gratis/tetap/manual), jasa; gambar otomatis WebP; harga coret, stok, pertanyaan checkout. Link Drive disimpan terenkripsi dan tidak pernah tampil ke publik.
+- **Checkout pembeli** `/beli/{id}` tanpa login: mobile-first, saran salah ketik email, pilih QRIS atau VA/e-wallet, kupon, alamat kirim; stok & kuota kupon dipesan saat checkout dan dikembalikan bila kedaluwarsa.
+- **Halaman akses** `/akses/{token}` (link di email): buka produk dengan batas buka/unduh & masa berlaku, catatan penjual, kirim ulang email; **Cek pesanan** `/cek-pesanan`.
+- **Pesanan** (tab *Pesanan*): filter, detail rincian uang, tandai terkirim (resi), selesai (jasa), refund (dipotong dari saldo, ditransfer tim Hellom), pembeli + export Excel; **Kupon**.
+- **Kepercayaan**: verifikasi email (wajib sebelum tarik dana), lencana *Penjual Terverifikasi*, halaman kebijakan `/kebijakan/*`, tombol *Laporkan*; super admin *Moderasi Toko* (laporan, nonaktifkan toko/produk, tahan saldo) dan antrean *Refund*.
+- Overview penjual memakai data penjualan asli (badge "+12%" palsu dihapus). Email pembeli kini berisi invoice + link akses, bukan link file mentah.
+- `wallet:clean-mock-topups` membersihkan saldo uji coba; kode status iPaymu dicocokkan dengan dokumentasi resmi.
+- Pesan 422 di dashboard kini menampilkan error field pertama (bukan "… (and N more errors)").
+
 ### Hellom Page — uang penjualan (Fase 2, [docs/AUDIT_LANDING_BUILDER.md](docs/AUDIT_LANDING_BUILDER.md))
 - **Pembayaran diverifikasi ke gateway**: order landing hanya lunas bila status **dan nominal** cocok di API gateway; webhook ganda tidak mengkredit dua kali; tanda tangan DOKU dicek; semua webhook dicatat mentah di `payment_webhook_logs`.
 - **Status order** `pending → paid → fulfilled` (+ `expired/failed/refunded`) dengan transisi terkunci; order kedaluwarsa 24 jam; rekonsiliasi otomatis tiap 5 menit; item order di-snapshot.

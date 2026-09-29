@@ -34,7 +34,18 @@ yang sudah dihapus lagi. Tidak ada data pelanggan yang dibaca/ditampilkan; angka
 | 2 | LB-28 | ✅ Tes isolasi saldo antar penjual |
 | 2 | UI-02 | ✅ Halaman status `/pesanan/{ref}` untuk semua metode (polling saja) |
 | 2 | UI-05 | ◐ Tab "Tarik Saldo" di Pembayaran diarahkan ke Saldo Penjualan; tabel riwayat dompet → Fase 5 |
-| 3–5 | lainnya | Belum |
+| 3 | LB-14 | ✅ Tombol "Kirim ulang email" di dashboard penjual, halaman akses, dan "Cek pesanan" (maks 3×/10 menit per pesanan) |
+| 3 | LB-15, LB-17 | ✅ Produk jadi entitas sendiri (`landing_products`, harga BIGINT); checkout per produk `/beli/{id}`, bukan "halaman terbit terakhir". Checkout blok lama tetap jalan; `landing:products-from-blocks` memindahkannya |
+| 3 | LB-21 | ✅ File produk di disk privat (nama acak, maks 10 MB, allowlist ekstensi), unduh lewat URL bertanda tangan 10 menit + batas unduh |
+| 3 | LB-22 | ✅ Email berisi link akses Hellom `/akses/{token}`, bukan link mentah; link Drive dibaca dari produk saat dibuka (ganti link = pembeli lama ikut dapat yang baru); link disimpan terenkripsi |
+| 3 | LB-25 | ◐ Checkout produk: limiter per IP + per email/produk. Captcha belum (Fase 5) |
+| 3 | LB-32 | ✅ Badge tren palsu dihapus; Overview memakai data penjualan sungguhan |
+| 3 | LB-35 | ✅ Daftar pesanan + filter + detail, kirim ulang, tandai terkirim, refund lewat ledger, kupon, halaman akses, cek pesanan, tipe produk link/fisik/jasa, batas buka/unduh |
+| 3 | LB-24 | ◐ Endpoint baru (produk, kupon, pesanan, saldo) hanya owner/admin; editor halaman masih terbuka untuk semua anggota (Fase 4) |
+| 3 | UI-01, UI-02 | ✅ Checkout satu halaman mobile-first (input 16px, target ≥44px, tombol bayar menempel, pilihan QRIS/VA, ringkasan biaya) |
+| 4–5 | lainnya | Belum |
+
+**Catatan Google Drive (Fase 3).** Produk Drive memakai link "Siapa saja yang memiliki link". Link asli tidak pernah dikirim ke halaman publik, API publik, atau sebelum lunas, tetapi setelah pembeli membukanya **tetap bisa diteruskan** ke orang lain. Batas buka dan masa berlaku hanya membatasi halaman akses Hellom. Mode lanjutan disiapkan tapi belum dibangun: `landing_products.delivery_mode = google_grant` → penjual menghubungkan akun Google (OAuth, scope `drive.file`/`drive`), dan saat lunas sistem memberi izin *reader* ke email pembeli lewat Drive API (`permissions.create`), lalu mencabutnya saat refund/kedaluwarsa.
 
 ## A. Peta modul
 
