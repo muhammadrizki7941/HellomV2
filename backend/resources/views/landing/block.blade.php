@@ -167,7 +167,7 @@
                     <div class="grid g2 {{ ($c['columns'] ?? 2) >= 3 ? 'g3' : '' }}">
                         @foreach ($b['products'] as $p)
                             <div class="card prod">
-                                <a href="{{ $p['url'] }}" style="text-decoration:none;color:inherit">
+                                <a href="{{ $p['url'] }}" style="text-decoration:none;color:inherit" aria-label="{{ $p['name'] }}" tabindex="-1">
                                     @if ($p['image_url'])<img class="prod-img" src="{{ $p['image_url'] }}" alt="{{ $p['name'] }}" loading="lazy" decoding="async">@else<div class="prod-img"></div>@endif
                                 </a>
                                 <div class="prod-body">

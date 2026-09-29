@@ -53,11 +53,13 @@
       else prompt('Salin link:', shareUrl);
     });
   });
+  // Our sheet always opens (copy link, WhatsApp, QR); the phone's own share menu is one option in it.
   qa('[data-share]').forEach(function (b) {
-    b.addEventListener('click', function () {
-      if (navigator.share) { navigator.share({ title: document.title, url: shareUrl }).catch(function () {}); return; }
-      var d = q('#hl-share'); if (d && d.showModal) d.showModal();
-    });
+    b.addEventListener('click', function () { var d = q('#hl-share'); if (d && d.showModal) d.showModal(); });
+  });
+  qa('[data-native-share]').forEach(function (b) {
+    if (!navigator.share) { b.hidden = true; return; }
+    b.addEventListener('click', function () { navigator.share({ title: document.title, url: shareUrl }).catch(function () {}); });
   });
   qa('[data-qr]').forEach(function (b) {
     b.addEventListener('click', function () {

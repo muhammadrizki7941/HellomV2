@@ -87,8 +87,19 @@ server {
         try_files $uri =404;
     }
 
-    # SPA fallback
+    # Hellom Page (Fase 4): shop pages hellomspace.com/{username} are rendered by Laravel.
+    # Real files (JS/CSS/images from the React build) are served directly; every other path
+    # goes to Laravel, which answers with the shop page or the React app shell (index.html).
     location / {
-        try_files $uri $uri/ /index.html;
+        try_files $uri @laravel;
+    }
+
+    location @laravel {
+        fastcgi_pass unix:/tmp/php-cgi-83.sock;
+        fastcgi_param SCRIPT_FILENAME /www/wwwroot/hellomspace.com/backend/public/index.php;
+        fastcgi_param SCRIPT_NAME /index.php;
+        fastcgi_param REQUEST_URI $request_uri;
+        include fastcgi_params;
+        fastcgi_hide_header X-Powered-By;
     }
 }

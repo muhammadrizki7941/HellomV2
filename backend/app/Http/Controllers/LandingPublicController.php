@@ -79,7 +79,9 @@ class LandingPublicController extends Controller
         }
 
         $version = $this->shop->cacheVersion((int) $organization->id);
-        $key = "landing:html:{$organization->id}:{$version}:" . ($slug ?? '_home');
+        // A deploy that changes the templates must not serve old cached HTML.
+        $templates = max(array_map('filemtime', glob(resource_path('views/landing/*')) ?: [0]));
+        $key = "landing:html:{$organization->id}:{$version}:{$templates}:" . ($slug ?? '_home');
         $cached = Cache::get($key);
         if (!is_array($cached)) {
             $cached = $this->build($organization, $slug);

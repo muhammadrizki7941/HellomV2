@@ -83,6 +83,7 @@
         <button class="btn block" type="button" data-copy>Salin link</button>
         <a class="btn block outline" href="https://wa.me/?text={{ rawurlencode($meta['title'] . ' ' . $meta['url']) }}" target="_blank" rel="noopener">Bagikan ke WhatsApp</a>
         <button class="btn block outline" type="button" data-qr>Unduh QR code</button>
+        <button class="btn block ghost" type="button" data-native-share>Lainnya…</button>
     </div>
 </dialog>
 
