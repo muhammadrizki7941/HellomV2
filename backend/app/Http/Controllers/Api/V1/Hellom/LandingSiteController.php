@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Api\V1\Hellom;
 use App\Http\Controllers\Api\V1\Hellom\Concerns\ResolvesSellerOrganization;
 use App\Models\LandingPageVersion;
 use App\Models\LandingProduct;
+use App\Models\LandingTrackingSetting;
 use App\Models\Organization;
 use App\Models\OrganizationLandingPage;
+use App\Models\OrganizationPayoutProfile;
 use App\Services\Landing\LandingDocumentService;
 use App\Services\Landing\LandingShop;
 use App\Support\Landing\BlockSchema;
@@ -40,6 +42,41 @@ class LandingSiteController extends BaseApiController
         }
 
         return $this->ok($this->sitePayload($organization), 'Halaman toko');
+    }
+
+    /** Onboarding wizard + progress checklist on the overview, in one request. */
+    public function onboarding(Request $request): JsonResponse
+    {
+        [$organization, $error] = $this->sellerOrganization($request);
+        if ($error) {
+            return $error;
+        }
+        $home = OrganizationLandingPage::query()->where('organization_id', $organization->id)
+            ->orderByDesc('is_home')->orderBy('id')->first();
+        $live = $this->shop->livePages($organization);
+        $products = LandingProduct::query()->where('organization_id', $organization->id)->where('is_active', true)->count();
+        $payout = OrganizationPayoutProfile::query()->where('organization_id', $organization->id)->value('status');
+        $tracking = LandingTrackingSetting::query()->find($organization->id);
+
+        return $this->ok([
+            'username' => $organization->landingUsername(),
+            'username_is_custom' => $organization->landing_username !== null,
+            'public_url' => $this->shop->publicUrl($organization),
+            'home_page' => $home ? [
+                'id' => $home->id,
+                'is_live' => $live->contains('id', $home->id),
+                'draft_blocks' => count((array) ($this->documents->draft($home)['document']['blocks'] ?? [])),
+            ] : null,
+            'products_count' => $products,
+            'checklist' => [
+                'username' => $organization->landing_username !== null,
+                'page_published' => $live->isNotEmpty(),
+                'first_product' => $products > 0,
+                'email_verified' => $request->user()->email_verified_at !== null,
+                'payout_status' => $payout ?: 'none',
+                'pixel' => $tracking !== null && $tracking->publicIds() !== [],
+            ],
+        ], 'Progres toko');
     }
 
     public function updateUsername(Request $request): JsonResponse

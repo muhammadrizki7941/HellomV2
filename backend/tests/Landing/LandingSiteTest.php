@@ -143,6 +143,27 @@ class LandingSiteTest extends SellerFinanceTestCase
         $this->get('/login')->assertOk()->assertHeaderMissing('ETag');
     }
 
+    public function test_onboarding_checklist_follows_the_shop(): void
+    {
+        $seller = $this->seller(verifiedPayout: false);
+        $url = '/api/v1/hellom/apps/landing-builder/onboarding';
+        $this->getJson($url, $this->auth($seller))->assertOk()
+            ->assertJsonPath('data.checklist', ['username' => false, 'page_published' => false, 'first_product' => false,
+                'email_verified' => true, 'payout_status' => 'none', 'pixel' => false])
+            ->assertJsonPath('data.home_page.id', $seller['page']->id);
+
+        $shop = $this->shop();
+        LandingTrackingSetting::query()->create(['organization_id' => $shop['org']->id, 'meta_pixel_id' => '123456789012345']);
+        $this->getJson($url, $this->auth($shop))->assertOk()
+            ->assertJsonPath('data.checklist.username', true)
+            ->assertJsonPath('data.checklist.page_published', true)
+            ->assertJsonPath('data.checklist.first_product', true)
+            ->assertJsonPath('data.checklist.payout_status', 'verified')
+            ->assertJsonPath('data.checklist.pixel', true)
+            ->assertJsonPath('data.home_page.is_live', true)
+            ->assertJsonPath('data.products_count', 1);
+    }
+
     public function test_pages_are_isolated_between_sellers_and_closed_to_pos_staff(): void
     {
         $shop = $this->shop();

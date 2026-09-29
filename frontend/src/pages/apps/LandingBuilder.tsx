@@ -45,7 +45,7 @@ function CustomersPanel() {
         <button
           onClick={() => void loadCustomers()}
           disabled={loading}
-          className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
+          className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
         >
           <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} /> Refresh
         </button>
@@ -182,7 +182,7 @@ export default function LandingBuilder() {
         </div>
       ) : (
         <div className="min-h-[600px]">
-          {activeTab === 'overview' && <Overview onEdit={() => setActiveTab('editor')} onOpenOrders={() => setActiveTab('pesanan')} onOpenProducts={() => setActiveTab('produk')} />}
+          {activeTab === 'overview' && <Overview onEdit={() => setActiveTab('editor')} onOpenOrders={() => setActiveTab('pesanan')} onOpenProducts={() => setActiveTab('produk')} onOpenSettings={() => setActiveTab('pengaturan')} />}
           {activeTab === 'produk' && <ProductsPanel />}
           {activeTab === 'pesanan' && <OrdersPanel />}
           {activeTab === 'kupon' && <CouponsPanel />}

@@ -162,3 +162,24 @@ export type PurchaseEvent = {
 export function claimPurchaseEvent(reference: string) {
   return publicApiRequest<PurchaseEvent>(`/public/landingpage/orders/${encodeURIComponent(reference)}/purchase-event`, { method: 'POST' });
 }
+
+export type LandingOnboarding = {
+  username: string;
+  username_is_custom: boolean;
+  public_url: string;
+  home_page: { id: number; is_live: boolean; draft_blocks: number } | null;
+  products_count: number;
+  checklist: {
+    username: boolean;
+    page_published: boolean;
+    first_product: boolean;
+    email_verified: boolean;
+    payout_status: 'none' | 'unverified' | 'pending' | 'verified' | 'rejected';
+    pixel: boolean;
+  };
+};
+
+/** Onboarding wizard + progress checklist (username, page, first product, email, KYC/bank, pixel). */
+export function getLandingOnboarding() {
+  return apiRequest<LandingOnboarding>(`${BASE}/onboarding`);
+}
