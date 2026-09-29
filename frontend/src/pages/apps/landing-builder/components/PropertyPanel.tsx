@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { Block, BlockStyles } from '../types';
 import { useLang } from '../i18n';
+import LinkedProductPicker from './LinkedProductPicker';
 
 interface PropertyPanelProps {
   selectedBlock: Block | undefined;
@@ -423,6 +424,9 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
 
         {/* Product Specific Fields */}
         {block.type === 'product' && (
+          <LinkedProductPicker content={block.content} onPatch={patch} />
+        )}
+        {block.type === 'product' && !block.content.productId && (
           <>
             <div className="space-y-2">
               <label className="text-xs font-bold text-zinc-700">{t('pp.product.name')}</label>

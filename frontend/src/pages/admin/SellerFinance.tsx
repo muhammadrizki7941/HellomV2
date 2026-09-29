@@ -14,6 +14,7 @@ import {
   markSellerWithdrawalPaid,
   updateSellerFinanceSettings,
 } from '@/lib/hellomApi';
+import RefundsQueue from './RefundsQueue';
 import type {
   AdminReconciliation,
   AdminSellerFinanceSummary,
@@ -23,11 +24,12 @@ import type {
 } from '@/lib/hellomApi';
 
 // Super admin: landing-page sales money (balances, withdrawals, webhooks, reconciliation).
-type Tab = 'summary' | 'withdrawals' | 'webhooks' | 'reconciliation' | 'settings';
+type Tab = 'summary' | 'withdrawals' | 'refunds' | 'webhooks' | 'reconciliation' | 'settings';
 
 const TABS: Array<[Tab, string]> = [
   ['summary', 'Ringkasan'],
   ['withdrawals', 'Penarikan'],
+  ['refunds', 'Refund'],
   ['webhooks', 'Webhook'],
   ['reconciliation', 'Rekonsiliasi'],
   ['settings', 'Pengaturan'],
@@ -103,6 +105,7 @@ export default function SellerFinance() {
 
       {tab === 'summary' && <SummaryTab onOpenWithdrawals={() => setTab('withdrawals')} />}
       {tab === 'withdrawals' && <WithdrawalsTab />}
+      {tab === 'refunds' && <RefundsQueue />}
       {tab === 'webhooks' && <WebhooksTab />}
       {tab === 'reconciliation' && <ReconciliationTab />}
       {tab === 'settings' && <SettingsTab />}
@@ -155,6 +158,7 @@ function SummaryTab({ onOpenWithdrawals }: { onOpenWithdrawals: () => void }) {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Penarikan terbuka" value={String(data.withdrawals_open)} hint={rupiah(data.liabilities.processing)} tone={data.withdrawals_open > 0 ? 'warn' : undefined} />
         <Stat label="Pesanan menunggu bayar" value={String(data.orders_pending)} />
+        <Stat label="Refund perlu ditransfer" value={String(data.refunds_open)} hint={rupiah(data.refunds_open_amount)} tone={data.refunds_open > 0 ? 'warn' : undefined} />
       </div>
     </div>
   );

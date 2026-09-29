@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Settings, LogOut,
-  Menu, X, ShieldCheck, Activity, Package, Wallet, Film, Palette, ShoppingBag, FileText
+  Menu, X, ShieldCheck, ShieldAlert, Activity, Package, Wallet, Film, Palette, ShoppingBag, FileText
 } from 'lucide-react';
 import NotificationBell from '@/components/admin/NotificationBell';
 import { cn } from '@/lib/utils';
@@ -138,6 +138,7 @@ export default function AdminLayout() {
     { icon: Palette, label: 'Brand Settings', path: '/admin/brand' },
     { icon: Wallet, label: 'Finance', path: '/admin/finance' },
     { icon: Wallet, label: 'Keuangan Penjual', path: '/admin/keuangan-penjual' },
+    { icon: ShieldAlert, label: 'Moderasi Toko', path: '/admin/moderasi-toko' },
     { icon: Activity, label: 'System Health', path: '/admin/system' },
     { icon: Settings, label: 'Settings', path: '/admin/settings' },
   ];

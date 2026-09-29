@@ -95,8 +95,10 @@ export class ApiError extends Error {
   code: string | null;
   problems: ApiProblem[];
   data: unknown;
+  // Laravel validation (422): field → messages, e.g. { "delivery_url": ["…"] }.
+  fieldErrors: Record<string, string[]>;
 
-  constructor(message: string, status: number, error: unknown, data: unknown) {
+  constructor(message: string, status: number, error: unknown, data: unknown, fieldErrors: Record<string, string[]> = {}) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
@@ -104,11 +106,16 @@ export class ApiError extends Error {
     this.code = typeof err.code === 'string' ? err.code : null;
     this.problems = Array.isArray(err.problems) ? (err.problems as ApiProblem[]) : [];
     this.data = data;
+    this.fieldErrors = fieldErrors;
   }
 }
 
 function toApiError(response: Response, payload: ApiEnvelope<unknown> | null): ApiError {
-  return new ApiError(payload?.message || `HTTP ${response.status}`, response.status, payload?.error ?? null, payload?.data ?? null);
+  const errors = (payload as { errors?: unknown } | null)?.errors;
+  const fieldErrors = errors && typeof errors === 'object' ? (errors as Record<string, string[]>) : {};
+  // Laravel's 422 message is "first error (and N more errors)": show the first error only.
+  const firstField = Object.values(fieldErrors)[0]?.[0];
+  return new ApiError(firstField || payload?.message || `HTTP ${response.status}`, response.status, payload?.error ?? null, payload?.data ?? null, fieldErrors);
 }
 
 export async function apiRequest<T>(

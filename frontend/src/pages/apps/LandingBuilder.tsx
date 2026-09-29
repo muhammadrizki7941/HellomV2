@@ -2,8 +2,11 @@ import { useEffect, useState } from 'react';
 import Overview from './landing-builder/Overview';
 import Editor from './landing-builder/Editor';
 import SellerBalance from './landing-builder/SellerBalance';
+import ProductsPanel from './landing-builder/ProductsPanel';
+import OrdersPanel from './landing-builder/OrdersPanel';
+import CouponsPanel from './landing-builder/CouponsPanel';
 import { useSearchParams } from 'react-router-dom';
-import { Layout, BarChart3, Users, RefreshCw, Wallet } from 'lucide-react';
+import { Layout, BarChart3, Users, RefreshCw, Wallet, Package, ReceiptText, TicketPercent } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getLandingPageCustomers } from '@/lib/hellomApi';
 import { useEditorChrome } from '@/contexts/editorChrome';
@@ -98,12 +101,27 @@ function CustomersPanel() {
   );
 }
 
+type Tab = 'overview' | 'produk' | 'pesanan' | 'kupon' | 'editor' | 'customers' | 'saldo';
+
+const TABS: Array<{ key: Tab; label: string; icon: typeof Layout }> = [
+  { key: 'overview', label: 'Overview', icon: BarChart3 },
+  { key: 'produk', label: 'Produk', icon: Package },
+  { key: 'pesanan', label: 'Pesanan', icon: ReceiptText },
+  { key: 'editor', label: 'Editor', icon: Layout },
+  { key: 'kupon', label: 'Kupon', icon: TicketPercent },
+  { key: 'customers', label: 'Pelanggan', icon: Users },
+  { key: 'saldo', label: 'Saldo', icon: Wallet },
+];
+
 export default function LandingBuilder() {
-  // ?tab=saldo opens the sales balance directly (links from emails).
-  const [searchParams] = useSearchParams();
-  const [activeTab, setActiveTab] = useState<'overview' | 'editor' | 'customers' | 'saldo'>(
-    searchParams.get('tab') === 'saldo' ? 'saldo' : 'overview'
-  );
+  // ?tab=saldo|pesanan|produk|kupon opens that tab directly (links from emails).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requested = searchParams.get('tab') as Tab | null;
+  const [activeTab, setActiveTabState] = useState<Tab>(requested && TABS.some((t) => t.key === requested) ? requested : 'overview');
+  const setActiveTab = (tab: Tab) => {
+    setActiveTabState(tab);
+    setSearchParams(tab === 'overview' ? {} : { tab }, { replace: true });
+  };
   const { chromeHidden, setChromeHidden } = useEditorChrome();
 
   // Auto-hide the dashboard chrome (mobile header + these tabs) while editing,
@@ -122,54 +140,21 @@ export default function LandingBuilder() {
         chromeHidden ? "hidden lg:flex" : "flex"
       )}>
         <div className="-mx-1 flex gap-6 overflow-x-auto px-1">
-          <button
-            onClick={() => setActiveTab('overview')}
-            className={cn(
-              "flex items-center gap-2 pb-3 text-sm font-medium border-b-2 transition-colors",
-              activeTab === 'overview' 
-                ? "border-yellow-400 text-black" 
-                : "border-transparent text-zinc-500 hover:text-zinc-900"
-            )}
-          >
-            <BarChart3 className="w-4 h-4" />
-            Overview
-          </button>
-          <button
-            onClick={() => setActiveTab('editor')}
-            className={cn(
-              "flex items-center gap-2 pb-3 text-sm font-medium border-b-2 transition-colors",
-              activeTab === 'editor' 
-                ? "border-yellow-400 text-black" 
-                : "border-transparent text-zinc-500 hover:text-zinc-900"
-            )}
-          >
-            <Layout className="w-4 h-4" />
-            Editor
-          </button>
-          <button
-            onClick={() => setActiveTab('customers')}
-            className={cn(
-              "flex items-center gap-2 pb-3 text-sm font-medium border-b-2 transition-colors",
-              activeTab === 'customers'
-                ? "border-yellow-400 text-black"
-                : "border-transparent text-zinc-500 hover:text-zinc-900"
-            )}
-          >
-            <Users className="w-4 h-4" />
-            Pelanggan
-          </button>
-          <button
-            onClick={() => setActiveTab('saldo')}
-            className={cn(
-              "flex shrink-0 items-center gap-2 pb-3 text-sm font-medium border-b-2 transition-colors",
-              activeTab === 'saldo'
-                ? "border-yellow-400 text-black"
-                : "border-transparent text-zinc-500 hover:text-zinc-900"
-            )}
-          >
-            <Wallet className="w-4 h-4" />
-            Saldo
-          </button>
+          {TABS.map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              onClick={() => setActiveTab(key)}
+              className={cn(
+                "flex min-h-11 shrink-0 items-center gap-2 pb-3 text-sm font-medium border-b-2 transition-colors",
+                activeTab === key
+                  ? "border-yellow-400 text-black"
+                  : "border-transparent text-zinc-500 hover:text-zinc-900"
+              )}
+            >
+              <Icon className="w-4 h-4" />
+              {label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -193,13 +178,12 @@ export default function LandingBuilder() {
         </div>
       ) : (
         <div className="min-h-[600px]">
-          {activeTab === 'overview' ? (
-            <Overview onEdit={() => setActiveTab('editor')} />
-          ) : activeTab === 'saldo' ? (
-            <SellerBalance />
-          ) : (
-            <CustomersPanel />
-          )}
+          {activeTab === 'overview' && <Overview onEdit={() => setActiveTab('editor')} onOpenOrders={() => setActiveTab('pesanan')} onOpenProducts={() => setActiveTab('produk')} />}
+          {activeTab === 'produk' && <ProductsPanel />}
+          {activeTab === 'pesanan' && <OrdersPanel />}
+          {activeTab === 'kupon' && <CouponsPanel />}
+          {activeTab === 'saldo' && <SellerBalance />}
+          {activeTab === 'customers' && <CustomersPanel />}
         </div>
       )}
     </div>

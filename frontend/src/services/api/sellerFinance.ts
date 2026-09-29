@@ -17,6 +17,7 @@ export type LandingOrderStatus = {
   paid_at: string | null;
   has_file: boolean;
   download_token: string | null;
+  access_path: string | null; // "/akses/{token}" once paid
 };
 
 export function getLandingOrderPublicStatus(reference: string) {
@@ -36,6 +37,7 @@ export function reportLandingOrderReturn(reference: string, trxId?: string | nul
 export type SellerPayoutAccount = {
   status: string;
   verified: boolean;
+  email_verified: boolean;
   destination_type: 'bank' | 'ewallet';
   bank_code: string | null;
   bank_name: string | null;
@@ -122,6 +124,8 @@ export type AdminSellerFinanceSummary = {
   withdrawals_near_sla: number;
   withdrawals_over_sla: number;
   orders_pending: number;
+  refunds_open: number;
+  refunds_open_amount: number;
 };
 
 export type AdminWithdrawalRow = SellerWithdrawalRow & {
@@ -210,6 +214,11 @@ export function getSellerFinanceSettings() {
 
 export function updateSellerFinanceSettings(payload: Partial<SellerFinanceSettings>) {
   return apiRequest<SellerFinanceSettings>('/admin/seller-finance/settings', { method: 'PUT', body: payload });
+}
+
+// Hold a seller's balance (no withdrawals) or set a per-seller hold period.
+export function updateSellerFinanceSeller(organizationId: number, body: { is_frozen?: boolean; frozen_reason?: string | null; hold_days_override?: number | null }) {
+  return apiRequest<unknown>(`/admin/seller-finance/sellers/${organizationId}`, { method: 'PATCH', body });
 }
 
 export function exportSellerFinance(type: 'withdrawals' | 'ledger' | 'orders', from?: string, to?: string) {

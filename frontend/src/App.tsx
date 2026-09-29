@@ -16,6 +16,10 @@ import {
 const PublicLayout = lazy(() => import('@/layouts/PublicLayout'));
 const PublicPage = lazy(() => import('@/pages/public/PublicPage'));
 const OrderStatusPage = lazy(() => import('@/pages/public/OrderStatusPage'));
+const CheckoutPage = lazy(() => import('@/pages/public/CheckoutPage'));
+const AccessPage = lazy(() => import('@/pages/public/AccessPage'));
+const OrderLookupPage = lazy(() => import('@/pages/public/OrderLookupPage'));
+const SellerPolicyPage = lazy(() => import('@/pages/public/SellerPolicyPage'));
 const InvitationAcceptPage = lazy(() => import('@/pages/public/InvitationAcceptPage'));
 const LoginPage = lazy(() => import('@/pages/auth/LoginPage'));
 const RegisterPage = lazy(() => import('@/pages/auth/RegisterPage'));
@@ -47,6 +51,7 @@ const Notifications = lazy(() => import('@/pages/admin/Notifications'));
 const SystemHealth = lazy(() => import('@/pages/admin/SystemHealth'));
 const FinanceManagement = lazy(() => import('@/pages/admin/FinanceManagement'));
 const AdminSellerFinance = lazy(() => import('@/pages/admin/SellerFinance'));
+const AdminLandingModeration = lazy(() => import('@/pages/admin/LandingModeration'));
 const ShowcaseManagement = lazy(() => import('@/pages/admin/ShowcaseManagement'));
 const LandingContentManagement = lazy(() => import('@/pages/admin/LandingContentManagement'));
 const BrandSettings = lazy(() => import('@/pages/admin/BrandSettings'));
@@ -107,6 +112,11 @@ export default function App() {
         {/* Other public routes */}
         {/* Buyer thank-you / order status (payment return URL). */}
         <Route path="/pesanan/:reference" element={<OrderStatusPage />} />
+        {/* Hellom Page selling: checkout, buyer access page, order lookup, policies. */}
+        <Route path="/beli/:productId" element={<CheckoutPage />} />
+        <Route path="/akses/:token" element={<AccessPage />} />
+        <Route path="/cek-pesanan" element={<OrderLookupPage />} />
+        <Route path="/kebijakan/:slug" element={<SellerPolicyPage />} />
         <Route path="/p/demo" element={<PublicPage />} />
         <Route path="/p/landingpage/:organizationSlug" element={<PublicPage />} />
         <Route path="/p/domain/:domain" element={<PublicPage />} />
@@ -188,6 +198,7 @@ export default function App() {
           <Route path="products/purchases" element={<AdminProductPurchases />} />
           <Route path="finance" element={<FinanceManagement />} />
           <Route path="keuangan-penjual" element={<AdminSellerFinance />} />
+          <Route path="moderasi-toko" element={<AdminLandingModeration />} />
           <Route path="showcase" element={<ShowcaseManagement />} />
           <Route path="landing-content" element={<LandingContentManagement />} />
           <Route path="brand" element={<BrandSettings />} />

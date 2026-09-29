@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react';
 import { safeHtml } from '@/lib/safeHtml';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   ShoppingCart, CheckCircle, XCircle, Loader2,
   ArrowRight, Star, Menu, X, FileText, Upload,
   Facebook, Instagram, Music2, AtSign, MessageCircle,
-  Quote, Check, ChevronDown
+  Quote, Check, ChevronDown, BadgeCheck, Flag
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { createLandingOrder, getLandingOrderStatus, getPublicLandingByDomain, getPublicLandingPage, getPublicLandingPageByOrganization, submitLandingCustomer } from '@/lib/hellomApi';
+import { ApiError, createLandingOrder, getLandingOrderStatus, getPublicLandingByDomain, getPublicLandingPage, getPublicLandingPageByOrganization, reportLandingPage, submitLandingCustomer, REPORT_REASONS } from '@/lib/hellomApi';
+import type { PublicProduct, PublicSeller } from '@/lib/hellomApi';
 import { THEMES } from '@/pages/apps/landing-builder/constants';
 import { BLOCK_TYPES, BlockType } from '@/pages/apps/landing-builder/types';
 
@@ -130,6 +131,96 @@ const RenderProduct = ({ content, styles, blockId, onBuy }: { content: any, styl
     </div>
   </section>
 );
+
+const RenderLinkedProduct = ({ product, content, styles }: { product: PublicProduct, content: any, styles?: any }) => {
+  const navigate = useNavigate();
+  return (
+    <section className="py-16 px-4 md:py-20 md:px-6" style={{ backgroundColor: styles?.backgroundColor || '#f9fafb', color: styles?.textColor }}>
+      <div className="max-w-4xl mx-auto bg-white rounded-3xl shadow-xl overflow-hidden border border-zinc-100 flex flex-col md:flex-row">
+        <div className="md:w-1/2 bg-zinc-100 aspect-square md:aspect-auto md:min-h-[300px] flex items-center justify-center overflow-hidden">
+          {product.image_url ? (
+            <img src={product.image_url} alt={product.name} loading="lazy" className="h-full w-full object-cover" />
+          ) : (
+            <ShoppingCart className="w-20 h-20 text-zinc-300" />
+          )}
+        </div>
+        <div className="md:w-1/2 p-6 md:p-10 flex flex-col justify-center">
+          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{product.type_label}</p>
+          <h2 className="mt-1 text-2xl md:text-3xl font-bold text-zinc-900">{product.name}</h2>
+          <p className="mt-3 text-2xl font-bold" style={{ color: styles?.accentColor }}>
+            Rp {product.price.toLocaleString('id-ID')}
+            {product.compare_at_price && <span className="ml-2 text-base font-normal text-zinc-400 line-through">Rp {product.compare_at_price.toLocaleString('id-ID')}</span>}
+          </p>
+          {product.stock_left !== null && product.stock_left > 0 && <p className="mt-1 text-sm text-amber-700">Sisa {product.stock_left}</p>}
+          {product.description && <div className="[&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-1 [&_li]:my-0.5 mt-4 max-w-none text-zinc-600" dangerouslySetInnerHTML={{ __html: safeHtml(product.description) }} />}
+          <button
+            type="button"
+            disabled={!product.available}
+            onClick={() => navigate(`/beli/${product.id}${window.location.search}`)}
+            className="mt-6 w-full min-h-12 py-4 bg-black text-white font-bold rounded-xl hover:bg-zinc-800 transition-all flex items-center justify-center gap-2 disabled:opacity-40"
+            style={{ backgroundColor: styles?.buttonColor, color: styles?.buttonTextColor }}
+          >
+            {product.available ? (content.buttonText || 'Beli Sekarang') : (product.in_stock ? 'Belum tersedia' : 'Stok habis')} {product.available && <ArrowRight className="w-5 h-5" />}
+          </button>
+          <p className="text-xs text-center text-zinc-400 mt-4">Pembayaran aman diproses oleh Hellom</p>
+        </div>
+      </div>
+    </section>
+  );
+};
+
+const ReportDialog = ({ organizationSlug, pageId, onClose }: { organizationSlug: string, pageId: number | null, onClose: () => void }) => {
+  const [reason, setReason] = useState('scam');
+  const [description, setDescription] = useState('');
+  const [email, setEmail] = useState('');
+  const [sending, setSending] = useState(false);
+  const [done, setDone] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const send = async () => {
+    setSending(true);
+    setError(null);
+    try {
+      await reportLandingPage({ organization_slug: organizationSlug, landing_page_id: pageId ?? undefined, reason, description: description.trim() || undefined, reporter_email: email.trim() || undefined, page_url: window.location.href });
+      setDone('Terima kasih, laporan kamu sudah kami terima dan akan ditinjau tim Hellom.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Laporan belum terkirim');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center" onClick={onClose}>
+      <div className="w-full max-w-md rounded-t-3xl bg-white p-5 text-zinc-900 sm:rounded-3xl" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Laporkan halaman" style={{ paddingBottom: 'calc(1.25rem + env(safe-area-inset-bottom))' }}>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold">Laporkan halaman ini</h2>
+          <button type="button" onClick={onClose} aria-label="Tutup" className="flex h-11 w-11 items-center justify-center rounded-full hover:bg-zinc-100"><X className="h-5 w-5" /></button>
+        </div>
+        {done ? (
+          <p className="mt-3 rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-800">{done}</p>
+        ) : (
+          <div className="mt-3 space-y-3 text-sm">
+            <div className="space-y-2" role="radiogroup">
+              {Object.entries(REPORT_REASONS).map(([key, label]) => (
+                <label key={key} className="flex min-h-11 items-center gap-3 rounded-xl border border-zinc-200 px-3">
+                  <input type="radio" name="report-reason" checked={reason === key} onChange={() => setReason(key)} className="h-4 w-4" /> {label}
+                </label>
+              ))}
+            </div>
+            <textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} maxLength={2000} placeholder="Ceritakan singkat (opsional)" className="w-full rounded-xl border border-zinc-300 p-3 text-base outline-none focus:border-zinc-900" />
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email kamu (opsional, untuk dihubungi)" className="min-h-12 w-full rounded-xl border border-zinc-300 px-3 text-base outline-none focus:border-zinc-900" />
+            {error && <p className="text-rose-600">{error}</p>}
+            <button type="button" disabled={sending} onClick={() => void send()} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-zinc-900 font-bold text-white disabled:opacity-50">
+              {sending && <Loader2 className="h-4 w-4 animate-spin" />} Kirim laporan
+            </button>
+            <p className="text-xs text-zinc-500">Lihat juga <Link to="/kebijakan/produk-terlarang" className="underline">daftar produk terlarang</Link>.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 const RenderContent = ({ content, styles }: { content: any, styles?: any }) => (
   <section className="py-20 px-6" style={{ backgroundColor: styles?.backgroundColor, color: styles?.textColor }}>
@@ -564,6 +655,9 @@ export default function PublicPage() {
   });
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [suspended, setSuspended] = useState(false);
+  const [seller, setSeller] = useState<PublicSeller | null>(null);
+  const [showReport, setShowReport] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [checkoutSubmitting, setCheckoutSubmitting] = useState(false);
@@ -597,6 +691,7 @@ export default function PublicPage() {
 
         const landingPayload = response as {
           blocks?: Array<Record<string, any>>;
+          seller?: PublicSeller | null;
           page?: { id?: number; organization_slug?: string | null; content?: Record<string, unknown> | null };
           seo?: { title?: string };
         };
@@ -608,11 +703,13 @@ export default function PublicPage() {
           type: (BLOCK_TYPES.includes(block.block_type as BlockType)
             ? block.block_type
             : 'content') as Block['type'],
-          content: block.content || {},
+          // A product block linked to a Hellom Page product carries its current data.
+          content: block.product ? { ...(block.content || {}), linkedProduct: block.product } : (block.content || {}),
           styles: (block.content as Record<string, unknown> | null)?.styles,
         }));
 
         setBlocks(mappedBlocks);
+        setSeller(landingPayload.seller ?? null);
         setPageId(landingPayload.page?.id || null);
         const resolvedTheme = String(landingPayload.page?.content?.theme || 'modern');
         setTheme(resolvedTheme);
@@ -625,6 +722,7 @@ export default function PublicPage() {
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Gagal memuat public page';
+        setSuspended(error instanceof ApiError && error.status === 410);
         setLoadError(message);
         setBlocks([]);
         setPageId(null);
@@ -709,6 +807,16 @@ export default function PublicPage() {
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin" /></div>;
 
+  if (suspended) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
+        <XCircle className="mb-4 h-12 w-12 text-zinc-300" />
+        <h1 className="text-2xl font-bold mb-2">Toko ini sedang nonaktif</h1>
+        <p className="text-zinc-500">Halaman ini sementara tidak bisa dibuka. Sudah pernah membeli? <Link to="/cek-pesanan" className="underline">Cek pesanan kamu</Link>.</p>
+      </div>
+    );
+  }
+
   if (blocks.length === 0) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
@@ -729,7 +837,9 @@ export default function PublicPage() {
         switch (block.type) {
           case 'hero': return <RenderHero key={block.id} content={block.content} styles={mergedStyles} />;
           case 'features': return <RenderFeatures key={block.id} content={block.content} styles={mergedStyles} />;
-          case 'product': return <RenderProduct key={block.id} content={block.content} styles={mergedStyles} blockId={String(block.id)} onBuy={handleBuy} />;
+          case 'product': return block.content?.linkedProduct
+            ? <RenderLinkedProduct key={block.id} product={block.content.linkedProduct as PublicProduct} content={block.content} styles={mergedStyles} />
+            : <RenderProduct key={block.id} content={block.content} styles={mergedStyles} blockId={String(block.id)} onBuy={handleBuy} />;
           case 'content': return <RenderContent key={block.id} content={block.content} styles={mergedStyles} />;
           case 'cta': return <RenderCTA key={block.id} content={block.content} styles={mergedStyles} pageSettings={pageSettings} />;
           case 'banner': return <RenderBanner key={block.id} content={block.content} styles={mergedStyles} />;
@@ -753,9 +863,20 @@ export default function PublicPage() {
       })}
 
       {/* Footer */}
-      <footer className="py-8 text-center text-sm opacity-50 border-t border-current/10 mt-auto">
-        Powered by Hellom Page Builder
+      <footer className="py-8 px-4 text-center text-sm border-t border-current/10 mt-auto space-y-3">
+        {seller?.verified && (
+          <p className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700"><BadgeCheck className="h-4 w-4" /> Penjual Terverifikasi</p>
+        )}
+        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 opacity-60">
+          <Link to="/cek-pesanan" className="inline-flex min-h-11 items-center">Cek pesanan</Link>
+          <Link to="/kebijakan/refund" className="inline-flex min-h-11 items-center">Kebijakan refund</Link>
+          {seller?.slug && (
+            <button type="button" onClick={() => setShowReport(true)} className="inline-flex min-h-11 items-center gap-1"><Flag className="h-3.5 w-3.5" /> Laporkan</button>
+          )}
+        </div>
+        <p className="opacity-50">Powered by Hellom Page Builder</p>
       </footer>
+      {showReport && seller?.slug && <ReportDialog organizationSlug={seller.slug} pageId={pageId} onClose={() => setShowReport(false)} />}
 
       {pageSettings.showFloatingWhatsapp && pageSettings.whatsappNumber && (
         <a

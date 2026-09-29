@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { AlertTriangle, ArrowDownToLine, CheckCircle2, Clock3, Loader2, ShieldCheck, Wallet, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -8,6 +8,7 @@ import {
   getSellerLedger,
   getSellerWithdrawals,
   requestSellerWithdrawal,
+  sendEmailVerification,
 } from '@/lib/hellomApi';
 import type { SellerFinanceSummary, SellerLedgerRow, SellerWithdrawalRow } from '@/lib/hellomApi';
 
@@ -33,6 +34,25 @@ export default function SellerBalance() {
   const [withdrawals, setWithdrawals] = useState<SellerWithdrawalRow[]>([]);
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [sendingVerification, setSendingVerification] = useState(false);
+  const [searchParams] = useSearchParams();
+
+  // Back from the verification link (?email_verified=1).
+  useEffect(() => {
+    if (searchParams.get('email_verified') === '1') setToast('Email kamu sudah terverifikasi ✅');
+  }, [searchParams]);
+
+  const verifyEmail = async () => {
+    setSendingVerification(true);
+    try {
+      await sendEmailVerification();
+      setToast('Link verifikasi dikirim ke email kamu. Cek juga folder Spam.');
+    } catch (err) {
+      setToast(err instanceof Error ? err.message : 'Link belum bisa dikirim');
+    } finally {
+      setSendingVerification(false);
+    }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -149,6 +169,16 @@ export default function SellerBalance() {
               <Link to="/dashboard/payments" className="mt-2 inline-flex min-h-11 items-center font-semibold text-zinc-900 underline">
                 Lengkapi verifikasi KTP & rekening
               </Link>
+            )}
+            {!account.email_verified && (
+              <button
+                type="button"
+                disabled={sendingVerification}
+                onClick={() => void verifyEmail()}
+                className="mt-2 flex min-h-11 items-center gap-2 font-semibold text-zinc-900 underline disabled:opacity-50"
+              >
+                {sendingVerification && <Loader2 className="h-4 w-4 animate-spin" />} Kirim link verifikasi email
+              </button>
             )}
           </div>
         </div>

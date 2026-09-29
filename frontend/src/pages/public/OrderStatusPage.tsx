@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
-import { CheckCircle2, Clock3, Download, Loader2, Mail, XCircle } from 'lucide-react';
-import { getLandingOrderDownload, getLandingOrderPublicStatus, reportLandingOrderReturn } from '@/lib/hellomApi';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { ArrowRight, CheckCircle2, Clock3, Loader2, Mail, XCircle } from 'lucide-react';
+import { getLandingOrderPublicStatus, reportLandingOrderReturn } from '@/lib/hellomApi';
 import type { LandingOrderStatus } from '@/lib/hellomApi';
 
 // Buyer lands here after the payment page. The page only watches the order: it is marked
@@ -14,7 +14,6 @@ export default function OrderStatusPage() {
   const [searchParams] = useSearchParams();
   const [order, setOrder] = useState<LandingOrderStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [downloading, setDownloading] = useState(false);
   const reported = useRef(false);
 
   useEffect(() => {
@@ -57,19 +56,6 @@ export default function OrderStatusPage() {
       if (timer) window.clearTimeout(timer);
     };
   }, [reference]);
-
-  const openProduct = async () => {
-    if (!order?.download_token) return;
-    setDownloading(true);
-    try {
-      const res = (await getLandingOrderDownload(order.download_token)) as { file_url?: string | null };
-      if (res.file_url) window.location.href = res.file_url;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Tautan produk belum bisa dibuka');
-    } finally {
-      setDownloading(false);
-    }
-  };
 
   const paid = order?.status === 'paid' || order?.status === 'fulfilled';
   const closed = order?.status === 'expired' || order?.status === 'failed';
@@ -125,16 +111,13 @@ export default function OrderStatusPage() {
                 <div className="flex justify-between gap-3"><dt className="text-zinc-500">Status</dt><dd className="font-medium">{order.status_label}</dd></div>
               </dl>
 
-              {paid && order.has_file && (
-                <button
-                  type="button"
-                  onClick={() => void openProduct()}
-                  disabled={downloading}
-                  className="mt-6 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-zinc-900 px-4 text-base font-semibold text-white disabled:opacity-60"
+              {paid && order.access_path && (
+                <Link
+                  to={order.access_path}
+                  className="mt-6 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-zinc-900 px-4 text-base font-semibold text-white"
                 >
-                  {downloading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Download className="h-5 w-5" />}
-                  Buka produk
-                </button>
+                  {order.has_file ? 'Buka produk' : 'Lihat detail pesanan'} <ArrowRight className="h-5 w-5" />
+                </Link>
               )}
               {paid && (
                 <p className="mt-4 flex items-start gap-2 text-xs leading-5 text-zinc-500">
