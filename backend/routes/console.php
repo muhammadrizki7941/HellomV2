@@ -1,7 +1,9 @@
 <?php
 
 use Illuminate\Foundation\Inspiring;
+use App\Http\Controllers\HealthController;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schedule;
@@ -387,3 +389,8 @@ Schedule::command('landing:orders expire')->everyTenMinutes()->withoutOverlappin
 Schedule::command('landing:orders release')->everyTenMinutes()->withoutOverlapping();
 Schedule::command('landing:orders sla')->everyThirtyMinutes()->withoutOverlapping();
 Schedule::command('balance:reconcile')->dailyAt('03:10')->withoutOverlapping();
+
+// Heartbeat for GET /api/health: proves cron schedule:run is installed and running.
+Schedule::call(fn () => Cache::forever(HealthController::HEARTBEAT_KEY, time()))
+    ->everyMinute()
+    ->name('health:heartbeat');

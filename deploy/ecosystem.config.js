@@ -1,4 +1,4 @@
-// PM2 process file for the Hellom realtime server (and an optional queue worker).
+// PM2 process file for the Hellom realtime server and the Laravel queue worker.
 //
 //   pm2 startOrReload deploy/ecosystem.config.js --update-env
 //   pm2 save
@@ -49,16 +49,21 @@ module.exports = {
       },
     },
 
-    // Optional: Laravel queue worker. Only needed if QUEUE_CONNECTION is not
-    // "sync" AND something is dispatched to the queue (today nothing is:
-    // no job/mail/listener implements ShouldQueue). Uncomment when needed.
-    // {
-    //   name: 'hellom-queue',
-    //   cwd: path.join(root, 'backend'),
-    //   script: 'artisan',
-    //   interpreter: 'php',
-    //   args: 'queue:work --sleep=3 --tries=3 --max-time=3600',
-    //   autorestart: true,
-    // },
+    // Laravel queue worker (QUEUE_CONNECTION=database in backend/.env): access/receipt
+    // emails after payment, withdrawal/refund emails, verification email, Meta CAPI,
+    // order reconciliation. With "sync" these run inside the webhook/request instead.
+    // --timeout stays below DB_QUEUE_RETRY_AFTER (90 s); --max-time restarts it hourly;
+    // deploy.sh runs queue:restart after a deploy.
+    {
+      name: 'hellom-queue',
+      cwd: path.join(root, 'backend'),
+      script: 'artisan',
+      interpreter: 'php',
+      args: 'queue:work --queue=default --sleep=3 --tries=3 --backoff=60 --timeout=75 --max-time=3600',
+      instances: 1,
+      exec_mode: 'fork',
+      autorestart: true,
+      max_memory_restart: '256M',
+    },
   ],
 };

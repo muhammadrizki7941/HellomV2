@@ -7,3 +7,10 @@
 # See scheduled tasks:    php artisan schedule:list
 
 * * * * * cd /www/wwwroot/hellomspace.com/backend && php artisan schedule:run >> /dev/null 2>&1
+
+# Daily backup at 02:15 (database + uploads). Set BACKUP_RCLONE_REMOTE for an off-site
+# copy; a backup that only lives on the same VPS does not survive losing the VPS.
+15 2 * * * cd /www/wwwroot/hellomspace.com && BACKUP_DIR=/www/backup/hellom bash deploy/backup.sh >> /www/backup/hellom/backup.log 2>&1
+
+# Uptime: point an external monitor (UptimeRobot, BetterStack, ...) at
+#   https://hellomspace.com/api/health   → 200 = ok, 503 = database/cache/scheduler/queue problem

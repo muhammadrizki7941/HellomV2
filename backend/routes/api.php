@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\HealthController;
 use App\Http\Middleware\Api\AuthenticateApiToken;
 use Illuminate\Support\Facades\Route;
 
@@ -8,6 +9,9 @@ use Illuminate\Support\Facades\Route;
 | Each module file is required in a fixed order: registration order decides
 | which route matches first, so do not reorder without checking route:list.
 */
+
+// Uptime monitor: database, cache, scheduler heartbeat, queue backlog (200 / 503).
+Route::get('/health', HealthController::class)->middleware('throttle:60,1')->name('api.health');
 
 Route::prefix('v1/hellom')->name('api.v1.hellom.')->group(function () {
     require __DIR__.'/api/public.php';
