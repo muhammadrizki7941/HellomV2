@@ -24,7 +24,8 @@ trait ActivatesPlans
     private function planEligibleForApp(string $planSlug, string $appSlug): bool
     {
         return match ($appSlug) {
-            'landing_builder' => $planSlug === 'free',
+            // Hellom Page: the free plan, or paid multi-page plans (slug landing_*, quota in max_landing_pages).
+            'landing_builder' => $planSlug === 'free' || str_starts_with($planSlug, 'landing_'),
             'pos' => str_starts_with($planSlug, 'pos_'),
             default => false,
         };

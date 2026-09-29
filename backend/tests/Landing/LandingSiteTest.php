@@ -182,6 +182,8 @@ class LandingSiteTest extends SellerFinanceTestCase
         $html = $this->get('/' . $shop['username'])->assertOk()->getContent();
         $this->assertStringContainsString('1234567890123', $html);
         $this->assertStringNotContainsString($token, $html);
+        // Pixels wait for the visitor's consent (banner on the shop page).
+        $this->assertStringContainsString('id="hl-consent"', $html);
 
         // Paid order → one browser Purchase event, and server CAPI with the same event_id.
         Http::swap(new HttpFactory());
@@ -189,7 +191,7 @@ class LandingSiteTest extends SellerFinanceTestCase
         Http::fake(['https://graph.facebook.com/*' => Http::response(['events_received' => 1])]);
         $order = LandingPageOrder::query()->create(['organization_id' => $shop['org']->id, 'product_id' => $shop['product']->id, 'product_kind' => 'drive',
             'product_name' => 'E-book Resep', 'amount' => 49000, 'net_amount' => 44000, 'buyer_name' => 'Rina Wati', 'buyer_email' => 'Rina@Example.test',
-            'buyer_phone' => '081234567890', 'status' => 'paid', 'reference_id' => 'lps_TEST' . uniqid(), 'attribution' => ['fbclid' => 'abc123']]);
+            'buyer_phone' => '081234567890', 'status' => 'paid', 'reference_id' => 'lps_TEST' . uniqid(), 'attribution' => ['fbclid' => 'abc123', 'consent' => 'denied']]);
         $order->forceFill(['paid_at' => now()])->save();
 
         $first = $this->postJson("/api/v1/hellom/public/landingpage/orders/{$order->reference_id}/purchase-event")->assertOk()->json('data');
@@ -197,6 +199,10 @@ class LandingSiteTest extends SellerFinanceTestCase
         $this->assertSame('purchase_' . $order->reference_id, $first['event_id']);
         $this->postJson("/api/v1/hellom/public/landingpage/orders/{$order->reference_id}/purchase-event")->assertOk()->assertJsonPath('data.fire', false);
 
+        // No consent → nothing goes to Meta.
+        (new SendMetaPurchaseEvent($order->id))->handle();
+        Http::assertNothingSent();
+        $order->forceFill(['attribution' => ['fbclid' => 'abc123', 'consent' => 'granted']])->save();
         (new SendMetaPurchaseEvent($order->id))->handle();
         Http::assertSent(function (HttpRequest $request) use ($order) {
             $event = $request->data()['data'][0];

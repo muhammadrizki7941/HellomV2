@@ -26,8 +26,23 @@ function script(src: string) {
   document.head.appendChild(s);
 }
 
-/** Load the seller's pixels once (no-op when there are none). */
-export function loadSellerPixels(raw: Record<string, string> | null | undefined): Ids {
+/** The visitor's pixel consent for a shop (same key as the server-rendered page). */
+export function getPixelConsent(username: string | null | undefined): 'granted' | 'denied' | null {
+  try {
+    const v = username ? localStorage.getItem(`hl_consent:${username}`) : null;
+    return v === 'granted' || v === 'denied' ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setPixelConsent(username: string, value: 'granted' | 'denied') {
+  try { localStorage.setItem(`hl_consent:${username}`, value); } catch { /* ignore */ }
+}
+
+/** Load the seller's pixels once (no-op when there are none or without consent). */
+export function loadSellerPixels(raw: Record<string, string> | null | undefined, username?: string | null): Ids {
+  if (username !== undefined && getPixelConsent(username) !== 'granted') return {};
   if (loaded) return loaded;
   const ids: Ids = {};
   (Object.keys(PATTERNS) as Array<keyof Ids>).forEach((k) => {
@@ -125,7 +140,8 @@ export async function firePurchase(reference: string) {
   try {
     const ev = await claimPurchaseEvent(reference);
     if (!ev.fire) return;
-    loadSellerPixels(ev.tracking);
+    if (getPixelConsent(ev.username) !== 'granted') return;
+    loadSellerPixels(ev.tracking, ev.username);
     trackSellerEvent('Purchase', { value: ev.value, content_ids: ev.content_ids, content_name: ev.content_name, event_id: ev.event_id });
     await new Promise((r) => setTimeout(r, 800)); // give the pixels a moment before navigating
   } catch {

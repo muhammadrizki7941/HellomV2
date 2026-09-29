@@ -38,6 +38,10 @@ class SendMetaPurchaseEvent implements ShouldQueue
         if (!$order || !$order->isPaid() || $order->capi_sent_at) {
             return;
         }
+        // Only buyers who accepted the shop's pixels (consent banner) are sent to Meta.
+        if (($order->attribution['consent'] ?? null) !== 'granted') {
+            return;
+        }
         $settings = LandingTrackingSetting::query()->find($order->organization_id);
         $pixel = $settings?->publicIds()['meta_pixel_id'] ?? null;
         $token = (string) ($settings?->meta_capi_token ?? '');

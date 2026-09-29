@@ -4,7 +4,7 @@ import { BadgeCheck, CheckCircle2, Loader2, Lock, Minus, Plus, QrCode, ShieldChe
 import { cn } from '@/lib/utils';
 import { safeHtml } from '@/lib/safeHtml';
 import { EMAIL_PATTERN, suggestEmail } from '@/lib/emailTypo';
-import { captureAttributionFromUrl, firePurchase, loadSellerPixels, readAttribution, trackSellerEvent } from '@/lib/sellerPixels';
+import { captureAttributionFromUrl, firePurchase, getPixelConsent, loadSellerPixels, readAttribution, setPixelConsent, trackSellerEvent } from '@/lib/sellerPixels';
 import { ApiError, checkoutLandingProduct, getLandingOrderPublicStatus, getPublicLandingProduct, quoteLandingProduct } from '@/lib/hellomApi';
 import type { CheckoutQuote, CheckoutResult, PaymentOption, PublicProductPage } from '@/lib/hellomApi';
 
@@ -37,6 +37,8 @@ export default function CheckoutPage() {
   const [submitting, setSubmitting] = useState(false);
   const [qr, setQr] = useState<CheckoutResult | null>(null);
   const [qrPaid, setQrPaid] = useState(false);
+  // Pixel consent (only when the shop uses ad pixels).
+  const [consent, setConsent] = useState<'granted' | 'denied' | 'ask' | 'none'>('none');
   const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
@@ -54,8 +56,13 @@ export default function CheckoutPage() {
         setPage(data);
         setMethod(data.payment_options[0] ?? null);
         document.title = `${data.product.name} · Checkout`;
-        loadSellerPixels(data.tracking);
-        trackSellerEvent('InitiateCheckout', { value: data.product.price, content_ids: [data.product.id], content_name: data.product.name });
+        const username = data.seller.username ?? data.seller.slug ?? '';
+        const hasPixels = Object.keys(data.tracking ?? {}).length > 0;
+        setConsent(hasPixels ? getPixelConsent(username) ?? 'ask' : 'none');
+        if (getPixelConsent(username) === 'granted') {
+          loadSellerPixels(data.tracking, username);
+          trackSellerEvent('InitiateCheckout', { value: data.product.price, content_ids: [data.product.id], content_name: data.product.name });
+        }
       })
       .catch((err) => setLoadError({
         message: err instanceof Error ? err.message : 'Produk tidak ditemukan',
@@ -132,7 +139,7 @@ export default function CheckoutPage() {
     trackSellerEvent('AddPaymentInfo', { value: total, content_ids: [product.id], content_name: product.name });
     try {
       const result = await checkoutLandingProduct(productId, {
-        attribution: readAttribution(),
+        attribution: { ...(readAttribution() ?? {}), consent: consent === 'granted' ? 'granted' : 'denied' },
         quantity,
         coupon_code: couponCode || undefined,
         payment_method: method,
@@ -401,6 +408,23 @@ export default function CheckoutPage() {
         </section>
 
         {formError && <p role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{formError}</p>}
+
+        {consent === 'ask' && (
+          <div role="dialog" aria-label="Persetujuan cookie" className="rounded-3xl border border-zinc-200 bg-white p-4 text-sm ring-1 ring-zinc-100">
+            <p>Toko ini memakai cookie & piksel iklan (Meta, Google, TikTok) untuk mengukur iklan. Boleh?</p>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => { const u = page.seller.username ?? page.seller.slug ?? ''; setPixelConsent(u, 'denied'); setConsent('denied'); }} className="min-h-11 rounded-xl border border-zinc-300 font-semibold">Tolak</button>
+              <button type="button" onClick={() => {
+                const u = page.seller.username ?? page.seller.slug ?? '';
+                setPixelConsent(u, 'granted');
+                setConsent('granted');
+                loadSellerPixels(page.tracking, u);
+                trackSellerEvent('InitiateCheckout', { value: product.price, content_ids: [product.id], content_name: product.name });
+              }} className="min-h-11 rounded-xl bg-zinc-900 font-semibold text-white">Terima</button>
+            </div>
+            <Link to="/kebijakan/privasi" className="mt-2 inline-block text-xs text-zinc-500 underline">Kebijakan privasi</Link>
+          </div>
+        )}
 
         {/* Sticky pay button */}
         <div className="fixed inset-x-0 bottom-0 z-30 border-t border-zinc-200 bg-white/95 backdrop-blur" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>

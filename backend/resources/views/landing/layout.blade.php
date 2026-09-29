@@ -101,6 +101,16 @@
     </form>
 </dialog>
 
+@if (!empty($tracking) && !$preview)
+<div id="hl-consent" class="consent" role="dialog" aria-label="Persetujuan cookie" hidden>
+    <p>Toko ini memakai cookie & piksel iklan (Meta, Google, TikTok) untuk mengukur iklan. Boleh?</p>
+    <div class="consent-actions">
+        <button type="button" class="btn ghost" data-consent="denied">Tolak</button>
+        <button type="button" class="btn" data-consent="granted">Terima</button>
+    </div>
+    <a href="/kebijakan/privasi" class="small">Kebijakan privasi</a>
+</div>
+@endif
 <div id="hl-toast" class="toast" role="status"></div>
 <script type="application/json" id="hl-data">{!! json_encode($config, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) !!}</script>
 <script>{!! $js !!}</script>

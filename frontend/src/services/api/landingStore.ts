@@ -36,7 +36,7 @@ export type PublicProduct = {
   file: { extension: string; size: number } | null;
 };
 
-export type PublicSeller = { name: string | null; slug: string | null; verified: boolean; suspended: boolean };
+export type PublicSeller = { name: string | null; slug: string | null; username?: string; verified: boolean; suspended: boolean };
 
 export type PublicProductPage = {
   product: PublicProduct;

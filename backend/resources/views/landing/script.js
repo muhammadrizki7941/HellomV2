@@ -172,11 +172,28 @@
     window.__hlPixels = true;
     flush();
   }
-  if (T.meta_pixel_id || T.ga4_id || T.google_ads_id || T.tiktok_pixel_id) {
+  // Pixels only with the visitor's consent (per shop, remembered); stats above are cookie-free.
+  var consentKey = 'hl_consent:' + C.username;
+  var consent = null;
+  try { consent = localStorage.getItem(consentKey); } catch (e) {}
+  var banner = q('#hl-consent');
+  if (banner && !consent) banner.hidden = false;
+  qa('[data-consent]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      consent = b.getAttribute('data-consent');
+      try { localStorage.setItem(consentKey, consent); } catch (e) {}
+      if (banner) banner.hidden = true;
+      if (consent === 'granted') startPixels();
+    });
+  });
+  function startPixels() {
+    if (!(T.meta_pixel_id || T.ga4_id || T.google_ads_id || T.tiktok_pixel_id) || window.__hlStarted) return;
+    window.__hlStarted = true;
     fire('PageView');
     if (C.productId) fire('ViewContent', { content_ids: [C.productId], content_name: C.productName, value: C.value || 0, currency: 'IDR', content_type: 'product' });
     var start = function () { ('requestIdleCallback' in window) ? requestIdleCallback(loadPixels, { timeout: 3000 }) : setTimeout(loadPixels, 1500); };
     if (document.readyState === 'complete') start(); else window.addEventListener('load', start);
     ['pointerdown', 'keydown', 'scroll'].forEach(function (e) { window.addEventListener(e, loadPixels, { once: true, passive: true }); });
   }
+  if (consent === 'granted') startPixels();
 })();

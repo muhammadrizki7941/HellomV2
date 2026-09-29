@@ -72,6 +72,40 @@ const POLICIES: Record<string, Policy> = {
       },
     ],
   },
+  privasi: {
+    title: 'Kebijakan Privasi Hellom Page',
+    intro: 'Bagaimana data pengunjung dan pembeli di halaman toko Hellom dipakai dan dilindungi.',
+    sections: [
+      {
+        heading: 'Data yang kami kumpulkan',
+        items: [
+          'Saat membeli: nama, email, nomor WhatsApp (jika diisi), alamat kirim (produk fisik), dan jawaban pertanyaan penjual. Data ini dipakai untuk memproses pesanan dan mengirim produk.',
+          'Data pembayaran diproses mitra pembayaran resmi (mis. iPaymu); Hellom tidak menyimpan data kartu atau PIN.',
+          'Statistik kunjungan dihitung tanpa cookie dan tanpa menyimpan identitas pengunjung (hanya angka harian).',
+        ],
+      },
+      {
+        heading: 'Cookie & piksel iklan',
+        items: [
+          'Penjual dapat memasang piksel iklan (Meta, Google, TikTok). Piksel hanya aktif setelah kamu menekan "Terima" pada pemberitahuan cookie di halaman toko.',
+          'Jika kamu setuju, data pembelian (email/nomor HP dalam bentuk terenkripsi satu arah/hash) dapat dikirim ke Meta untuk mengukur iklan penjual.',
+          'Kamu bisa menolak; pembelian tetap berjalan normal. Pilihan disimpan di browser kamu dan bisa dihapus dengan menghapus data situs.',
+        ],
+      },
+      {
+        heading: 'Siapa yang melihat data kamu',
+        items: [
+          'Penjual toko tempat kamu membeli: untuk mengirim produk dan layanan purna jual.',
+          'Tim Hellom: untuk dukungan, pencegahan penipuan, refund, dan kewajiban hukum.',
+          'Data tidak dijual ke pihak lain.',
+        ],
+      },
+      {
+        heading: 'Hak kamu',
+        items: ['Minta salinan, perbaikan, atau penghapusan data dengan menghubungi tim Hellom. Data transaksi tertentu wajib kami simpan sesuai aturan perpajakan dan keuangan.'],
+      },
+    ],
+  },
   'produk-terlarang': {
     title: 'Produk Terlarang',
     intro: 'Produk dan konten berikut tidak boleh dijual atau ditampilkan di halaman Hellom.',
@@ -95,7 +129,7 @@ const POLICIES: Record<string, Policy> = {
   },
 };
 
-const NAV: Array<[string, string]> = [['syarat', 'Syarat & Ketentuan'], ['refund', 'Refund'], ['produk-terlarang', 'Produk Terlarang']];
+const NAV: Array<[string, string]> = [['syarat', 'Syarat & Ketentuan'], ['refund', 'Refund'], ['privasi', 'Privasi'], ['produk-terlarang', 'Produk Terlarang']];
 
 export default function SellerPolicyPage() {
   const { slug = 'syarat' } = useParams();

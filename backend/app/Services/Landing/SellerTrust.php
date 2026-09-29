@@ -26,12 +26,13 @@ final class SellerTrust
             ->exists();
     }
 
-    /** @return array{name: ?string, slug: ?string, verified: bool, suspended: bool} */
+    /** @return array{name: ?string, slug: ?string, username: string, verified: bool, suspended: bool} */
     public function publicSeller(Organization $organization): array
     {
         return [
             'name' => $organization->name,
             'slug' => $organization->slug,
+            'username' => $organization->landingUsername(),
             'verified' => $this->isVerified((int) $organization->id),
             'suspended' => $organization->landing_suspended_at !== null,
         ];

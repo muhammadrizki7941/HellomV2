@@ -241,7 +241,7 @@ final class CheckoutService
         if (!is_array($input)) {
             return null;
         }
-        $keys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'fbclid', 'gclid', 'ttclid', 'referrer', 'landing'];
+        $keys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'fbclid', 'gclid', 'ttclid', 'referrer', 'landing', 'consent'];
         $out = [];
         foreach ($keys as $key) {
             if (isset($input[$key]) && is_scalar($input[$key]) && trim((string) $input[$key]) !== '') {

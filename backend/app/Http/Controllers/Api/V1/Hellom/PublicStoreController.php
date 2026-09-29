@@ -268,6 +268,7 @@ class PublicStoreController extends BaseApiController
             'content_ids' => array_filter([LandingProduct::withTrashed()->whereKey($order->product_id)->value('public_id')]),
             'content_name' => (string) $order->product_name,
             'tracking' => $tracking,
+            'username' => Organization::query()->find($order->organization_id)?->landingUsername(),
         ], 'Purchase');
     }
 

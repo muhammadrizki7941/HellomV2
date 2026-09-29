@@ -155,6 +155,7 @@ export type PurchaseEvent = {
   content_ids?: string[];
   content_name?: string;
   tracking?: Record<string, string>;
+  username?: string;
 };
 
 /** Thank-you page: the Purchase pixel event, handed out once per paid order. */
