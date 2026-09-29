@@ -44,4 +44,9 @@ return [
         'model' => env('GEMINI_MODEL', 'gemini-2.0-flash'),
     ],
 
+    // Only used when iPaymu is in sandbox mode (never in production mode).
+    'ipaymu' => [
+        'sandbox_url' => env('IPAYMU_SANDBOX_URL', 'https://sandbox.ipaymu.com'),
+    ],
+
 ];

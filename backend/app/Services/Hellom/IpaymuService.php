@@ -89,7 +89,8 @@ class IpaymuService
         $bodyHash = strtolower(hash('sha256', $body));
         $stringToSign = strtoupper($method) . ':' . $config['va'] . ':' . $bodyHash . ':' . $config['api_key'];
         $signature = hash_hmac('sha256', $stringToSign, $config['api_key']);
-        $baseUrl = $config['is_production'] ? 'https://my.ipaymu.com' : 'https://sandbox.ipaymu.com';
+        // Sandbox URL is configurable so local end-to-end tests can use a mock; production is fixed.
+        $baseUrl = $config['is_production'] ? 'https://my.ipaymu.com' : rtrim((string) config('services.ipaymu.sandbox_url'), '/');
 
         try {
             $response = Http::baseUrl($baseUrl)
