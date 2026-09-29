@@ -117,7 +117,9 @@ class LandingPaymentTest extends SellerFinanceTestCase
 
         $summary = app(LandingPaymentService::class)->reconcilePending(5);
         $this->assertSame(1, $summary['paid']);
-        $this->assertSame(LandingPageOrder::STATUS_PAID, $paid->fresh()->status);
+        // Digital product: the access email (queue = sync here) marks it delivered.
+        $this->assertSame(LandingPageOrder::STATUS_FULFILLED, $paid->fresh()->status);
+        $this->assertNotNull($paid->fresh()->emails_sent_at);
 
         $stale = $this->pendingOrder($seller);
         $stale->forceFill(['expires_at' => now()->subMinute()])->save(); // no transaction id: cannot be paid

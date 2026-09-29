@@ -424,6 +424,10 @@ class AuthController extends BaseApiController
 
         if (isset($validated['email'])) {
             $validated['email'] = strtolower((string) $validated['email']);
+            if ($validated['email'] !== strtolower((string) $user->email)) {
+                // A new address must be verified again (withdrawals, seller badge).
+                $user->email_verified_at = null;
+            }
         }
 
         $user->update($validated);

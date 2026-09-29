@@ -6,10 +6,12 @@ use App\Mail\HellomCheckoutStatusMail;
 use App\Models\LandingBlock;
 use App\Models\LandingOrderItem;
 use App\Models\LandingPageOrder;
+use App\Models\LandingProduct;
 use App\Models\Organization;
 use App\Models\OrganizationLandingPage;
 use App\Services\SellerFinance\FeeCalculator;
 use App\Services\SellerFinance\FinanceSettings;
+use App\Support\FrontendUrl;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -81,32 +83,53 @@ class LandingSaleService
         });
     }
 
-    /** Email the buyer (receipt + download link) and notify the seller's owners/admins. */
-    public function sendSaleEmails(LandingPageOrder $order): void
+    /**
+     * Email the buyer (invoice + Hellom access link, never the raw file/Drive link) and
+     * notify the seller's owners/admins. Digital orders count as delivered once sent.
+     */
+    public function sendSaleEmails(LandingPageOrder $order, bool $buyerOnly = false): void
     {
         $mailer = app(PlatformMailService::class);
         $fmt = fn (int $v) => 'Rp ' . number_format($v, 0, ',', '.');
-        $paidAt = optional($order->paid_at)->format('d M Y H:i') ?? now()->format('d M Y H:i');
+        $paidAt = optional($order->paid_at)->timezone('Asia/Jakarta')->format('d M Y H:i') ?? now()->timezone('Asia/Jakarta')->format('d M Y H:i');
+        $organization = Organization::query()->with('users')->find((int) $order->organization_id);
+        $kind = (string) $order->product_kind;
+        $isDigital = in_array($kind, [LandingProduct::TYPE_DRIVE, LandingProduct::TYPE_FILE, LandingProduct::TYPE_LINK, 'pdf', 'product'], true)
+            && ($order->product_id !== null || $order->file_url);
 
-        // ── Buyer receipt ──
+        // ── Buyer invoice ──
         if ($order->buyer_email) {
+            $details = ['No. pesanan' => (string) $order->reference_id, 'Tanggal' => $paidAt, 'Penjual' => (string) ($organization?->name ?? '-')];
+            $details['Produk'] = (string) $order->product_name . ((int) $order->quantity > 1 ? ' × ' . (int) $order->quantity : '');
+            if ($order->subtotal_amount !== null && ((int) $order->discount_amount > 0 || (int) $order->shipping_amount > 0)) {
+                $details['Subtotal'] = $fmt((int) $order->subtotal_amount);
+                if ((int) $order->discount_amount > 0) {
+                    $details['Diskon' . ($order->coupon_code ? ' (' . $order->coupon_code . ')' : '')] = '−' . $fmt((int) $order->discount_amount);
+                }
+                if ((int) $order->shipping_amount > 0) {
+                    $details['Ongkir'] = $fmt((int) $order->shipping_amount);
+                }
+            }
+            $details['Total dibayar'] = $fmt((int) $order->amount);
+
             $buyerPayload = [
                 'headline' => 'Pembayaran berhasil 🎉',
-                'intro' => 'Terima kasih! Pembayaran kamu untuk "' . (string) $order->product_name . '" sudah kami terima.',
-                'details' => [
-                    'Produk' => (string) $order->product_name,
-                    'Nominal' => $fmt((int) $order->amount),
-                    'No. Order' => (string) $order->reference_id,
-                    'Tanggal' => $paidAt,
-                ],
+                'intro' => 'Terima kasih, ' . ((string) $order->buyer_name ?: 'kak') . '! Pembayaran kamu untuk "' . (string) $order->product_name . '" sudah kami terima.',
+                'details' => $details,
             ];
-
-            if ($order->file_url) {
-                $buyerPayload['cta_url'] = (string) $order->file_url;
-                $buyerPayload['cta_label'] = 'Unduh Produk';
-                $buyerPayload['closing'] = 'Simpan email ini sebagai bukti pembelian. Jika tombol tidak bekerja, salin tautan ini: ' . (string) $order->file_url;
+            if ($isDigital && $order->accessUrl()) {
+                $buyerPayload['cta_url'] = $order->accessUrl();
+                $buyerPayload['cta_label'] = 'Buka Produk';
+                $buyerPayload['closing'] = 'Tombol di atas membuka halaman akses produk kamu. Simpan email ini — halaman akses selalu berisi link terbaru dari penjual. '
+                    . 'Kalau tombol tidak bisa diklik, salin tautan ini: ' . $order->accessUrl();
+            } elseif ($kind === LandingProduct::TYPE_PHYSICAL) {
+                $buyerPayload['cta_url'] = $order->accessUrl();
+                $buyerPayload['cta_label'] = 'Lihat Status Pesanan';
+                $buyerPayload['closing'] = 'Penjual akan mengemas dan mengirim pesanan ke alamat kamu. Nomor resi akan muncul di halaman status pesanan.';
             } else {
-                $buyerPayload['closing'] = 'Penjual akan menghubungi kamu untuk pengiriman produk. Simpan email ini sebagai bukti pembelian.';
+                $buyerPayload['cta_url'] = $order->accessUrl();
+                $buyerPayload['cta_label'] = 'Lihat Pesanan';
+                $buyerPayload['closing'] = 'Penjual akan menghubungi kamu untuk langkah selanjutnya. Simpan email ini sebagai bukti pembelian.';
             }
 
             $mailer->sendTo((string) $order->buyer_email, new HellomCheckoutStatusMail(
@@ -115,8 +138,16 @@ class LandingSaleService
             ));
         }
 
+        if ($order->status === LandingPageOrder::STATUS_PAID && $isDigital) {
+            $order->forceFill(['status' => LandingPageOrder::STATUS_FULFILLED, 'fulfilled_at' => now()]);
+        }
+        $order->forceFill(['emails_sent_at' => now()])->save();
+
+        if ($buyerOnly) {
+            return;
+        }
+
         // ── Seller notification (owners/admins of the organization) ──
-        $organization = Organization::query()->with('users')->find((int) $order->organization_id);
         if (!$organization instanceof Organization) {
             return;
         }
@@ -133,22 +164,39 @@ class LandingSaleService
         }
 
         $available = $order->settlement_eta === null || $order->settlement_eta->isPast();
+        $details = [
+            'No. pesanan' => (string) $order->reference_id,
+            'Produk' => (string) $order->product_name . ((int) $order->quantity > 1 ? ' × ' . (int) $order->quantity : ''),
+            'Pembeli' => (string) ($order->buyer_name ?? '-'),
+            'Email pembeli' => (string) ($order->buyer_email ?? '-'),
+        ];
+        if ($order->buyer_phone) {
+            $details['WhatsApp pembeli'] = (string) $order->buyer_phone;
+        }
+        if (is_array($order->shipping_address)) {
+            $a = $order->shipping_address;
+            $details['Kirim ke'] = trim(($a['recipient_name'] ?? '') . ' (' . ($a['phone'] ?? '') . '), ' . ($a['address'] ?? '') . ', ' . ($a['city'] ?? '') . ' ' . ($a['postal_code'] ?? ''));
+        }
+        foreach ((array) $order->custom_fields as $field) {
+            $details[(string) ($field['label'] ?? 'Catatan')] = Str::limit((string) ($field['value'] ?? ''), 300);
+        }
+        $details += [
+            'Dibayar pembeli' => $fmt((int) $order->amount),
+            'Biaya layanan Hellom' => $fmt((int) $order->commission_amount),
+            'Masuk saldo (bersih)' => $fmt((int) $order->net_amount),
+            'Status saldo' => $available
+                ? 'Tersedia — sudah bisa ditarik'
+                : 'Tertahan sampai ' . $order->settlement_eta->timezone('Asia/Jakarta')->format('d M Y H:i'),
+            'Tanggal' => $paidAt,
+        ];
+        $needsAction = in_array((string) $order->product_kind, [LandingProduct::TYPE_PHYSICAL, LandingProduct::TYPE_SERVICE], true);
         $sellerPayload = [
             'headline' => 'Ada penjualan baru 💰',
-            'intro' => 'Produk "' . (string) $order->product_name . '" baru saja terjual di landing page kamu.',
-            'details' => [
-                'Produk' => (string) $order->product_name,
-                'Pembeli' => (string) ($order->buyer_name ?? '-'),
-                'Email pembeli' => (string) ($order->buyer_email ?? '-'),
-                'Harga' => $fmt((int) $order->amount),
-                'Biaya layanan Hellom' => $fmt((int) $order->commission_amount),
-                'Masuk saldo (bersih)' => $fmt((int) $order->net_amount),
-                'Status saldo' => $available
-                    ? 'Tersedia — sudah bisa ditarik'
-                    : 'Tertahan sampai ' . $order->settlement_eta->format('d M Y H:i'),
-                'Tanggal' => $paidAt,
-            ],
-            'closing' => 'Cek Saldo Penjualan di dashboard Hellom (Landing Page Builder › Saldo).',
+            'intro' => 'Produk "' . (string) $order->product_name . '" baru saja terjual di halaman Hellom kamu.'
+                . ($needsAction ? ' Pesanan ini perlu kamu proses (kirim barang / hubungi pembeli).' : ' Akses produk sudah otomatis dikirim ke pembeli.'),
+            'details' => $details,
+            'cta_url' => FrontendUrl::to('/dashboard/apps/landing-builder?tab=pesanan'),
+            'cta_label' => 'Buka Pesanan',
         ];
 
         foreach ($recipients as $email) {

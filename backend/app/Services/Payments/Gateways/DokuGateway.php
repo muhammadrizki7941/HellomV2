@@ -32,6 +32,11 @@ final class DokuGateway implements PaymentGateway
         return $this->settings->isReady();
     }
 
+    public function paymentOptions(): array
+    {
+        return ['other'];
+    }
+
     public function createCharge(ChargeRequest $request): ChargeResult
     {
         $session = $this->api->createCheckout([

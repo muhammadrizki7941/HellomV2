@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Support\FrontendUrl;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -73,6 +75,21 @@ class LandingPageOrder extends Model
         'refunded_at',
         'ledger_posted_at',
         'metadata',
+        'product_id',
+        'quantity',
+        'subtotal_amount',
+        'discount_amount',
+        'shipping_amount',
+        'coupon_id',
+        'coupon_code',
+        'shipping_address',
+        'custom_fields',
+        'access_max_opens',
+        'access_days',
+        'download_limit',
+        'shipping_courier',
+        'tracking_number',
+        'shipped_at',
     ];
 
     protected function casts(): array
@@ -92,12 +109,55 @@ class LandingPageOrder extends Model
             'refunded_at' => 'datetime',
             'ledger_posted_at' => 'datetime',
             'metadata' => 'array',
+            'quantity' => 'integer',
+            'subtotal_amount' => 'integer',
+            'discount_amount' => 'integer',
+            'shipping_amount' => 'integer',
+            'shipping_address' => 'array',
+            'custom_fields' => 'array',
+            'access_max_opens' => 'integer',
+            'access_days' => 'integer',
+            'access_open_count' => 'integer',
+            'access_last_opened_at' => 'datetime',
+            'download_limit' => 'integer',
+            'download_count' => 'integer',
+            'shipped_at' => 'datetime',
+            'inventory_reserved_at' => 'datetime',
+            'inventory_released_at' => 'datetime',
+            'emails_sent_at' => 'datetime',
+            'email_resend_count' => 'integer',
         ];
     }
 
     public function organization(): BelongsTo
     {
         return $this->belongsTo(Organization::class);
+    }
+
+    public function product(): BelongsTo
+    {
+        return $this->belongsTo(LandingProduct::class, 'product_id')->withTrashed();
+    }
+
+    public function coupon(): BelongsTo
+    {
+        return $this->belongsTo(LandingCoupon::class, 'coupon_id')->withTrashed();
+    }
+
+    public function refunds(): HasMany
+    {
+        return $this->hasMany(LandingRefund::class, 'order_id');
+    }
+
+    /** Buyer's access page (/akses/{token}); the token exists once the order is paid. */
+    public function accessUrl(): ?string
+    {
+        return $this->download_token ? FrontendUrl::to('/akses/' . $this->download_token) : null;
+    }
+
+    public function accessExpiresAt(): ?CarbonInterface
+    {
+        return $this->access_days && $this->paid_at ? $this->paid_at->copy()->addDays((int) $this->access_days) : null;
     }
 
     public function items(): HasMany

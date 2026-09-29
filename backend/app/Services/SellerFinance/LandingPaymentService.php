@@ -5,6 +5,7 @@ namespace App\Services\SellerFinance;
 use App\Jobs\SendLandingSaleEmails;
 use App\Models\LandingPageOrder;
 use App\Models\PlatformFinanceLedger;
+use App\Services\Landing\CheckoutService;
 use App\Services\Payments\GatewayRegistry;
 use App\Services\Payments\PaymentStatus;
 use Illuminate\Support\Facades\DB;
@@ -27,6 +28,7 @@ final class LandingPaymentService
         private readonly GatewayRegistry $gateways,
         private readonly FeeCalculator $fees,
         private readonly SellerLedger $ledger,
+        private readonly CheckoutService $checkout,
     ) {
     }
 
@@ -110,6 +112,9 @@ final class LandingPaymentService
             $split = $this->fees->split((int) $locked->amount, $status->channel ?: $status->method, $status->fee);
             $holdDays = $this->ledger->holdDaysFor((int) $locked->organization_id);
             $availableAt = now()->addDays($holdDays);
+
+            // Sold count; stock/coupon taken again when the order had expired first.
+            $this->checkout->commitSale($locked);
 
             $meta = is_array($locked->metadata) ? $locked->metadata : [];
             $meta['fee_split'] = $split;
@@ -248,6 +253,7 @@ final class LandingPaymentService
                 return false;
             }
             $locked->forceFill(['status' => $status, $timestampColumn => now()])->save();
+            $this->checkout->releaseInventory($locked);
 
             return true;
         }, 3);

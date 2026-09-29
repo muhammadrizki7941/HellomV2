@@ -40,14 +40,15 @@ final class WithdrawalService
      *
      * @return array<string, mixed>
      */
-    public function payoutAccount(int $organizationId): array
+    public function payoutAccount(int $organizationId, ?User $user = null): array
     {
         $profile = OrganizationPayoutProfile::query()->where('organization_id', $organizationId)->first();
-        $blocked = $this->blockReason($profile);
+        $blocked = $this->blockReason($profile, $user);
 
         return [
             'status' => $profile ? (string) $profile->status : OrganizationPayoutProfile::STATUS_UNVERIFIED,
             'verified' => $profile?->isVerified() ?? false,
+            'email_verified' => $user === null || $user->email_verified_at !== null,
             'destination_type' => $profile?->destination_type ?? 'bank',
             'bank_code' => $profile?->bank_code,
             'bank_name' => $profile?->bank_name,
@@ -62,7 +63,7 @@ final class WithdrawalService
     public function request(Organization $organization, User $user, int $amount, ?string $notes = null): SellerWithdrawal
     {
         $profile = OrganizationPayoutProfile::query()->where('organization_id', $organization->id)->first();
-        if ($reason = $this->blockReason($profile)) {
+        if ($reason = $this->blockReason($profile, $user)) {
             throw new FinanceException($reason, 'WITHDRAWAL_BLOCKED');
         }
         $settings = $this->settings->all();
@@ -288,10 +289,13 @@ final class WithdrawalService
         }
     }
 
-    private function blockReason(?OrganizationPayoutProfile $profile): ?string
+    private function blockReason(?OrganizationPayoutProfile $profile, ?User $user = null): ?string
     {
         if (!$profile || !$profile->isVerified()) {
             return 'Lengkapi dan tunggu verifikasi data diri (KTP) & rekening sebelum menarik dana.';
+        }
+        if ($user !== null && $user->email_verified_at === null) {
+            return 'Verifikasi email kamu dulu sebelum menarik dana.';
         }
         if (!$this->namesMatch((string) $profile->full_name, (string) $profile->account_name)) {
             return 'Nama pemilik rekening harus sama dengan nama di KTP yang terverifikasi.';

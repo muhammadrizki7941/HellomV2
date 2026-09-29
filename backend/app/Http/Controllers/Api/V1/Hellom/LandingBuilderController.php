@@ -6,11 +6,13 @@ use App\Models\LandingDomain;
 use App\Models\LandingBlock;
 use App\Models\LandingPageStat;
 use App\Models\LandingPageVersion;
+use App\Models\LandingProduct;
 use App\Models\LandingStat;
 use App\Models\Organization;
 use App\Models\OrganizationLandingPage;
 use App\Models\CustomerLandingpage;
 use App\Models\User;
+use App\Services\Landing\SellerTrust;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -1194,6 +1196,10 @@ class LandingBuilderController extends BaseApiController
             return $this->fail('Published landing page not found', ['code' => 'PUBLISHED_LANDING_PAGE_NOT_FOUND'], 404);
         }
 
+        if ($suspended = $this->suspendedSellerResponse($page)) {
+            return $suspended;
+        }
+
         $this->trackPublicView($page);
 
         $payload = $this->publicPayload($page, '/landing/' . $organizationSlug . '/' . $pageSlug, sprintf('landing:%s:%s', $organizationSlug, $pageSlug));
@@ -1214,6 +1220,10 @@ class LandingBuilderController extends BaseApiController
 
         if (!$page) {
             return $this->fail('Published landing page not found', ['code' => 'PUBLISHED_LANDING_PAGE_NOT_FOUND'], 404);
+        }
+
+        if ($suspended = $this->suspendedSellerResponse($page)) {
+            return $suspended;
         }
 
         $this->trackPublicView($page);
@@ -1244,6 +1254,10 @@ class LandingBuilderController extends BaseApiController
         $page = $landingDomain->landingPage;
         if ((string) $page->status !== 'published') {
             return $this->fail('Published landing page not found for domain', ['code' => 'DOMAIN_LANDING_NOT_FOUND'], 404);
+        }
+
+        if ($suspended = $this->suspendedSellerResponse($page)) {
+            return $suspended;
         }
 
         $this->trackPublicView($page);
@@ -1303,24 +1317,43 @@ class LandingBuilderController extends BaseApiController
         $title = (string) ($hero['title'] ?? $page->title);
         $description = (string) ($hero['subtitle'] ?? 'Landing page published via Hellom Landing Builder');
 
-        $blocks = LandingBlock::query()
+        $blockModels = LandingBlock::query()
             ->where('landing_page_id', (int) $page->id)
             ->where('is_visible', true)
             ->orderBy('sort_order')
             ->orderBy('id')
-            ->get()
-            ->map(fn(LandingBlock $block) => [
-                'id' => (int) $block->id,
-                'block_key' => (string) $block->block_key,
-                'block_type' => (string) $block->block_type,
-                'sort_order' => (int) $block->sort_order,
-                // Paid delivery links stripped, HTML sanitised: visitors are anonymous.
-                'content' => $block->publicContent(),
-            ])
+            ->get();
+
+        // Blocks linked to a landing product (content.productId = public id) get its
+        // current public data from the database: price, stock, image. Never delivery data.
+        $productIds = $blockModels->map(fn(LandingBlock $b) => is_array($b->content) ? ($b->content['productId'] ?? null) : null)
+            ->filter(fn($id) => is_string($id) && $id !== '')->unique()->values();
+        $products = $productIds->isEmpty() ? collect() : LandingProduct::query()
+            ->where('organization_id', (int) $page->organization_id)
+            ->whereIn('public_id', $productIds)
+            ->get()->keyBy('public_id');
+
+        $blocks = $blockModels
+            ->map(function (LandingBlock $block) use ($products) {
+                $productId = is_array($block->content) ? ($block->content['productId'] ?? null) : null;
+
+                return [
+                    'id' => (int) $block->id,
+                    'block_key' => (string) $block->block_key,
+                    'block_type' => (string) $block->block_type,
+                    'sort_order' => (int) $block->sort_order,
+                    // Paid delivery links stripped, HTML sanitised: visitors are anonymous.
+                    'content' => $block->publicContent(),
+                    'product' => is_string($productId) && isset($products[$productId]) ? $products[$productId]->publicPayload() : null,
+                ];
+            })
             ->values();
+
+        $organization = $page->organization ?? Organization::query()->find((int) $page->organization_id);
 
         return [
             'page' => $this->pagePayload($page),
+            'seller' => $organization ? app(SellerTrust::class)->publicSeller($organization) : null,
             'blocks' => $blocks,
             'seo' => [
                 'title' => $title,
@@ -1334,6 +1367,16 @@ class LandingBuilderController extends BaseApiController
                 'generated_at' => now()->toISOString(),
             ],
         ];
+    }
+
+    /** A shop switched off by super admin shows a "toko nonaktif" page instead of its content. */
+    private function suspendedSellerResponse(OrganizationLandingPage $page): ?JsonResponse
+    {
+        $suspended = Organization::query()->whereKey((int) $page->organization_id)->whereNotNull('landing_suspended_at')->exists();
+
+        return $suspended
+            ? $this->fail('Toko ini sedang nonaktif', ['code' => 'SELLER_SUSPENDED'], 410)->header('Cache-Control', 'no-store')
+            : null;
     }
 
     private function findPageForCurrentOrg(Request $request, int $id): ?OrganizationLandingPage

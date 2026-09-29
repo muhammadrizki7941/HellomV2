@@ -16,6 +16,7 @@ class SellerLedgerEntry extends Model
     public const TYPE_WITHDRAWAL = 'withdrawal';
     public const TYPE_WITHDRAWAL_REVERSAL = 'withdrawal_reversal';
     public const TYPE_REFUND = 'refund';
+    public const TYPE_REFUND_REVERSAL = 'refund_reversal';
     public const TYPE_ADJUSTMENT = 'adjustment';
     public const TYPE_OPENING = 'opening';
 
@@ -29,7 +30,8 @@ class SellerLedgerEntry extends Model
         self::TYPE_RELEASE => 'Saldo cair',
         self::TYPE_WITHDRAWAL => 'Penarikan dana',
         self::TYPE_WITHDRAWAL_REVERSAL => 'Penarikan dibatalkan / gagal',
-        self::TYPE_REFUND => 'Refund',
+        self::TYPE_REFUND => 'Refund ke pembeli',
+        self::TYPE_REFUND_REVERSAL => 'Refund gagal (dana kembali)',
         self::TYPE_ADJUSTMENT => 'Penyesuaian',
         self::TYPE_OPENING => 'Saldo awal',
     ];

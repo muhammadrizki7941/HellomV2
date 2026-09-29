@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers\Api\V1\Hellom;
 
+use App\Http\Controllers\Api\V1\Hellom\Concerns\ResolvesSellerOrganization;
 use App\Models\LandingPageOrder;
 use App\Models\Organization;
 use App\Models\SellerBalance;
 use App\Models\SellerLedgerEntry;
 use App\Models\SellerWithdrawal;
-use App\Models\User;
 use App\Services\SellerFinance\FinanceException;
 use App\Services\SellerFinance\FinanceSettings;
 use App\Services\SellerFinance\SellerLedger;
@@ -22,6 +22,8 @@ use Illuminate\Http\Request;
  */
 class SellerFinanceController extends BaseApiController
 {
+    use ResolvesSellerOrganization;
+
     public function __construct(
         private readonly SellerLedger $ledger,
         private readonly WithdrawalService $withdrawals,
@@ -46,7 +48,7 @@ class SellerFinanceController extends BaseApiController
                 'withdrawn' => (int) ($balance->withdrawn ?? 0),
                 'is_frozen' => (bool) ($balance->is_frozen ?? false),
             ],
-            'payout_account' => $this->withdrawals->payoutAccount((int) $organization->id),
+            'payout_account' => $this->withdrawals->payoutAccount((int) $organization->id, $request->user()),
             'rules' => [
                 'min_withdrawal' => (int) $settings['min_withdrawal'],
                 'withdrawal_fee_flat' => (int) $settings['withdrawal_fee_flat'],
@@ -181,19 +183,6 @@ class SellerFinanceController extends BaseApiController
     /** @return array{0: ?Organization, 1: ?JsonResponse} */
     private function organization(Request $request): array
     {
-        $user = $request->user();
-        if (!$user instanceof User) {
-            return [null, $this->fail('Unauthorized', ['code' => 'UNAUTHORIZED'], 401)];
-        }
-        $organization = Organization::query()->find((int) $user->current_organization_id);
-        if (!$organization) {
-            return [null, $this->fail('Pilih organisasi dulu', ['code' => 'NO_ACTIVE_ORGANIZATION'], 403)];
-        }
-        $role = (string) ($user->organizations()->where('organizations.id', $organization->id)->first()?->pivot?->role ?? '');
-        if (!in_array($role, ['owner', 'admin'], true) && (string) $user->role !== 'super_admin') {
-            return [null, $this->fail('Hanya pemilik/admin toko yang bisa melihat saldo penjualan', ['code' => 'INSUFFICIENT_ROLE'], 403)];
-        }
-
-        return [$organization, null];
+        return $this->sellerOrganization($request, 'Hanya pemilik/admin toko yang bisa melihat saldo penjualan');
     }
 }

@@ -4,17 +4,17 @@ namespace App\Http\Controllers\Api\V1\Hellom\Billing;
 
 use App\Http\Controllers\Api\V1\Hellom\BaseApiController;
 use App\Models\LandingBlock;
-use App\Models\LandingPageOrder;
 use App\Models\OrganizationLandingPage;
 use App\Services\Hellom\LandingSaleService;
-use App\Services\Payments\ChargeRequest;
+use App\Services\Landing\PaymentStarter;
 use App\Services\Payments\GatewayRegistry;
-use App\Support\FrontendUrl;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use RuntimeException;
 
 /**
- * Public checkout for products sold on an organization's landing page.
+ * Public checkout for products written directly into landing page blocks (before
+ * Fase 3). New pages sell landing_products through PublicStoreController.
  */
 class LandingCheckoutController extends BaseApiController
 {
@@ -24,11 +24,11 @@ class LandingCheckoutController extends BaseApiController
      * adapter). The order only becomes paid through a gateway-verified webhook or the
      * reconcile job — never from this request or the thank-you page.
      */
-    public function publicLandingCheckout(Request $request, string $organizationSlug, GatewayRegistry $gateways): JsonResponse
+    public function publicLandingCheckout(Request $request, string $organizationSlug, GatewayRegistry $gateways, PaymentStarter $starter): JsonResponse
     {
         $page = OrganizationLandingPage::query()
             ->with('organization')
-            ->whereHas('organization', fn ($query) => $query->where('slug', $organizationSlug))
+            ->whereHas('organization', fn ($query) => $query->where('slug', $organizationSlug)->whereNull('landing_suspended_at'))
             ->where('status', 'published')
             ->orderByDesc('published_at')
             ->orderByDesc('id')
@@ -77,73 +77,13 @@ class LandingCheckoutController extends BaseApiController
             'email' => (string) $validated['buyer_email'],
             'phone' => isset($validated['buyer_phone']) ? (string) $validated['buyer_phone'] : null,
         ]);
-        $referenceId = (string) $order->reference_id;
 
         try {
-            $charge = $gateway->createCharge(new ChargeRequest(
-                reference: $referenceId,
-                amount: (int) $order->amount,
-                productName: (string) $order->product_name,
-                buyerName: (string) $order->buyer_name,
-                buyerEmail: (string) $order->buyer_email,
-                buyerPhone: $order->buyer_phone,
-                // Thank-you page: polls the order status; it can never mark the order paid.
-                returnUrl: FrontendUrl::to('/pesanan/' . $referenceId),
-                notifyContext: [
-                    'purpose' => 'landing_sale',
-                    'organization_id' => (int) $page->organization_id,
-                    'reference_id' => $referenceId,
-                ],
-            ));
-        } catch (\Throwable $exception) {
-            report($exception);
-            $order->forceFill(['status' => LandingPageOrder::STATUS_FAILED, 'failed_at' => now()])->save();
-
-            return $this->fail('Pembayaran belum bisa dibuat. Coba lagi sebentar lagi.', [
-                'code' => strtoupper($gateway->name()) . '_LANDING_CHECKOUT_FAILED',
-            ], 422);
+            $payment = $starter->start($order);
+        } catch (RuntimeException $e) {
+            return $this->fail($e->getMessage(), ['code' => strtoupper($gateway->name()) . '_LANDING_CHECKOUT_FAILED'], 422);
         }
 
-        $meta = is_array($order->metadata) ? $order->metadata : [];
-        if ($charge->mode === 'qris') {
-            $meta['qr_image_url'] = (string) $charge->qrImageUrl;
-            $meta['qr_string'] = (string) $charge->qrString;
-        }
-        $order->forceFill([
-            'provider' => $charge->provider,
-            'gateway_ref' => (string) ($charge->gatewayRef ?? ''),
-            'gateway_trx_id' => $charge->transactionId ?: null,
-            'metadata' => $meta,
-        ])->save();
-
-        if ($charge->mode === 'qris') {
-            return $this->ok([
-                'reference_id' => $referenceId,
-                'provider' => $charge->provider,
-                'mode' => 'qris',
-                'amount' => (int) $order->amount,
-                'product_name' => (string) $order->product_name,
-                'qr_image_url' => route('api.v1.hellom.public.landing.orders.qr', ['reference' => $referenceId]),
-                'qr_string' => (string) $charge->qrString,
-                'payment_url' => null,
-                'status_url' => FrontendUrl::to('/pesanan/' . $referenceId),
-            ], 'Checkout QRIS dibuat', 201);
-        }
-
-        if (!$charge->paymentUrl) {
-            $order->forceFill(['status' => LandingPageOrder::STATUS_FAILED, 'failed_at' => now()])->save();
-
-            return $this->fail('Halaman pembayaran tidak tersedia. Coba lagi.', ['code' => 'PAYMENT_URL_MISSING'], 422);
-        }
-
-        return $this->ok([
-            'reference_id' => $referenceId,
-            'provider' => $charge->provider,
-            'mode' => 'redirect',
-            'amount' => (int) $order->amount,
-            'product_name' => (string) $order->product_name,
-            'payment_url' => $charge->paymentUrl,
-            'status_url' => FrontendUrl::to('/pesanan/' . $referenceId),
-        ], 'Checkout produk dibuat', 201);
+        return $this->ok($payment, $payment['mode'] === 'qris' ? 'Checkout QRIS dibuat' : 'Checkout produk dibuat', 201);
     }
 }

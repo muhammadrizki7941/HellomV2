@@ -16,6 +16,14 @@ interface PaymentGateway
 
     public function isReady(): bool;
 
+    /**
+     * Choices shown on the checkout page: "qris" (QR on our page) and/or "other" (the
+     * provider's own payment page with VA, e-wallet, retail, …).
+     *
+     * @return list<'qris'|'other'>
+     */
+    public function paymentOptions(): array;
+
     /** Start a payment for the buyer. */
     public function createCharge(ChargeRequest $request): ChargeResult;
 

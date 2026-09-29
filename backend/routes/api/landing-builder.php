@@ -1,13 +1,18 @@
 <?php
 
 /*
-| Landing Builder app (requires canUseApp:landing_builder).
+| Landing Builder app (requires canUseApp:landing_builder), plus the seller order
+| endpoints of Hellom Page, which stay open after a subscription ends.
 | Loaded from routes/api.php inside the v1/hellom prefix group.
 */
 
+use App\Http\Controllers\Api\V1\Hellom\EmailVerificationController;
 use App\Http\Controllers\Api\V1\Hellom\EntitlementController;
 use App\Http\Controllers\Api\V1\Hellom\FileAssetController;
 use App\Http\Controllers\Api\V1\Hellom\LandingBuilderController;
+use App\Http\Controllers\Api\V1\Hellom\SellerCouponController;
+use App\Http\Controllers\Api\V1\Hellom\SellerOrderController;
+use App\Http\Controllers\Api\V1\Hellom\SellerProductController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('canUseApp:landing_builder')->group(function () {
@@ -73,4 +78,38 @@ Route::middleware('canUseApp:landing_builder')->group(function () {
         ->name('apps.landing_builder.assets.index');
     Route::post('/apps/landing-builder/assets/upload', [FileAssetController::class, 'upload'])
         ->name('apps.landing_builder.assets.upload');
+
+    // Products & coupons (Fase 3) — owner/admin of the shop.
+    Route::prefix('/apps/landing-builder')->name('apps.landing_builder.')->group(function () {
+        Route::get('/products', [SellerProductController::class, 'index'])->name('products.index');
+        Route::post('/products', [SellerProductController::class, 'store'])->name('products.store');
+        Route::post('/products/check-drive-link', [SellerProductController::class, 'checkDriveLink'])->name('products.check_drive_link');
+        Route::get('/products/{productId}', [SellerProductController::class, 'show'])->whereNumber('productId')->name('products.show');
+        Route::put('/products/{productId}', [SellerProductController::class, 'update'])->whereNumber('productId')->name('products.update');
+        Route::post('/products/{productId}/toggle', [SellerProductController::class, 'toggle'])->whereNumber('productId')->name('products.toggle');
+        Route::delete('/products/{productId}', [SellerProductController::class, 'destroy'])->whereNumber('productId')->name('products.destroy');
+        Route::post('/products/{productId}/image', [SellerProductController::class, 'uploadImage'])->whereNumber('productId')->name('products.image');
+        Route::post('/products/{productId}/file', [SellerProductController::class, 'uploadFile'])->whereNumber('productId')->name('products.file');
+        Route::delete('/products/{productId}/file', [SellerProductController::class, 'deleteFile'])->whereNumber('productId')->name('products.file.destroy');
+        Route::get('/coupons', [SellerCouponController::class, 'index'])->name('coupons.index');
+        Route::post('/coupons', [SellerCouponController::class, 'store'])->name('coupons.store');
+        Route::put('/coupons/{couponId}', [SellerCouponController::class, 'update'])->whereNumber('couponId')->name('coupons.update');
+        Route::delete('/coupons/{couponId}', [SellerCouponController::class, 'destroy'])->whereNumber('couponId')->name('coupons.destroy');
+    });
 });
+
+// Orders, buyers (Fase 3): not behind the subscription — a seller must be able to fulfil
+// and refund what was sold, like the sales balance.
+Route::prefix('/seller/orders')->name('seller_orders.')->group(function () {
+    Route::get('/summary', [SellerOrderController::class, 'summary'])->name('summary');
+    Route::get('/', [SellerOrderController::class, 'index'])->name('index');
+    Route::get('/export', [SellerOrderController::class, 'exportOrders'])->name('export');
+    Route::get('/buyers', [SellerOrderController::class, 'buyers'])->name('buyers');
+    Route::get('/buyers/export', [SellerOrderController::class, 'exportBuyers'])->name('buyers.export');
+    Route::get('/{orderId}', [SellerOrderController::class, 'show'])->whereNumber('orderId')->name('show');
+    Route::post('/{orderId}/resend', [SellerOrderController::class, 'resend'])->whereNumber('orderId')->name('resend');
+    Route::post('/{orderId}/fulfill', [SellerOrderController::class, 'fulfill'])->whereNumber('orderId')->name('fulfill');
+    Route::post('/{orderId}/refund', [SellerOrderController::class, 'refund'])->whereNumber('orderId')->middleware('throttle:10,1')->name('refund');
+});
+Route::post('/account/email/verification', [EmailVerificationController::class, 'send'])->middleware('throttle:hellom-landing-mail')
+    ->name('account.email.verification');

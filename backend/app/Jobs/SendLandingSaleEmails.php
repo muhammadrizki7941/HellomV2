@@ -10,7 +10,10 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 
-/** Buyer receipt + seller notification after a sale is booked (queued, off the webhook request). */
+/**
+ * Buyer receipt + seller notification after a sale is booked (queued, off the webhook
+ * request). $buyerOnly: "kirim ulang" of the buyer email (invoice + access link).
+ */
 class SendLandingSaleEmails implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
@@ -19,15 +22,15 @@ class SendLandingSaleEmails implements ShouldQueue
 
     public int $backoff = 60;
 
-    public function __construct(public readonly int $orderId)
+    public function __construct(public readonly int $orderId, public readonly bool $buyerOnly = false)
     {
     }
 
     public function handle(LandingSaleService $sales): void
     {
         $order = LandingPageOrder::query()->find($this->orderId);
-        if ($order && $order->isPaid()) {
-            $sales->sendSaleEmails($order);
+        if ($order && ($order->isPaid() || ($this->buyerOnly && $order->status === LandingPageOrder::STATUS_REFUNDED))) {
+            $sales->sendSaleEmails($order, $this->buyerOnly);
         }
     }
 }

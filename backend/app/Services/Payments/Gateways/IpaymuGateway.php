@@ -37,13 +37,29 @@ final class IpaymuGateway implements PaymentGateway
         return $this->settings->isReady();
     }
 
+    public function paymentOptions(): array
+    {
+        $methods = $this->settings->enabledPaymentMethods();
+        $options = [];
+        if (in_array('qris', $methods, true)) {
+            $options[] = 'qris';
+        }
+        if (array_diff($methods, ['qris']) !== []) {
+            $options[] = 'other';
+        }
+
+        return $options;
+    }
+
     public function createCharge(ChargeRequest $request): ChargeResult
     {
         $notifyUrl = $this->notifyUrl($request->notifyContext);
         $methods = $this->settings->enabledPaymentMethods();
+        $qrisOnly = count($methods) === 1 && in_array('qris', $methods, true);
 
-        // QRIS-only: a direct charge so the buyer gets a QR on our own page.
-        if (count($methods) === 1 && in_array('qris', $methods, true)) {
+        // QRIS (chosen by the buyer, or the only method): a direct charge so the buyer
+        // gets a QR on our own page.
+        if ($qrisOnly || ($request->preferredMethod === 'qris' && in_array('qris', $methods, true))) {
             $session = $this->api->createDirectPayment([
                 'name' => $request->buyerName !== '' ? $request->buyerName : 'Pembeli',
                 'email' => $request->buyerEmail,

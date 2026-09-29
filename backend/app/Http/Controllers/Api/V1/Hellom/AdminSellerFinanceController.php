@@ -4,11 +4,13 @@ namespace App\Http\Controllers\Api\V1\Hellom;
 
 use App\Models\AuditLog;
 use App\Models\LandingPageOrder;
+use App\Models\LandingRefund;
 use App\Models\Organization;
 use App\Models\PaymentWebhookLog;
 use App\Models\SellerBalance;
 use App\Models\SellerLedgerEntry;
 use App\Models\SellerWithdrawal;
+use App\Services\Landing\RefundService;
 use App\Services\SellerFinance\FinanceException;
 use App\Services\SellerFinance\FinanceSettings;
 use App\Services\SellerFinance\SellerLedger;
@@ -56,6 +58,9 @@ class AdminSellerFinanceController extends BaseApiController
             'withdrawals_near_sla' => (int) (clone $open)->where('created_at', '<=', now()->subHours((int) $settings['sla_warn_hours']))->count(),
             'withdrawals_over_sla' => (int) (clone $open)->where('created_at', '<=', now()->subHours((int) $settings['sla_hours']))->count(),
             'orders_pending' => (int) LandingPageOrder::query()->where('status', LandingPageOrder::STATUS_PENDING)->count(),
+            // Refunds already taken from sellers, still to be transferred to buyers.
+            'refunds_open' => (int) LandingRefund::query()->where('status', LandingRefund::STATUS_REQUESTED)->count(),
+            'refunds_open_amount' => (int) LandingRefund::query()->where('status', LandingRefund::STATUS_REQUESTED)->sum('amount'),
         ], 'Ringkasan keuangan penjual');
     }
 
@@ -314,6 +319,81 @@ class AdminSellerFinanceController extends BaseApiController
         $writer->close();
 
         return response()->download($path, $filename)->deleteFileAfterSend(true);
+    }
+
+    /** Refunds to buyers waiting for (or done by) a Hellom transfer. */
+    public function refunds(Request $request): JsonResponse
+    {
+        $status = (string) $request->query('status', LandingRefund::STATUS_REQUESTED);
+        $items = LandingRefund::query()
+            ->with(['organization:id,name,slug', 'order:id,reference_id,product_name,amount,buyer_name,buyer_email'])
+            ->when($status !== 'all', fn ($q) => $q->where('status', $status))
+            ->orderBy($status === LandingRefund::STATUS_REQUESTED ? 'id' : 'updated_at', $status === LandingRefund::STATUS_REQUESTED ? 'asc' : 'desc')
+            ->paginate(20);
+        $items->getCollection()->transform(fn (LandingRefund $r) => [
+            'id' => $r->id,
+            'reference' => $r->reference,
+            'status' => $r->status,
+            'status_label' => LandingRefund::LABELS[$r->status] ?? $r->status,
+            'amount' => (int) $r->amount,
+            'reason' => $r->reason,
+            'destination_type' => $r->destination_type,
+            'bank_code' => $r->bank_code,
+            'bank_name' => $r->bank_name,
+            'account_number' => $r->account_number,
+            'account_name' => $r->account_name,
+            'failure_reason' => $r->failure_reason,
+            'has_proof' => (bool) $r->proof_path,
+            'age_hours' => round((float) $r->created_at->diffInMinutes(now(), true) / 60, 1),
+            'created_at' => optional($r->created_at)->toIso8601String(),
+            'paid_at' => optional($r->paid_at)->toIso8601String(),
+            'organization' => ['id' => $r->organization_id, 'name' => $r->organization?->name, 'slug' => $r->organization?->slug],
+            'order' => $r->order ? ['reference' => $r->order->reference_id, 'product_name' => $r->order->product_name, 'amount' => (int) $r->order->amount,
+                'buyer_name' => $r->order->buyer_name, 'buyer_email' => $r->order->buyer_email] : null,
+        ]);
+
+        return $this->ok($items, 'Refund');
+    }
+
+    public function markRefundPaid(Request $request, int $refundId, RefundService $refunds): JsonResponse
+    {
+        $request->validate(['proof' => ['nullable', 'file', 'max:4096', 'mimes:jpg,jpeg,png,webp,pdf']]);
+
+        return $this->refundAction($request, $refundId, 'paid', fn (LandingRefund $r) => $refunds->markPaid($r, $request->user(), $request->file('proof')));
+    }
+
+    public function markRefundFailed(Request $request, int $refundId, RefundService $refunds): JsonResponse
+    {
+        $validated = $request->validate(['reason' => ['required', 'string', 'min:3', 'max:250']]);
+
+        return $this->refundAction($request, $refundId, 'failed', fn (LandingRefund $r) => $refunds->markFailed($r, $request->user(), $validated['reason']));
+    }
+
+    public function refundProof(int $refundId): StreamedResponse|JsonResponse
+    {
+        $refund = LandingRefund::query()->find($refundId);
+        if (!$refund || !$refund->proof_path || !Storage::disk('local')->exists($refund->proof_path)) {
+            return $this->fail('Bukti tidak ditemukan', ['code' => 'PROOF_NOT_FOUND'], 404);
+        }
+
+        return Storage::disk('local')->download($refund->proof_path, 'bukti-' . $refund->reference . '.' . pathinfo($refund->proof_path, PATHINFO_EXTENSION));
+    }
+
+    private function refundAction(Request $request, int $refundId, string $action, callable $callback): JsonResponse
+    {
+        $refund = LandingRefund::query()->find($refundId);
+        if (!$refund) {
+            return $this->fail('Refund tidak ditemukan', ['code' => 'REFUND_NOT_FOUND'], 404);
+        }
+        try {
+            $updated = $callback($refund);
+        } catch (FinanceException $e) {
+            return $this->fail($e->getMessage(), ['code' => $e->errorCode], $e->status);
+        }
+        AuditLog::record('landing.refund_' . $action, $request->user()?->id, (int) $refund->organization_id, 'landing_refund', $refund->id,
+            ['status' => $refund->status], ['status' => $updated->status], null, $request->ip());
+
+        return $this->ok(['id' => $updated->id, 'status' => $updated->status], 'Refund diperbarui');
     }
 
     private function act(Request $request, int $withdrawalId, string $action, callable $callback): JsonResponse

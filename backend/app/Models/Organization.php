@@ -35,6 +35,7 @@ class Organization extends Model
         return [
             'pos_provisioned_at' => 'datetime',
             'max_outlets_override' => 'integer',
+            'landing_suspended_at' => 'datetime', // Hellom Page shop switched off by super admin
         ];
     }
 
@@ -46,6 +47,12 @@ class Organization extends Model
     public function primaryOutlet(): HasOne
     {
         return $this->hasOne(Outlet::class)->where('is_primary', true);
+    }
+
+    /** Hellom Page: visitor reports about this seller. */
+    public function landingReports(): HasMany
+    {
+        return $this->hasMany(LandingReport::class);
     }
 
     public function users(): BelongsToMany

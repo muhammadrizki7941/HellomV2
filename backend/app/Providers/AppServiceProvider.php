@@ -46,6 +46,22 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(10)->by($request->ip());
         });
 
+        // Hellom Page checkout: each call opens a gateway session and reserves stock.
+        RateLimiter::for('hellom-landing-checkout', function (Request $request) {
+            return [
+                Limit::perMinute(10)->by('ip:' . $request->ip()),
+                Limit::perHour(20)->by('buyer:' . strtolower((string) $request->input('buyer_email')) . '|' . (string) $request->route('publicId')),
+            ];
+        });
+        // "Cek pesanan", resend access email, verification email: sends mail.
+        RateLimiter::for('hellom-landing-mail', function (Request $request) {
+            return [Limit::perMinute(5)->by($request->ip()), Limit::perHour(30)->by($request->ip())];
+        });
+        // "Laporkan" from public pages.
+        RateLimiter::for('hellom-landing-report', function (Request $request) {
+            return Limit::perHour(10)->by($request->ip());
+        });
+
         // Self-order submit: per QR token (one table cannot flood the kitchen) and per IP.
         RateLimiter::for('hellom-self-order', function (Request $request) {
             $token = (string) $request->input('table_token', $request->route('tableToken') ?? '');

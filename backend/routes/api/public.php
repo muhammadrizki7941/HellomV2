@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\V1\Hellom\Billing\LandingCheckoutController;
 use App\Http\Controllers\Api\V1\Hellom\BrandSettingController;
 use App\Http\Controllers\Api\V1\Hellom\CustomerOrderController;
 use App\Http\Controllers\Api\V1\Hellom\DokuWebhookController;
+use App\Http\Controllers\Api\V1\Hellom\EmailVerificationController;
 use App\Http\Controllers\Api\V1\Hellom\IpaymuWebhookController;
 use App\Http\Controllers\Api\V1\Hellom\LandingBuilderController;
 use App\Http\Controllers\Api\V1\Hellom\LandingContentController;
@@ -18,6 +19,7 @@ use App\Http\Controllers\Api\V1\Hellom\LandingSaleController;
 use App\Http\Controllers\Api\V1\Hellom\Pos\PosExperienceController;
 use App\Http\Controllers\Api\V1\Hellom\Pos\PosMemberController;
 use App\Http\Controllers\Api\V1\Hellom\Pos\PosPaymentSettingController;
+use App\Http\Controllers\Api\V1\Hellom\PublicStoreController;
 use App\Http\Controllers\Api\V1\Hellom\ShowcaseController;
 use App\Http\Controllers\Api\V1\Hellom\XenditWebhookController;
 use App\Http\Controllers\Api\V1\Public\GuestProductCheckoutController;
@@ -44,6 +46,27 @@ Route::get('/public/landingpage/orders/{token}/download', [LandingSaleController
     ->name('public.landing.orders.download');
 Route::get('/public/landingpage/orders/{reference}/qr', [LandingSaleController::class, 'qr'])
     ->name('public.landing.orders.qr');
+// Hellom Page selling (Fase 3): checkout page /beli/{id}, access page /akses/{token}, "cek pesanan", "laporkan".
+Route::get('/public/landing-products/{publicId}', [PublicStoreController::class, 'product'])->middleware('throttle:hellom-public-lookup')
+    ->name('public.landing.products.show');
+Route::post('/public/landing-products/{publicId}/quote', [PublicStoreController::class, 'quote'])->middleware('throttle:hellom-public-lookup')
+    ->name('public.landing.products.quote');
+Route::post('/public/landing-products/{publicId}/checkout', [PublicStoreController::class, 'checkout'])->middleware('throttle:hellom-landing-checkout')
+    ->name('public.landing.products.checkout');
+Route::get('/public/landing-access/{token}', [PublicStoreController::class, 'access'])->middleware('throttle:hellom-public-lookup')
+    ->name('public.landing.access.show');
+Route::post('/public/landing-access/{token}/open', [PublicStoreController::class, 'open'])->middleware('throttle:hellom-public-lookup')
+    ->name('public.landing.access.open');
+Route::get('/public/landing-access/{token}/download', [PublicStoreController::class, 'download'])->middleware('throttle:hellom-public-lookup')
+    ->name('public.landing.access.download');
+Route::post('/public/landing-access/{token}/resend', [PublicStoreController::class, 'resend'])->middleware('throttle:hellom-landing-mail')
+    ->name('public.landing.access.resend');
+Route::post('/public/landing-orders/lookup', [PublicStoreController::class, 'lookup'])->middleware('throttle:hellom-landing-mail')
+    ->name('public.landing.orders.lookup');
+Route::post('/public/landing-reports', [PublicStoreController::class, 'report'])->middleware('throttle:hellom-landing-report')
+    ->name('public.landing.reports.store');
+Route::get('/public/email/verify/{id}/{hash}', [EmailVerificationController::class, 'verify'])->middleware('throttle:hellom-public-lookup')
+    ->name('public.email.verify');
 Route::get('/public/showcase/portfolios', [ShowcaseController::class, 'publicPortfolios'])->name('public.showcase.portfolios');
 Route::get('/public/showcase/clients', [ShowcaseController::class, 'publicClients'])->name('public.showcase.clients');
 Route::get('/public/landing-content', [LandingContentController::class, 'publicContent'])->name('public.landing_content');

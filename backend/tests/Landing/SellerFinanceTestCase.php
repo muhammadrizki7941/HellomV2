@@ -50,6 +50,7 @@ abstract class SellerFinanceTestCase extends PosTestCase
     {
         $org = Organization::query()->create(['name' => 'Toko ' . Str::random(4), 'slug' => 'toko-' . Str::lower(Str::random(8)), 'status' => 'active']);
         $user = User::query()->create(['name' => 'Budi Santoso', 'email' => Str::lower(Str::random(10)) . '@example.test', 'password' => bcrypt(Str::random(16)), 'role' => 'member', 'current_organization_id' => $org->id]);
+        $user->forceFill(['email_verified_at' => now()])->save();
         $org->users()->attach($user->id, ['role' => 'owner']);
         $plain = Str::random(40);
         ApiToken::query()->create(['user_id' => $user->id, 'name' => 't', 'token_hash' => hash('sha256', $plain)]);

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Hellom;
 
 use App\Jobs\ReconcileLandingOrder;
 use App\Models\LandingPageOrder;
+use App\Services\Landing\OrderAccessService;
 use App\Services\SellerFinance\LandingPaymentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -93,8 +94,10 @@ class LandingSaleController extends BaseApiController
             'buyer_email_masked' => $this->maskEmail((string) $order->buyer_email),
             'expires_at' => optional($order->expires_at)->toIso8601String(),
             'paid_at' => optional($order->paid_at)->toIso8601String(),
-            'has_file' => (bool) $order->file_url,
+            'has_file' => app(OrderAccessService::class)->isDigital($order),
             'download_token' => $order->isPaid() ? $order->download_token : null,
+            // Paid: the buyer continues on the access page (limits, latest link, status).
+            'access_path' => $order->isPaid() && $order->download_token ? '/akses/' . $order->download_token : null,
         ], 'Order status');
     }
 

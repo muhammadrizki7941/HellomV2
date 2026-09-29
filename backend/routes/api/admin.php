@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\V1\Hellom\LandingContentController;
 use App\Http\Controllers\Api\V1\Hellom\PromoCampaignController;
 use App\Http\Controllers\Api\V1\Hellom\ShowcaseController;
 use App\Http\Controllers\Api\V1\Hellom\SuperAdminController;
+use App\Http\Controllers\Api\V1\Hellom\AdminLandingModerationController;
 use App\Http\Controllers\Api\V1\Hellom\AdminSellerFinanceController;
 use Illuminate\Support\Facades\Route;
 
@@ -143,5 +144,19 @@ Route::prefix('admin')->name('admin.')->middleware('superAdmin')->group(function
         Route::patch('/sellers/{organizationId}', [AdminSellerFinanceController::class, 'updateSeller'])->name('sellers.update');
         Route::post('/sellers/{organizationId}/adjustment', [AdminSellerFinanceController::class, 'adjustment'])->name('sellers.adjustment');
         Route::get('/export', [AdminSellerFinanceController::class, 'export'])->name('export');
+        Route::get('/refunds', [AdminSellerFinanceController::class, 'refunds'])->name('refunds');
+        Route::post('/refunds/{refundId}/mark-paid', [AdminSellerFinanceController::class, 'markRefundPaid'])->name('refunds.mark_paid');
+        Route::post('/refunds/{refundId}/mark-failed', [AdminSellerFinanceController::class, 'markRefundFailed'])->name('refunds.mark_failed');
+        Route::get('/refunds/{refundId}/proof', [AdminSellerFinanceController::class, 'refundProof'])->name('refunds.proof');
+    });
+
+    // Moderasi toko Hellom Page (Fase 3): reports, switching sellers/products off.
+    Route::prefix('landing-moderation')->name('landing_moderation.')->group(function () {
+        Route::get('/reports', [AdminLandingModerationController::class, 'reports'])->name('reports');
+        Route::patch('/reports/{reportId}', [AdminLandingModerationController::class, 'updateReport'])->name('reports.update');
+        Route::get('/sellers', [AdminLandingModerationController::class, 'sellers'])->name('sellers');
+        Route::post('/sellers/{organizationId}/suspend', [AdminLandingModerationController::class, 'suspendSeller'])->name('sellers.suspend');
+        Route::get('/products', [AdminLandingModerationController::class, 'products'])->name('products');
+        Route::post('/products/{productId}/disable', [AdminLandingModerationController::class, 'disableProduct'])->name('products.disable');
     });
 });
