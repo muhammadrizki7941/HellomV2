@@ -36,7 +36,7 @@ Route::get('/public/landing/{organizationSlug}/{pageSlug}', [LandingBuilderContr
 Route::post('/public/landing/{landingPageId}/customers', [LandingBuilderController::class, 'publicStoreCustomer'])->middleware('throttle:hellom-public-write')
     ->name('public.landing.customers.store');
 // Public buyer checkout for landing-page product/PDF sales (gateway only)
-Route::post('/public/landingpage/{organizationSlug}/orders', [LandingCheckoutController::class, 'publicLandingCheckout'])->middleware('throttle:hellom-public-write')
+Route::post('/public/landingpage/{organizationSlug}/orders', [LandingCheckoutController::class, 'publicLandingCheckout'])->middleware('throttle:hellom-guest-checkout')
     ->name('public.landing.orders.checkout');
 Route::post('/public/landingpage/orders/{reference}/returned', [LandingSaleController::class, 'returned'])->middleware('throttle:hellom-public-lookup')
     ->name('public.landing.orders.returned');

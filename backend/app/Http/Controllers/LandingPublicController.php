@@ -9,6 +9,7 @@ use App\Models\OrganizationLandingPage;
 use App\Services\Landing\LandingDocumentService;
 use App\Services\Landing\LandingRenderer;
 use App\Services\Landing\LandingShop;
+use App\Support\Landing\PageSecurity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Symfony\Component\HttpFoundation\Response;
@@ -50,9 +51,9 @@ class LandingPublicController extends Controller
         $landingPage = OrganizationLandingPage::query()->with('organization')->findOrFail($page);
         $document = $this->documents->draft($landingPage)['document'];
 
-        return response()->view('landing.page', $this->renderer->page($landingPage->organization, $landingPage, $document, true))
+        return PageSecurity::apply(response()->view('landing.page', $this->renderer->page($landingPage->organization, $landingPage, $document, true))
             ->header('Cache-Control', 'no-store')
-            ->header('X-Robots-Tag', 'noindex');
+            ->header('X-Robots-Tag', 'noindex'));
     }
 
     /** A verified custom domain (landing_domains) shows the page it is linked to at "/". */
@@ -91,16 +92,14 @@ class LandingPublicController extends Controller
 
         $etag = '"' . substr(sha1($html), 0, 20) . '"';
         if ($status === 200 && $request->headers->get('If-None-Match') === $etag) {
-            return response('', 304)->header('ETag', $etag);
+            return PageSecurity::apply(response('', 304)->header('ETag', $etag));
         }
         $seconds = (int) config('landing.public_cache_seconds', 60);
 
-        return response($html, $status)
+        return PageSecurity::apply(response($html, $status)
             ->header('Content-Type', 'text/html; charset=UTF-8')
             ->header('Cache-Control', $status === 200 ? "public, max-age={$seconds}, stale-while-revalidate=300" : 'no-store')
-            ->header('ETag', $etag)
-            ->header('X-Content-Type-Options', 'nosniff')
-            ->header('Referrer-Policy', 'strict-origin-when-cross-origin');
+            ->header('ETag', $etag));
     }
 
     /** @return array{0: string, 1: int} */
@@ -132,7 +131,7 @@ class LandingPublicController extends Controller
 
     private function status(string $kind, Organization $organization, int $code): Response
     {
-        return response($this->statusHtml($kind, $organization), $code)->header('Cache-Control', 'no-store');
+        return PageSecurity::apply(response($this->statusHtml($kind, $organization), $code)->header('Cache-Control', 'no-store'));
     }
 
     private function statusHtml(string $kind, Organization $organization): string

@@ -9,7 +9,9 @@ use App\Models\Entitlement;
 use App\Models\LandingPageOrder;
 use App\Models\LandingTrackingSetting;
 use App\Models\OrganizationLandingPage;
+use App\Models\ApiToken;
 use App\Models\Plan;
+use App\Models\User;
 use App\Services\Landing\LandingDocumentService;
 use App\Services\Landing\ProductService;
 use App\Support\Landing\BlockSchema;
@@ -19,6 +21,7 @@ use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 /** Fase 4: documents (draft/publish), server-rendered pages, username, quota, ads, stats. */
 class LandingSiteTest extends SellerFinanceTestCase
@@ -108,7 +111,18 @@ class LandingSiteTest extends SellerFinanceTestCase
     public function test_public_page_is_server_rendered_with_meta_and_never_leaks_delivery_data(): void
     {
         $shop = $this->shop();
-        $html = $this->get('/' . $shop['username'])->assertOk()->assertHeader('Content-Type', 'text/html; charset=UTF-8')->getContent();
+        $response = $this->get('/' . $shop['username'])->assertOk()->assertHeader('Content-Type', 'text/html; charset=UTF-8');
+        $html = $response->getContent();
+
+        // CSP: the only executable inline script is allowed by its hash; no unsafe-inline scripts.
+        $csp = (string) $response->headers->get('Content-Security-Policy');
+        $this->assertMatchesRegularExpression('/<script>(.*?)<\/script>/s', $html);
+        preg_match_all('/<script>(.*?)<\/script>/s', $html, $inline);
+        $this->assertCount(1, $inline[1]);
+        $this->assertStringContainsString("'sha256-" . base64_encode(hash('sha256', $inline[1][0], true)) . "'", $csp);
+        $this->assertStringNotContainsString("script-src 'unsafe-inline'", $csp);
+        $this->assertStringContainsString("object-src 'none'", $csp);
+        $this->assertStringContainsString("frame-ancestors 'self'", $csp);
 
         $this->assertStringContainsString('<meta property="og:title" content="Toko Resep Bu Sari">', $html);
         $this->assertStringContainsString('<link rel="canonical"', $html);
@@ -127,6 +141,57 @@ class LandingSiteTest extends SellerFinanceTestCase
         $this->get('/' . $shop['username'] . '/tidak-ada')->assertNotFound();
         // Reserved words stay with the React app.
         $this->get('/login')->assertOk()->assertHeaderMissing('ETag');
+    }
+
+    public function test_pages_are_isolated_between_sellers_and_closed_to_pos_staff(): void
+    {
+        $shop = $this->shop();
+        $other = $this->seller();
+        $pageId = $shop['page']->id;
+        $base = '/api/v1/hellom/apps/landing-builder';
+        $doc = ['theme' => [], 'blocks' => [['id' => 'h1', 'type' => 'profile', 'content' => ['name' => 'Diretas']]]];
+
+        // Another seller: neither the new editor API nor the old one reaches this shop's page.
+        foreach ([
+            ['GET', "{$base}/site/pages/{$pageId}/document"],
+            ['PUT', "{$base}/site/pages/{$pageId}/document", ['document' => $doc, 'revision' => null]],
+            ['POST', "{$base}/site/pages/{$pageId}/publish"],
+            ['GET', "{$base}/site/pages/{$pageId}/history"],
+            ['POST', "{$base}/site/pages/{$pageId}/preview-link"],
+            ['DELETE', "{$base}/site/pages/{$pageId}"],
+            ['GET', "{$base}/pages/{$pageId}"],
+            ['GET', "{$base}/pages/{$pageId}/blocks"],
+            ['PUT', "{$base}/pages/{$pageId}", ['title' => 'Diretas']],
+            ['DELETE', "{$base}/pages/{$pageId}"],
+        ] as $call) {
+            $status = $this->json($call[0], $call[1], $call[2] ?? [], $this->auth($other))->status();
+            $this->assertContains($status, [403, 404], "{$call[0]} {$call[1]} → {$status}");
+        }
+        $this->assertSame('Toko', $shop['page']->fresh()->title);
+        $this->get('/' . $shop['username'])->assertOk()->assertSee('Toko Resep Bu Sari')->assertDontSee('Diretas');
+
+        // POS cashier of the same organization: no page editing, no leads, no uploads.
+        $cashier = User::query()->create(['name' => 'Kasir', 'email' => Str::lower(Str::random(10)) . '@example.test', 'password' => bcrypt(Str::random(16)),
+            'role' => 'cashier', 'current_organization_id' => $shop['org']->id]);
+        $shop['org']->users()->attach($cashier->id, ['role' => 'cashier']);
+        $plain = Str::random(40);
+        ApiToken::query()->create(['user_id' => $cashier->id, 'name' => 't', 'token_hash' => hash('sha256', $plain)]);
+        $asCashier = ['Authorization' => "Bearer {$plain}"];
+        foreach ([
+            ['GET', "{$base}/pages"],
+            ['GET', "{$base}/customers"],
+            ['POST', "{$base}/pages", ['title' => 'Baru']],
+            ['POST', "{$base}/pages/{$pageId}/publish"],
+            ['POST', "{$base}/assets/upload"],
+            ['GET', "{$base}/site"],
+            ['PUT', "{$base}/site/pages/{$pageId}/document", ['document' => $doc, 'revision' => null]],
+            ['GET', "{$base}/products"],
+        ] as $call) {
+            $this->json($call[0], $call[1], $call[2] ?? [], $asCashier)->assertForbidden();
+        }
+        // The owner still can.
+        $this->getJson("{$base}/pages", $this->auth($shop))->assertOk();
+        $this->getJson("{$base}/customers", $this->auth($shop))->assertOk();
     }
 
     public function test_username_rules_redirect_and_suspended_shop(): void

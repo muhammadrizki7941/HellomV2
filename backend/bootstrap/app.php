@@ -21,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'set.locale' => \App\Http\Middleware\SetLocale::class,
             'canUseApp' => \App\Http\Middleware\Api\EnsureAppEntitlement::class,
             'superAdmin' => \App\Http\Middleware\Api\EnsureSuperAdmin::class,
+            'shopManager' => \App\Http\Middleware\Api\EnsureShopManager::class,
             'injectPosContext' => \App\Http\Middleware\Api\InjectPosContext::class,
             'billing.mock' => \App\Http\Middleware\Api\EnsureBillingMockEnabled::class,
             'logPaymentWebhook' => \App\Http\Middleware\Api\LogPaymentWebhook::class,

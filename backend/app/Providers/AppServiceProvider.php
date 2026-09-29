@@ -30,7 +30,11 @@ class AppServiceProvider extends ServiceProvider
         // ─── API rate limits (routes/api/public.php) ───
         // Auth: brute-force protection per email + IP.
         RateLimiter::for('hellom-auth', function (Request $request) {
-            return Limit::perMinute(10)->by(strtolower((string) $request->input('email')) . '|' . $request->ip());
+            // Per email + IP, plus a per-IP cap so rotating emails does not bypass it.
+            return [
+                Limit::perMinute(10)->by(strtolower((string) $request->input('email')) . '|' . $request->ip()),
+                Limit::perMinute(30)->by('ip:' . $request->ip()),
+            ];
         });
         // Public writes (self-order, member register, promo claim, reservations,
         // landing leads/checkout). Generous: restaurant guests often share one IP.
