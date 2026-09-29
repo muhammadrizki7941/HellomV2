@@ -143,6 +143,36 @@ class LandingSiteTest extends SellerFinanceTestCase
         $this->get('/login')->assertOk()->assertHeaderMissing('ETag');
     }
 
+    public function test_images_get_smaller_copies_and_srcset(): void
+    {
+        $shop = $this->shop();
+        $products = app(ProductService::class);
+        $products->storeImage($shop['product'], \Illuminate\Http\UploadedFile::fake()->image('foto.jpg', 1200, 800));
+        $path = $shop['product']->fresh()->image_path;
+        $disk = Storage::disk('public');
+        foreach (['-480w.webp', '-960w.webp'] as $suffix) {
+            $this->assertTrue($disk->exists(str_replace('.webp', $suffix, $path)));
+        }
+        $url = $shop['product']->fresh()->imageUrl();
+        $this->assertSame(str_replace('.webp', '-480w.webp', $url) . ' 480w, ' . str_replace('.webp', '-960w.webp', $url) . ' 960w, ' . $url . ' 1200w',
+            \App\Support\ImageOptimizer::srcset($url));
+        $this->assertNull(\App\Support\ImageOptimizer::srcset('https://example.com/a.webp'));
+
+        // Server-rendered pages offer the copies.
+        app(\App\Services\Landing\LandingShop::class)->bumpCache((int) $shop['org']->id);
+        $this->get('/' . $shop['username'] . '/' . $shop['product']->slug)->assertOk()->assertSee('480w', false)->assertSee('sizes=', false);
+
+        // Backfill for an older upload without copies; replacing the image removes all files.
+        $disk->delete([str_replace('.webp', '-480w.webp', $path), str_replace('.webp', '-960w.webp', $path)]);
+        $this->assertSame(2, \App\Support\ImageOptimizer::ensureVariants($path));
+        $this->artisan('landing:image-variants')->assertSuccessful();
+        $products->storeImage($shop['product']->fresh(), \Illuminate\Http\UploadedFile::fake()->image('baru.jpg', 300, 300));
+        $this->assertFalse($disk->exists($path));
+        $this->assertFalse($disk->exists(str_replace('.webp', '-480w.webp', $path)));
+        // A small image gets no copies and no srcset.
+        $this->assertNull(\App\Support\ImageOptimizer::srcset($shop['product']->fresh()->imageUrl()));
+    }
+
     public function test_button_colors_stay_readable(): void
     {
         $renderer = app(\App\Services\Landing\LandingRenderer::class);

@@ -10,7 +10,7 @@
         <div class="wrap">
             <div class="card">
                 @if ($product['image_url'])
-                    <img class="prod-img" src="{{ $product['image_url'] }}" alt="{{ $product['name'] }}" fetchpriority="high">
+                    <img class="prod-img" src="{{ $product['image_url'] }}" @if ($set = \App\Support\ImageOptimizer::srcset($product['image_url'])) srcset="{{ $set }}" sizes="(max-width: 720px) 100vw, 680px" @endif alt="{{ $product['name'] }}" fetchpriority="high">
                 @endif
                 <div class="prod-body" style="padding:20px">
                     <p class="muted small" style="margin:0">{{ $product['type_label'] }}</p>

@@ -18,6 +18,9 @@
     $href = fn (?string $u) => ($u === null || $u === '' || $u === '#') ? null : $u;
     $rp = fn ($v) => 'Rp ' . number_format((int) $v, 0, ',', '.');
     $imgAttrs = fn (bool $eager) => $eager ? 'fetchpriority="high"' : 'loading="lazy" decoding="async"';
+    // Smaller WebP copies (480w/960w) when the upload has them (PF-04).
+    $srcset = fn (?string $url, string $sizes) => ($set = \App\Support\ImageOptimizer::srcset($url)) ? 'srcset="' . e($set) . '" sizes="' . e($sizes) . '"' : '';
+    $full = '(max-width: 720px) 100vw, 680px';
     $btnClass = 'btn' . (($theme['buttonStyle'] ?? 'solid') === 'outline' ? ' outline' : '');
 @endphp
 @switch($b['type'])
@@ -26,7 +29,7 @@
             @if (!empty($c['coverUrl']))<div class="cover" style="background-image:url('{{ $cssUrl($c['coverUrl']) }}')"></div>@endif
             <div class="wrap center">
                 @if (!empty($c['avatarUrl']))
-                    <img class="avatar" src="{{ $c['avatarUrl'] }}" alt="{{ $c['name'] ?? $organization->name }}" width="104" height="104" {!! $imgAttrs($first) !!}>
+                    <img class="avatar" src="{{ $c['avatarUrl'] }}" {!! $srcset($c['avatarUrl'], '104px') !!} alt="{{ $c['name'] ?? $organization->name }}" width="104" height="104" {!! $imgAttrs($first) !!}>
                 @else
                     <div class="avatar initial" aria-hidden="true">{{ mb_strtoupper(mb_substr($c['name'] ?? $organization->name, 0, 1)) }}</div>
                 @endif
@@ -40,7 +43,7 @@
     @case('hero')
         <section class="{{ $cls ?: 'blk' }} {{ empty($s['textAlign']) ? 'center' : '' }}" @if($style) style="{{ $style }}" @endif>
             <div class="wrap">
-                @if (!empty($c['imageUrl']))<img class="hero-img" src="{{ $c['imageUrl'] }}" alt="" {!! $imgAttrs($first) !!}>@endif
+                @if (!empty($c['imageUrl']))<img class="hero-img" src="{{ $c['imageUrl'] }}" {!! $srcset($c['imageUrl'], $full) !!} alt="" {!! $imgAttrs($first) !!}>@endif
                 @if (!empty($c['title']))<h1>{{ $c['title'] }}</h1>@endif
                 @if (!empty($c['subtitle']))<p class="muted" style="font-size:1.1rem;white-space:pre-line">{{ $c['subtitle'] }}</p>@endif
                 @if (($c['showButton'] ?? true) && !empty($c['buttonText']))
@@ -101,7 +104,7 @@
             <section class="{{ $cls }} center" @if($style) style="{{ $style }}" @endif>
                 <div class="wrap">
                     @if ($href($c['linkUrl'] ?? null))<a href="{{ $c['linkUrl'] }}" target="_blank" rel="noopener" data-track="click" data-label="gambar">@endif
-                    <img src="{{ $src }}" alt="{{ $c['alt'] ?? ($c['caption'] ?? '') }}" style="border-radius:16px;margin:0 auto" {!! $imgAttrs($first) !!}>
+                    <img src="{{ $src }}" {!! $srcset($src, $full) !!} alt="{{ $c['alt'] ?? ($c['caption'] ?? '') }}" style="border-radius:16px;margin:0 auto" {!! $imgAttrs($first) !!}>
                     @if ($href($c['linkUrl'] ?? null))</a>@endif
                     @if (!empty($c['caption']))<p class="muted small" style="margin-top:8px">{{ $c['caption'] }}</p>@endif
                 </div>
@@ -128,7 +131,7 @@
             <div class="wrap wide">
                 @if ($p)
                     <div class="card featured">
-                        @if ($p['image_url'])<img class="prod-img" src="{{ $p['image_url'] }}" alt="{{ $p['name'] }}" {!! $imgAttrs($first) !!}>@endif
+                        @if ($p['image_url'])<img class="prod-img" src="{{ $p['image_url'] }}" {!! $srcset($p['image_url'], $full) !!} alt="{{ $p['name'] }}" {!! $imgAttrs($first) !!}>@endif
                         <div class="prod-body">
                             <p class="muted small" style="margin:0">{{ $p['type_label'] }}</p>
                             <h2 style="margin:0"><a href="{{ $p['url'] }}" style="text-decoration:none">{{ $p['name'] }}</a></h2>
@@ -145,7 +148,7 @@
                 @elseif (!empty($c['name']))
                     {{-- Old block not linked to a product yet: shown, but without online checkout. --}}
                     <div class="card featured">
-                        @if (!empty($c['imageUrl']))<img class="prod-img" src="{{ $c['imageUrl'] }}" alt="{{ $c['name'] }}" loading="lazy">@endif
+                        @if (!empty($c['imageUrl']))<img class="prod-img" src="{{ $c['imageUrl'] }}" {!! $srcset($c['imageUrl'], $full) !!} alt="{{ $c['name'] }}" loading="lazy">@endif
                         <div class="prod-body">
                             <h2 style="margin:0">{{ $c['name'] }}</h2>
                             @if (!empty($c['price']))<p class="price" style="margin:0">{{ $c['price'] }}</p>@endif
@@ -168,7 +171,7 @@
                         @foreach ($b['products'] as $p)
                             <div class="card prod">
                                 <a href="{{ $p['url'] }}" style="text-decoration:none;color:inherit" aria-label="{{ $p['name'] }}" tabindex="-1">
-                                    @if ($p['image_url'])<img class="prod-img" src="{{ $p['image_url'] }}" alt="{{ $p['name'] }}" loading="lazy" decoding="async">@else<div class="prod-img"></div>@endif
+                                    @if ($p['image_url'])<img class="prod-img" src="{{ $p['image_url'] }}" {!! $srcset($p['image_url'], ($c['columns'] ?? 2) >= 3 ? '(max-width: 600px) 50vw, 300px' : '(max-width: 600px) 50vw, 440px') !!} alt="{{ $p['name'] }}" loading="lazy" decoding="async">@else<div class="prod-img"></div>@endif
                                 </a>
                                 <div class="prod-body">
                                     <a href="{{ $p['url'] }}" class="prod-name" style="text-decoration:none">{{ $p['name'] }}</a>
@@ -304,7 +307,7 @@
             <section class="{{ $cls }}" @if($style) style="{{ $style }}" @endif>
                 <div class="wrap wide"><div class="scroller">
                     @foreach ($c['images'] as $img)
-                        @if (!empty($img['url']))<figure style="margin:0"><img src="{{ $img['url'] }}" alt="{{ $img['caption'] ?? '' }}" {!! $imgAttrs($first && $loop->first) !!}>@if (!empty($img['caption']))<figcaption class="small muted" style="padding:6px">{{ $img['caption'] }}</figcaption>@endif</figure>@endif
+                        @if (!empty($img['url']))<figure style="margin:0"><img src="{{ $img['url'] }}" {!! $srcset($img['url'], '(max-width: 600px) 86vw, 900px') !!} alt="{{ $img['caption'] ?? '' }}" {!! $imgAttrs($first && $loop->first) !!}>@if (!empty($img['caption']))<figcaption class="small muted" style="padding:6px">{{ $img['caption'] }}</figcaption>@endif</figure>@endif
                     @endforeach
                 </div></div>
             </section>
@@ -318,7 +321,7 @@
                     @if (!empty($c['title']))<h2 class="center">{{ $c['title'] }}</h2>@endif
                     <div class="grid gallery" style="grid-template-columns:repeat({{ min(4, max(2, (int) ($c['columns'] ?? 2))) }},minmax(0,1fr));gap:8px">
                         @foreach ($c['images'] as $img)
-                            @if (!empty($img['url']))<img src="{{ $img['url'] }}" alt="{{ $img['caption'] ?? '' }}" loading="lazy" decoding="async">@endif
+                            @if (!empty($img['url']))<img src="{{ $img['url'] }}" {!! $srcset($img['url'], '(max-width: 600px) 50vw, 300px') !!} alt="{{ $img['caption'] ?? '' }}" loading="lazy" decoding="async">@endif
                         @endforeach
                     </div>
                 </div>

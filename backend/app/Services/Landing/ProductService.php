@@ -125,9 +125,7 @@ final class ProductService
         $old = $product->image_path;
         $product->image_path = ImageOptimizer::storeWebp($file, 'landing-products/' . $product->organization_id);
         $product->save();
-        if ($old) {
-            Storage::disk('public')->delete($old);
-        }
+        ImageOptimizer::delete($old);
 
         return $product;
     }
