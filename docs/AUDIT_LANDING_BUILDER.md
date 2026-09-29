@@ -43,8 +43,19 @@ yang sudah dihapus lagi. Tidak ada data pelanggan yang dibaca/ditampilkan; angka
 | 3 | LB-35 | ✅ Daftar pesanan + filter + detail, kirim ulang, tandai terkirim, refund lewat ledger, kupon, halaman akses, cek pesanan, tipe produk link/fisik/jasa, batas buka/unduh |
 | 3 | LB-24 | ◐ Endpoint baru (produk, kupon, pesanan, saldo) hanya owner/admin; editor halaman masih terbuka untuk semua anggota (Fase 4) |
 | 3 | UI-01, UI-02 | ✅ Checkout satu halaman mobile-first (input 16px, target ≥44px, tombol bayar menempel, pilihan QRIS/VA, ringkasan biaya) |
-| 4–5 | lainnya | Belum |
-
+| 4 | LB-06, LB-29 | ✅ Draft (autosave, cek revisi → 409 bila tab lain lebih baru) terpisah dari versi terbit; publik hanya membaca versi terbit; simpan = satu tulis atomik, ID blok stabil; riwayat & kembalikan versi |
+| 4 | LB-23 | ✅ `BlockSchema`: whitelist field per tipe blok, URL http(s)/mailto/tel/relatif, warna hex, HTML disanitasi; base64 di dokumen lama dipindah ke file WebP |
+| 4 | LB-24 | ◐ Editor baru (`/apps/landing-builder/site/*`) hanya owner/admin; endpoint editor lama (`pages/*/blocks`) masih terbuka untuk anggota (tidak dipakai UI lagi) — dikunci di Fase 5 |
+| 4 | LB-26 | ✅ `landing_username` + daftar kata terlarang (`config/landing.php`), slug organisasi baru menghindarinya, username lama → 301 |
+| 4 | LB-31 | ✅ Multi-halaman: 1 halaman gratis, lebih banyak lewat `plans.max_landing_pages` (harga paket diatur super admin); halaman di atas kuota tidak disajikan |
+| 4 | LB-33 | ✅ Statistik harian ringan (kunjungan 1×/pengunjung/hari tanpa cookie, klik, lihat produk, mulai checkout) + sumber trafik & penjualan per sumber |
+| 4 | LB-34 | ✅ 5 template (link-in-bio, e-book, kelas online, produk fisik, jasa) + pengaturan tema (warna, huruf, bentuk & gaya tombol) |
+| 4 | PF-01 | ✅ Halaman publik dirender server (Blade, CSS inline, ±3 KB JS, cache per versi toko). Lighthouse mobile: Performance 100, Accessibility 100, Best Practices 100, SEO 100; LCP 1,2 dtk; total 31 KB |
+| 4 | PF-02 | ✅ Title/description/canonical, Open Graph & Twitter Card; halaman produk `/{username}/{produk}` dengan meta produk |
+| 4 | PF-03 | ✅ Meta Pixel, GA4, Google Ads, TikTok (ID divalidasi), dimuat setelah halaman idle; PageView/ViewContent/InitiateCheckout/AddPaymentInfo/Purchase; Purchase sekali per pesanan + Conversions API dengan event_id sama; UTM/fbclid/gclid/ttclid disimpan di pesanan |
+| 4 | PF-04 | ◐ Upload gambar → WebP maks 1600 px, lazy load; `srcset` multi-ukuran belum (Fase 5) |
+| 4 | UI-03 | ◐ Aksi blok di HP 44 px (naik/turun/duplikat/sembunyikan/hapus); ikon header editor lama masih 32 px (Fase 5) |
+| 5 | LB-27, LB-25 captcha, UI sisa | Belum |
 **Catatan Google Drive (Fase 3).** Produk Drive memakai link "Siapa saja yang memiliki link". Link asli tidak pernah dikirim ke halaman publik, API publik, atau sebelum lunas, tetapi setelah pembeli membukanya **tetap bisa diteruskan** ke orang lain. Batas buka dan masa berlaku hanya membatasi halaman akses Hellom. Mode lanjutan disiapkan tapi belum dibangun: `landing_products.delivery_mode = google_grant` → penjual menghubungkan akun Google (OAuth, scope `drive.file`/`drive`), dan saat lunas sistem memberi izin *reader* ke email pembeli lewat Drive API (`permissions.create`), lalu mencabutnya saat refund/kedaluwarsa.
 
 ## A. Peta modul

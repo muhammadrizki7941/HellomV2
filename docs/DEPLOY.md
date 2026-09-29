@@ -63,6 +63,25 @@ Lakukan **sekali** saat pertama kali men-deploy hasil refactor:
 8. **Pengaturan pembayaran** diisi dari dashboard super admin (Settings → Payment), bukan di kode: kredensial + callback token tiap gateway, centang *production*, pilih gateway aktif dan mode checkout (*Otomatis* agar pembeli langsung ke gateway), channel iPaymu, transfer manual (cadangan), checkout tanpa login. Untuk Xendit, daftarkan URL webhook yang tampil di kartu Xendit beserta verification token yang sama. **Jangan ganti `APP_KEY`** setelah kredensial diisi (tersimpan terenkripsi).
 9. **Periksa data dari celah lama** (read-only, lihat `docs/AUDIT.md` Langkah 0): transaksi `wallet_topup_mock`, invoice `payment_method = mock`, penarikan yang disetujui non-super-admin.
 
+### 3b. Hellom Page (Fase 2–4: uang, produk, halaman server)
+
+Urutan sekali jalan setelah `git pull` + `composer install` + `php artisan migrate`:
+
+1. **Nginx wajib diubah** (`deploy/nginx/hellomspace.com.conf.example`): blok `location /` sekarang `try_files $uri @laravel;` + `location @laravel` ke PHP-FPM. Tanpa ini halaman toko `hellomspace.com/{username}` tetap tampil lewat React (lebih lambat, tanpa meta WhatsApp/OG). `nginx -t && systemctl reload nginx`.
+2. **PHP GD dengan WebP** (`php -r "var_dump(function_exists('imagewebp'));"` harus `true`) — gambar produk/halaman disimpan sebagai WebP.
+3. **Queue worker** harus jalan (email penjualan, email akses, Meta Conversions API): PM2/Supervisor `php artisan queue:work --tries=3`. Cron `schedule:run` tiap menit (rekonsiliasi pembayaran, kedaluwarsa pesanan, SLA penarikan).
+4. Laporan dulu, lalu `--force` setelah dicek:
+   ```bash
+   cd backend
+   php artisan optimize:clear
+   php artisan seller-balance:opening                 # pindah hasil penjualan lama dari dompet ke Saldo Penjualan
+   php artisan wallet:clean-mock-topups               # saldo top-up uji coba (keputusan pemilik: dibersihkan)
+   php artisan billing:revoke-subscription --mock-paid  # langganan yang dibayar saldo uji coba → revoke id yang dikonfirmasi
+   php artisan landing:products-from-blocks           # blok produk lama → produk (keputusan pemilik: boleh --force)
+   php artisan landing:documents-backfill             # halaman lama → draft + versi terbit (wajib --force sebelum Nginx diubah)
+   ```
+5. Toko yang slug organisasinya kata terlarang (mis. `hellom`) muncul di laporan `landing:documents-backfill`; pemiliknya memilih username di tab Pengaturan.
+
 ## 4. Variabel lingkungan penting
 
 | File | Variabel | Nilai produksi |

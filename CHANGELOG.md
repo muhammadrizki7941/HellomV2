@@ -4,6 +4,13 @@
 
 Audit lengkap dan status per temuan: [docs/AUDIT.md](docs/AUDIT.md). Langkah deploy khusus rilis ini: [docs/DEPLOY.md §3](docs/DEPLOY.md#3-catatan-khusus-rilis-refactor-branch-refactorcleanup).
 
+### Hellom Page — builder & halaman publik (Fase 4)
+- **Halaman toko dirender server** (`hellomspace.com/{username}` dan `/{username}/{produk}`): HTML ringan dengan CSS inline, meta WhatsApp/Facebook (Open Graph), tombol bagikan (salin link, WhatsApp, QR), laporkan, halaman 404/toko nonaktif. Lighthouse mobile 100/100/100/100. **Butuh perubahan Nginx** (lihat `docs/DEPLOY.md` §3b).
+- **Editor**: draft tersimpan otomatis dan tidak mengubah halaman tayang sampai *Terbitkan*; riwayat versi & kembalikan; pratinjau asli (HP/Desktop); duplikat & sembunyikan blok; blok baru Profil, Katalog Produk, Galeri; 5 template; tema (huruf, bentuk & gaya tombol); upload gambar jadi WebP (bukan lagi base64 di halaman).
+- **Username toko** bisa diganti (kata terlarang ditolak, alamat lama otomatis diarahkan). **Multi-halaman**: 1 halaman gratis, lebih dengan paket yang kuotanya diatur super admin (`Maksimal halaman` di form paket).
+- **Iklan**: Meta Pixel, GA4, Google Ads, TikTok per toko + Meta Conversions API; Purchase dikirim sekali per pesanan; sumber iklan (UTM) tercatat di pesanan. Tab **Statistik** (kunjungan, sumber, klik, konversi per produk) dan **Pengaturan**.
+- Tombol "AI" editor (bukan AI sungguhan) diganti Template; langganan yang dibayar saldo uji coba dicabut (`billing:revoke-subscription`); produk fisik yang belum dibayar kedaluwarsa 6 jam.
+
 ### Hellom Page — jualan & produk digital (Fase 3)
 - **Produk** (tab *Produk*): Google Drive, upload file (maks 10 MB, disimpan privat), link/akses, produk fisik (ongkir gratis/tetap/manual), jasa; gambar otomatis WebP; harga coret, stok, pertanyaan checkout. Link Drive disimpan terenkripsi dan tidak pernah tampil ke publik.
 - **Checkout pembeli** `/beli/{id}` tanpa login: mobile-first, saran salah ketik email, pilih QRIS atau VA/e-wallet, kupon, alamat kirim; stok & kuota kupon dipesan saat checkout dan dikembalikan bila kedaluwarsa.
