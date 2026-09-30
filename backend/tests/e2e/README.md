@@ -10,6 +10,7 @@ with local stand-ins for iPaymu and email. Nothing reaches a real gateway or inb
 | `journey.mjs` | 16 steps at 390 px: register → onboarding (username, template, Drive product) → file product → SSR page + CSP → buyer checkout without login → sandbox payment → webhook → access email → access page / download → balance → email verification → KYC → admin approves → withdraw Rp50.000 → admin marks paid → seller sees it. |
 | `ui-audit.mjs` | 360 px audit of 32 public + dashboard pages: horizontal scroll, tap targets < 44 px, form fonts < 16 px. Run after `journey.mjs`, before cleanup. |
 | `dark-audit.mjs [light]` | Dashboard dark (or light) mode: text contrast < 4.5:1 on 20 views, screenshots, public pages must stay light. |
+| `pos-cashier-seed.php` + `pos-cashier.mjs` | POS cashier permissions: default menu (Orders + Members), direct URL redirect, owner grants/revokes and the menu follows without re-login, orders always work, owner sees the switches. Only Laravel :8010 + Vite :3010 needed. |
 | `captcha.mjs` | Turnstile on repeated checkouts in the browser. Start the :8010 server with `CACHE_STORE=database` and Cloudflare's test keys `TURNSTILE_SITE_KEY=1x00000000000000000000AA TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA` (always pass; calls challenges.cloudflare.com). |
 
 Screenshots and results go to `backend/storage/app/e2e_shots/`, `e2e_full_result.json`, `e2e_ui_audit.json` (git-ignored).

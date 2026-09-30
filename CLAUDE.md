@@ -37,6 +37,7 @@ Tes PHPUnit fitur gagal di sqlite (migration memakai `information_schema` MySQL)
 - **Isolasi tenant manual**: global scope `tenant` tidak aktif di API token. Setiap query POS filter `tenant_id` (`posTenantSlug` dari `InjectPosContext`, atau `OutletService::tenantSlugs($org)` untuk level organisasi). Endpoint publik mencari lewat token (`dining_tables.public_id`), bukan ID berurutan.
 - **Akses berbayar** hanya lewat `App\Services\Billing\EntitlementService`; periode dari `Plan::accessEndsAt()`; cek akses dengan `Entitlement::allowsAccess()`.
 - **Penarikan dana**: tinjauan/persetujuan hanya `super_admin`.
+- **Hak akses kasir POS**: katalog di `App\Support\Pos\PosPermissions` (`orders` selalu aktif; `manager` = owner/admin saja); setiap route POS wajib `->middleware('posPermission:<key>')`, cek di controller pakai `BasePosController::canPos()`. Tambah fitur POS baru → tambah key di katalog **dan** `FALLBACK_PERMISSIONS` (PosStaff.tsx) + `cashierNavigation` (PosLayout). Akses kasir terkini: `GET /pos/me/access`.
 - Role: `users.role` (`super_admin`, `admin`, `tenant_admin`, `cashier`, `member`, `suspended`) + pivot `organization_user.role` (`owner`, `admin`, `member`, `cashier`).
 - Respons API: `BaseApiController::ok()/fail()` (atau `success()/error()` di POS) — amplop `{ success, message, data, error }`.
 - Validasi masih di controller (`$request->validate`) setelah cek otorisasi; kalau memakai Form Request, pindahkan otorisasi ke `authorize()` agar urutan 401/403 → 422 sama.

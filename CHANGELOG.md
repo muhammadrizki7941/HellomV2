@@ -4,6 +4,11 @@
 
 Audit lengkap dan status per temuan: [docs/AUDIT.md](docs/AUDIT.md). Langkah deploy khusus rilis ini: [docs/DEPLOY.md §3](docs/DEPLOY.md#3-catatan-khusus-rilis-refactor-branch-refactorcleanup).
 
+### POS — hak akses kasir yang bisa diatur
+- Owner/admin organisasi mengatur per kasir fitur POS apa saja yang boleh dibuka (POS › Staff › edit): batalkan & refund pesanan, kelola meja, produk, member, poin & data member, loyalty, promo & reservasi, laporan, buka/tutup kas, pengaturan pesanan outlet. **Kasir & pesanan selalu aktif.** Outlet, staf, dan pengaturan pembayaran tetap khusus owner/admin.
+- Ditegakkan di server (middleware `posPermission`), menu POS kasir hanya menampilkan yang diizinkan dan ikut berubah tanpa login ulang.
+- Perbaikan: menyimpan data staf dari form tidak lagi melepas akun login kasir yang tertaut; pembatalan lewat endpoint status kini ikut dicek izinnya.
+
 ### Hellom Page — poles & siap produksi (Fase 5)
 - **Onboarding penjual baru** 3 langkah (username → template → produk pertama → halaman terbit & siap dibagikan) + checklist *Siapkan toko kamu* di Overview (username, produk, halaman, verifikasi email, KTP & rekening, pixel).
 - **Keamanan**: CSP di halaman toko (hash + `strict-dynamic`, pixel iklan tetap jalan setelah persetujuan), editor lama/pelanggan/domain/upload hanya pemilik & admin toko (kasir POS ditolak), rate limit login per IP, kirim ulang email & checkout lama; paket keamanan Laravel/Guzzle/Symfony/CommonMark diperbarui (`composer audit` bersih).
