@@ -1,7 +1,7 @@
 @extends('emails.partials.hellom-layout')
 
 @section('content')
-    <h1 style="margin:0 0 12px;font-size:26px;line-height:1.25;color:#111827;">Pembayaran berhasil 🎉</h1>
+    <h1 style="margin:0 0 16px;font-size:22px;line-height:1.3;font-weight:800;color:#0a0a0a;">Pembayaran berhasil 🎉</h1>
     <p style="margin:0 0 20px;font-size:15px;line-height:1.7;color:#374151;">
         Terima kasih. <strong>{{ $productName }}</strong> sudah aktif di akun Anda dan bisa langsung dipakai.
     </p>

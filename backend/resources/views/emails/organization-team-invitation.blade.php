@@ -1,28 +1,44 @@
 @extends('emails.partials.hellom-layout')
 
+@php
+    $roleLabel = ['cashier' => 'Kasir', 'admin' => 'Admin', 'member' => 'Anggota tim', 'owner' => 'Pemilik'][$role] ?? $role;
+    $isCashier = $role === 'cashier';
+@endphp
+
+@section('preheader'){{ ($activation ?? false) ? 'Aktifkan akun kasir kamu' : 'Kamu diundang bergabung' }} di {{ $organizationName }}.@endsection
+
 @section('content')
-    <h1 style="margin:0 0 12px;font-size:28px;line-height:1.2;color:#111827;">Undangan bergabung ke tim</h1>
-    <p style="margin:0 0 16px;font-size:15px;line-height:1.75;color:#374151;">
-        Kamu diundang untuk bergabung ke organisasi <strong>{{ $organizationName }}</strong> sebagai <strong>{{ $role }}</strong>.
-    </p>
-    <p style="margin:0 0 18px;font-size:15px;line-height:1.75;color:#374151;">
-        Klik tombol di bawah untuk login atau daftar menggunakan email yang diundang, lalu selesaikan proses join organisasi di Hellom.
-    </p>
-    @if(!empty($registerUrl))
-        <a href="{{ $registerUrl }}" style="display:inline-block;padding:12px 18px;background:#111827;color:#ffffff;text-decoration:none;border-radius:12px;font-weight:700;">
-            Buka Undangan
-        </a>
-    @endif
-    <p style="margin:18px 0 12px;font-size:14px;color:#6b7280;">Token undangan</p>
-    <div style="margin:0 0 18px;padding:14px 16px;border-radius:14px;background:#f3f4f6;font-family:Consolas,monospace;font-size:15px;color:#111827;word-break:break-all;">
-        {{ $token }}
-    </div>
-    @if($expiresAt)
-        <p style="margin:0 0 16px;font-size:15px;line-height:1.75;color:#374151;">
-            Undangan berlaku sampai <strong>{{ $expiresAt->format('d M Y H:i') }}</strong>.
+    @if($activation ?? false)
+        <h1 style="margin:0 0 16px;font-size:22px;line-height:1.3;font-weight:800;color:#0a0a0a;">Aktifkan akun kamu</h1>
+        <p style="margin:0;">
+            Email ini terdaftar sebagai <strong style="color:#18181b;">{{ $roleLabel }}</strong> di
+            <strong style="color:#18181b;">{{ $organizationName }}</strong>, tapi belum punya akun Hellom.
+            Buat kata sandi sekarang untuk mulai memakai POS toko.
+        </p>
+    @else
+        <h1 style="margin:0 0 16px;font-size:22px;line-height:1.3;font-weight:800;color:#0a0a0a;">Kamu diundang bergabung</h1>
+        <p style="margin:0;">
+            <strong style="color:#18181b;">{{ $organizationName }}</strong> mengundang kamu bergabung sebagai
+            <strong style="color:#18181b;">{{ $roleLabel }}</strong> di Hellom.
+            @if($isCashier) Setelah bergabung, kamu langsung bisa memakai POS toko ini. @endif
         </p>
     @endif
-    <p style="margin:0;font-size:14px;line-height:1.75;color:#6b7280;">
-        Jika kamu tidak merasa diundang, abaikan email ini.
+
+    @if(!empty($registerUrl))
+        @include('emails.partials.button', ['url' => $registerUrl, 'label' => ($activation ?? false) ? 'Buat kata sandi' : 'Terima undangan'])
+    @endif
+
+    @if($isCashier)
+        <p style="margin:0 0 12px;font-size:14px;color:#52525b;">
+            Berikutnya, masuk lewat halaman <strong>Masuk kasir</strong>: <a href="{{ \App\Support\FrontendUrl::to('/login/kasir') }}" style="color:#3f3f46;">{{ \App\Support\FrontendUrl::to('/login/kasir') }}</a>
+        </p>
+    @endif
+    @if($expiresAt)
+        <p style="margin:0 0 8px;font-size:14px;color:#52525b;">
+            Link berlaku sampai <strong>{{ $expiresAt->copy()->timezone(config('app.timezone'))->locale('id')->translatedFormat('d F Y, H:i') }}</strong>.
+        </p>
+    @endif
+    <p style="margin:0;font-size:14px;color:#52525b;">
+        Tidak mengenal toko ini? Abaikan email ini — tidak ada yang berubah di akun kamu.
     </p>
 @endsection

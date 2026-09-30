@@ -62,12 +62,18 @@ class HellomBrandSetting extends Model
                 'login_subtitle' => 'Masuk ke akun kamu dan lanjutkan kerja hari ini.',
                 'register_title' => 'Bikin akun baru',
                 'register_subtitle' => 'Gabung dan mulai kelola bisnis kamu bareng Hellom.',
-                'footer_text' => 'Â© 2026 Hellom. All rights reserved.',
+                'footer_text' => '© ' . date('Y') . ' Hellom. Semua hak dilindungi.',
                 'meta_title' => 'Hellom',
             ]);
         }
 
         return $settings;
+    }
+
+    /** The old default was saved double-encoded ("Â©"): show a proper © everywhere. */
+    public function getFooterTextAttribute(?string $value): ?string
+    {
+        return $value === null ? null : str_replace('Â©', '©', $value);
     }
 
     /**
@@ -87,7 +93,29 @@ class HellomBrandSetting extends Model
      */
     protected function absoluteStorageUrl(string $path): string
     {
-        return $this->appBaseUrl() . '/storage/' . ltrim($path, '/');
+        // /media/{path} (routes/web.php) serves the public disk without the storage:link
+        // symlink, which this project does not use; /storage/... was a 404 in production.
+        $base = '/' . trim((string) config('filesystems.disks.public.url', '/media'), '/');
+
+        return $this->appBaseUrl() . $base . '/' . ltrim($path, '/');
+    }
+
+    /** Absolute file path of the logo on this server (emails embed it; SVG is not email-safe). */
+    public function logoFilePath(): ?string
+    {
+        $candidates = [];
+        if (!empty($this->logo_path)) {
+            $candidates[] = \Illuminate\Support\Facades\Storage::disk('public')->path($this->logo_path);
+        }
+        $candidates[] = public_path('brand/logo.png');
+        $candidates[] = public_path('assets/hellom.png');
+        foreach ($candidates as $path) {
+            if (is_file($path) && !str_ends_with(strtolower($path), '.svg')) {
+                return $path;
+            }
+        }
+
+        return null;
     }
 
     /**
