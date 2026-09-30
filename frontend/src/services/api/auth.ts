@@ -12,6 +12,17 @@ export function login(email: string, password: string) {
   });
 }
 
+/** Staff/cashier login: straight into the store where the account is POS staff (409 = choose a store). */
+export function staffLogin(email: string, password: string, staffId?: number) {
+  return apiRequest<{ token: string; user: unknown }>('/auth/staff-login', {
+    method: 'POST',
+    body: { email, password, staff_id: staffId },
+    token: null,
+  });
+}
+
+export type StaffStoreChoice = { staff_id: number; organization_id: number; organization_name: string; outlet_name: string | null };
+
 export function register(payload: {
   name: string;
   email: string;

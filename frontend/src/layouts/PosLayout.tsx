@@ -130,7 +130,8 @@ export default function PosLayout() {
   const handleLogout = () => {
     setSidebarOpen(false);
     clearSession();
-    navigate('/login?app=pos', { replace: true });
+    // Cashiers go back to their own login page; owners/admins to the normal one.
+    navigate(isCashier ? '/login/kasir' : '/login?app=pos', { replace: true });
   };
 
   // Map current location to active tab

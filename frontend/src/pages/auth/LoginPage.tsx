@@ -211,6 +211,9 @@ export default function LoginPage() {
                 Daftar
               </Link>
             </div>
+            <Link to="/login/kasir" className="mt-3 flex min-h-11 items-center justify-center rounded-xl border border-white/[0.12] text-sm font-semibold text-white/80 hover:border-[#F6B400] hover:text-white">
+              Kasir atau staf toko? Masuk di sini
+            </Link>
           </m.section>
         </main>
       </div>

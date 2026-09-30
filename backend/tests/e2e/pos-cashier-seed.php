@@ -31,6 +31,11 @@ if ($org = Organization::query()->where('slug', $slug)->first()) {
     DB::table('users')->whereIn('id', $userIds)->delete();
     DB::table('organizations')->where('id', $org->id)->delete();
 }
+// The cashier's own side business (her account's current organization).
+if ($own = Organization::query()->where('slug', 'usaha-sinta-e2e')->first()) {
+    DB::table('organization_user')->where('organization_id', $own->id)->delete();
+    DB::table('organizations')->where('id', $own->id)->delete();
+}
 if (($argv[1] ?? '') === 'cleanup') {
     echo "cleaned\n";
     exit(0);
@@ -60,8 +65,15 @@ $token = function (string $name, string $pivot, string $role) use ($org): array 
 [$cashier, $cashierToken] = $token('Kasir Sinta', 'cashier', 'cashier');
 $staff = PosStaff::query()->create(['organization_id' => $org->id, 'outlet_id' => $outlet->id, 'tenant_id' => $outlet->tenant_slug,
     'linked_user_id' => $cashier->id, 'name' => 'Kasir Sinta', 'role' => 'cashier', 'employment_status' => 'active']);
+// She also owns a small business, which is her account's current organization: the staff
+// login must still take her into Resto E2E Kasir.
+$own = Organization::query()->create(['name' => 'Usaha Sinta', 'slug' => 'usaha-sinta-e2e', 'status' => 'active']);
+$own->users()->attach($cashier->id, ['role' => 'owner']);
+$cashierPassword = 'KasirE2E-2026!';
+$cashier->forceFill(['current_organization_id' => $own->id, 'password' => bcrypt($cashierPassword)])->save();
 
 file_put_contents(__DIR__ . '/../../storage/app/e2e_pos_cashier.json', json_encode([
     'owner_token' => $ownerToken, 'cashier_token' => $cashierToken, 'staff_id' => $staff->id, 'outlet_id' => $outlet->id,
+    'cashier_email' => $cashier->email, 'cashier_password' => $cashierPassword, 'store_name' => $org->name,
 ], JSON_PRETTY_PRINT));
 echo "seeded\n";

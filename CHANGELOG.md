@@ -7,6 +7,7 @@ Audit lengkap dan status per temuan: [docs/AUDIT.md](docs/AUDIT.md). Langkah dep
 ### POS — hak akses kasir yang bisa diatur
 - Owner/admin organisasi mengatur per kasir fitur POS apa saja yang boleh dibuka (POS › Staff › edit): batalkan & refund pesanan, kelola meja, produk, member, poin & data member, loyalty, promo & reservasi, laporan, buka/tutup kas, pengaturan pesanan outlet. **Kasir & pesanan selalu aktif.** Outlet, staf, dan pengaturan pembayaran tetap khusus owner/admin.
 - Ditegakkan di server (middleware `posPermission`), menu POS kasir hanya menampilkan yang diizinkan dan ikut berubah tanpa login ulang.
+- **Login kasir & staf terpisah** di `/login/kasir` (tautan dari halaman login pemilik): setelah berhasil langsung masuk ke toko & outlet tempat email itu terdaftar sebagai staf POS — walaupun akunnya juga punya/ikut usaha lain. Staf yang didaftarkan owner dengan email tertentu otomatis tertaut ke akun dengan email itu **jika email akun sudah terverifikasi**. Terdaftar di beberapa toko → pilih toko. Kasir yang keluar kembali ke halaman login kasir.
 - **Buka/tutup kas di layar kasir** (tombol Kas di Orders): kas awal, penjualan tunai berjalan, uang seharusnya di laci, dan selisih saat tutup. Kelola meja & QR aktif bawaan untuk kasir.
 - Perbaikan: menyimpan data staf dari form tidak lagi melepas akun login kasir yang tertaut; buka kas kini memakai outlet kasir (sebelumnya gagal untuk kasir di outlet selain outlet utama); pembatalan lewat endpoint status kini ikut dicek izinnya.
 

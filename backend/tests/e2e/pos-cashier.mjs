@@ -118,6 +118,23 @@ try {
   await tab.send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 860, deviceScaleFactor: 1, mobile: false });
   await setPermissions({}); // defaults
 
+  await step('login kasir terpisah (/login/kasir) → langsung ke toko tempat dia staf', async () => {
+    await tab.go(`${APP}/login?app=pos`);
+    await tab.waitFor(tab.bodyHas('Kasir atau staf toko? Masuk di sini'), 'link from owner login');
+    await tab.click('Kasir atau staf toko? Masuk di sini', 'a');
+    await tab.waitFor(`location.pathname === '/login/kasir' && !!document.querySelector('#staff-email')`, 'staff login page');
+    await tab.fill('#staff-email', seed.cashier_email);
+    await tab.fill('#staff-password', seed.cashier_password);
+    await tab.shot('pos-staff-login');
+    await tab.eval(`document.querySelector('form button[type=submit]').click(); true`);
+    await tab.waitFor(`location.pathname === '/pos/orders'`, 'landed in POS', 20000);
+    const user = JSON.parse(await tab.eval(`localStorage.getItem('hellom_user')`));
+    if (user.current_organization?.name !== seed.store_name) throw new Error('wrong store: ' + user.current_organization?.name);
+    if (!user.pos_access?.is_cashier) throw new Error('not cashier');
+    await tab.waitFor(tab.bodyHas('Outlet Pusat'), 'outlet shown', 10000);
+    await tab.shot('pos-staff-login-landed');
+  });
+
   await step('kasir default: menu Orders + Tables + Members', async () => {
     await login(seed.cashier_token);
     await tab.go(`${APP}/pos/orders`);

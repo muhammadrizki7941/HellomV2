@@ -350,6 +350,58 @@ class AuthController extends BaseApiController
     }
 
     /**
+     * Staff / cashier login (/login/kasir): after the password check the account is switched
+     * straight into the store where it is registered as POS staff (App\Services\Pos\StaffLogin).
+     * Several stores → 409 with `choices`; send again with `staff_id`.
+     */
+    public function staffLogin(Request $request, \App\Services\Pos\StaffLogin $staffLogin): JsonResponse
+    {
+        $validated = $request->validate([
+            'email' => ['required', 'email'],
+            'password' => ['required', 'string'],
+            'staff_id' => ['nullable', 'integer'],
+        ]);
+
+        $user = User::query()->where('email', strtolower((string) $validated['email']))->first();
+        if (!$user || !Hash::check((string) $validated['password'], (string) $user->password)) {
+            return $this->fail(__('hellom.invalid_credentials'), ['code' => 'INVALID_CREDENTIALS'], 401);
+        }
+        if ($user->isSuspended()) {
+            return $this->fail(__('hellom.account_suspended'), ['code' => 'ACCOUNT_SUSPENDED'], 403);
+        }
+
+        $candidates = $staffLogin->candidates($user);
+        if ($candidates->isEmpty()) {
+            if ($staffLogin->unverifiedMatches($user) > 0) {
+                return $this->fail('Email akun ini belum terverifikasi, jadi belum bisa dipakai sebagai kasir. Minta owner mengirim undangan login dari POS › Staff, lalu buka link di email.',
+                    ['code' => 'STAFF_EMAIL_UNVERIFIED'], 403);
+            }
+
+            return $this->fail('Email ini belum terdaftar sebagai staf POS aktif. Minta owner/admin toko menambahkan kamu di POS › Staff, atau masuk lewat halaman login pemilik.',
+                ['code' => 'NOT_POS_STAFF'], 403);
+        }
+
+        $staff = isset($validated['staff_id'])
+            ? $candidates->firstWhere('id', (int) $validated['staff_id'])
+            : ($candidates->count() === 1 ? $candidates->first() : null);
+        if (!$staff) {
+            return $this->fail('Kamu terdaftar di beberapa toko. Pilih toko yang mau dibuka.', [
+                'code' => 'STAFF_CHOOSE_STORE',
+                'choices' => $candidates->map(fn ($s) => $staffLogin->choice($s))->values()->all(),
+            ], 409);
+        }
+
+        $staffLogin->enter($user, $staff);
+        [$plainToken] = $this->issueToken($user, 'hellom-pos-staff');
+
+        return $this->ok([
+            'token' => $plainToken,
+            'token_type' => 'Bearer',
+            'user' => $this->userPayload($user->fresh(['currentOrganization', 'organizations'])),
+        ], __('hellom.logged_in'));
+    }
+
+    /**
      * Exchange a single-use sign-in link from an email (e.g. digital product access
      * after a guest checkout) for an API token.
      */

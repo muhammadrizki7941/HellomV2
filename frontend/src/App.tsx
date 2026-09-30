@@ -22,6 +22,7 @@ const OrderLookupPage = lazy(() => import('@/pages/public/OrderLookupPage'));
 const SellerPolicyPage = lazy(() => import('@/pages/public/SellerPolicyPage'));
 const InvitationAcceptPage = lazy(() => import('@/pages/public/InvitationAcceptPage'));
 const LoginPage = lazy(() => import('@/pages/auth/LoginPage'));
+const StaffLoginPage = lazy(() => import('@/pages/auth/StaffLoginPage'));
 const RegisterPage = lazy(() => import('@/pages/auth/RegisterPage'));
 const ForgotPassword = lazy(() => import('@/pages/auth/ForgotPassword'));
 const GuestProductCheckoutPage = lazy(() => import('@/pages/produk/checkout'));
@@ -123,6 +124,7 @@ export default function App() {
         <Route path="/p/:organizationSlug/:pageSlug" element={<PublicPage />} />
         <Route path="/invitation/accept" element={<InvitationAcceptPage />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/login/kasir" element={<StaffLoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/customer/:organizationSlug" element={<PosCustomerOrder />} />

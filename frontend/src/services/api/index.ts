@@ -29,8 +29,10 @@ export {
   register,
   resetPassword,
   ssoLogin,
+  staffLogin,
   updateProfile,
 } from './auth';
+export type { StaffStoreChoice } from './auth';
 export {
   acceptOrganizationInvitation,
   createOrganizationInvitation,

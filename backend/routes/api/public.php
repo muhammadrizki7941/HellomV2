@@ -104,6 +104,8 @@ Route::post('/webhooks/doku', [DokuWebhookController::class, 'handle'])->middlew
 // Public auth endpoints (no token needed)
 Route::post('/auth/register', [AuthController::class, 'register'])->middleware('throttle:hellom-auth')->name('auth.register');
 Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:hellom-auth')->name('auth.login');
+// Staff / cashier login: straight into the store where the account is POS staff.
+Route::post('/auth/staff-login', [AuthController::class, 'staffLogin'])->middleware('throttle:hellom-auth')->name('auth.staff_login');
 Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:hellom-auth')->name('auth.forgot_password');
 Route::post('/auth/reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:hellom-auth')->name('auth.reset_password');
 Route::post('/auth/sso-login', [AuthController::class, 'ssoLogin'])->middleware('throttle:hellom-auth')->name('auth.sso_login');
