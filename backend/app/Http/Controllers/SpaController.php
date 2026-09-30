@@ -39,6 +39,7 @@ class SpaController extends Controller
         'svg' => 'image/svg+xml', 'png' => 'image/png', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'webp' => 'image/webp',
         'gif' => 'image/gif', 'ico' => 'image/x-icon', 'woff2' => 'font/woff2', 'woff' => 'font/woff', 'ttf' => 'font/ttf',
         'txt' => 'text/plain; charset=utf-8', 'xml' => 'application/xml',
+        'mp4' => 'video/mp4', 'webm' => 'video/webm',
     ];
 
     private static function buildFile(string $path): ?Response
