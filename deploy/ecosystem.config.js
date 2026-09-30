@@ -11,6 +11,20 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 
+// The queue worker writes Laravel files (logs, compiled views, cache): run it as the web
+// server user (aaPanel: "www", override with HELLOM_WEB_USER) when PM2 itself runs as root,
+// so PHP-FPM can still write those files. Otherwise PM2's own user is kept.
+function webUser() {
+  const user = process.env.HELLOM_WEB_USER || 'www';
+  if (typeof process.getuid !== 'function' || process.getuid() !== 0) return {};
+  try {
+    require('child_process').execSync(`id -u ${user}`, { stdio: 'ignore' });
+    return { uid: user, gid: user };
+  } catch {
+    return {};
+  }
+}
+
 // Minimal KEY=VALUE parser so PM2 can pass realtime/.env to server.js
 // (server.js reads process.env and does not load .env files itself).
 function readEnvFile(file) {
@@ -64,6 +78,7 @@ module.exports = {
       exec_mode: 'fork',
       autorestart: true,
       max_memory_restart: '256M',
+      ...webUser(),
     },
   ],
 };

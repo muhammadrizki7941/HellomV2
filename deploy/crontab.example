@@ -6,7 +6,8 @@
 # Check it is installed:  crontab -l | grep schedule:run
 # See scheduled tasks:    php artisan schedule:list
 
-* * * * * cd /www/wwwroot/hellomspace.com/backend && php artisan schedule:run >> /dev/null 2>&1
+# Runs as the web user (www), like PHP-FPM, so files it writes stay writable for the site.
+* * * * * cd /www/wwwroot/hellomspace.com/backend && sudo -u www php artisan schedule:run >> /dev/null 2>&1
 
 # Daily backup at 02:15 (database + uploads). Set BACKUP_RCLONE_REMOTE for an off-site
 # copy; a backup that only lives on the same VPS does not survive losing the VPS.

@@ -7,15 +7,23 @@
 #   BRANCH=main          git branch to deploy
 #   SKIP_MIGRATE=1       do not run migrations
 #   SKIP_PULL=1          build the currently checked-out commit (rollback)
+#   WEB_USER=www         owner of backend/storage & bootstrap/cache (PHP-FPM user)
 #
 # Never runs destructive commands (no migrate:fresh / db:wipe).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BRANCH="${BRANCH:-main}"
+WEB_USER="${WEB_USER:-www}"
 
 step() { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33m[warn] %s\033[0m\n' "$*"; }
+# Files written by this script (running as root) must stay writable for PHP-FPM.
+fix_owner() {
+  if [ "$(id -u)" = "0" ] && id "$WEB_USER" >/dev/null 2>&1; then
+    chown -R "$WEB_USER:$WEB_USER" "$ROOT/backend/storage" "$ROOT/backend/bootstrap/cache"
+  fi
+}
 
 cd "$ROOT"
 
@@ -49,6 +57,7 @@ if ! php artisan route:cache; then
 fi
 php artisan view:cache
 php artisan queue:restart || true
+fix_owner
 
 step "frontend: build → backend/public/hellom"
 cd "$ROOT/frontend"
@@ -61,6 +70,7 @@ npm ci --omit=dev --no-audit --no-fund
 cd "$ROOT"
 pm2 startOrReload deploy/ecosystem.config.js --update-env
 pm2 save
+fix_owner
 
 step "done"
 echo "Check: https://hellomspace.com  ·  pm2 status  ·  crontab -l | grep schedule:run"
