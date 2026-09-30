@@ -134,6 +134,7 @@ Route::middleware(['canUseApp:pos', 'App\Http\Middleware\Api\InjectPosContext'])
 
     // The signed-in cashier's current permissions (the POS menu refreshes from this).
     Route::get('/pos/me/access', [PosStaffController::class, 'myAccess']);
+    Route::get('/pos/me/cash', [PosStaffController::class, 'myCash'])->middleware('posPermission:cash_control');
     Route::get('/apps/pos/probe', [EntitlementController::class, 'probeLocked'])
         ->name('apps.pos.probe');
     Route::get('/apps/pos/access', [EntitlementController::class, 'posAccess'])

@@ -375,6 +375,7 @@ export {
   getPosStaffAttendanceQr,
   getPosStaffDashboard,
   getPosMyAccess,
+  getPosMyCash,
   invitePosStaffLogin,
   markLeavePosStaff,
   openPosStaffCash,
@@ -383,7 +384,7 @@ export {
   updatePosStaff,
   updatePosStaffShift,
 } from './posStaff';
-export type { PosStaffAttendance, PosStaffAttendanceQr, PosStaffCashLog, PosStaffDashboard, PosStaffEmploymentStatus, PosStaffItem, PosStaffPermissionKey, PosStaffRole, PosStaffShift, PosPermissionDef } from './posStaff';
+export type { PosStaffAttendance, PosStaffAttendanceQr, PosStaffCashLog, PosStaffDashboard, PosStaffEmploymentStatus, PosStaffItem, PosStaffPermissionKey, PosStaffRole, PosStaffShift, PosPermissionDef, PosMyCash } from './posStaff';
 
 export {
   getGuestCheckoutOptions,

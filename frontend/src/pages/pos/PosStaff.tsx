@@ -78,7 +78,7 @@ const FALLBACK_PERMISSIONS: PosPermissionDef[] = [
   { key: 'orders', label: 'Kasir & pesanan', description: 'Buat pesanan, terima pembayaran, cetak struk, tagihan meja. Selalu aktif.', locked: true, default_cashier: true, default_admin: true },
   { key: 'order_cancel', label: 'Batalkan pesanan', description: 'Membatalkan pesanan yang belum dibayar.', locked: false, default_cashier: true, default_admin: true },
   { key: 'order_refund', label: 'Refund pesanan', description: 'Mengembalikan uang pesanan yang sudah dibayar.', locked: false, default_cashier: false, default_admin: true },
-  { key: 'tables', label: 'Kelola meja & QR', description: 'Tambah, ubah, hapus meja dan buat ulang QR meja.', locked: false, default_cashier: false, default_admin: true },
+  { key: 'tables', label: 'Kelola meja & QR', description: 'Tambah, ubah, hapus meja dan buat ulang QR meja.', locked: false, default_cashier: true, default_admin: true },
   { key: 'products', label: 'Kelola produk & kategori', description: 'Tambah, ubah, hapus menu, harga, stok, dan kategori.', locked: false, default_cashier: false, default_admin: true },
   { key: 'members', label: 'Member', description: 'Lihat daftar member, tambah dan ubah data member.', locked: false, default_cashier: true, default_admin: true },
   { key: 'member_points', label: 'Poin & data member', description: 'Sesuaikan poin, gabung member ganda, tanda kecurangan, export data member.', locked: false, default_cashier: false, default_admin: true },

@@ -347,3 +347,14 @@ export async function downloadPosStaffExport(type: 'attendance' | 'performance' 
   link.remove();
   window.URL.revokeObjectURL(url);
 }
+
+export type PosMyCash = {
+  staff_id: number | null;
+  open: (PosStaffCashLog & { live_transactions: number; live_cash_sales: number; live_expected_cash: number }) | null;
+  last_closed: PosStaffCashLog | null;
+};
+
+/** The signed-in staff's cash drawer at the active outlet (cashier screen). */
+export function getPosMyCash() {
+  return apiRequest<PosMyCash>('/pos/me/cash');
+}

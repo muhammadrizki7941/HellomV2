@@ -111,22 +111,23 @@ const login = async (token) => {
 };
 
 let tab;
+const state = {};
 try {
   await sleep(1500);
   tab = await Tab.open('about:blank');
   await tab.send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 860, deviceScaleFactor: 1, mobile: false });
   await setPermissions({}); // defaults
 
-  await step('kasir default: menu hanya Orders + Members', async () => {
+  await step('kasir default: menu Orders + Tables + Members', async () => {
     await login(seed.cashier_token);
     await tab.go(`${APP}/pos/orders`);
     await tab.waitFor(`[...document.querySelectorAll('a[href="/pos/orders"]')].some(a => a.offsetParent !== null)`, 'orders nav', 20000);
     const items = await navTexts();
     console.log('     menu:', items.join(' | '));
-    for (const hidden of ['Reports', 'Product Management', 'Staff', 'Tables', 'Outlet', 'Dashboard', 'Settings', 'Loyalty']) {
+    for (const hidden of ['Reports', 'Product Management', 'Staff', 'Outlet', 'Dashboard', 'Settings', 'Loyalty']) {
       if (items.some((t) => t === hidden)) throw new Error(`${hidden} visible`);
     }
-    if (!items.includes('Orders') || !items.includes('Members')) throw new Error('Orders/Members missing');
+    if (!items.includes('Orders') || !items.includes('Members') || !items.includes('Tables')) throw new Error('Orders/Tables/Members missing');
     await tab.shot('pos-cashier-default');
   });
 
@@ -157,12 +158,42 @@ try {
     await tab.waitFor(`location.pathname === '/pos/orders'`, 'redirect after revoke', 15000);
   });
 
+  await step('kasir buka kas dari layar Orders', async () => {
+    await tab.go(`${APP}/pos/orders`);
+    await tab.waitFor(`[...document.querySelectorAll('button')].some(b => b.innerText.includes('Buka kas'))`, 'cash button', 15000);
+    await tab.click('Buka kas');
+    await tab.waitFor(tab.bodyHas('Hitung uang di laci'), 'open dialog');
+    await tab.fill('[role=dialog] input[inputmode=numeric]', '200000');
+    await tab.shot('pos-cash-open');
+    await tab.eval(`[...document.querySelectorAll('[role=dialog] button')].find(b => b.innerText.trim() === 'Buka kas').click(); true`);
+    await tab.waitFor(`[...document.querySelectorAll('button')].some(b => b.innerText.includes('Kas terbuka'))`, 'drawer open', 15000);
+  });
+
   await step('Kasir & pesanan tetap bisa: buat pesanan', async () => {
     const products = await api(seed.cashier_token, 'GET', '/pos/products');
     const list = products.json?.data?.products ?? products.json?.data?.items ?? products.json?.data ?? [];
     const pid = (Array.isArray(list) ? list : list.data ?? [])[0]?.id;
     const r = await api(seed.cashier_token, 'POST', '/pos/orders', { items: [{ product_id: pid, quantity: 1 }] });
     if (r.status !== 201) throw new Error('order ' + r.status + ' ' + JSON.stringify(r.json).slice(0, 200));
+    state.orderTotal = r.json.data.order.final_amount;
+    const paid = await api(seed.cashier_token, 'POST', `/pos/orders/${r.json.data.order.id}/payment`, { payment_method: 'cash', payment_amount: 100000 });
+    if (paid.status !== 200) throw new Error('pay ' + paid.status);
+  });
+
+  await step('kasir tutup kas: selisih dihitung dari kas awal + penjualan tunai', async () => {
+    await tab.go(`${APP}/pos/orders`);
+    await tab.waitFor(`[...document.querySelectorAll('button')].some(b => b.innerText.includes('Kas terbuka'))`, 'cash button', 15000);
+    await tab.click('Kas terbuka');
+    const expected = 200000 + state.orderTotal;
+    await tab.waitFor(tab.bodyHas('Seharusnya di laci') + ' && ' + tab.bodyHas('Rp ' + expected.toLocaleString('id-ID')), 'expected cash', 10000);
+    await tab.fill('[role=dialog] input[inputmode=numeric]', String(expected - 2000));
+    await tab.waitFor(tab.bodyHas('Kurang Rp 2.000'), 'live difference');
+    await tab.shot('pos-cash-close');
+    await tab.eval(`window.confirm = () => true; [...document.querySelectorAll('[role=dialog] button')].find(b => b.innerText.trim() === 'Tutup kas').click(); true`);
+    await tab.waitFor(tab.bodyHas('Kas ditutup') + ' && ' + tab.bodyHas('Kurang Rp 2.000'), 'closed summary', 15000);
+    await tab.shot('pos-cash-closed');
+    await tab.click('Selesai');
+    await tab.waitFor(`[...document.querySelectorAll('button')].some(b => b.innerText.includes('Buka kas'))`, 'back to closed', 10000);
   });
 
   await step('owner: form Staff menampilkan hak akses (Kasir & pesanan terkunci)', async () => {

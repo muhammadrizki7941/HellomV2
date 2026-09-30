@@ -7,7 +7,8 @@ Audit lengkap dan status per temuan: [docs/AUDIT.md](docs/AUDIT.md). Langkah dep
 ### POS — hak akses kasir yang bisa diatur
 - Owner/admin organisasi mengatur per kasir fitur POS apa saja yang boleh dibuka (POS › Staff › edit): batalkan & refund pesanan, kelola meja, produk, member, poin & data member, loyalty, promo & reservasi, laporan, buka/tutup kas, pengaturan pesanan outlet. **Kasir & pesanan selalu aktif.** Outlet, staf, dan pengaturan pembayaran tetap khusus owner/admin.
 - Ditegakkan di server (middleware `posPermission`), menu POS kasir hanya menampilkan yang diizinkan dan ikut berubah tanpa login ulang.
-- Perbaikan: menyimpan data staf dari form tidak lagi melepas akun login kasir yang tertaut; pembatalan lewat endpoint status kini ikut dicek izinnya.
+- **Buka/tutup kas di layar kasir** (tombol Kas di Orders): kas awal, penjualan tunai berjalan, uang seharusnya di laci, dan selisih saat tutup. Kelola meja & QR aktif bawaan untuk kasir.
+- Perbaikan: menyimpan data staf dari form tidak lagi melepas akun login kasir yang tertaut; buka kas kini memakai outlet kasir (sebelumnya gagal untuk kasir di outlet selain outlet utama); pembatalan lewat endpoint status kini ikut dicek izinnya.
 
 ### Hellom Page — poles & siap produksi (Fase 5)
 - **Onboarding penjual baru** 3 langkah (username → template → produk pertama → halaman terbit & siap dibagikan) + checklist *Siapkan toko kamu* di Overview (username, produk, halaman, verifikasi email, KTP & rekening, pixel).

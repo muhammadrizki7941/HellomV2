@@ -628,7 +628,7 @@ class PosStaffController extends BasePosController
             return $denied;
         }
         $org = $this->getOrg($request);
-        $tenantSlug = $this->getTenantSlug($org);
+        $tenantSlug = (string) $request->attributes->get('posTenantSlug');
         $validated = $request->validate([
             'opening_cash' => 'required|integer|min:0',
             'shift_id' => 'nullable|integer',
@@ -1065,6 +1065,44 @@ class PosStaffController extends BasePosController
         $staff->update(['last_activity_at' => now()]);
 
         return $this->serializeAttendance($attendance->fresh(), $staff);
+    }
+
+    /**
+     * GET /pos/me/cash: the signed-in staff's cash drawer at this outlet, for the cashier
+     * screen. Open drawer → live cash sales and expected cash so far; plus the last closed one.
+     */
+    public function myCash(Request $request): JsonResponse
+    {
+        $tenantSlug = (string) $request->attributes->get('posTenantSlug');
+        $staff = $request->attributes->get('posStaff');
+        if (!$staff instanceof PosStaff) {
+            // Owner/admin working the till with their own staff record at this outlet.
+            $staff = PosStaff::query()->where('tenant_id', $tenantSlug)->where('linked_user_id', (int) $request->user()->id)
+                ->where('employment_status', 'active')->first();
+        }
+        if (!$staff instanceof PosStaff) {
+            return $this->success(['staff_id' => null, 'open' => null, 'last_closed' => null], 'Belum terdaftar sebagai staf outlet ini');
+        }
+
+        $open = PosStaffCashLog::query()->where('tenant_id', $tenantSlug)->where('staff_id', $staff->id)
+            ->where('status', 'open')->latest('started_at')->first();
+        $openPayload = null;
+        if ($open) {
+            [$transactions, $cashSales] = $this->calculateCashPerformance($tenantSlug, $staff, $open->started_at, now());
+            $openPayload = $this->serializeCashLog($open, $staff) + [
+                'live_transactions' => $transactions,
+                'live_cash_sales' => $cashSales,
+                'live_expected_cash' => (int) $open->opening_cash + $cashSales,
+            ];
+        }
+        $lastClosed = PosStaffCashLog::query()->where('tenant_id', $tenantSlug)->where('staff_id', $staff->id)
+            ->where('status', 'closed')->latest('closed_at')->first();
+
+        return $this->success([
+            'staff_id' => (int) $staff->id,
+            'open' => $openPayload,
+            'last_closed' => $lastClosed ? $this->serializeCashLog($lastClosed, $staff) : null,
+        ], 'Kas saya');
     }
 
     /** GET /pos/me/access: the signed-in user's POS permissions (cashier menu refresh). */

@@ -71,7 +71,6 @@ class CashierPermissionsTest extends PosTestCase
         foreach ([
             ['POST', "{$api}/products", ['name' => 'Kopi', 'price' => 10000]],
             ['POST', "{$api}/categories", ['name' => 'Minuman']],
-            ['POST', "{$api}/tables", ['code' => 'T9']],
             ['GET', "{$api}/reports/summary"],
             ['POST', "{$api}/orders/{$order['id']}/refund", ['reason' => 'x']],
             ['GET', "{$api}/members/export"],
@@ -90,7 +89,41 @@ class CashierPermissionsTest extends PosTestCase
             ->assertJsonPath('data.is_cashier', true)
             ->assertJsonPath('data.permissions.orders', true)
             ->assertJsonPath('data.permissions.products', false)
-            ->assertJsonPath('data.permissions.members', true);
+            ->assertJsonPath('data.permissions.members', true)
+            ->assertJsonPath('data.permissions.tables', true); // owner decision: on by default
+    }
+
+    public function test_cashier_opens_and_closes_own_cash_drawer_at_any_outlet(): void
+    {
+        ['org' => $org] = $this->makeOrganization('S');
+        $outlet = $this->makeOutlet($org); // not the primary outlet
+        $product = $this->makeProduct($outlet, 30000);
+        [$h, $staff] = $this->cashier($org, $outlet);
+        $api = '/api/v1/hellom/pos';
+
+        $this->withHeaders($h)->getJson("{$api}/me/cash")->assertOk()
+            ->assertJsonPath('data.staff_id', $staff->id)->assertJsonPath('data.open', null);
+        $this->withHeaders($h)->postJson("{$api}/staff/{$staff->id}/cash/open", ['opening_cash' => 200000])->assertCreated();
+        $this->withHeaders($h)->postJson("{$api}/staff/{$staff->id}/cash/open", ['opening_cash' => 1])->assertStatus(422);
+
+        $order = $this->withHeaders($h)->postJson("{$api}/orders", ['items' => [['product_id' => $product->id, 'quantity' => 1]]])->assertCreated()->json('data.order');
+        $this->withHeaders($h)->postJson("{$api}/orders/{$order['id']}/payment", ['payment_method' => 'cash', 'payment_amount' => 50000])->assertOk();
+
+        $this->withHeaders($h)->getJson("{$api}/me/cash")->assertOk()
+            ->assertJsonPath('data.open.opening_cash', 200000)
+            ->assertJsonPath('data.open.live_cash_sales', (int) $order['final_amount'])
+            ->assertJsonPath('data.open.live_expected_cash', 200000 + (int) $order['final_amount']);
+
+        $closed = $this->withHeaders($h)->postJson("{$api}/staff/{$staff->id}/cash/close", ['closing_cash' => 200000 + (int) $order['final_amount'] - 5000])
+            ->assertOk()->json('data.cash_log');
+        $this->assertSame('closed', $closed['status']);
+        $this->assertSame(-5000, $closed['difference_cash']);
+        $this->withHeaders($h)->getJson("{$api}/me/cash")->assertJsonPath('data.open', null)->assertJsonPath('data.last_closed.difference_cash', -5000);
+
+        // Switched off: no drawer for this cashier.
+        $staff->forceFill(['permissions' => ['cash_control' => false]])->save();
+        $this->withHeaders($h)->getJson("{$api}/me/cash")->assertForbidden();
+        $this->withHeaders($h)->postJson("{$api}/staff/{$staff->id}/cash/open", ['opening_cash' => 1])->assertForbidden();
     }
 
     public function test_owner_grants_and_revokes_features_dynamically(): void

@@ -15,6 +15,7 @@ import type { PosOrderListItem, PosOrderStatus, PosTableBill } from '@/lib/hello
 import NewOrderModal from '@/components/pos/NewOrderModal';
 import ReceiptModal from '@/components/pos/ReceiptModal';
 import PaymentModal from '@/components/pos/PaymentModal';
+import CashDrawerButton from '@/components/pos/CashDrawerButton';
 import { getPosRealtimeEventName, isPosRealtimeConnected } from '@/lib/realtime';
 import {
   ensurePosOrderListResetAt,
@@ -249,6 +250,7 @@ export default function PosOrders() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <CashDrawerButton />
             <button
               onClick={() => void loadOrders()}
               className="rounded-lg bg-gray-100 px-3 py-1.5 text-sm text-gray-700 transition-colors hover:bg-gray-200"

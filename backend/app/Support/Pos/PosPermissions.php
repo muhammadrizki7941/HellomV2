@@ -28,7 +28,7 @@ final class PosPermissions
         'orders' => ['Kasir & pesanan', 'Buat pesanan, terima pembayaran, cetak struk, tagihan meja. Selalu aktif.', true, true],
         'order_cancel' => ['Batalkan pesanan', 'Membatalkan pesanan yang belum dibayar.', true, true],
         'order_refund' => ['Refund pesanan', 'Mengembalikan uang pesanan yang sudah dibayar.', false, true],
-        'tables' => ['Kelola meja & QR', 'Tambah, ubah, hapus meja dan buat ulang QR meja.', false, true],
+        'tables' => ['Kelola meja & QR', 'Tambah, ubah, hapus meja dan buat ulang QR meja.', true, true],
         'products' => ['Kelola produk & kategori', 'Tambah, ubah, hapus menu, harga, stok, dan kategori.', false, true],
         'members' => ['Member', 'Lihat daftar member, tambah dan ubah data member.', true, true],
         'member_points' => ['Poin & data member', 'Sesuaikan poin, gabung member ganda, tanda kecurangan, export data member.', false, true],
