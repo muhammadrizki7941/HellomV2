@@ -706,11 +706,11 @@ class OrganizationTeamController extends BaseApiController
             ->first();
 
         if (!$invitation instanceof OrganizationTeamInvitation) {
-            return $this->fail('Invitation token invalid', ['code' => 'INVITATION_INVALID'], 404);
+            return $this->fail('Link undangan tidak dikenal. Minta owner mengirim ulang undangan.', ['code' => 'INVITATION_INVALID'], 404);
         }
 
         if ($invitation->status !== OrganizationTeamInvitation::STATUS_PENDING) {
-            return $this->fail('Invitation token is no longer active', ['code' => 'INVITATION_NOT_ACTIVE'], 422);
+            return $this->fail('Undangan ini sudah dipakai atau dibatalkan.', ['code' => 'INVITATION_NOT_ACTIVE'], 422);
         }
 
         if ($invitation->expires_at && $invitation->expires_at->isPast()) {
@@ -718,11 +718,11 @@ class OrganizationTeamController extends BaseApiController
                 'status' => OrganizationTeamInvitation::STATUS_EXPIRED,
             ])->save();
 
-            return $this->fail('Invitation has expired', ['code' => 'INVITATION_EXPIRED'], 422);
+            return $this->fail('Undangan ini sudah kedaluwarsa. Minta owner mengirim undangan baru.', ['code' => 'INVITATION_EXPIRED'], 422);
         }
 
         if (strtolower((string) $user->email) !== strtolower((string) $invitation->email)) {
-            return $this->fail('Invitation email does not match current account', ['code' => 'INVITATION_EMAIL_MISMATCH'], 403);
+            return $this->fail('Undangan ini untuk email lain. Masuk dengan email yang diundang.', ['code' => 'INVITATION_EMAIL_MISMATCH'], 403);
         }
 
         $organization = Organization::query()->find((int) $invitation->organization_id);
@@ -730,7 +730,9 @@ class OrganizationTeamController extends BaseApiController
             return $this->fail('Organization not found', ['code' => 'ORG_NOT_FOUND'], 404);
         }
 
-        if ($this->belongsToDifferentOrganization($user, (int) $organization->id)) {
+        // POS staff invitations may join while the account also has its own business: the staff
+        // login (/login/kasir) opens the right store. Other team invitations keep the one-org rule.
+        if (!$invitation->pos_staff_id && $this->belongsToDifferentOrganization($user, (int) $organization->id)) {
             return $this->fail(
                 'Akun ini sudah terhubung ke organisasi lain dan tidak boleh menerima invitation tambahan.',
                 ['code' => 'USER_HAS_OTHER_ORGANIZATION'],
@@ -753,7 +755,8 @@ class OrganizationTeamController extends BaseApiController
             'accepted_by_user_id' => (int) $user->id,
         ])->save();
 
-        if ((int) ($user->current_organization_id ?? 0) <= 0) {
+        // Cashiers go straight into the store that invited them.
+        if ((int) ($user->current_organization_id ?? 0) <= 0 || $invitation->pos_staff_id) {
             $user->forceFill([
                 'current_organization_id' => (int) $organization->id,
             ])->save();
@@ -799,6 +802,38 @@ class OrganizationTeamController extends BaseApiController
         $requesterRole = (string) ($organization->pivot->role ?? 'member');
 
         return [$organization, $requesterRole, null];
+    }
+
+    /**
+     * GET /public/invitations/{token}: what the invitation page shows before login/sign-up.
+     * The token is the secret (it only travels by email); no ids are exposed.
+     */
+    public function publicInvitation(string $token): JsonResponse
+    {
+        $invitation = strlen($token) >= 16 && strlen($token) <= 255
+            ? OrganizationTeamInvitation::query()->where('token_hash', hash('sha256', $token))->first()
+            : null;
+        if (!$invitation instanceof OrganizationTeamInvitation) {
+            return $this->fail('Link undangan tidak dikenal. Minta owner mengirim ulang undangan.', ['code' => 'INVITATION_INVALID'], 404);
+        }
+        $expired = $invitation->expires_at && $invitation->expires_at->isPast();
+        $status = $invitation->status === OrganizationTeamInvitation::STATUS_PENDING ? ($expired ? 'expired' : 'pending') : (string) $invitation->status;
+        $organization = Organization::query()->find((int) $invitation->organization_id);
+        $staff = $invitation->pos_staff_id ? \App\Models\PosStaff::query()->find((int) $invitation->pos_staff_id) : null;
+        $roleLabels = ['cashier' => 'Kasir', 'admin' => 'Admin', 'member' => 'Anggota tim', 'owner' => 'Pemilik'];
+
+        return $this->ok([
+            'status' => $status,
+            'email' => (string) $invitation->email,
+            'role' => (string) $invitation->role,
+            'role_label' => $roleLabels[(string) $invitation->role] ?? (string) $invitation->role,
+            'organization_name' => (string) ($organization?->name ?? ''),
+            'outlet_name' => $staff?->resolveBoundOutlet()?->name,
+            'is_pos_staff' => $invitation->pos_staff_id !== null,
+            'staff_name' => $staff?->name,
+            'has_account' => User::query()->whereRaw('LOWER(email) = ?', [mb_strtolower((string) $invitation->email)])->exists(),
+            'expires_at' => optional($invitation->expires_at)->toIso8601String(),
+        ], 'Undangan');
     }
 
     private function belongsToDifferentOrganization(User $user, int $organizationId): bool
@@ -850,7 +885,8 @@ class OrganizationTeamController extends BaseApiController
     private function sendInvitationEmail(Organization $organization, OrganizationTeamInvitation $invitation, string $plainToken): array
     {
         $appBase = trim((string) config('app.frontend_url'));
-        $registerUrl = rtrim($appBase, '/') . '/register?inviteToken=' . urlencode($plainToken);
+        // Invitation page: log in (existing account) or create one, then join.
+        $registerUrl = rtrim($appBase, '/') . '/invitation/accept?token=' . urlencode($plainToken);
 
         return $this->platformMailService->sendTo($invitation->email, new OrganizationTeamInvitationMail(
             organizationName: (string) $organization->name,

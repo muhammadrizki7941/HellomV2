@@ -39,12 +39,16 @@ class AuthController extends BaseApiController
 
         $email = strtolower((string) $validated['email']);
         $user = User::query()->where('email', $email)->first();
+        // Same answer whether or not the account exists (no account enumeration).
+        $answer = fn () => $this->ok(['email' => $email, 'sent' => true],
+            'Kalau email ini terdaftar, link untuk membuat kata sandi baru sudah kami kirim. Cek juga folder Spam.');
 
         if (!$user instanceof User) {
-            return $this->ok([
-                'email' => $email,
-                'sent' => true,
-            ], 'If the account exists, reset instructions have been sent');
+            // A cashier/staff the owner registered by email but who never created an account:
+            // send an activation invitation for that store instead.
+            $this->sendStaffActivation($email);
+
+            return $answer();
         }
 
         $token = Str::random(64);
@@ -61,14 +65,50 @@ class AuthController extends BaseApiController
             email: $user->email,
             token: $token,
             expiresInMinutes: (int) config('auth.passwords.users.expire', 60),
+            resetUrl: \App\Support\FrontendUrl::to('/reset-password?' . http_build_query(['token' => $token, 'email' => $user->email])),
+            name: (string) $user->name,
         ));
+        if (!($delivery['sent'] ?? false)) {
+            \Illuminate\Support\Facades\Log::warning('Password reset email not sent', ['user_id' => $user->id, 'error' => $delivery['error'] ?? null]);
+        }
 
-        return $this->ok([
+        return $answer();
+    }
+
+    /** Forgot password for a POS staff email without an account → invitation to create it. */
+    private function sendStaffActivation(string $email): void
+    {
+        $staff = PosStaff::query()->whereNull('linked_user_id')->where('employment_status', 'active')
+            ->whereRaw('LOWER(email) = ?', [$email])->orderByDesc('id')->first();
+        $organization = $staff ? Organization::query()->find((int) $staff->organization_id) : null;
+        if (!$staff || !$organization || (string) $organization->status !== 'active') {
+            return;
+        }
+        $inviterId = $organization->users()->wherePivotIn('role', ['owner', 'admin'])->orderByRaw("FIELD(organization_user.role, 'owner', 'admin')")->value('users.id');
+        if (!$inviterId) {
+            return;
+        }
+        $plainToken = Str::random(48);
+        OrganizationTeamInvitation::query()->where('pos_staff_id', $staff->id)
+            ->where('status', OrganizationTeamInvitation::STATUS_PENDING)->update(['status' => OrganizationTeamInvitation::STATUS_REVOKED]);
+        $invitation = OrganizationTeamInvitation::query()->create([
+            'organization_id' => $organization->id,
             'email' => $email,
-            'sent' => true,
-            'email_delivery' => $delivery,
-            'debug_reset_token' => app()->isLocal() ? $token : null,
-        ], 'If the account exists, reset instructions have been sent');
+            'role' => 'cashier',
+            'token_hash' => hash('sha256', $plainToken),
+            'status' => OrganizationTeamInvitation::STATUS_PENDING,
+            'expires_at' => now()->addDays(7),
+            'pos_staff_id' => $staff->id,
+            'invited_by_user_id' => (int) $inviterId,
+        ]);
+        $this->platformMailService->sendTo($email, new \App\Mail\OrganizationTeamInvitationMail(
+            organizationName: (string) $organization->name,
+            role: 'cashier',
+            token: $plainToken,
+            registerUrl: \App\Support\FrontendUrl::to('/invitation/accept?token=' . urlencode($plainToken)),
+            expiresAt: $invitation->expires_at,
+            activation: true,
+        ));
     }
 
     public function resetPassword(Request $request): JsonResponse
@@ -98,16 +138,26 @@ class AuthController extends BaseApiController
         );
 
         if ($status !== Password::PASSWORD_RESET) {
-            return $this->fail('Password reset failed', [
-                'code' => 'PASSWORD_RESET_FAILED',
-                'status' => $status,
-            ], 422);
+            $message = $status === Password::INVALID_TOKEN
+                ? 'Link ini sudah tidak berlaku atau sudah dipakai. Minta link baru dari halaman Lupa kata sandi.'
+                : 'Kata sandi belum bisa diubah. Minta link baru dari halaman Lupa kata sandi.';
+
+            return $this->fail($message, ['code' => 'PASSWORD_RESET_FAILED', 'status' => $status], 422);
         }
+
+        // The link came to this inbox, so the email is proven (lets POS staff link by email).
+        $user = User::query()->where('email', $email)->first();
+        if ($user && $user->email_verified_at === null) {
+            $user->forceFill(['email_verified_at' => now()])->save();
+        }
+        $isStaff = $user && app(\App\Services\Pos\StaffLogin::class)->candidates($user)->isNotEmpty();
 
         return $this->ok([
             'email' => $email,
             'reset' => true,
-        ], 'Password has been reset');
+            // Where to log in next: cashiers/staff use their own login page.
+            'next' => $isStaff ? '/login/kasir' : '/login',
+        ], 'Kata sandi baru sudah disimpan. Silakan masuk.');
     }
 
     public function register(Request $request): JsonResponse
@@ -128,7 +178,7 @@ class AuthController extends BaseApiController
                 ->first();
 
             if (!$invitation instanceof OrganizationTeamInvitation) {
-                return $this->fail('Invitation token invalid', ['code' => 'INVITATION_INVALID'], 422);
+                return $this->fail('Link undangan tidak dikenal atau sudah dipakai. Minta owner mengirim ulang undangan.', ['code' => 'INVITATION_INVALID'], 422);
             }
 
             if ($invitation->expires_at && $invitation->expires_at->isPast()) {
@@ -136,7 +186,7 @@ class AuthController extends BaseApiController
                     'status' => OrganizationTeamInvitation::STATUS_EXPIRED,
                 ])->save();
 
-                return $this->fail('Invitation has expired', ['code' => 'INVITATION_EXPIRED'], 422);
+                return $this->fail('Undangan ini sudah kedaluwarsa. Minta owner mengirim undangan baru.', ['code' => 'INVITATION_EXPIRED'], 422);
             }
 
             if (strtolower((string) $invitation->email) !== strtolower((string) $validated['email'])) {
@@ -163,7 +213,8 @@ class AuthController extends BaseApiController
                 }
 
                 $organization->users()->attach($user->id, ['role' => (string) $invitation->role]);
-                $user->forceFill(['current_organization_id' => $organization->id])->save();
+                // The invitation token only travels to this email address, so the email is proven.
+                $user->forceFill(['current_organization_id' => $organization->id, 'email_verified_at' => now()])->save();
 
                 // Bind the new account to its POS staff record (cashier invites),
                 // so it lands directly in POS scoped to the assigned outlet.

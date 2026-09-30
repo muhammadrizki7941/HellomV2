@@ -81,9 +81,26 @@ export function changePassword(payload: { current_password: string; password: st
   });
 }
 
+export type PublicInvitation = {
+  status: 'pending' | 'expired' | 'accepted' | 'revoked';
+  email: string;
+  role: string;
+  role_label: string;
+  organization_name: string;
+  outlet_name: string | null;
+  is_pos_staff: boolean;
+  staff_name: string | null;
+  has_account: boolean;
+  expires_at: string | null;
+};
+
+/** Invitation page: who invited, and whether the invited email already has an account. */
+export function getPublicInvitation(token: string) {
+  return apiRequest<PublicInvitation>(`/public/invitations/${encodeURIComponent(token)}`, { token: null });
+}
+
 export function forgotPassword(email: string) {
-  // debug_reset_token is only returned when the backend runs with APP_ENV=local.
-  return apiRequest<{ debug_reset_token?: string | null }>('/auth/forgot-password', {
+  return apiRequest<{ email: string; sent: boolean }>('/auth/forgot-password', {
     method: 'POST',
     body: { email },
     token: null,
@@ -96,7 +113,8 @@ export function resetPassword(payload: {
   password: string;
   password_confirmation: string;
 }) {
-  return apiRequest<Record<string, unknown>>('/auth/reset-password', {
+  // `next`: /login/kasir for POS staff, /login otherwise.
+  return apiRequest<{ email: string; reset: boolean; next?: string }>('/auth/reset-password', {
     method: 'POST',
     body: payload,
     token: null,

@@ -19,13 +19,17 @@ class OrganizationTeamInvitationMail extends Mailable
         public string $token,
         public ?string $registerUrl = null,
         public ?Carbon $expiresAt = null,
+        // Sent from "Lupa kata sandi" to a staff email that has no account yet.
+        public bool $activation = false,
     ) {
     }
 
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Undangan bergabung tim organisasi',
+            subject: $this->activation
+                ? "Aktifkan akun kamu di {$this->organizationName}"
+                : "Kamu diundang bergabung dengan {$this->organizationName} di Hellom",
         );
     }
 

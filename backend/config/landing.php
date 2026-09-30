@@ -13,7 +13,7 @@ return [
         // app & site routes
         'admin', 'api', 'app', 'apps', 'auth', 'akses', 'aplikasi', 'beli', 'blog', 'cek-pesanan', 'checkout', 'contact', 'customer',
         'dashboard', 'faq', 'forgot-password', 'hellom', 'help', 'insights', 'invitation', 'kebijakan', 'kontak', 'layanan', 'login',
-        'logout', 'media', 'member', 'p', 'pesanan', 'portofolio', 'pos', 'produk', 'refund-policy', 'register', 'settings',
+        'logout', 'media', 'member', 'p', 'pesanan', 'portofolio', 'pos', 'produk', 'refund-policy', 'register', 'reset-password', 'settings',
         'socket.io', 'storage', 'sw.js', 'tentang', 'terms', 'wawasan', 'hellom-assets', 'assets', 'build', 'static', 'public',
         // words that look official
         'hellomspace', 'official', 'support', 'bantuan', 'cs', 'billing', 'payment', 'pembayaran', 'bayar', 'invoice', 'status',

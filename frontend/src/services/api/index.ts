@@ -30,9 +30,10 @@ export {
   resetPassword,
   ssoLogin,
   staffLogin,
+  getPublicInvitation,
   updateProfile,
 } from './auth';
-export type { StaffStoreChoice } from './auth';
+export type { StaffStoreChoice, PublicInvitation } from './auth';
 export {
   acceptOrganizationInvitation,
   createOrganizationInvitation,

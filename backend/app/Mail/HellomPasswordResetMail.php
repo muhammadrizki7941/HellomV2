@@ -16,13 +16,15 @@ class HellomPasswordResetMail extends Mailable
         public string $email,
         public string $token,
         public int $expiresInMinutes,
+        public ?string $resetUrl = null,
+        public ?string $name = null,
     ) {
     }
 
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Reset Password Akun Hellom',
+            subject: 'Buat kata sandi baru untuk akun Hellom kamu',
         );
     }
 

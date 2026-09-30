@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\V1\Hellom\IpaymuWebhookController;
 use App\Http\Controllers\Api\V1\Hellom\LandingBuilderController;
 use App\Http\Controllers\Api\V1\Hellom\LandingContentController;
 use App\Http\Controllers\Api\V1\Hellom\LandingSaleController;
+use App\Http\Controllers\Api\V1\Hellom\OrganizationTeamController;
 use App\Http\Controllers\Api\V1\Hellom\Pos\PosExperienceController;
 use App\Http\Controllers\Api\V1\Hellom\Pos\PosMemberController;
 use App\Http\Controllers\Api\V1\Hellom\Pos\PosPaymentSettingController;
@@ -105,6 +106,8 @@ Route::post('/webhooks/doku', [DokuWebhookController::class, 'handle'])->middlew
 Route::post('/auth/register', [AuthController::class, 'register'])->middleware('throttle:hellom-auth')->name('auth.register');
 Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:hellom-auth')->name('auth.login');
 // Staff / cashier login: straight into the store where the account is POS staff.
+// Invitation page (email link): who invited you, and whether the email already has an account.
+Route::get('/public/invitations/{token}', [OrganizationTeamController::class, 'publicInvitation'])->middleware('throttle:hellom-public-lookup')->name('public.invitations.show');
 Route::post('/auth/staff-login', [AuthController::class, 'staffLogin'])->middleware('throttle:hellom-auth')->name('auth.staff_login');
 Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:hellom-auth')->name('auth.forgot_password');
 Route::post('/auth/reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:hellom-auth')->name('auth.reset_password');

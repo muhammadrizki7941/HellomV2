@@ -25,6 +25,7 @@ const LoginPage = lazy(() => import('@/pages/auth/LoginPage'));
 const StaffLoginPage = lazy(() => import('@/pages/auth/StaffLoginPage'));
 const RegisterPage = lazy(() => import('@/pages/auth/RegisterPage'));
 const ForgotPassword = lazy(() => import('@/pages/auth/ForgotPassword'));
+const ResetPasswordPage = lazy(() => import('@/pages/auth/ResetPasswordPage'));
 const GuestProductCheckoutPage = lazy(() => import('@/pages/produk/checkout'));
 const GuestCheckoutStatusPage = lazy(() => import('@/pages/produk/checkout-status'));
 const MagicLoginPage = lazy(() => import('@/pages/auth/MagicLoginPage'));
@@ -127,6 +128,7 @@ export default function App() {
         <Route path="/login/kasir" element={<StaffLoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/customer/:organizationSlug" element={<PosCustomerOrder />} />
         <Route path="/customer/order/:tableToken" element={<PosCustomerOrder />} />
         <Route path="/customer/:organizationSlug/order/:tableToken" element={<PosCustomerOrder />} />
