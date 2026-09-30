@@ -3,6 +3,8 @@
 export {
   HELLOM_API_BASE,
   HELLOM_REALTIME_PUBLIC_URL,
+  POS_PERMISSION_DENIED_EVENT,
+  canPos,
   clearSession,
   getActiveOutletEventName,
   getActiveOutletId,
@@ -14,6 +16,7 @@ export {
   isPosCashier,
   setActiveOutletId,
   setSession,
+  setSessionPosAccess,
 } from './client';
 export type { ApiProblem, PosAccess } from './client';
 export { ApiError } from './client';
@@ -371,6 +374,7 @@ export {
   downloadPosStaffExport,
   getPosStaffAttendanceQr,
   getPosStaffDashboard,
+  getPosMyAccess,
   invitePosStaffLogin,
   markLeavePosStaff,
   openPosStaffCash,
@@ -379,7 +383,7 @@ export {
   updatePosStaff,
   updatePosStaffShift,
 } from './posStaff';
-export type { PosStaffAttendance, PosStaffAttendanceQr, PosStaffCashLog, PosStaffDashboard, PosStaffEmploymentStatus, PosStaffItem, PosStaffPermissionKey, PosStaffRole, PosStaffShift } from './posStaff';
+export type { PosStaffAttendance, PosStaffAttendanceQr, PosStaffCashLog, PosStaffDashboard, PosStaffEmploymentStatus, PosStaffItem, PosStaffPermissionKey, PosStaffRole, PosStaffShift, PosPermissionDef } from './posStaff';
 
 export {
   getGuestCheckoutOptions,

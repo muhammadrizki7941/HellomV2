@@ -3,6 +3,7 @@ import { Search, Clock, CheckCircle, XCircle, ShoppingCart, RotateCcw, Info, Wif
 import { cn } from '@/lib/utils';
 import {
   POS_ORDER_STATUS_LABELS,
+  canPos,
   cancelPosOrder,
   getPosOrders,
   getPosTableBills,
@@ -482,7 +483,7 @@ export default function PosOrders() {
                           ))}
                         </select>
                       )}
-                      {allowed.includes('cancelled') && !isPaid && (
+                      {allowed.includes('cancelled') && !isPaid && canPos('order_cancel') && (
                         <button
                           disabled={busy}
                           onClick={() => handleStatusUpdate(order, 'cancelled')}
@@ -491,12 +492,11 @@ export default function PosOrders() {
                           Batalkan
                         </button>
                       )}
-                      {isPaid && (
+                      {isPaid && canPos('order_refund') && (
                         <button
                           disabled={busy}
                           onClick={() => handleRefund(order)}
                           className="rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
-                          title="Hanya owner/supervisor"
                         >
                           Refund
                         </button>

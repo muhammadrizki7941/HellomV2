@@ -509,43 +509,7 @@ class AuthController extends BaseApiController
      */
     private function posAccessPayload(User $user): array
     {
-        $organization = $user->currentOrganization;
-        if (!$organization instanceof Organization) {
-            return ['is_cashier' => false];
-        }
-
-        $isPlatform = in_array((string) $user->role, ['super_admin', 'tenant_admin'], true);
-        $membership = $user->organizations()
-            ->where('organizations.id', (int) $organization->id)
-            ->first();
-        $pivotRole = (string) ($membership?->pivot?->role ?? '');
-        $isManager = $isPlatform || in_array($pivotRole, ['owner', 'admin', 'super_admin'], true);
-
-        if ($isManager) {
-            return ['is_cashier' => false];
-        }
-
-        $staff = PosStaff::query()
-            ->where('organization_id', (int) $organization->id)
-            ->where('linked_user_id', (int) $user->id)
-            ->where('employment_status', 'active')
-            ->orderByDesc('id')
-            ->first();
-
-        if (!$staff instanceof PosStaff) {
-            return ['is_cashier' => false];
-        }
-
-        $outlet = $staff->resolveBoundOutlet();
-
-        return [
-            'is_cashier' => true,
-            'pos_role' => (string) $staff->role,
-            'permissions' => is_array($staff->permissions) ? $staff->permissions : [],
-            'outlet_id' => $outlet?->id,
-            'outlet_name' => $outlet?->name,
-            'tenant_slug' => (string) ($outlet?->tenant_slug ?? $staff->tenant_id),
-        ];
+        return \App\Support\Pos\PosAccess::forUser($user);
     }
 
     private function seedDefaultEntitlements(Organization $organization): void

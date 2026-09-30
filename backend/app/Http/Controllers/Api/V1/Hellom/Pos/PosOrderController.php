@@ -117,6 +117,10 @@ class PosOrderController extends BasePosController
         if (!$to) {
             return $this->error('Status tidak dikenal', 'INVALID_STATUS', null, 422);
         }
+        // Cancelling through the status endpoint needs the same permission as POST …/cancel.
+        if ($to === Order::STATUS_CANCELLED && !$this->canPos($request, 'order_cancel')) {
+            return $this->error('Akun kamu belum punya akses membatalkan pesanan. Minta owner/admin mengaktifkannya di POS › Staff.', 'POS_PERMISSION_DENIED', null, 403);
+        }
         $order = $this->findOrder($request, $orderId);
         if ($to === Order::STATUS_CANCELLED && blank($validated['reason'] ?? null)) {
             return $this->error('Alasan pembatalan wajib diisi', 'CANCEL_REASON_REQUIRED', null, 422);
@@ -176,8 +180,8 @@ class PosOrderController extends BasePosController
     public function refund(Request $request, string $orderId): JsonResponse
     {
         $org = $this->getOrg($request);
-        if (!$org || !$this->isSupervisor($request, $org)) {
-            return $this->error('Hanya owner atau supervisor yang bisa melakukan refund', 'FORBIDDEN', null, 403);
+        if (!$org || !$this->canPos($request, 'order_refund')) {
+            return $this->error('Akun kamu belum punya akses refund. Minta owner/admin mengaktifkannya di POS › Staff.', 'FORBIDDEN', null, 403);
         }
         $validated = $request->validate(['reason' => 'required|string|max:255']);
         $order = $this->findOrder($request, $orderId);

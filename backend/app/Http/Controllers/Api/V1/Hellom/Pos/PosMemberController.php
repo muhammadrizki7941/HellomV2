@@ -212,8 +212,8 @@ class PosMemberController extends BasePosController
         if (!$org) {
             return $this->error('Konteks POS tidak tersedia', 'CONTEXT_MISSING');
         }
-        if (!$this->isSupervisor($request, $org)) {
-            return $this->error('Hanya owner atau supervisor yang bisa mengubah poin', 'FORBIDDEN', null, 403);
+        if (!$this->canPos($request, 'member_points')) {
+            return $this->error('Akun kamu belum punya akses mengubah poin. Minta owner/admin mengaktifkannya di POS › Staff.', 'FORBIDDEN', null, 403);
         }
         $validated = $request->validate([
             'points' => 'required|integer|not_in:0|min:-100000|max:100000',
@@ -326,8 +326,8 @@ class PosMemberController extends BasePosController
         if (!$org) {
             return $this->error('Konteks POS tidak tersedia', 'CONTEXT_MISSING');
         }
-        if (!$this->isSupervisor($request, $org)) {
-            return $this->error('Hanya owner atau supervisor', 'FORBIDDEN', null, 403);
+        if (!$this->canPos($request, 'member_points')) {
+            return $this->error('Akun kamu belum punya akses ke data member ini', 'FORBIDDEN', null, 403);
         }
         $flags = PosFraudFlag::query()
             ->where('organization_id', $org->id)
@@ -361,8 +361,8 @@ class PosMemberController extends BasePosController
     public function resolveFraudFlag(Request $request, int $flagId): JsonResponse
     {
         $org = $this->getOrg($request);
-        if (!$org || !$this->isSupervisor($request, $org)) {
-            return $this->error('Hanya owner atau supervisor', 'FORBIDDEN', null, 403);
+        if (!$org || !$this->canPos($request, 'member_points')) {
+            return $this->error('Akun kamu belum punya akses ke data member ini', 'FORBIDDEN', null, 403);
         }
         $validated = $request->validate(['status' => 'required|in:dismissed,confirmed']);
         $flag = PosFraudFlag::query()->where('organization_id', $org->id)->findOrFail($flagId);

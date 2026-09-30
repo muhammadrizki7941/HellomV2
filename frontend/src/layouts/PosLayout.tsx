@@ -4,7 +4,7 @@ import { LayoutDashboard, ShoppingCart, Users, BarChart3, Utensils, Settings, Lo
 import { useState, useEffect, useMemo } from 'react';
 import BottomNav from '@/components/pos/BottomNav';
 import OutletSwitcher from '@/components/pos/OutletSwitcher';
-import { getActiveOutletEventName, getAuthMe, getPosOrders, getPosRealtimeToken, getSessionEventName, getSessionUser, getSessionPosAccess, getToken, setSession, clearSession } from '@/lib/hellomApi';
+import { getActiveOutletEventName, getAuthMe, getPosMyAccess, getPosOrders, getPosRealtimeToken, getSessionEventName, getSessionUser, getSessionPosAccess, getToken, setSession, setSessionPosAccess, clearSession, POS_PERMISSION_DENIED_EVENT } from '@/lib/hellomApi';
 import { playOrderChime, setPosRealtimeConnected, subscribeRealtime } from '@/lib/realtime';
 import { usePWAInstall } from '@/hooks/usePWAInstall';
 import {
@@ -27,17 +27,21 @@ const sidebarNavigation = [
   { name: 'Settings', href: '/pos/settings', icon: Settings },
 ];
 
-// Curated, permission-gated navigation for POS cashiers. They never see
-// manager-only pages (outlets, staff, loyalty, settings, aggregated dashboard).
+// Navigation for POS cashiers: one page per permission their owner/admin switched on
+// (POS › Staff, backend App\Support\Pos\PosPermissions). "Orders" is always there. Outlets,
+// Staff and the aggregated dashboard are owner/admin only.
 // NOTE: never include /pos/cashier or /pos/admin-dashboard here — the former is
 // an SSO bootstrap stub that redirects to admin-dashboard, the latter is a
 // manager overview; pointing cashiers there causes a redirect loop.
-const cashierNavigation: Array<{ name: string; href: string; icon: typeof ShoppingCart; hasBadge?: boolean; perm?: string }> = [
+const cashierNavigation: Array<{ name: string; href: string; icon: typeof ShoppingCart; hasBadge?: boolean; perm: string }> = [
   { name: 'Orders', href: '/pos/orders', icon: ShoppingCart, hasBadge: true, perm: 'orders' },
-  { name: 'Tables', href: '/pos/tables', icon: Square, perm: 'orders' },
+  { name: 'Tables', href: '/pos/tables', icon: Square, perm: 'tables' },
   { name: 'Product Management', href: '/pos/menu', icon: Utensils, perm: 'products' },
-  { name: 'Members', href: '/pos/members', icon: User, perm: 'transactions' },
+  { name: 'Members', href: '/pos/members', icon: User, perm: 'members' },
+  { name: 'Loyalty', href: '/pos/loyalty', icon: Settings, perm: 'loyalty' },
+  { name: 'Promo & Reservasi', href: '/pos/customer-hub', icon: Ticket, perm: 'customer_hub' },
   { name: 'Reports', href: '/pos/reports', icon: BarChart3, perm: 'reports' },
+  { name: 'Pesanan & Jam Buka', href: '/pos/settings', icon: Settings, perm: 'outlet_settings' },
 ];
 
 const ACTIVE_ORDER_STATUSES = ['new', 'accepted', 'preparing', 'prepared'];
@@ -62,17 +66,55 @@ export default function PosLayout() {
   const [activeOrdersCount, setActiveOrdersCount] = useState(0);
   const { state: installState, install } = usePWAInstall();
 
+  // Re-render when the session (and with it pos_access) changes.
+  const [, setAccessVersion] = useState(0);
   const posAccess = getSessionPosAccess();
   const isCashier = posAccess?.is_cashier === true;
   const permissionsKey = JSON.stringify(posAccess?.permissions ?? {});
   const navItems = useMemo(
     () =>
       isCashier
-        ? cashierNavigation.filter((item) => !item.perm || posAccess?.permissions?.[item.perm])
+        ? cashierNavigation.filter((item) => item.perm === 'orders' || posAccess?.permissions?.[item.perm] === true)
         : sidebarNavigation,
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [isCashier, permissionsKey]
   );
+  // Tablet bottom bar: tab ids = the second path segment (/pos/menu → "menu").
+  const allowedTabs = isCashier ? navItems.map((item) => item.href.split('/')[2]) : undefined;
+
+  // Cashier permissions can change while they are logged in (owner/admin edits POS › Staff):
+  // reload them on open, on focus, every minute, and right after the API refused something.
+  useEffect(() => {
+    const onSession = () => setAccessVersion((v) => v + 1);
+    window.addEventListener(getSessionEventName(), onSession);
+    return () => window.removeEventListener(getSessionEventName(), onSession);
+  }, []);
+  useEffect(() => {
+    if (!getSessionPosAccess()?.is_cashier) return undefined;
+    let last = 0;
+    const refresh = async () => {
+      if (Date.now() - last < 3000 || !getToken()) return;
+      last = Date.now();
+      try {
+        const access = await getPosMyAccess();
+        if (JSON.stringify(access) !== JSON.stringify(getSessionPosAccess())) setSessionPosAccess(access);
+      } catch {
+        // Offline or token expired: keep the current menu; the API still enforces access.
+      }
+    };
+    const onVisible = () => { if (document.visibilityState === 'visible') void refresh(); };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 60000);
+    window.addEventListener('focus', onVisible);
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener(POS_PERMISSION_DENIED_EVENT, refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', onVisible);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener(POS_PERMISSION_DENIED_EVENT, refresh);
+    };
+  }, [isCashier]);
 
   // Keep cashiers out of manager-only pages even via direct URL. Redirect to the
   // first page they ARE allowed to see (never a hardcoded route that might bounce).
@@ -351,6 +393,7 @@ export default function PosLayout() {
             activeTab={activeTab}
             onTabChange={handleTabChange}
             activeOrdersCount={activeOrdersCount}
+            allowedTabs={allowedTabs}
           />
         </div>
       </div>

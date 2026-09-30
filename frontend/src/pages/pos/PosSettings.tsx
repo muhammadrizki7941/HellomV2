@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import OutletOrderSettings from '@/components/pos/OutletOrderSettings';
-import { getImageUrl, getToken, HELLOM_API_BASE } from '@/lib/hellomApi';
+import { getImageUrl, getToken, HELLOM_API_BASE, isPosCashier } from '@/lib/hellomApi';
 
 interface OrganizationSettings {
   id: number;
@@ -32,6 +32,8 @@ function resolvePreviewUrl(value: string | null | undefined) {
 }
 
 export default function PosSettings() {
+  // Cashiers reach this page only with the "Pengaturan pesanan outlet" permission: order settings only.
+  const cashierView = isPosCashier();
   const [activeTab, setActiveTab] = useState<'identity' | 'payment' | 'order' | 'tables'>('identity');
   const [settings, setSettings] = useState<OrganizationSettings | null>(null);
   const [loading, setLoading] = useState(true);
@@ -81,10 +83,11 @@ export default function PosSettings() {
   const qrInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    if (cashierView) return;
     safeLoadSettings();
     safeLoadPaymentSettings();
     loadPosPaymentSettings();
-  }, []);
+  }, [cashierView]);
 
   const loadPosPaymentSettings = async () => {
     try {
@@ -421,6 +424,15 @@ export default function PosSettings() {
       setPosPaymentSaving(false);
     }
   };
+
+  if (cashierView) {
+    return (
+      <div className="max-w-2xl mx-auto p-4 md:p-6">
+        <h1 className="mb-4 text-2xl font-bold text-gray-900">Pesanan & Jam Buka</h1>
+        <OutletOrderSettings />
+      </div>
+    );
+  }
 
   if (loading) {
     return (

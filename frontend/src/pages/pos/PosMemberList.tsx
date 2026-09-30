@@ -3,6 +3,7 @@ import { Search, Plus, Star, ShoppingBag, TrendingUp, MessageCircle, CheckCircle
 import { cn } from '@/lib/utils';
 import {
   adjustPosMemberPoints,
+  canPos,
   createPosMember,
   exportPosMembers,
   getPosFraudFlags,
@@ -160,10 +161,12 @@ export default function PosMemberList() {
             <p className="mt-1 text-gray-600">Member berlaku di semua outlet. Nomor HP = identitas member.</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button onClick={() => void handleExport()} className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-gray-800 hover:bg-gray-50">
-              <Download className="h-4 w-4" />
-              Export Excel
-            </button>
+            {canPos('member_points') && (
+              <button onClick={() => void handleExport()} className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-gray-800 hover:bg-gray-50">
+                <Download className="h-4 w-4" />
+                Export Excel
+              </button>
+            )}
             <button onClick={() => setShowAddModal(true)} className="flex items-center gap-2 rounded-lg bg-amber-400 px-4 py-2 text-[#111111] hover:bg-amber-500">
               <Plus className="h-4 w-4" />
               Tambah Member
@@ -172,7 +175,7 @@ export default function PosMemberList() {
         </div>
 
         <div className="flex gap-1 border-b border-gray-200">
-          {([['members', 'Member', Users], ['duplicates', 'Nomor ganda', Users], ['fraud', 'Sinyal kecurangan', ShieldAlert]] as const).map(([key, label, Icon]) => (
+          {([['members', 'Member', Users], ['duplicates', 'Nomor ganda', Users], ['fraud', 'Sinyal kecurangan', ShieldAlert]] as const).filter(([key]) => key === 'members' || canPos('member_points')).map(([key, label, Icon]) => (
             <button
               key={key}
               onClick={() => setTab(key)}
@@ -439,9 +442,9 @@ function MemberDrawer({ memberId, onClose, onChanged }: { memberId: number; onCl
           </div>
         )}
 
-        <div className="mt-5 rounded-xl border border-gray-200 p-4">
+        {canPos('member_points') && <div className="mt-5 rounded-xl border border-gray-200 p-4">
           <p className="text-sm font-semibold text-gray-900">Ubah poin manual</p>
-          <p className="text-xs text-gray-500">Hanya owner/supervisor. Pakai angka minus untuk mengurangi. Alasan wajib.</p>
+          <p className="text-xs text-gray-500">Pakai angka minus untuk mengurangi. Alasan wajib.</p>
           <div className="mt-2 flex gap-2">
             <input value={adjustPoints} onChange={(e) => setAdjustPoints(e.target.value.replace(/[^\d-]/g, ''))} placeholder="+50 / -20"
               className="w-24 rounded-lg border border-gray-300 px-2 py-1.5 text-sm" />
@@ -451,7 +454,7 @@ function MemberDrawer({ memberId, onClose, onChanged }: { memberId: number; onCl
               className="rounded-lg bg-amber-400 px-3 text-sm font-semibold disabled:opacity-50">Simpan</button>
           </div>
           {message && <p className={cn('mt-2 text-xs', message.ok ? 'text-green-700' : 'text-red-600')}>{message.text}</p>}
-        </div>
+        </div>}
 
         <div className="mt-5 flex gap-2 text-sm">
           <button onClick={() => setView('points')} className={cn('rounded-lg px-3 py-1.5', view === 'points' ? 'bg-gray-900 text-white' : 'bg-gray-100')}>Riwayat poin</button>

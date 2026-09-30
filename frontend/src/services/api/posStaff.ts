@@ -1,14 +1,32 @@
 // POS staff management (team, shifts, attendance, cash sessions). Requests carry
 // X-Outlet-Id via apiRequest so each outlet keeps its own team.
 // Part of the Hellom API client; import from '@/lib/hellomApi' or '@/services/api'.
-import { apiRequest, apiRequestBlob } from './client';
+import { apiRequest, apiRequestBlob, type PosAccess } from './client';
 
+// Keep in sync with backend App\Support\Pos\PosPermissions::CATALOG.
 export type PosStaffPermissionKey =
-  | 'transactions'
-  | 'reports'
-  | 'products'
   | 'orders'
-  | 'cash_control';
+  | 'order_cancel'
+  | 'order_refund'
+  | 'tables'
+  | 'products'
+  | 'members'
+  | 'member_points'
+  | 'loyalty'
+  | 'customer_hub'
+  | 'reports'
+  | 'cash_control'
+  | 'outlet_settings';
+
+/** One switchable POS feature (GET /pos/staff → meta.permissions). `locked` = always on. */
+export type PosPermissionDef = {
+  key: PosStaffPermissionKey;
+  label: string;
+  description: string;
+  locked: boolean;
+  default_cashier: boolean;
+  default_admin: boolean;
+};
 
 export type PosStaffRole = 'admin' | 'cashier';
 export type PosStaffEmploymentStatus = 'active' | 'inactive' | 'on_leave';
@@ -134,12 +152,17 @@ export type PosStaffDashboard = {
   current_user_staff_id?: number | null;
   meta: {
     roles: PosStaffRole[];
-    permissions: PosStaffPermissionKey[];
+    permissions: PosPermissionDef[];
   };
 };
 
 export function getPosStaffDashboard() {
   return apiRequest<PosStaffDashboard>('/pos/staff');
+}
+
+/** The signed-in user's current POS access (cashier permissions change without re-login). */
+export function getPosMyAccess() {
+  return apiRequest<PosAccess>('/pos/me/access');
 }
 
 export function createPosStaff(payload: {

@@ -118,6 +118,10 @@ function toApiError(response: Response, payload: ApiEnvelope<unknown> | null): A
   const fieldErrors = errors && typeof errors === 'object' ? (errors as Record<string, string[]>) : {};
   // Laravel's 422 message is "first error (and N more errors)": show the first error only.
   const firstField = Object.values(fieldErrors)[0]?.[0];
+  const code = (payload?.error as { code?: unknown } | null | undefined)?.code;
+  if (code === 'POS_PERMISSION_DENIED' && typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('hellom-pos-permission-denied'));
+  }
   return new ApiError(firstField || payload?.message || `HTTP ${response.status}`, response.status, payload?.error ?? null, payload?.data ?? null, fieldErrors);
 }
 
@@ -267,6 +271,29 @@ export function getSessionPosAccess(): PosAccess | null {
 export function isPosCashier(): boolean {
   return getSessionPosAccess()?.is_cashier === true;
 }
+
+/**
+ * Whether the signed-in user may use a POS feature. Owners/admins always may; cashiers only
+ * what their owner/admin switched on (App\Support\Pos\PosPermissions). The API enforces the
+ * same rule; this only hides what would be refused.
+ */
+export function canPos(permission: string): boolean {
+  const access = getSessionPosAccess();
+  if (!access?.is_cashier) return true;
+  if (permission === 'orders') return true;
+  return access.permissions?.[permission] === true;
+}
+
+/** Store fresh POS access (GET /pos/me/access) in the session; notifies session listeners. */
+export function setSessionPosAccess(access: PosAccess): void {
+  const user = getSessionUser<Record<string, unknown>>();
+  if (!user) return;
+  localStorage.setItem(USER_KEY, JSON.stringify({ ...user, pos_access: access }));
+  emitSessionChanged();
+}
+
+/** Fired when the API refuses a POS feature (permissions changed) → POS reloads access. */
+export const POS_PERMISSION_DENIED_EVENT = 'hellom-pos-permission-denied';
 
 export function clearSession(): void {
   localStorage.removeItem(TOKEN_KEY);

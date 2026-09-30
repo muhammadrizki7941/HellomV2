@@ -7,6 +7,8 @@ use App\Models\Order;
 use App\Models\Organization;
 use App\Models\OrganizationTeamInvitation;
 use App\Models\PosStaff;
+use App\Support\Pos\PosAccess;
+use App\Support\Pos\PosPermissions;
 use App\Models\PosStaffAttendance;
 use App\Models\PosStaffCashLog;
 use App\Models\PosStaffShift;
@@ -23,14 +25,6 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class PosStaffController extends BasePosController
 {
-    private const PERMISSION_KEYS = [
-        'transactions',
-        'reports',
-        'products',
-        'orders',
-        'cash_control',
-    ];
-
     public function index(Request $request): JsonResponse
     {
         $org = $this->getOrg($request);
@@ -168,7 +162,7 @@ class PosStaffController extends BasePosController
             'current_user_staff_id' => $myStaff?->id,
             'meta' => [
                 'roles' => ['admin', 'cashier'],
-                'permissions' => self::PERMISSION_KEYS,
+                'permissions' => PosPermissions::catalog(),
             ],
         ], 'Staff management loaded');
     }
@@ -371,6 +365,11 @@ class PosStaffController extends BasePosController
 
         if ($linkedUserId === false) {
             return $this->error('User terhubung tidak termasuk tim organisasi ini', 'STAFF_USER_INVALID', null, 422);
+        }
+        // The edit form does not send linked_user_id: keep the invited login instead of unlinking
+        // the cashier (who would lose POS access) whenever the staff email differs from theirs.
+        if ($linkedUserId === null && !$request->exists('linked_user_id')) {
+            $linkedUserId = $staff->linked_user_id;
         }
 
         $staff->update([
@@ -625,6 +624,9 @@ class PosStaffController extends BasePosController
 
     public function openCash(Request $request, int $staffId): JsonResponse
     {
+        if ($denied = $this->denyOtherStaff($request, $staffId)) {
+            return $denied;
+        }
         $org = $this->getOrg($request);
         $tenantSlug = $this->getTenantSlug($org);
         $validated = $request->validate([
@@ -668,6 +670,9 @@ class PosStaffController extends BasePosController
 
     public function closeCash(Request $request, int $staffId): JsonResponse
     {
+        if ($denied = $this->denyOtherStaff($request, $staffId)) {
+            return $denied;
+        }
         $tenantSlug = $request->attributes->get('posTenantSlug');
         $validated = $request->validate([
             'closing_cash' => 'required|integer|min:0',
@@ -830,7 +835,7 @@ class PosStaffController extends BasePosController
             'phone' => $staff->phone,
             'role' => $this->normalizeRole($staff->role),
             'employment_status' => $staff->employment_status,
-            'permissions' => $staff->permissions ?? $this->defaultPermissionsForRole($this->normalizeRole($staff->role)),
+            'permissions' => PosPermissions::forStaff($staff),
             'hourly_rate' => $staff->hourly_rate,
             'joined_at' => optional($staff->joined_at)->toDateString(),
             'notes' => $staff->notes,
@@ -972,18 +977,7 @@ class PosStaffController extends BasePosController
 
     private function normalizePermissions(string $role, ?array $permissions): array
     {
-        $base = $this->defaultPermissionsForRole($role);
-        if (!$permissions) {
-            return $base;
-        }
-
-        foreach (self::PERMISSION_KEYS as $key) {
-            if (array_key_exists($key, $permissions)) {
-                $base[$key] = (bool) $permissions[$key];
-            }
-        }
-
-        return $base;
+        return PosPermissions::normalize($this->normalizeRole($role), $permissions);
     }
 
     private function performCheckIn(int $organizationId, string $tenantSlug, PosStaff $staff, array $validated, ?int $scannedByUserId): array
@@ -1073,24 +1067,21 @@ class PosStaffController extends BasePosController
         return $this->serializeAttendance($attendance->fresh(), $staff);
     }
 
-    private function defaultPermissionsForRole(string $role): array
+    /** GET /pos/me/access: the signed-in user's POS permissions (cashier menu refresh). */
+    public function myAccess(Request $request): JsonResponse
     {
-        return match ($role) {
-            'admin' => [
-                'transactions' => true,
-                'reports' => true,
-                'products' => true,
-                'orders' => true,
-                'cash_control' => true,
-            ],
-            default => [
-                'transactions' => true,
-                'reports' => false,
-                'products' => false,
-                'orders' => true,
-                'cash_control' => true,
-            ],
-        };
+        return $this->success(PosAccess::forUser($request->user()), 'Akses POS');
+    }
+
+    /** Cashiers (posStaff attribute) may only act on their own staff record. */
+    private function denyOtherStaff(Request $request, int $staffId): ?JsonResponse
+    {
+        $me = $request->attributes->get('posStaff');
+        if ($me instanceof PosStaff && (int) $me->id !== $staffId) {
+            return $this->error('Kamu hanya bisa membuka/menutup kas milikmu sendiri', 'POS_PERMISSION_DENIED', null, 403);
+        }
+
+        return null;
     }
 
     private function normalizeRole(string $role): string

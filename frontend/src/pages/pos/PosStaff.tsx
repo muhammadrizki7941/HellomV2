@@ -38,6 +38,7 @@ import {
   type PosStaffEmploymentStatus,
   type PosStaffItem,
   type PosStaffPermissionKey,
+  type PosPermissionDef,
   type PosStaffAttendanceQr,
   type PosStaffRole,
   type PosStaffShift,
@@ -72,22 +73,25 @@ declare global {
   }
 }
 
-const defaultPermissions: Record<PosStaffRole, Record<PosStaffPermissionKey, boolean>> = {
-  admin: {
-    transactions: true,
-    reports: true,
-    products: true,
-    orders: true,
-    cash_control: true,
-  },
-  cashier: {
-    transactions: true,
-    reports: false,
-    products: false,
-    orders: true,
-    cash_control: true,
-  },
-};
+// Same list as backend App\Support\Pos\PosPermissions (the API sends it in meta.permissions).
+const FALLBACK_PERMISSIONS: PosPermissionDef[] = [
+  { key: 'orders', label: 'Kasir & pesanan', description: 'Buat pesanan, terima pembayaran, cetak struk, tagihan meja. Selalu aktif.', locked: true, default_cashier: true, default_admin: true },
+  { key: 'order_cancel', label: 'Batalkan pesanan', description: 'Membatalkan pesanan yang belum dibayar.', locked: false, default_cashier: true, default_admin: true },
+  { key: 'order_refund', label: 'Refund pesanan', description: 'Mengembalikan uang pesanan yang sudah dibayar.', locked: false, default_cashier: false, default_admin: true },
+  { key: 'tables', label: 'Kelola meja & QR', description: 'Tambah, ubah, hapus meja dan buat ulang QR meja.', locked: false, default_cashier: false, default_admin: true },
+  { key: 'products', label: 'Kelola produk & kategori', description: 'Tambah, ubah, hapus menu, harga, stok, dan kategori.', locked: false, default_cashier: false, default_admin: true },
+  { key: 'members', label: 'Member', description: 'Lihat daftar member, tambah dan ubah data member.', locked: false, default_cashier: true, default_admin: true },
+  { key: 'member_points', label: 'Poin & data member', description: 'Sesuaikan poin, gabung member ganda, tanda kecurangan, export data member.', locked: false, default_cashier: false, default_admin: true },
+  { key: 'loyalty', label: 'Pengaturan loyalty', description: 'Ubah aturan poin dan hadiah.', locked: false, default_cashier: false, default_admin: true },
+  { key: 'customer_hub', label: 'Promo & reservasi', description: 'Kelola promo, area/meja reservasi, dan status reservasi.', locked: false, default_cashier: false, default_admin: true },
+  { key: 'reports', label: 'Laporan', description: 'Lihat dan export laporan penjualan outlet.', locked: false, default_cashier: false, default_admin: true },
+  { key: 'cash_control', label: 'Buka/tutup kas', description: 'Membuka dan menutup kas shift sendiri.', locked: false, default_cashier: true, default_admin: true },
+  { key: 'outlet_settings', label: 'Pengaturan pesanan outlet', description: 'Jam buka, status buka/tutup, pengaturan pesanan online.', locked: false, default_cashier: false, default_admin: true },
+];
+
+function permissionPreset(role: PosStaffRole, catalog: PosPermissionDef[] = FALLBACK_PERMISSIONS): Record<PosStaffPermissionKey, boolean> {
+  return Object.fromEntries(catalog.map((p) => [p.key, p.locked || (role === 'admin' ? p.default_admin : p.default_cashier)])) as Record<PosStaffPermissionKey, boolean>;
+}
 
 const initialStaffForm = {
   name: '',
@@ -95,7 +99,7 @@ const initialStaffForm = {
   phone: '',
   role: 'cashier' as PosStaffRole,
   employment_status: 'active' as PosStaffEmploymentStatus,
-  permissions: { ...defaultPermissions.cashier },
+  permissions: permissionPreset('cashier'),
   hourly_rate: 0,
   joined_at: '',
   notes: '',
@@ -203,6 +207,7 @@ const inputClass =
 
 export default function PosStaff() {
   const [dashboard, setDashboard] = useState<PosStaffDashboard | null>(null);
+  const permissionCatalog: PosPermissionDef[] = dashboard?.meta?.permissions?.length ? dashboard.meta.permissions : FALLBACK_PERMISSIONS;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -482,7 +487,7 @@ export default function PosStaff() {
       phone: member.phone || '',
       role: member.role,
       employment_status: member.employment_status,
-      permissions: { ...member.permissions },
+      permissions: { ...permissionPreset(member.role, permissionCatalog), ...member.permissions },
       hourly_rate: member.hourly_rate || 0,
       joined_at: toDateInput(member.joined_at),
       notes: member.notes || '',
@@ -702,6 +707,7 @@ export default function PosStaff() {
   }
 
   function togglePermission(key: PosStaffPermissionKey) {
+    if (permissionCatalog.find((p) => p.key === key)?.locked) return;
     setStaffForm((prev) => ({
       ...prev,
       permissions: {
@@ -715,7 +721,7 @@ export default function PosStaff() {
     setStaffForm((prev) => ({
       ...prev,
       role,
-      permissions: { ...defaultPermissions[role] },
+      permissions: permissionPreset(role, permissionCatalog),
     }));
   }
 
@@ -1100,17 +1106,21 @@ export default function PosStaff() {
                       </div>
 
                       <div className="mt-4 flex flex-wrap gap-2">
-                        {Object.entries(member.permissions).map(([key, enabled]) => (
-                          <span
-                            key={key}
-                            className={cn(
-                              'rounded-full px-2.5 py-1 text-[11px] font-semibold',
-                              enabled ? 'bg-[#111111] text-white' : 'bg-[#ede7da] text-[#7a7063]'
-                            )}
-                          >
-                            {key.replace('_', ' ')}
-                          </span>
-                        ))}
+                        {permissionCatalog.map((perm) => {
+                          const enabled = perm.locked || member.permissions?.[perm.key] === true;
+                          return (
+                            <span
+                              key={perm.key}
+                              title={perm.description}
+                              className={cn(
+                                'rounded-full px-2.5 py-1 text-[11px] font-semibold',
+                                enabled ? 'bg-[#111111] text-white' : 'bg-[#ede7da] text-[#7a7063] line-through'
+                              )}
+                            >
+                              {perm.label}
+                            </span>
+                          );
+                        })}
                       </div>
                     </article>
                   ))}
@@ -1348,22 +1358,40 @@ export default function PosStaff() {
               </div>
 
               <Field label="Hak akses POS">
-                <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-                  {(Object.keys(staffForm.permissions) as PosStaffPermissionKey[]).map((key) => (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => togglePermission(key)}
-                      className={cn(
-                        'rounded-2xl border px-3 py-3 text-sm font-semibold capitalize transition',
-                        staffForm.permissions[key]
-                          ? 'border-[#111111] bg-[#111111] text-white'
-                          : 'border-[#eadfbe] bg-[#fffdf7] text-[#5a5146]'
-                      )}
-                    >
-                      {key.replace('_', ' ')}
-                    </button>
-                  ))}
+                <p className="mb-3 text-xs text-[#7a7063]">
+                  {staffForm.role === 'cashier'
+                    ? 'Pilih fitur yang boleh dibuka kasir ini. Fitur yang mati tidak tampil di menu dan ditolak server.'
+                    : 'Admin outlet: pilih fitur yang boleh dikelola. Outlet, staf, dan pengaturan pembayaran tetap khusus owner/admin organisasi.'}
+                </p>
+                <div className="grid gap-2 md:grid-cols-2">
+                  {permissionCatalog.map((perm) => {
+                    const enabled = perm.locked || staffForm.permissions[perm.key] === true;
+                    return (
+                      <button
+                        key={perm.key}
+                        type="button"
+                        role="switch"
+                        aria-checked={enabled}
+                        aria-disabled={perm.locked || undefined}
+                        onClick={() => togglePermission(perm.key)}
+                        className={cn(
+                          'flex min-h-14 items-start gap-3 rounded-2xl border px-3 py-3 text-left transition',
+                          enabled ? 'border-[#111111] bg-[#111111] text-white' : 'border-[#eadfbe] bg-[#fffdf7] text-[#5a5146]',
+                          perm.locked && 'cursor-default opacity-90'
+                        )}
+                      >
+                        <span className={cn('mt-0.5 flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 transition', enabled ? 'bg-[#f6b400]' : 'bg-[#d9cfb8]')}>
+                          <span className={cn('h-4 w-4 rounded-full bg-white transition', enabled && 'translate-x-4')} />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-sm font-semibold">
+                            {perm.label}{perm.locked && <span className="ml-1 text-xs font-normal opacity-80">(selalu aktif)</span>}
+                          </span>
+                          <span className={cn('block text-xs', enabled ? 'text-white/75' : 'text-[#7a7063]')}>{perm.description}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               </Field>
 

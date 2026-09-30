@@ -38,17 +38,15 @@ abstract class BasePosController extends BaseApiController
     }
 
     /**
-     * Owner/admin of the organization, or an outlet staff member with the "admin"
-     * (supervisor) role. Needed for refunds and manual point adjustments.
+     * Owner/admin of the organization (no posStaff attribute), or POS staff whose owner/admin
+     * granted this feature (App\Support\Pos\PosPermissions). Same rule as the
+     * posPermission route middleware, for checks inside controllers.
      */
-    protected function isSupervisor(Request $request, Organization $org): bool
+    protected function canPos(Request $request, string $permission): bool
     {
-        if ($this->isOrgOwner($request, $org)) {
-            return true;
-        }
         $staff = $request->attributes->get('posStaff');
 
-        return $staff instanceof PosStaff && (string) $staff->role === 'admin';
+        return !$staff instanceof PosStaff || \App\Support\Pos\PosPermissions::allows($staff, $permission);
     }
 
     /**

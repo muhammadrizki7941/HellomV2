@@ -17,6 +17,8 @@ interface BottomNavProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
   activeOrdersCount?: number;
+  /** Cashiers: tab ids they may open (undefined = everything, for owners/admins). */
+  allowedTabs?: string[];
 }
 
 const moreItems = [
@@ -40,11 +42,13 @@ const OrdersBadge = ({ count }: { count?: number }) => {
 const MoreSheet = ({
   isOpen,
   onClose,
-  onSelect
+  onSelect,
+  items,
 }: {
   isOpen: boolean;
   onClose: () => void;
   onSelect: (tab: string) => void;
+  items: typeof moreItems;
 }) => (
   <>
     {/* Overlay */}
@@ -71,7 +75,7 @@ const MoreSheet = ({
       </p>
       {/* Grid 2x2 */}
       <div className="grid grid-cols-4 gap-4 px-6 pb-8">
-        {moreItems.map(item => (
+        {items.map(item => (
           <button
             key={item.id}
             onClick={() => {
@@ -100,7 +104,11 @@ const navItems = [
   { id: 'tables', label: 'Meja', icon: Grid2x2 },
 ];
 
-export default function BottomNav({ activeTab, onTabChange, activeOrdersCount }: BottomNavProps) {
+export default function BottomNav({ activeTab, onTabChange, activeOrdersCount, allowedTabs }: BottomNavProps) {
+  const allowed = (id: string) => id === 'orders' || !allowedTabs || allowedTabs.includes(id);
+  const leftItems = navItems.slice(0, 2).filter((item) => allowed(item.id));
+  const rightItems = navItems.slice(3, 4).filter((item) => allowed(item.id));
+  const visibleMore = moreItems.filter((item) => allowed(item.id));
   const [visible, setVisible] = useState(false);
   const [showMoreSheet, setShowMoreSheet] = useState(false);
   const hideTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -174,7 +182,7 @@ export default function BottomNav({ activeTab, onTabChange, activeOrdersCount }:
             <div className="flex items-center justify-around px-2 h-16 relative">
               {/* Left items */}
               <div className="flex items-center">
-                {navItems.slice(0, 2).map((item) => {
+                {leftItems.map((item) => {
                   const isActive = activeTab === item.id;
                   const Icon = item.icon;
 
@@ -222,7 +230,7 @@ export default function BottomNav({ activeTab, onTabChange, activeOrdersCount }:
 
               {/* Right items */}
               <div className="flex items-center">
-                {navItems.slice(3, 4).map((item) => {
+                {rightItems.map((item) => {
                   const isActive = activeTab === item.id;
                   const Icon = item.icon;
 
@@ -248,12 +256,12 @@ export default function BottomNav({ activeTab, onTabChange, activeOrdersCount }:
                 })}
 
                 {/* More button */}
-                <button
+                {visibleMore.length > 0 && <button
                   onClick={() => handleTabChange('more')}
                   className="flex flex-col items-center justify-center min-w-[52px] gap-0.5 py-2 px-3 rounded-2xl transition-all duration-300 text-gray-400 hover:text-gray-600"
                 >
                   <MoreHorizontal className="w-5 h-5" />
-                </button>
+                </button>}
               </div>
             </div>
           </div>
@@ -265,6 +273,7 @@ export default function BottomNav({ activeTab, onTabChange, activeOrdersCount }:
         isOpen={showMoreSheet}
         onClose={() => setShowMoreSheet(false)}
         onSelect={handleMoreSelect}
+        items={visibleMore}
       />
     </>
   );

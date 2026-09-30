@@ -122,8 +122,8 @@ class PosTableController extends BasePosController
         if (!$tenantSlug || !$org) {
             return $this->error('POS context not available', 'CONTEXT_MISSING');
         }
-        if (!$this->isSupervisor($request, $org)) {
-            return $this->error('Hanya owner atau supervisor yang bisa mengganti QR meja', 'FORBIDDEN', null, 403);
+        if (!$this->canPos($request, 'tables')) {
+            return $this->error('Akun kamu belum punya akses mengelola meja & QR', 'FORBIDDEN', null, 403);
         }
 
         $table = $this->tables($tenantSlug)->findOrFail($tableId);
