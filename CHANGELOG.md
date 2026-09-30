@@ -4,6 +4,13 @@
 
 Audit lengkap dan status per temuan: [docs/AUDIT.md](docs/AUDIT.md). Langkah deploy khusus rilis ini: [docs/DEPLOY.md §3](docs/DEPLOY.md#3-catatan-khusus-rilis-refactor-branch-refactorcleanup).
 
+### Akun — undangan, lupa kata sandi, daftar, email
+- **Link undangan tidak lagi layar putih**: file tampilan (`/assets/*.js`) kini dilayani juga saat aplikasi dibuka lewat server Laravel.
+- **Halaman undangan baru** `/invitation/accept`: menampilkan toko, peran & outlet; akun lama cukup kata sandi, orang baru cukup nama + kata sandi; kasir langsung masuk POS. Kasir yang punya usaha sendiri tetap bisa menerima undangan toko.
+- **Lupa kata sandi**: email berisi tombol ke halaman "Buat kata sandi baru" (tanpa salin token), indikator kekuatan kata sandi. Kasir yang didaftarkan owner tapi belum punya akun menerima email aktivasi akun untuk tokonya.
+- **Email**: logo Hellom kini tertanam di email (tampil di Gmail/Outlook/HP), tata letak baru yang bersih; isi email undangan & reset ditulis ulang.
+- **Halaman daftar** baru yang bersih dengan pratinjau alamat toko yang tertulis saat nama usaha diketik.
+
 ### POS — hak akses kasir yang bisa diatur
 - Owner/admin organisasi mengatur per kasir fitur POS apa saja yang boleh dibuka (POS › Staff › edit): batalkan & refund pesanan, kelola meja, produk, member, poin & data member, loyalty, promo & reservasi, laporan, buka/tutup kas, pengaturan pesanan outlet. **Kasir & pesanan selalu aktif.** Outlet, staf, dan pengaturan pembayaran tetap khusus owner/admin.
 - Ditegakkan di server (middleware `posPermission`), menu POS kasir hanya menampilkan yang diizinkan dan ikut berubah tanpa login ulang.
