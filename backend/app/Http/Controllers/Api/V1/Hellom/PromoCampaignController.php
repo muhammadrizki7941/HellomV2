@@ -2,11 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Hellom;
 
-use App\Models\AuditLog;
-use App\Models\Invoice;
 use App\Models\PromoCampaign;
-use App\Models\PromoRedemption;
-use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -54,12 +50,16 @@ class PromoCampaignController extends BaseApiController
             'ends_at' => ['nullable', 'date', 'after_or_equal:starts_at'],
         ]);
 
+        if ($validated['type'] === 'percentage' && (int) $validated['value'] > 100) {
+            return $this->fail('Diskon persen maksimal 100.', ['code' => 'PROMO_VALUE_TOO_HIGH'], 422);
+        }
+
         $validated['code'] = strtoupper(trim($validated['code']));
         $validated['used_slots'] = 0;
 
         $campaign = PromoCampaign::query()->create($validated);
 
-        $this->auditLog($request, 'promo_campaign.created', $campaign->id);
+        $this->adminAudit($request, 'promo_campaign.created', 'promo_campaign', (int) $campaign->id, ['code' => $campaign->code, 'type' => $campaign->type, 'value' => (int) $campaign->value]);
 
         return $this->ok($campaign->fresh(['app', 'plan']), __('hellom.promo_created'), 201);
     }
@@ -81,12 +81,18 @@ class PromoCampaignController extends BaseApiController
             'plan_id' => ['nullable', 'integer', 'exists:plans,id'],
             'is_active' => ['boolean'],
             'starts_at' => ['nullable', 'date'],
-            'ends_at' => ['nullable', 'date'],
+            'ends_at' => ['nullable', 'date', 'after_or_equal:starts_at'],
         ]);
+
+        $type = (string) ($validated['type'] ?? $campaign->type);
+        $value = (int) ($validated['value'] ?? $campaign->value);
+        if ($type === 'percentage' && $value > 100) {
+            return $this->fail('Diskon persen maksimal 100.', ['code' => 'PROMO_VALUE_TOO_HIGH'], 422);
+        }
 
         $campaign->update($validated);
 
-        $this->auditLog($request, 'promo_campaign.updated', $campaign->id);
+        $this->adminAudit($request, 'promo_campaign.updated', 'promo_campaign', (int) $campaign->id, $validated);
 
         return $this->ok($campaign->fresh(['app', 'plan']), __('hellom.promo_updated'));
     }
@@ -100,7 +106,7 @@ class PromoCampaignController extends BaseApiController
 
         $campaign->delete();
 
-        $this->auditLog($request, 'promo_campaign.deleted', $id);
+        $this->adminAudit($request, 'promo_campaign.deleted', 'promo_campaign', $id, ['code' => $campaign->code]);
 
         return $this->ok(null, __('hellom.promo_deleted'));
     }
@@ -179,19 +185,5 @@ class PromoCampaignController extends BaseApiController
 
         // fixed discount
         return min((int) $campaign->value, $amount);
-    }
-
-    private function auditLog(Request $request, string $action, int|string $targetId): void
-    {
-        $user = $request->user();
-        if ($user instanceof User) {
-            AuditLog::query()->create([
-                'user_id' => $user->id,
-                'action' => $action,
-                'target_type' => 'promo_campaign',
-                'target_id' => (string) $targetId,
-                'metadata' => ['ip' => $request->ip()],
-            ]);
-        }
     }
 }

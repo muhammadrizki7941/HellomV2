@@ -45,6 +45,14 @@ class AdminMailController extends BaseApiController
             ]);
         }
 
+        $this->adminAudit($request, 'admin.mail_settings.updated', 'mail', null, [
+            'enabled' => (bool) ($validated['enabled'] ?? false),
+            'host' => $validated['host'] ?? null,
+            'port' => $validated['port'] ?? null,
+            'from_address' => $validated['from_address'] ?? null,
+            'password_changed' => trim((string) ($validated['password'] ?? '')) !== '',
+        ]);
+
         return $this->ok([
             'mail' => $this->mailService->saveSettings($validated),
         ], 'Mail settings saved');

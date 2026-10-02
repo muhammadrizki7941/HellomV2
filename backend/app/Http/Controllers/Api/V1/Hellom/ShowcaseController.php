@@ -71,6 +71,7 @@ class ShowcaseController extends BaseApiController
         $validated['slug'] = ($validated['slug'] ?? null) ?: Str::slug($validated['title']);
 
         $portfolio = ShowcasePortfolio::query()->create($validated);
+        $this->adminAudit($request, 'admin.showcase.portfolio_created', 'showcase_portfolio', (int) $portfolio->id, ['title' => $portfolio->title]);
 
         return $this->ok($portfolio, 'Portfolio created', 201);
     }
@@ -104,11 +105,12 @@ class ShowcaseController extends BaseApiController
         }
 
         $portfolio->update($validated);
+        $this->adminAudit($request, 'admin.showcase.portfolio_updated', 'showcase_portfolio', $id, ['fields' => array_keys($validated)]);
 
         return $this->ok($portfolio->fresh(), 'Portfolio updated');
     }
 
-    public function destroyPortfolio(int $id): JsonResponse
+    public function destroyPortfolio(Request $request, int $id): JsonResponse
     {
         $portfolio = ShowcasePortfolio::query()->find($id);
         if (!$portfolio) {
@@ -116,6 +118,7 @@ class ShowcaseController extends BaseApiController
         }
 
         $portfolio->delete();
+        $this->adminAudit($request, 'admin.showcase.portfolio_deleted', 'showcase_portfolio', $id, ['title' => $portfolio->title]);
 
         return $this->ok(null, 'Portfolio deleted');
     }
@@ -143,6 +146,7 @@ class ShowcaseController extends BaseApiController
         ]);
 
         $client = ShowcaseClient::query()->create($validated);
+        $this->adminAudit($request, 'admin.showcase.client_created', 'showcase_client', (int) $client->id, ['name' => $client->name]);
 
         return $this->ok($client, 'Client created', 201);
     }
@@ -163,11 +167,12 @@ class ShowcaseController extends BaseApiController
         ]);
 
         $client->update($validated);
+        $this->adminAudit($request, 'admin.showcase.client_updated', 'showcase_client', $id, ['fields' => array_keys($validated)]);
 
         return $this->ok($client->fresh(), 'Client updated');
     }
 
-    public function destroyClient(int $id): JsonResponse
+    public function destroyClient(Request $request, int $id): JsonResponse
     {
         $client = ShowcaseClient::query()->find($id);
         if (!$client) {
@@ -175,6 +180,7 @@ class ShowcaseController extends BaseApiController
         }
 
         $client->delete();
+        $this->adminAudit($request, 'admin.showcase.client_deleted', 'showcase_client', $id, ['name' => $client->name]);
 
         return $this->ok(null, 'Client deleted');
     }

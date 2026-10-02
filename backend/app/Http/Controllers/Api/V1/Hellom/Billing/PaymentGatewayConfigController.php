@@ -189,6 +189,13 @@ class PaymentGatewayConfigController extends BaseApiController
             $config = $this->xenditSettings()->saveConfig($validated);
         }
 
+        // Which fields changed, never the secret values themselves.
+        $this->adminAudit($request, 'admin.gateway_config.updated', 'payment_gateway', null, [
+            'provider' => $provider,
+            'is_production' => (bool) $validated['is_production'],
+            'fields' => array_values(array_keys(array_filter($validated, fn ($value) => $value !== null && $value !== ''))),
+        ]);
+
         $generatedCallbackToken = ($previous['callback_token'] ?? '') === ''
             && trim((string) ($validated['callback_token'] ?? '')) === ''
             && ($config['callback_token'] ?? '') !== ''
@@ -224,9 +231,10 @@ class PaymentGatewayConfigController extends BaseApiController
         ], 'Admin gateway config updated');
     }
 
-    public function resetIpaymuConfig(): JsonResponse
+    public function resetIpaymuConfig(Request $request): JsonResponse
     {
         $config = $this->ipaymuSettings()->resetConfig();
+        $this->adminAudit($request, 'admin.gateway_config.reset', 'payment_gateway', null, ['provider' => 'ipaymu']);
 
         return $this->ok([
             'provider' => 'ipaymu',
@@ -285,6 +293,8 @@ class PaymentGatewayConfigController extends BaseApiController
             }
         }
 
+        $this->adminAudit($request, 'admin.manual_payment_config.updated', 'payment_gateway', null, $payload);
+
         return $this->ok(
             $this->manualPaymentSettings()->saveConfig($payload),
             'Manual payment config updated'
@@ -308,6 +318,8 @@ class PaymentGatewayConfigController extends BaseApiController
             'sale_commission_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'guest_checkout_enabled' => ['nullable', 'boolean'],
         ]);
+
+        $this->adminAudit($request, 'admin.checkout_runtime.updated', 'payment_gateway', null, $validated);
 
         return $this->ok(
             $this->gatewayRuntime()->saveRuntimeConfig($validated),

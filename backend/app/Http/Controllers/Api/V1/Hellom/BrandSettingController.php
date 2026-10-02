@@ -72,6 +72,8 @@ class BrandSettingController extends BaseApiController
 
         $settings->save();
 
+        $this->adminAudit($request, 'admin.brand.updated', 'brand', null, ['fields' => array_keys($validated)]);
+
         return $this->ok([
             'brand' => $this->transformBrand($settings->fresh()),
         ], 'Brand settings updated');

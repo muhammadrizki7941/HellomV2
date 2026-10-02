@@ -32,7 +32,7 @@ class DigitalProductController extends BaseApiController
             $query->where('is_published', filter_var($request->query('is_published'), FILTER_VALIDATE_BOOLEAN));
         }
 
-        $perPage = (int) $request->query('per_page', 15);
+        $perPage = max(1, min((int) $request->query('per_page', 15), 100));
         $items = $query
             ->orderByDesc('is_featured')
             ->orderBy('sort_order')
@@ -77,6 +77,8 @@ class DigitalProductController extends BaseApiController
             'currency' => 'IDR',
         ]);
 
+        $this->adminAudit($request, 'admin.digital_product.created', 'digital_product', (int) $product->id, ['name' => $product->name, 'price' => (int) $product->price]);
+
         return $this->ok($product, 'Digital product created', 201);
     }
 
@@ -120,30 +122,34 @@ class DigitalProductController extends BaseApiController
             'slug' => $slug,
             'price' => (int) ($validated['price'] ?? 0),
         ]);
+        $this->adminAudit($request, 'admin.digital_product.updated', 'digital_product', (int) $product->id, ['name' => $product->name, 'price' => (int) $product->price, 'is_published' => (bool) $product->is_published]);
 
         return $this->ok($product->fresh(), 'Digital product updated');
     }
 
-    public function destroy(string $id): JsonResponse
+    public function destroy(Request $request, string $id): JsonResponse
     {
         $product = DigitalProduct::query()->findOrFail($id);
-        $product->delete();
+        $product->delete(); // soft delete: purchases and buyer access stay intact
+        $this->adminAudit($request, 'admin.digital_product.deleted', 'digital_product', (int) $product->id, ['name' => $product->name]);
 
         return $this->ok(true, 'Digital product deleted');
     }
 
-    public function publish(string $id): JsonResponse
+    public function publish(Request $request, string $id): JsonResponse
     {
         $product = DigitalProduct::query()->findOrFail($id);
         $product->update(['is_published' => true]);
+        $this->adminAudit($request, 'admin.digital_product.published', 'digital_product', (int) $product->id, ['name' => $product->name]);
 
         return $this->ok($product->fresh(), 'Product published');
     }
 
-    public function unpublish(string $id): JsonResponse
+    public function unpublish(Request $request, string $id): JsonResponse
     {
         $product = DigitalProduct::query()->findOrFail($id);
         $product->update(['is_published' => false]);
+        $this->adminAudit($request, 'admin.digital_product.unpublished', 'digital_product', (int) $product->id, ['name' => $product->name]);
 
         return $this->ok($product->fresh(), 'Product unpublished');
     }
@@ -263,11 +269,12 @@ class DigitalProductController extends BaseApiController
         return $this->ok($doc, 'Documentation uploaded', 201);
     }
 
-    public function deleteFile(string $fileId): JsonResponse
+    public function deleteFile(Request $request, string $fileId): JsonResponse
     {
         $file = DigitalProductFile::query()->findOrFail($fileId);
         Storage::disk('local')->delete($file->file_path);
         $file->delete();
+        $this->adminAudit($request, 'admin.digital_product.file_deleted', 'digital_product', (int) $file->product_id, ['file' => $file->label]);
 
         return $this->ok(true, 'File deleted');
     }
@@ -317,11 +324,12 @@ class DigitalProductController extends BaseApiController
     /** Remove a file we stored on the public disk (ignores external URLs). */
     private function deletePublicUrl(?string $url): void
     {
+        // Public disk URLs are /media/... today (/storage/... for older uploads).
         $path = parse_url((string) $url, PHP_URL_PATH);
-        if (!is_string($path) || !Str::contains($path, '/storage/products/banners/')) {
+        if (!is_string($path) || !preg_match('#/(?:media|storage)/(products/banners/.+)$#', $path, $match)) {
             return;
         }
-        Storage::disk('public')->delete(ltrim(Str::after($path, '/storage/'), '/'));
+        Storage::disk('public')->delete($match[1]);
     }
 
     private function deleteDocFile(string $path): void

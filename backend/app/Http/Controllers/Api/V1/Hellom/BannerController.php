@@ -56,6 +56,7 @@ class BannerController extends BaseApiController
         unset($validated['remove_image']);
 
         $banner = Banner::query()->create($validated);
+        $this->adminAudit($request, 'admin.banner.created', 'banner', (int) $banner->id, ['title' => $banner->title]);
 
         return $this->ok($this->transformBanner($banner), 'Banner created', 201);
     }
@@ -81,11 +82,12 @@ class BannerController extends BaseApiController
 
         $banner->fill($validated);
         $banner->save();
+        $this->adminAudit($request, 'admin.banner.updated', 'banner', (int) $banner->id, ['fields' => array_keys($validated)]);
 
         return $this->ok($this->transformBanner($banner->fresh()), 'Banner updated');
     }
 
-    public function destroy(int $id): JsonResponse
+    public function destroy(Request $request, int $id): JsonResponse
     {
         $banner = Banner::query()->findOrFail($id);
 
@@ -94,6 +96,7 @@ class BannerController extends BaseApiController
         }
 
         $banner->delete();
+        $this->adminAudit($request, 'admin.banner.deleted', 'banner', $id, ['title' => $banner->title]);
 
         return $this->ok(['deleted' => true, 'id' => $id], 'Banner deleted');
     }

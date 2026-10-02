@@ -212,6 +212,7 @@ class LandingContentController extends BaseApiController
             $about = new LandingAboutSetting();
         }
         $about->fill($validated)->save();
+        $this->adminAudit($request, 'admin.site_content.about_updated', 'landing_about', (int) $about->id, ['fields' => array_keys($validated)]);
 
         return $this->ok($about->fresh(), 'About updated');
     }
@@ -221,7 +222,10 @@ class LandingContentController extends BaseApiController
         $validated = $this->validateService($request);
         $validated['slug'] = $this->uniqueSlug(LandingService::class, (string) (($validated['slug'] ?? null) ?: $validated['title']));
 
-        return $this->ok(LandingService::query()->create($validated), 'Layanan dibuat', 201);
+        $service = LandingService::query()->create($validated);
+        $this->adminAudit($request, 'admin.site_content.service_created', 'landing_service', (int) $service->id, ['title' => $service->title]);
+
+        return $this->ok($service, 'Layanan dibuat', 201);
     }
 
     public function updateService(Request $request, int $id): JsonResponse
@@ -236,13 +240,16 @@ class LandingContentController extends BaseApiController
             $validated['slug'] = $this->uniqueSlug(LandingService::class, (string) ($validated['title'] ?? $service->title), $id);
         }
         $service->update($validated);
+        $this->adminAudit($request, 'admin.site_content.service_updated', 'landing_service', $id, ['fields' => array_keys($validated)]);
 
         return $this->ok($service->fresh(), 'Service updated');
     }
 
-    public function destroyService(int $id): JsonResponse
+    public function destroyService(Request $request, int $id): JsonResponse
     {
         LandingService::query()->whereKey($id)->delete();
+        $this->adminAudit($request, 'admin.site_content.service_deleted', 'landing_service', $id);
+
         return $this->ok(null, 'Service deleted');
     }
 
@@ -251,7 +258,10 @@ class LandingContentController extends BaseApiController
         $validated = $this->validateArticle($request);
         $validated['slug'] = $this->uniqueSlug(LandingArticle::class, (string) (($validated['slug'] ?? null) ?: $validated['title']));
 
-        return $this->ok(LandingArticle::query()->create($validated), 'Artikel dibuat', 201);
+        $article = LandingArticle::query()->create($validated);
+        $this->adminAudit($request, 'admin.site_content.article_created', 'landing_article', (int) $article->id, ['title' => $article->title]);
+
+        return $this->ok($article, 'Artikel dibuat', 201);
     }
 
     public function updateArticle(Request $request, int $id): JsonResponse
@@ -266,13 +276,16 @@ class LandingContentController extends BaseApiController
             $validated['slug'] = $this->uniqueSlug(LandingArticle::class, (string) ($validated['title'] ?? $article->title), $id);
         }
         $article->update($validated);
+        $this->adminAudit($request, 'admin.site_content.article_updated', 'landing_article', $id, ['fields' => array_keys($validated)]);
 
         return $this->ok($article->fresh(), 'Article updated');
     }
 
-    public function destroyArticle(int $id): JsonResponse
+    public function destroyArticle(Request $request, int $id): JsonResponse
     {
         LandingArticle::query()->whereKey($id)->delete();
+        $this->adminAudit($request, 'admin.site_content.article_deleted', 'landing_article', $id);
+
         return $this->ok(null, 'Article deleted');
     }
 
