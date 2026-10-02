@@ -1,7 +1,7 @@
 // Super admin: finance, gateways, users, apps/plans, promos, dashboard, notifications, mail.
 // Part of the Hellom API client; import from '@/lib/hellomApi' or '@/services/api'.
 import type { WalletWithdrawal } from './billing';
-import { apiRequest, buildQuery } from './client';
+import { HELLOM_API_BASE, apiRequest, buildQuery } from './client';
 
 // ─── Types (SuperAdminController payloads) ───
 
@@ -597,4 +597,34 @@ export type AdminInvoiceItem = {
 
 export function getAdminInvoices(params?: { search?: string; status?: string; organization_id?: number; page?: number; limit?: number }) {
   return apiRequest<{ items: AdminInvoiceItem[]; pagination: AdminPagination }>(`/admin/invoices${buildQuery(params)}`);
+}
+
+// ─── System health (GET /api/health: plain JSON, 503 when a check fails) ───
+
+export type SystemHealthCheck = {
+  ok: boolean;
+  error?: string;
+  ms?: number;
+  last_run_at?: string | null;
+  age_seconds?: number;
+  connection?: string;
+  pending?: number;
+  oldest_wait_seconds?: number | null;
+  failed?: number | null;
+};
+
+export type SystemHealth = {
+  status: 'ok' | 'degraded';
+  time: string;
+  checks: { database: SystemHealthCheck; cache: SystemHealthCheck; scheduler: SystemHealthCheck; queue: SystemHealthCheck };
+};
+
+export async function getSystemHealth(): Promise<SystemHealth> {
+  const url = HELLOM_API_BASE.replace(/\/v1\/hellom\/?$/, '') + '/health';
+  const response = await fetch(url, { headers: { Accept: 'application/json' }, cache: 'no-store' });
+  const payload = (await response.json().catch(() => null)) as SystemHealth | null;
+  if (!payload || !payload.checks) {
+    throw new Error(`Health check tidak bisa dibaca (HTTP ${response.status})`);
+  }
+  return payload;
 }

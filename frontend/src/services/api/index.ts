@@ -130,6 +130,7 @@ export {
   reactivateAdminOrganization,
   getAdminAuditLogs,
   getAdminInvoices,
+  getSystemHealth,
 } from './admin';
 export {
   cancelProductPurchase,
@@ -292,6 +293,8 @@ export type {
   EntitlementOverridePayload,
   AdminAuditLogItem,
   AdminInvoiceItem,
+  SystemHealth,
+  SystemHealthCheck,
 } from './admin';
 export type { EmailDelivery, OrganizationRef, TeamInvitation, TeamMember } from './organizations';
 export type { PayoutPolicy, WalletBalance, WalletOverview, WalletTransaction, WalletWithdrawal } from './billing';
