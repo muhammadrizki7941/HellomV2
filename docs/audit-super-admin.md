@@ -125,6 +125,58 @@ Keputusan pemilik (2026-10-02): "kerjakan bertahap" → semua usulan di bawah di
 | P2-8 | ✅ fixed | `7ba8c36` | Pesan error AI generik + `report()`, `throttle:10,1`. |
 | P2-9 (sebagian) | ✅ | `531b33d` | Halaman baru **Log Audit** dan **Invoice** (invoice kini berpaginasi + cari). |
 | P2-12 | ✅ fixed | `215fdf3` | Execute notifikasi memakai service yang sama + audit. |
+| P2-1 | ✅ fixed | `215fdf3`, `e89deb3`, `f4bd95d` | `per_page` maks 100 (notifikasi, pembelian, produk digital). |
+| P2-2 | ✅ fixed | `531b33d`, `56755a9` | Invoice berpaginasi + cari; promo & transfer manual sampai 100 + total (UI memberi tahu bila ada yang tersembunyi). Showcase/paket/klien dibiarkan tanpa paginasi (jumlahnya kecil). |
+| P2-4 | ✅ fixed | `f4bd95d` | `BaseApiController::adminAudit()`; gateway (nama field saja, tanpa nilai rahasia), transfer manual, runtime checkout, branding, email, banner, showcase, konten situs, produk digital, promo. Tes `AdminAuditTrailTest`. |
+| P2-5 | ✅ fixed | `eed0737` | Renderer error `api/*` → amplop seragam (tanpa stack trace); klien frontend mengakhiri sesi untuk 401 `UNAUTHORIZED` di endpoint mana pun. Tes `ApiErrorFormatTest`. |
+| P2-6 | ✅ dipensiunkan | `48ce718` | Broadcast promo & pengingat tagihan dihapus (0 pemanggil). |
+| P2-7 | ✅ fixed | `8e0face` | SVG/ICO diterima, warna wajib hex, `logo_base64` publik = null. Tes `BrandSettingsTest`. |
+| P2-9 | ✅ fixed | `531b33d`, `4101730` | UI Log Audit, Invoice, penyesuaian saldo penjual. `plans/{id}/subscriptions`, `promos/{id}`, `product-purchases/{id}`, `DELETE notifications/{id}` dibiarkan (endpoint baca/hapus kecil, aman). |
+| P2-10 | ✅ fixed | `8e0face` | Konfirmasi hapus + pesan sukses/gagal di Konten Situs. |
+| P2-11 | ✅ fixed | `8e0face` | Batas unggah 20 MB di server & klien. |
+| P3-1 | ✅ fixed | `531b33d`, `b849bd6`, `56c7fa6` | Teks admin Bahasa Indonesia (istilah teknis seperti API Key/Webhook dibiarkan). |
+| P3-2, P3-3 | ✅ fixed | `531b33d` | Menu aktif di sub-halaman; satu effect sesi. |
+| P3-4 | ⏭️ skipped | — | Mode gelap area admin: fitur baru, tidak diminta; sidebar admin sudah gelap. |
+| P3-5, P3-6 | ✅ fixed | `c2b21fc` | Filter `app_slug` paket dihapus; peran tim `super_admin` (pivot) tidak bisa diberikan lagi (0 data). |
+| P3-7, P3-8 | ✅ fixed | `f4bd95d` | File banner `/media` terhapus; promo persen ≤ 100, tanggal akhir ≥ mulai. |
+| P3-9 | ✅ fixed | `b849bd6` | Keuangan Platform: antrean transfer manual di atas; penarikan dompet lama dilipat (terbuka otomatis bila masih ada). |
+| P3-10 | ✅ fixed | `89fab44`, `616f873` | ESLint (flat config). Area admin 0 error/0 warning (`npm run lint:admin`). |
+| Ringkasan *(baru)* | ✅ fixed | `89fab44` | Kartu "Active App Cards" ternyata kartu milik super admin sendiri & tombol ⋯ tidak berfungsi → angka platform + "Perlu tindakan". |
+| Log *(baru)* | ✅ fixed | `56c7fa6` | Setiap buka halaman keuangan menulis ERROR "Failed to capture Xendit balance" bila Xendit tidak dipakai → dilewati. |
+
+## Hasil Fase 3 (verifikasi)
+| Cek | Hasil |
+|---|---|
+| `composer dump-autoload`, `optimize:clear`, `config:cache`, `route:cache` | OK (435 route API) |
+| `php artisan migrate` (dev + `hellom_pos_test`) | OK (`2026_10_05_000001`; 0 baris direset di DB dev) |
+| `php vendor/bin/phpunit -c phpunit.pos.xml` | **99 tes, 856 asersi, OK** (sebelum: 76) · unit `php artisan test --testsuite=Unit` 28 OK |
+| `npx tsc --noEmit` | 0 error |
+| `npm run lint:admin` (ESLint, area admin) | 0 error, 0 warning |
+| `npm run build` | OK |
+| Smoke browser `tests/e2e/admin-smoke.mjs` | **23/23** (19 halaman + 3 aksi + tablet 820 px), 0 error console, 0 API gagal |
+| `storage/logs/laravel.log` selama smoke | 0 error setelah perbaikan Xendit |
+
+`migrate:fresh --seed` **tidak** dijalankan (dilarang CLAUDE.md).
+
+**Ukuran bundle admin (lazy, setelah):** Ringkasan 8,6 KB (grafik tetap di `vendor-charts`), Pengguna 34,7 KB, Aplikasi & Paket 34,4 KB, Pengaturan 40,4 KB, Organisasi 12,4 KB, Log Audit 4,8 KB, Invoice 4,6 KB, Kesehatan Sistem 4,4 KB. Halaman lama hampir sama (+1–2 KB karena fitur baru); `lib/adminFinance.ts` dihapus.
+**Query:** daftar invoice/promo/transfer manual kini `paginate` (sebelumnya memuat 30–200 baris + relasi penuh); daftar organisasi/log audit eager-load relasi (tanpa N+1); respons branding publik tidak lagi membaca file logo dari disk setiap request.
+
+## Tindakan saat deploy ke VPS
+1. `git pull` + `bash deploy/deploy.sh` (menjalankan `composer install`, `php artisan migrate --force` → migration `2026_10_05_000001_reset_foreign_current_organizations`, cache, `npm ci && npm run build`, restart PM2 realtime & queue).
+2. `php artisan optimize:clear && php artisan optimize`.
+3. Tidak ada key `.env` baru. ESLint hanya dev dependency (`npm ci --include=dev` di deploy.sh sudah memasangnya; tidak dipakai saat build).
+4. **iPaymu**: checkout langganan/produk/top-up yang dibuat **sebelum** deploy tidak punya tanda tangan di notify URL — langganan & produk tetap diverifikasi ke API iPaymu (aman); **top-up lama tanpa tanda tangan tidak dikreditkan otomatis** (tercatat `unsigned` di Payment Events) → cek manual bila ada.
+5. Langganan tahunan iPaymu yang dibayar **sebelum** deploy dengan harga bulanan kini ditolak verifikasi nominal (`amount_mismatch`) bila notifikasinya datang setelah deploy — cek Payment Events.
+6. Setelah deploy: purge Cloudflare untuk halaman admin tidak diperlukan (aset ber-hash).
+
+## Bug di luar Super Admin (dicatat, tidak diperbaiki — aturan kerja #7)
+| Area | File | Temuan |
+|---|---|---|
+| POS / member / publik | ESLint `npm run lint:eslint` | 40 error (variabel/impor tak terpakai, `no-case-declarations`, `no-empty`) + 193 warning (`any`, deps hook) di POS (`PosReports`, `PosSettings`, `OrderPage`, `NewOrderModal`…), `pages/dashboard/Payments.tsx`, `MemberProfile`, `PublicPage`, `lib/sellerPixels.ts`. Tidak ada yang memblokir build/tsc. |
+| Auth (tak terpakai) | `components/auth/AuthLeftPanel.tsx`, `PromoBanner.tsx` | Masih kandidat arsip (pertanyaan lama, belum dijawab). |
+| Organisasi | `OrganizationController::settings/updateSettings` | `logo_url` memakai `url('storage/…')`, padahal disk publik kini `/media`. |
+| Moderasi | `LandingModeration.tsx` | Tautan toko memakai `/${slug}`, bukan `landing_username`. |
+| Billing | `BillingController::reconcileCheckout` | Memakai `payment_session_id` iPaymu sebagai id transaksi bila `transaction_id` belum tersimpan (SessionID ≠ TransactionId) → reconcile dari halaman kembali bisa "menunggu" sampai webhook datang. Tidak berbahaya. |
 
 ## Butuh keputusan pemilik sebelum Fase 2
 1. **P0-1**: register memberi `member`, dan role `admin` tidak lagi lintas organisasi. Apakah ada staf Hellom yang benar-benar butuh akses lintas organisasi selain super admin?

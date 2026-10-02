@@ -11,6 +11,7 @@ with local stand-ins for iPaymu and email. Nothing reaches a real gateway or inb
 | `ui-audit.mjs` | 360 px audit of 32 public + dashboard pages: horizontal scroll, tap targets < 44 px, form fonts < 16 px. Run after `journey.mjs`, before cleanup. |
 | `dark-audit.mjs [light]` | Dashboard dark (or light) mode: text contrast < 4.5:1 on 20 views, screenshots, public pages must stay light. |
 | `pos-cashier-seed.php` + `pos-cashier.mjs` | POS cashier permissions: default menu (Orders + Members), direct URL redirect, owner grants/revokes and the menu follows without re-login, orders always work, owner sees the switches. Only Laravel :8010 + Vite :3010 needed. |
+| `admin-smoke-seed.php` + `admin-smoke.mjs` | Super admin: opens all 19 admin pages + main read actions at 1366 px (and the overview at 820 px), fails on console errors, failed API calls (the expected 503 of `/api/health` without a scheduler is ignored) or pages stuck loading. Needs Laravel :8010 + Vite :3010 (+ realtime :3011 with the same `REALTIME_SERVER_SECRET`); `admin-smoke-seed.php cleanup` afterwards. Expect `23/23 checks OK`. |
 | `captcha.mjs` | Turnstile on repeated checkouts in the browser. Start the :8010 server with `CACHE_STORE=database` and Cloudflare's test keys `TURNSTILE_SITE_KEY=1x00000000000000000000AA TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA` (always pass; calls challenges.cloudflare.com). |
 
 Screenshots and results go to `backend/storage/app/e2e_shots/`, `e2e_full_result.json`, `e2e_ui_audit.json` (git-ignored).

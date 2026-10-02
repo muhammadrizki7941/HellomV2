@@ -4,6 +4,17 @@
 
 Audit lengkap dan status per temuan: [docs/AUDIT.md](docs/AUDIT.md). Langkah deploy khusus rilis ini: [docs/DEPLOY.md §3](docs/DEPLOY.md#3-catatan-khusus-rilis-refactor-branch-refactorcleanup).
 
+### Dashboard Super Admin — audit & perbaikan (branch `fix/super-admin-overhaul`, 2026-10-02 … 10-03)
+Audit & status per temuan: [docs/audit-super-admin.md](docs/audit-super-admin.md).
+- **Keamanan (penting)**: pemilik toko yang daftar sendiri tidak bisa lagi melihat/masuk ke organisasi lain (dulu bisa membaca tim, saldo, KTP & rekening toko lain). Migration mengembalikan organisasi aktif yang "asing" ke organisasi milik sendiri.
+- **Pembayaran**: notifikasi iPaymu untuk langganan, produk digital, dan top-up kini selalu dicek ke API iPaymu (status, referensi, nominal) — sama seperti penjualan Hellom Page; tombol "cek pembayaran" tidak lagi menerima ID transaksi sembarang. **Langganan tahunan via iPaymu/Xendit dulu ditagih harga bulanan** — sekarang ditagih benar. DOKU wajib tanda tangan & dicek ke API; status lunas tidak bisa turun karena notifikasi telat; pesan jelas untuk akun DOKU yang belum aktif.
+- **Data aman**: hapus paket yang punya riwayat → diarsipkan; hapus user ditolak bila dirinya sendiri, super admin, pemilik tunggal, atau punya riwayat pembayaran/saldo (pakai suspend).
+- **Tidak dobel**: setujui transfer manual & konfirmasi pembelian produk berjalan sekali walau diklik dua kali (revenue & invoice tidak dobel); refund hanya untuk yang sudah lunas.
+- **Menu baru**: Organisasi (suspend/aktifkan, atur akses dengan tanggal berakhir), Invoice, Log Audit; Ringkasan berisi angka platform + daftar "Perlu tindakan"; Kesehatan Sistem membaca `/api/health` (dulu angka statis); Keuangan Platform menaruh antrean transfer manual di atas; penyesuaian saldo penjual di Moderasi Toko; foto KTP bisa dilihat lagi.
+- **Log audit** untuk semua perubahan sensitif (kredensial gateway — tanpa nilai rahasia, rekening transfer manual, branding, email, konten, produk, promo).
+- **Lainnya**: format error API seragam; sesi berakhir otomatis saat token tidak berlaku; artikel disanitasi (XSS); logo SVG/favicon ICO bisa diunggah; respons branding publik tanpa logo base64; batas unggah 20 MB; daftar promo/transfer manual tidak terpotong diam-diam; teks admin Bahasa Indonesia; ESLint (`npm run lint:admin` bersih); broadcast promo & pengingat tagihan (tanpa UI, kirim sinkron ke semua user) dipensiunkan.
+- **Tes**: 99 tes MySQL (`phpunit.pos.xml`, suite baru `Admin`) + smoke browser `tests/e2e/admin-smoke.mjs` (23/23).
+
 ### Akun — undangan, lupa kata sandi, daftar, email
 - **Link undangan tidak lagi layar putih**: file tampilan (`/assets/*.js`) kini dilayani juga saat aplikasi dibuka lewat server Laravel.
 - **Halaman undangan baru** `/invitation/accept`: menampilkan toko, peran & outlet; akun lama cukup kata sandi, orang baru cukup nama + kata sandi; kasir langsung masuk POS. Kasir yang punya usaha sendiri tetap bisa menerima undangan toko.
