@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import {
-  Bell, User, CreditCard, Clock, CheckCheck, Trash2,
+  Bell, User, CreditCard, Clock, CheckCheck,
   Filter, Search, MoreHorizontal
 } from 'lucide-react';
-import { useNotifications, Notification } from '@/hooks/useNotifications';
+import { useNotifications } from '@/hooks/useNotifications';
 
 const typeIcons = {
   new_user: User,

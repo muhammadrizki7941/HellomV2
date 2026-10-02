@@ -18,7 +18,7 @@ import {
   setSession,
   switchOrganization,
 } from '@/lib/hellomApi';
-import { BRAND_LOGO_PATH, BRAND_NAME, getBrandLogo } from '@/lib/branding';
+import { BRAND_NAME, getBrandLogo } from '@/lib/branding';
 import { fetchBrand, BrandSettings } from '@/hooks/useBrand';
 
 export default function AdminLayout() {
@@ -68,6 +68,7 @@ export default function AdminLayout() {
         setOrganizations((orgs || []).map((org) => ({ id: org.id, name: org.name, role: org.role })));
         setCurrentOrgId(currentOrg?.id ?? null);
       } catch {
+        // The organization switcher is optional; the admin pages work without it.
       }
     };
 
@@ -108,6 +109,7 @@ export default function AdminLayout() {
     try {
       await logout();
     } catch {
+      // The token may already be invalid; the local session is cleared anyway.
     } finally {
       clearSession();
       navigate('/login', { replace: true });

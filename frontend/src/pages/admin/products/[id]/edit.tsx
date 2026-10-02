@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Save, Upload, X } from 'lucide-react';
 import {
@@ -195,7 +195,7 @@ export default function AdminProductEdit() {
 
   const isNew = !id || id === 'new';
 
-  const loadProduct = async () => {
+  const loadProduct = useCallback(async () => {
     if (!id || isNew) {
       setLoading(false);
       return;
@@ -226,11 +226,11 @@ export default function AdminProductEdit() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id, isNew]);
 
   useEffect(() => {
     void loadProduct();
-  }, [id]);
+  }, [loadProduct]);
 
   useEffect(() => {
     let cancelled = false;

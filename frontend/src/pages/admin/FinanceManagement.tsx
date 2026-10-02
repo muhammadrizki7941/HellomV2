@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Wallet, CheckCircle, XCircle, Clock,
   Search, AlertCircle, RefreshCw, ReceiptText
@@ -109,7 +109,6 @@ export default function FinanceManagement() {
   const [actingManualId, setActingManualId] = useState<number | null>(null);
   const [summary, setSummary] = useState({ pending_count: 0, processing_count: 0, failed_count: 0, paid_count: 0 });
   const [platformSummary, setPlatformSummary] = useState<PlatformFinanceSummary | null>(null);
-  const [loadingPlatform, setLoadingPlatform] = useState(false);
   const [showPayoutModal, setShowPayoutModal] = useState(false);
   const [payoutForm, setPayoutForm] = useState({
     amount: '',
@@ -118,7 +117,7 @@ export default function FinanceManagement() {
     account_holder_name: '',
   });
 
-  const loadQueue = async () => {
+  const loadQueue = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -144,7 +143,7 @@ export default function FinanceManagement() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [statusFilter]);
 
   const loadManualCheckouts = async () => {
     setLoadingManual(true);
@@ -162,21 +161,18 @@ export default function FinanceManagement() {
   };
 
   const loadPlatformSummary = async () => {
-    setLoadingPlatform(true);
     try {
       const result = await getPlatformFinanceSummary({ days: 30 });
       setPlatformSummary(result);
     } catch (loadError) {
       console.error('Failed to load platform summary:', loadError);
-      // Don't show error for platform summary, it's optional
-    } finally {
-      setLoadingPlatform(false);
+      // Optional block: the page works without the platform summary.
     }
   };
 
   useEffect(() => {
     void loadQueue();
-  }, [statusFilter]);
+  }, [loadQueue]);
 
   useEffect(() => {
     void Promise.all([loadManualCheckouts(), loadPlatformSummary()]);

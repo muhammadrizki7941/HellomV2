@@ -172,7 +172,7 @@ export default function BrandSettingsPage() {
     return () => {
       active = false;
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!logoFile) return;

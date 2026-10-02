@@ -188,6 +188,8 @@ export default function AdminSettings() {
     qris_label: 'QRIS Static',
     qris_instructions: '',
   });
+  // The method cards below address form fields by key name.
+  const manualField = (key: string) => (manualPaymentForm as Record<string, string | boolean>)[key];
   const [manualPaymentFiles, setManualPaymentFiles] = useState<Record<string, File | null>>({
     bank_transfer: null,
     gopay: null,
@@ -223,6 +225,7 @@ export default function AdminSettings() {
           setAdminEmail(me.email);
         }
       } catch {
+        // Only pre-fills the test-email address; the field stays editable.
       }
     };
 
@@ -282,10 +285,11 @@ export default function AdminSettings() {
         is_production: config.providers.doku.mode === 'production',
       });
       if (manualConfig && typeof manualConfig === 'object') {
-        const methods = (manualConfig as any).methods || {};
+        const manual = manualConfig as { enabled?: unknown; notes?: unknown; methods?: Record<string, Record<string, unknown> | undefined> };
+        const methods = manual.methods || {};
         setManualPaymentForm({
-          enabled: Boolean((manualConfig as any).enabled),
-          notes: String((manualConfig as any).notes || ''),
+          enabled: Boolean(manual.enabled),
+          notes: String(manual.notes || ''),
           bank_enabled: Boolean(methods.bank_transfer?.enabled),
           bank_label: String(methods.bank_transfer?.label || 'Transfer Bank'),
           bank_name: String(methods.bank_transfer?.bank_name || ''),
@@ -307,10 +311,10 @@ export default function AdminSettings() {
           qris_instructions: String(methods.qris?.instructions || ''),
         });
         setManualPaymentPreviews({
-          bank_transfer: methods.bank_transfer?.image_path ? getImageUrl(methods.bank_transfer.image_path) : null,
-          gopay: methods.gopay?.image_path ? getImageUrl(methods.gopay.image_path) : null,
-          dana: methods.dana?.image_path ? getImageUrl(methods.dana.image_path) : null,
-          qris: methods.qris?.image_path ? getImageUrl(methods.qris.image_path) : null,
+          bank_transfer: methods.bank_transfer?.image_path ? getImageUrl(String(methods.bank_transfer.image_path)) : null,
+          gopay: methods.gopay?.image_path ? getImageUrl(String(methods.gopay.image_path)) : null,
+          dana: methods.dana?.image_path ? getImageUrl(String(methods.dana.image_path)) : null,
+          qris: methods.qris?.image_path ? getImageUrl(String(methods.qris.image_path)) : null,
         });
       }
     } catch (loadError) {
@@ -1070,21 +1074,21 @@ export default function AdminSettings() {
                 <label className="flex items-center gap-3 text-sm font-semibold text-zinc-900">
                   <input
                     type="checkbox"
-                    checked={(manualPaymentForm as any)[item.enabledKey]}
+                    checked={Boolean(manualField(item.enabledKey))}
                     onChange={(event) => setManualPaymentForm((current) => ({ ...current, [item.enabledKey]: event.target.checked }))}
                   />
                   {item.title}
                 </label>
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
                   <input
-                    value={(manualPaymentForm as any)[item.labelKey]}
+                    value={String(manualField(item.labelKey) ?? '')}
                     onChange={(event) => setManualPaymentForm((current) => ({ ...current, [item.labelKey]: event.target.value }))}
                     placeholder="Label tampilan"
                     className="rounded-2xl border border-zinc-300 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-zinc-900"
                   />
                   {'bankNameKey' in item && item.bankNameKey ? (
                     <input
-                      value={(manualPaymentForm as any)[item.bankNameKey]}
+                      value={String(manualField(item.bankNameKey) ?? '')}
                       onChange={(event) => setManualPaymentForm((current) => ({ ...current, [item.bankNameKey]: event.target.value }))}
                       placeholder="Nama bank"
                       className="rounded-2xl border border-zinc-300 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-zinc-900"
@@ -1092,7 +1096,7 @@ export default function AdminSettings() {
                   ) : <div />}
                   {'nameKey' in item && item.nameKey ? (
                     <input
-                      value={(manualPaymentForm as any)[item.nameKey]}
+                      value={String(manualField(item.nameKey) ?? '')}
                       onChange={(event) => setManualPaymentForm((current) => ({ ...current, [item.nameKey]: event.target.value }))}
                       placeholder="Nama akun"
                       className="rounded-2xl border border-zinc-300 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-zinc-900"
@@ -1100,7 +1104,7 @@ export default function AdminSettings() {
                   ) : <div />}
                   {'numberKey' in item && item.numberKey ? (
                     <input
-                      value={(manualPaymentForm as any)[item.numberKey]}
+                      value={String(manualField(item.numberKey) ?? '')}
                       onChange={(event) => setManualPaymentForm((current) => ({ ...current, [item.numberKey]: event.target.value }))}
                       placeholder="Nomor akun"
                       className="rounded-2xl border border-zinc-300 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-zinc-900"
@@ -1108,7 +1112,7 @@ export default function AdminSettings() {
                   ) : <div />}
                   <textarea
                     rows={3}
-                    value={(manualPaymentForm as any)[item.instructionKey]}
+                    value={String(manualField(item.instructionKey) ?? '')}
                     onChange={(event) => setManualPaymentForm((current) => ({ ...current, [item.instructionKey]: event.target.value }))}
                     placeholder="Instruksi pembayaran"
                     className="rounded-2xl border border-zinc-300 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-zinc-900 md:col-span-2"

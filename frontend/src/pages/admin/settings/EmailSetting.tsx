@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   Mail, Save, Send, AlertCircle, CheckCircle, RefreshCw,
-  Shield, Eye, EyeOff
+  Eye, EyeOff
 } from 'lucide-react';
 import {
   getAdminMailSettings,

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search, Filter, Trash2, Eye, CheckCircle, ChevronLeft, ChevronRight, RefreshCw, Mail, Send, Ban,
@@ -120,7 +120,7 @@ export default function UserManagement() {
     }
   };
 
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
     setLoading(true);
     setErrorMessage(null);
     try {
@@ -166,9 +166,9 @@ export default function UserManagement() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeTab, currentPage, isSuperAdmin, searchTerm]);
 
-  const loadInvitations = async () => {
+  const loadInvitations = useCallback(async () => {
     setInvitationLoading(true);
     try {
       const result = await getOrganizationInvitations({ status: invitationFilter, limit: 50 });
@@ -186,7 +186,7 @@ export default function UserManagement() {
     } finally {
       setInvitationLoading(false);
     }
-  };
+  }, [invitationFilter]);
 
   const openUserDetail = async (user: UserItem) => {
     if (!isSuperAdmin || activeTab !== 'global') {
@@ -229,11 +229,11 @@ export default function UserManagement() {
 
   useEffect(() => {
     void loadUsers();
-  }, [activeTab, currentPage, searchTerm]);
+  }, [loadUsers]);
 
   useEffect(() => {
     void loadInvitations();
-  }, [invitationFilter]);
+  }, [loadInvitations]);
 
   const filteredUsers = users.filter((user) => {
     const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
