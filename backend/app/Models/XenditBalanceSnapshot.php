@@ -27,6 +27,12 @@ class XenditBalanceSnapshot extends Model
 
     public static function captureCurrentBalance(): ?self
     {
+        // Xendit is optional (iPaymu is the active gateway): without credentials there is
+        // nothing to capture, and logging an error on every finance page view is noise.
+        if (!app(\App\Services\Hellom\XenditSettingsService::class)->isReady()) {
+            return null;
+        }
+
         try {
             $xenditService = app(\App\Services\Hellom\XenditService::class);
             $balance = $xenditService->getBalance();

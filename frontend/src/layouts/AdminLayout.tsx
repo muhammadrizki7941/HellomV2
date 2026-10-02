@@ -167,7 +167,7 @@ export default function AdminLayout() {
           <span className="font-bold text-lg tracking-tight">{brand?.app_name || BRAND_NAME} Admin</span>
         </div>
 
-        <nav className="p-4 space-y-1 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 8.5rem)' }}>
+        <nav className="p-4 space-y-1 overflow-y-auto [scrollbar-color:#3f3f46_transparent] [scrollbar-width:thin]" style={{ maxHeight: 'calc(100vh - 8.5rem)' }}>
           {menuItems.map((item) => {
             const isActive = isActivePath(item.path);
             return (

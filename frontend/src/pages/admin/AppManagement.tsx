@@ -475,7 +475,7 @@ export default function AppManagement() {
               <Sparkles className="h-3.5 w-3.5" />
               Pricing Control Center
             </div>
-            <h1 className="mt-4 text-3xl font-bold tracking-tight text-zinc-950">App pricing, promo, dan status penjualan</h1>
+            <h1 className="mt-4 text-3xl font-bold tracking-tight text-zinc-950">Aplikasi &amp; Paket: harga, promo, dan status penjualan</h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-600">
               Halaman ini sekarang menjadi pusat setup harga aplikasi, kampanye diskon, dan kesiapan jalur pembayaran sebelum gateway Xendit diaktifkan penuh.
             </p>

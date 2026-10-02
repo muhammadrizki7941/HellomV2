@@ -442,7 +442,7 @@ export default function UserManagement() {
           <div className="inline-flex items-center gap-2 rounded-full border border-yellow-200 bg-yellow-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-yellow-700">
             Admin Control Center
           </div>
-          <h1 className="mt-3 text-3xl font-bold text-zinc-950">User Management</h1>
+          <h1 className="mt-3 text-3xl font-bold text-zinc-950">Pengguna</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">
             {activeTab === 'global'
               ? 'Semua user platform beserta pembelian app, masa aktif, dan kontrol suspend.'
