@@ -766,7 +766,7 @@ export default function BrandSettingsPage() {
                         {banner.image_url ? (
                           <img src={banner.image_url} alt={banner.title} className="h-20 w-28 rounded-xl object-cover" />
                         ) : (
-                          <div className="flex h-20 w-28 items-center justify-center rounded-xl bg-slate-100 text-xs font-semibold text-slate-500">No image</div>
+                          <div className="flex h-20 w-28 items-center justify-center rounded-xl bg-slate-100 text-xs font-semibold text-slate-500">Tanpa gambar</div>
                         )}
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
@@ -867,7 +867,7 @@ export default function BrandSettingsPage() {
 
         <aside className="space-y-6">
           <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-slate-900">Preview Live</h2>
+            <h2 className="text-lg font-semibold text-slate-900">Pratinjau langsung</h2>
             <p className="mt-1 text-sm text-slate-500">Preview cepat untuk landing, auth, dan footer.</p>
 
             <div className="mt-5 overflow-hidden rounded-[28px] shadow-sm" style={{ backgroundColor: previewBrand.background_color }}>

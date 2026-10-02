@@ -59,7 +59,7 @@ export default function ShowcaseManagement() {
       const res = await getAdminPortfolios();
       setPortfolios(res.items);
     } catch (e) {
-      setErrorMessage(e instanceof Error ? e.message : 'Failed to load portfolios');
+      setErrorMessage(e instanceof Error ? e.message : 'Gagal memuat portofolio');
     } finally {
       setLoading(false);
     }
@@ -72,7 +72,7 @@ export default function ShowcaseManagement() {
       const res = await getAdminClients();
       setClients(res.items);
     } catch (e) {
-      setErrorMessage(e instanceof Error ? e.message : 'Failed to load clients');
+      setErrorMessage(e instanceof Error ? e.message : 'Gagal memuat klien');
     } finally {
       setLoading(false);
     }
@@ -96,7 +96,7 @@ export default function ShowcaseManagement() {
       onUrl(res.url);
       setInfoMessage(`File "${file.name}" uploaded.`);
     } catch (e) {
-      setErrorMessage(e instanceof Error ? e.message : 'Upload failed');
+      setErrorMessage(e instanceof Error ? e.message : 'Unggah gagal');
     } finally {
       setUploading(false);
     }
@@ -143,7 +143,7 @@ export default function ShowcaseManagement() {
       setPortfolioForm(INITIAL_PORTFOLIO);
       await loadPortfolios();
     } catch (e) {
-      setErrorMessage(e instanceof Error ? e.message : 'Failed to save');
+      setErrorMessage(e instanceof Error ? e.message : 'Gagal menyimpan');
     }
   };
 
@@ -155,7 +155,7 @@ export default function ShowcaseManagement() {
       setInfoMessage('Portfolio deleted.');
       await loadPortfolios();
     } catch (e) {
-      setErrorMessage(e instanceof Error ? e.message : 'Failed to delete');
+      setErrorMessage(e instanceof Error ? e.message : 'Gagal menghapus');
     }
   };
 
@@ -190,7 +190,7 @@ export default function ShowcaseManagement() {
       setClientForm(INITIAL_CLIENT);
       await loadClients();
     } catch (e) {
-      setErrorMessage(e instanceof Error ? e.message : 'Failed to save');
+      setErrorMessage(e instanceof Error ? e.message : 'Gagal menyimpan');
     }
   };
 
@@ -202,7 +202,7 @@ export default function ShowcaseManagement() {
       setInfoMessage('Client deleted.');
       await loadClients();
     } catch (e) {
-      setErrorMessage(e instanceof Error ? e.message : 'Failed to delete');
+      setErrorMessage(e instanceof Error ? e.message : 'Gagal menghapus');
     }
   };
 
@@ -211,7 +211,7 @@ export default function ShowcaseManagement() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-900">Showcase Management</h1>
+          <h1 className="text-2xl font-bold text-zinc-900">Showcase</h1>
           <p className="text-zinc-500">Manage portfolio videos and trusted client logos displayed on the landing page.</p>
         </div>
       </div>
@@ -279,12 +279,12 @@ export default function ShowcaseManagement() {
                     )}
                     <div className="absolute top-2 right-2 flex flex-col gap-1 items-end">
                       {(p.is_featured as boolean)
-                        ? <span className="px-2 py-0.5 bg-yellow-400 text-black text-[10px] font-bold rounded-full flex items-center gap-1"><Star className="w-3 h-3" /> Featured</span>
-                        : <span className="px-2 py-0.5 bg-zinc-800 text-zinc-300 text-[10px] font-bold rounded-full">Not Featured</span>
+                        ? <span className="px-2 py-0.5 bg-yellow-400 text-black text-[10px] font-bold rounded-full flex items-center gap-1"><Star className="w-3 h-3" /> Unggulan</span>
+                        : <span className="px-2 py-0.5 bg-zinc-800 text-zinc-300 text-[10px] font-bold rounded-full">Bukan unggulan</span>
                       }
                       {(p.is_published as boolean)
                         ? <span className="px-2 py-0.5 bg-green-500 text-white text-[10px] font-bold rounded-full flex items-center gap-1"><Eye className="w-3 h-3" /> Live</span>
-                        : <span className="px-2 py-0.5 bg-zinc-500 text-white text-[10px] font-bold rounded-full flex items-center gap-1"><EyeOff className="w-3 h-3" /> Draft</span>
+                        : <span className="px-2 py-0.5 bg-zinc-500 text-white text-[10px] font-bold rounded-full flex items-center gap-1"><EyeOff className="w-3 h-3" /> Draf</span>
                       }
                     </div>
                   </div>
@@ -299,8 +299,8 @@ export default function ShowcaseManagement() {
                     <div className="flex items-center justify-between mt-3 pt-3 border-t border-zinc-100">
                       <span className="text-xs text-zinc-400 flex items-center gap-1"><GripVertical className="w-3 h-3" /> #{p.sort_order as number}</span>
                       <div className="flex gap-2">
-                        <button onClick={() => openPortfolioModal(p)} className="text-xs text-zinc-500 hover:text-zinc-900 font-medium">Edit</button>
-                        <button onClick={() => removePortfolio(p.id as number)} className="text-xs text-red-500 hover:text-red-700 font-medium">Delete</button>
+                        <button onClick={() => openPortfolioModal(p)} className="text-xs text-zinc-500 hover:text-zinc-900 font-medium">Ubah</button>
+                        <button onClick={() => removePortfolio(p.id as number)} className="text-xs text-red-500 hover:text-red-700 font-medium">Hapus</button>
                       </div>
                     </div>
                   </div>
@@ -333,11 +333,11 @@ export default function ShowcaseManagement() {
                   <thead className="bg-zinc-50 border-b border-zinc-200">
                     <tr>
                       <th className="px-6 py-4 font-medium text-zinc-500 uppercase tracking-wider text-xs">Logo</th>
-                      <th className="px-6 py-4 font-medium text-zinc-500 uppercase tracking-wider text-xs">Name</th>
+                      <th className="px-6 py-4 font-medium text-zinc-500 uppercase tracking-wider text-xs">Nama</th>
                       <th className="px-6 py-4 font-medium text-zinc-500 uppercase tracking-wider text-xs">Website</th>
-                      <th className="px-6 py-4 font-medium text-zinc-500 uppercase tracking-wider text-xs">Order</th>
+                      <th className="px-6 py-4 font-medium text-zinc-500 uppercase tracking-wider text-xs">Urutan</th>
                       <th className="px-6 py-4 font-medium text-zinc-500 uppercase tracking-wider text-xs">Status</th>
-                      <th className="px-6 py-4 font-medium text-zinc-500 uppercase tracking-wider text-xs text-right">Actions</th>
+                      <th className="px-6 py-4 font-medium text-zinc-500 uppercase tracking-wider text-xs text-right">Aksi</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-100">
@@ -360,14 +360,14 @@ export default function ShowcaseManagement() {
                         <td className="px-6 py-4 text-zinc-500">{c.sort_order}</td>
                         <td className="px-6 py-4">
                           {c.is_published
-                            ? <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded-full">Published</span>
-                            : <span className="px-2 py-0.5 bg-zinc-100 text-zinc-500 text-xs font-medium rounded-full">Draft</span>
+                            ? <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded-full">Terbit</span>
+                            : <span className="px-2 py-0.5 bg-zinc-100 text-zinc-500 text-xs font-medium rounded-full">Draf</span>
                           }
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex justify-end gap-2">
-                            <button onClick={() => openClientModal(c)} className="text-xs text-zinc-500 hover:text-zinc-900 font-medium">Edit</button>
-                            <button onClick={() => removeClient(c.id)} className="text-xs text-red-500 hover:text-red-700 font-medium">Delete</button>
+                            <button onClick={() => openClientModal(c)} className="text-xs text-zinc-500 hover:text-zinc-900 font-medium">Ubah</button>
+                            <button onClick={() => removeClient(c.id)} className="text-xs text-red-500 hover:text-red-700 font-medium">Hapus</button>
                           </div>
                         </td>
                       </tr>
@@ -400,7 +400,7 @@ export default function ShowcaseManagement() {
 
               {/* Description */}
               <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">Description</label>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">Deskripsi</label>
                 <textarea rows={3} value={portfolioForm.description} onChange={e => setPortfolioForm(f => ({ ...f, description: e.target.value }))}
                   className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none" />
               </div>
@@ -418,7 +418,7 @@ export default function ShowcaseManagement() {
                     onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(f, setUploadingVideo, url => setPortfolioForm(prev => ({ ...prev, video_url: url }))); }} />
                 </label>
                 {!portfolioForm.video_url && (
-                  <input type="url" placeholder="Or paste video URL" value={portfolioForm.video_url} onChange={e => setPortfolioForm(f => ({ ...f, video_url: e.target.value }))}
+                  <input type="url" placeholder="Atau tempel URL video" value={portfolioForm.video_url} onChange={e => setPortfolioForm(f => ({ ...f, video_url: e.target.value }))}
                     className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm mt-2 focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none" />
                 )}
               </div>
@@ -431,7 +431,7 @@ export default function ShowcaseManagement() {
                 )}
                 <label className="flex items-center gap-2 px-4 py-2 border border-dashed border-zinc-300 rounded-lg cursor-pointer hover:border-zinc-400 transition-colors text-sm text-zinc-600">
                   {uploadingThumb ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                  {uploadingThumb ? 'Uploading...' : 'Upload Thumbnail'}
+                  {uploadingThumb ? 'Mengunggah…' : 'Unggah thumbnail'}
                   <input type="file" accept="image/*" className="hidden" disabled={uploadingThumb}
                     onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(f, setUploadingThumb, url => setPortfolioForm(prev => ({ ...prev, thumbnail_url: url }))); }} />
                 </label>
@@ -440,12 +440,12 @@ export default function ShowcaseManagement() {
               {/* Client name + Category */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700 mb-1">Client Name</label>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">Nama klien</label>
                   <input type="text" value={portfolioForm.client_name} onChange={e => setPortfolioForm(f => ({ ...f, client_name: e.target.value }))}
                     className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700 mb-1">Category</label>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">Kategori</label>
                   <input type="text" placeholder="e.g. Landing Page, POS, E-Commerce" value={portfolioForm.category} onChange={e => setPortfolioForm(f => ({ ...f, category: e.target.value }))}
                     className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none" />
                 </div>
@@ -479,7 +479,7 @@ export default function ShowcaseManagement() {
               {/* Sort + Publish + Featured */}
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700 mb-1">Sort Order</label>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">Urutan</label>
                   <input type="number" value={portfolioForm.sort_order} onChange={e => setPortfolioForm(f => ({ ...f, sort_order: parseInt(e.target.value) || 0 }))}
                     className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none" />
                 </div>
@@ -487,29 +487,29 @@ export default function ShowcaseManagement() {
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" checked={portfolioForm.is_published} onChange={e => setPortfolioForm(f => ({ ...f, is_published: e.target.checked }))}
                       className="w-4 h-4 rounded border-zinc-300 text-yellow-500 focus:ring-yellow-400" />
-                    <span className="text-sm font-medium text-zinc-700">Published</span>
+                    <span className="text-sm font-medium text-zinc-700">Terbit</span>
                   </label>
                 </div>
                 <div className="flex items-end pb-1">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" checked={portfolioForm.is_featured} onChange={e => setPortfolioForm(f => ({ ...f, is_featured: e.target.checked }))}
                       className="w-4 h-4 rounded border-zinc-300 text-yellow-500 focus:ring-yellow-400" />
-                    <span className="text-sm font-medium text-zinc-700 flex items-center gap-1"><Star className="w-3.5 h-3.5 text-yellow-500" /> Featured</span>
+                    <span className="text-sm font-medium text-zinc-700 flex items-center gap-1"><Star className="w-3.5 h-3.5 text-yellow-500" /> Unggulan</span>
                   </label>
                 </div>
               </div>
 
               <div className="p-3 rounded-lg bg-yellow-50 border border-yellow-200 text-xs text-yellow-800 flex items-start gap-2">
                 <Star className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-yellow-600" />
-                <span><strong>Featured</strong> wajib diaktifkan agar portfolio tampil di halaman landing publik. Item yang tidak Featured hanya tersimpan sebagai arsip.</span>
+                <span><strong>Unggulan</strong> wajib diaktifkan agar portfolio tampil di halaman landing publik. Item yang tidak Featured hanya tersimpan sebagai arsip.</span>
               </div>
 
               {/* Actions */}
               <div className="pt-4 border-t border-zinc-100 flex justify-end gap-3">
                 <button type="button" onClick={() => { setPortfolioModalOpen(false); setEditingPortfolioId(null); setPortfolioForm(INITIAL_PORTFOLIO); }}
-                  className="px-4 py-2 text-sm font-medium text-zinc-500 hover:bg-zinc-100 rounded-lg transition-colors">Cancel</button>
+                  className="px-4 py-2 text-sm font-medium text-zinc-500 hover:bg-zinc-100 rounded-lg transition-colors">Batal</button>
                 <button type="submit" className="px-6 py-2 bg-zinc-900 text-white text-sm font-bold rounded-lg hover:bg-zinc-800 transition-colors flex items-center gap-2">
-                  <Save className="w-4 h-4" /> {editingPortfolioId ? 'Save Changes' : 'Create'}
+                  <Save className="w-4 h-4" /> {editingPortfolioId ? 'Save Changes' : 'Buat'}
                 </button>
               </div>
             </form>
@@ -543,7 +543,7 @@ export default function ShowcaseManagement() {
                 )}
                 <label className="flex items-center gap-2 px-4 py-2 border border-dashed border-zinc-300 rounded-lg cursor-pointer hover:border-zinc-400 transition-colors text-sm text-zinc-600">
                   {uploadingLogo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                  {uploadingLogo ? 'Uploading...' : 'Upload Logo (jpg, png, svg, webp)'}
+                  {uploadingLogo ? 'Mengunggah…' : 'Unggah logo (jpg, png, svg, webp)'}
                   <input type="file" accept="image/*" className="hidden" disabled={uploadingLogo}
                     onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(f, setUploadingLogo, url => setClientForm(prev => ({ ...prev, logo_url: url }))); }} />
                 </label>
@@ -551,7 +551,7 @@ export default function ShowcaseManagement() {
 
               {/* Website */}
               <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1">Website URL</label>
+                <label className="block text-sm font-medium text-zinc-700 mb-1">URL situs</label>
                 <input type="url" placeholder="https://example.com" value={clientForm.website_url ?? ''} onChange={e => setClientForm(f => ({ ...f, website_url: e.target.value }))}
                   className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none" />
               </div>
@@ -559,7 +559,7 @@ export default function ShowcaseManagement() {
               {/* Sort + Publish */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700 mb-1">Sort Order</label>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">Urutan</label>
                   <input type="number" value={clientForm.sort_order} onChange={e => setClientForm(f => ({ ...f, sort_order: parseInt(e.target.value) || 0 }))}
                     className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none" />
                 </div>
@@ -567,7 +567,7 @@ export default function ShowcaseManagement() {
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" checked={clientForm.is_published} onChange={e => setClientForm(f => ({ ...f, is_published: e.target.checked }))}
                       className="w-4 h-4 rounded border-zinc-300 text-yellow-500 focus:ring-yellow-400" />
-                    <span className="text-sm font-medium text-zinc-700">Published</span>
+                    <span className="text-sm font-medium text-zinc-700">Terbit</span>
                   </label>
                 </div>
               </div>
@@ -575,9 +575,9 @@ export default function ShowcaseManagement() {
               {/* Actions */}
               <div className="pt-4 border-t border-zinc-100 flex justify-end gap-3">
                 <button type="button" onClick={() => { setClientModalOpen(false); setEditingClientId(null); setClientForm(INITIAL_CLIENT); }}
-                  className="px-4 py-2 text-sm font-medium text-zinc-500 hover:bg-zinc-100 rounded-lg transition-colors">Cancel</button>
+                  className="px-4 py-2 text-sm font-medium text-zinc-500 hover:bg-zinc-100 rounded-lg transition-colors">Batal</button>
                 <button type="submit" className="px-6 py-2 bg-zinc-900 text-white text-sm font-bold rounded-lg hover:bg-zinc-800 transition-colors flex items-center gap-2">
-                  <Save className="w-4 h-4" /> {editingClientId ? 'Save Changes' : 'Create'}
+                  <Save className="w-4 h-4" /> {editingClientId ? 'Save Changes' : 'Buat'}
                 </button>
               </div>
             </form>

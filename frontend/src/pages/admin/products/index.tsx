@@ -85,13 +85,13 @@ export default function AdminProducts() {
         <table className="w-full text-sm">
           <thead className="bg-zinc-50 text-zinc-600">
             <tr>
-              <th className="text-left font-semibold px-4 py-3">Name</th>
-              <th className="text-left font-semibold px-4 py-3">Category</th>
-              <th className="text-left font-semibold px-4 py-3">Type</th>
-              <th className="text-left font-semibold px-4 py-3">Price</th>
+              <th className="text-left font-semibold px-4 py-3">Nama</th>
+              <th className="text-left font-semibold px-4 py-3">Kategori</th>
+              <th className="text-left font-semibold px-4 py-3">Tipe</th>
+              <th className="text-left font-semibold px-4 py-3">Harga</th>
               <th className="text-left font-semibold px-4 py-3">Status</th>
               <th className="text-left font-semibold px-4 py-3">Downloads</th>
-              <th className="text-left font-semibold px-4 py-3">Actions</th>
+              <th className="text-left font-semibold px-4 py-3">Aksi</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-100">
@@ -119,7 +119,7 @@ export default function AdminProducts() {
                   <td className="px-4 py-3 text-zinc-600">Rp {Number(item.price || 0).toLocaleString('id-ID')}</td>
                   <td className="px-4 py-3">
                     <span className={`px-2 py-1 rounded-full text-xs font-semibold ${item.is_published ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-100 text-zinc-600'}`}>
-                      {item.is_published ? 'Published' : 'Draft'}
+                      {item.is_published ? 'Terbit' : 'Draf'}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-zinc-600">{item.total_downloads || 0}</td>

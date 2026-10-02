@@ -497,8 +497,8 @@ export default function AdminProductEdit() {
                 onChange={(event) => setForm((prev) => ({ ...prev, type: event.target.value }))}
                 className="mt-2 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm"
               >
-                <option value="free">Free</option>
-                <option value="paid">Paid</option>
+                <option value="free">Gratis</option>
+                <option value="paid">Berbayar</option>
                 <option value="subscription_locked">Subscription Locked</option>
               </select>
             </label>
@@ -635,7 +635,7 @@ export default function AdminProductEdit() {
 
       {activeTab === 'files' && (
         <div className="bg-white border border-zinc-200 rounded-2xl p-6 space-y-5">
-          <div className="text-sm text-zinc-600 font-semibold">Upload File</div>
+          <div className="text-sm text-zinc-600 font-semibold">Unggah file</div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <input
               placeholder="Label"

@@ -522,7 +522,7 @@ export default function AppManagement() {
           { label: 'Aplikasi aktif', value: totals.activeApps, icon: Rocket, tone: 'amber' },
           { label: 'Plan aktif', value: totals.activePlans, icon: Wallet, tone: 'emerald' },
           { label: 'Promo berjalan', value: totals.activePromos, icon: Tag, tone: 'sky' },
-          { label: 'Total subscription', value: totals.subscriptions, icon: ShoppingCart, tone: 'violet' },
+          { label: 'Total langganan', value: totals.subscriptions, icon: ShoppingCart, tone: 'violet' },
         ].map((item) => (
           <div key={item.label} className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
             <div className="flex items-center gap-3">
@@ -593,7 +593,7 @@ export default function AppManagement() {
                       'rounded-full px-3 py-1 text-xs font-semibold',
                       plan.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-200 text-zinc-600'
                     )}>
-                      {plan.is_active ? 'Active' : 'Inactive'}
+                      {plan.is_active ? 'Aktif' : 'Nonaktif'}
                     </span>
                   </div>
                 </div>
@@ -651,7 +651,7 @@ export default function AppManagement() {
         <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
           <div className="mb-5 flex items-center justify-between gap-4">
             <div>
-              <h2 className="text-xl font-bold text-zinc-950">Promo campaigns</h2>
+              <h2 className="text-xl font-bold text-zinc-950">Kampanye promo</h2>
               <p className="mt-1 text-sm text-zinc-500">Diskon sekarang benar-benar tersambung ke endpoint promo admin dan siap divalidasi saat checkout.</p>
             </div>
             <button
@@ -681,7 +681,7 @@ export default function AppManagement() {
                       'rounded-full px-3 py-1 text-xs font-semibold',
                       promo.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-200 text-zinc-600'
                     )}>
-                      {promo.is_active ? 'Active' : 'Inactive'}
+                      {promo.is_active ? 'Aktif' : 'Nonaktif'}
                     </span>
                   </div>
 
@@ -706,7 +706,7 @@ export default function AppManagement() {
                     </span>
                     <span className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1">
                       <CalendarDays className="h-3.5 w-3.5" />
-                      {promo.starts_at ? toDateInput(promo.starts_at) : 'Now'} - {promo.ends_at ? toDateInput(promo.ends_at) : 'No end'}
+                      {promo.starts_at ? toDateInput(promo.starts_at) : 'Now'} - {promo.ends_at ? toDateInput(promo.ends_at) : 'Tanpa batas'}
                     </span>
                   </div>
 
@@ -743,7 +743,7 @@ export default function AppManagement() {
       <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
         <div className="mb-5 flex items-center justify-between gap-4">
           <div>
-            <h2 className="text-xl font-bold text-zinc-950">App catalog status</h2>
+            <h2 className="text-xl font-bold text-zinc-950">Status katalog aplikasi</h2>
             <p className="mt-1 text-sm text-zinc-500">Aktif/nonaktifkan akses app yang tampil di dashboard member dan checkout funnel.</p>
           </div>
         </div>
@@ -765,7 +765,7 @@ export default function AppManagement() {
                   'rounded-full px-3 py-1 text-xs font-semibold',
                   app.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-200 text-zinc-600'
                 )}>
-                  {app.is_active ? 'Visible' : 'Hidden'}
+                  {app.is_active ? 'Tampil' : 'Disembunyikan'}
                 </span>
               </div>
 
@@ -796,7 +796,7 @@ export default function AppManagement() {
           <div className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-zinc-200 bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-4">
               <div>
-                <h3 className="text-xl font-bold text-zinc-950">{editingPlanId ? 'Edit plan' : 'Tambah plan'}</h3>
+                <h3 className="text-xl font-bold text-zinc-950">{editingPlanId ? 'Ubah paket' : 'Tambah plan'}</h3>
                 <p className="text-sm text-zinc-500">Atur harga aplikasi untuk checkout dan auto-renew.</p>
               </div>
               <button onClick={resetPlanModal} className="rounded-2xl p-2 text-zinc-500 transition hover:bg-zinc-100">
@@ -807,7 +807,7 @@ export default function AppManagement() {
             <form onSubmit={handlePlanSubmit} className="space-y-5 px-6 py-5">
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="space-y-2 text-sm">
-                  <span className="font-medium text-zinc-700">Plan slug</span>
+                  <span className="font-medium text-zinc-700">Slug paket</span>
                   <input
                     value={planForm.slug}
                     onChange={(event) => setPlanForm((current) => ({ ...current, slug: event.target.value }))}
@@ -841,7 +841,7 @@ export default function AppManagement() {
                     className="w-full rounded-2xl border border-zinc-300 px-4 py-3 text-zinc-900 outline-none transition focus:border-amber-400"
                   >
                     <option value="subscription">Subscription</option>
-                    <option value="free">Free</option>
+                    <option value="free">Gratis</option>
                     <option value="one_time">One time</option>
                     <option value="lifetime">Lifetime</option>
                   </select>
@@ -961,7 +961,7 @@ export default function AppManagement() {
                 <div className="grid gap-2">
                   <label className="flex items-center justify-between rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3">
                     <div>
-                      <p className="text-sm font-semibold text-zinc-900">Recommended</p>
+                      <p className="text-sm font-semibold text-zinc-900">Direkomendasikan</p>
                       <p className="text-xs text-zinc-500">Tampilkan badge biru di checkout.</p>
                     </div>
                     <input
@@ -1021,7 +1021,7 @@ export default function AppManagement() {
           <div className="w-full max-w-2xl rounded-3xl border border-zinc-200 bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-4">
               <div>
-                <h3 className="text-xl font-bold text-zinc-950">{editingPromoId ? 'Edit promo' : 'Tambah promo'}</h3>
+                <h3 className="text-xl font-bold text-zinc-950">{editingPromoId ? 'Ubah promo' : 'Tambah promo'}</h3>
                 <p className="text-sm text-zinc-500">Promo ini akan dipakai untuk validasi diskon saat checkout subscription.</p>
               </div>
               <button onClick={resetPromoModal} className="rounded-2xl p-2 text-zinc-500 transition hover:bg-zinc-100">

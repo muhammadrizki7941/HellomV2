@@ -74,13 +74,13 @@ export default function AdminProductPurchases() {
         <table className="w-full text-sm">
           <thead className="bg-zinc-50 text-zinc-600">
             <tr>
-              <th className="text-left font-semibold px-4 py-3">User</th>
+              <th className="text-left font-semibold px-4 py-3">Pembeli</th>
               <th className="text-left font-semibold px-4 py-3">Produk</th>
-              <th className="text-left font-semibold px-4 py-3">Amount</th>
+              <th className="text-left font-semibold px-4 py-3">Nominal</th>
               <th className="text-left font-semibold px-4 py-3">Metode</th>
               <th className="text-left font-semibold px-4 py-3">Status</th>
               <th className="text-left font-semibold px-4 py-3">Tanggal</th>
-              <th className="text-left font-semibold px-4 py-3">Actions</th>
+              <th className="text-left font-semibold px-4 py-3">Aksi</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-100">

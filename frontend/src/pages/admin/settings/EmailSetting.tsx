@@ -177,7 +177,7 @@ export default function EmailSetting() {
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       <div>
-        <h1 className="text-2xl font-bold text-zinc-900">Email Settings</h1>
+        <h1 className="text-2xl font-bold text-zinc-900">Pengaturan Email</h1>
         <p className="text-zinc-500">Konfigurasi SMTP untuk notifikasi email owner.</p>
       </div>
 
@@ -223,7 +223,7 @@ export default function EmailSetting() {
                 onChange={(e) => setForm({ ...form, enabled: e.target.checked })}
                 className="w-4 h-4 text-green-600 rounded border-zinc-300 focus:ring-green-500"
               />
-              <span className="text-sm font-medium text-zinc-700">Enable Email Notifications</span>
+              <span className="text-sm font-medium text-zinc-700">Aktifkan email notifikasi</span>
             </label>
 
             <div>
@@ -310,7 +310,7 @@ export default function EmailSetting() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-2">From Name</label>
+              <label className="block text-sm font-medium text-zinc-700 mb-2">Nama pengirim</label>
               <input
                 type="text"
                 value={form.from_name}
@@ -332,7 +332,7 @@ export default function EmailSetting() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-2">Reply To Name</label>
+              <label className="block text-sm font-medium text-zinc-700 mb-2">Nama balasan (Reply-To)</label>
               <input
                 type="text"
                 value={form.reply_to_name}
@@ -367,7 +367,7 @@ export default function EmailSetting() {
             <Send className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="font-bold text-zinc-900">Test Email</h3>
+            <h3 className="font-bold text-zinc-900">Kirim email tes</h3>
             <p className="text-sm text-zinc-500">Kirim email test untuk memastikan konfigurasi benar.</p>
           </div>
         </div>
