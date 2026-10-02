@@ -50,7 +50,7 @@ abstract class AdminTestCase extends PosTestCase
         $plain = Str::random(40);
         ApiToken::query()->create(['user_id' => $user->id, 'name' => 'test', 'token_hash' => hash('sha256', $plain)]);
 
-        return $this->withHeaders(['Authorization' => 'Bearer ' . $plain, 'Accept' => 'application/json'])
+        return $this->flushHeaders()->withHeaders(['Authorization' => 'Bearer ' . $plain, 'Accept' => 'application/json'])
             ->json($method, '/api/v1/hellom' . $uri, $body);
     }
 }

@@ -378,14 +378,16 @@ export default function AppManagement() {
   };
 
   const handleDeletePlan = async (plan: AdminPlanItem) => {
-    if (!window.confirm(`Hapus plan ${plan.name}?`)) return;
+    if (!window.confirm(`Hapus paket ${plan.name}? Paket yang sudah punya riwayat langganan akan diarsipkan, bukan dihapus.`)) return;
 
     setSaving(true);
     setErrorMessage(null);
     setSuccessMessage(null);
     try {
-      await deleteAdminPlan(plan.id);
-      setSuccessMessage(`Plan "${plan.name}" berhasil dihapus.`);
+      const result = await deleteAdminPlan(plan.id);
+      setSuccessMessage(result.archived
+        ? `Paket "${plan.name}" diarsipkan karena sudah punya riwayat langganan.`
+        : `Paket "${plan.name}" berhasil dihapus.`);
       await loadData();
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Gagal menghapus plan');

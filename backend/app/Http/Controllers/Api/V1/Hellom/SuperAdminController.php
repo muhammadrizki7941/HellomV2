@@ -404,14 +404,59 @@ class SuperAdminController extends BaseApiController
             return $this->fail('User not found', ['code' => 'NOT_FOUND'], 404);
         }
 
+        if ($blocked = $this->deleteUserBlocker($request, $user)) {
+            return $this->fail($blocked['message'], ['code' => $blocked['code']], 422);
+        }
+
         DB::transaction(function () use ($user) {
             $user->organizations()->detach();
             $user->delete();
         });
 
-        $this->audit($request, 'user.delete', 'User', $userId);
+        $this->audit($request, 'user.delete', 'User', $userId, ['email' => $user->email, 'role' => $user->role]);
 
-        return $this->ok(['id' => $userId], 'User deleted');
+        return $this->ok(['id' => $userId], 'User dihapus');
+    }
+
+    /**
+     * Deleting a user cascades (FK) to checkout intents, digital purchases and the user
+     * wallet ledger, so accounts with any money history are suspended instead; platform
+     * admins and the only owner of an organization are never deleted.
+     *
+     * @return array{code: string, message: string}|null
+     */
+    private function deleteUserBlocker(Request $request, User $user): ?array
+    {
+        if ((int) $user->id === (int) $request->user()?->id) {
+            return ['code' => 'CANNOT_DELETE_SELF', 'message' => 'Kamu tidak bisa menghapus akunmu sendiri.'];
+        }
+        if ((string) $user->role === 'super_admin') {
+            return ['code' => 'CANNOT_DELETE_SUPER_ADMIN', 'message' => 'Akun super admin tidak bisa dihapus. Ubah dulu perannya atau suspend akunnya.'];
+        }
+
+        $soleOwnerOf = DB::table('organization_user as mine')
+            ->where('mine.user_id', $user->id)
+            ->where('mine.role', 'owner')
+            ->whereNotExists(function ($query) use ($user) {
+                $query->from('organization_user as other')
+                    ->whereColumn('other.organization_id', 'mine.organization_id')
+                    ->where('other.role', 'owner')
+                    ->where('other.user_id', '!=', $user->id);
+            })
+            ->count();
+        if ($soleOwnerOf > 0) {
+            return ['code' => 'USER_IS_SOLE_OWNER', 'message' => 'User ini satu-satunya pemilik organisasi. Suspend akunnya, atau tambahkan pemilik lain dulu.'];
+        }
+
+        $hasMoneyHistory = DB::table('checkout_intents')->where('user_id', $user->id)->exists()
+            || DB::table('product_purchases')->where('user_id', $user->id)->exists()
+            || DB::table('user_wallet_ledgers')->where('user_id', $user->id)->exists()
+            || DB::table('promo_redemptions')->where('user_id', $user->id)->exists();
+        if ($hasMoneyHistory) {
+            return ['code' => 'USER_HAS_PAYMENT_HISTORY', 'message' => 'User ini punya riwayat pembayaran/saldo yang harus disimpan. Suspend akunnya sebagai gantinya.'];
+        }
+
+        return null;
     }
 
     public function updateUserAppAccess(Request $request, int $userId): JsonResponse
@@ -630,26 +675,25 @@ class SuperAdminController extends BaseApiController
             return $this->fail('Plan not found', ['code' => 'NOT_FOUND'], 404);
         }
 
-        // Check if plan has active subscriptions
-        $activeSubscriptions = Subscription::query()
-            ->where('plan_id', $planId)
-            ->where('status', 'active')
-            ->count();
+        // subscriptions/checkout_intents cascade on plan delete: a plan with any billing
+        // history is archived instead, so payment records are never lost.
+        $hasHistory = Subscription::query()->where('plan_id', $planId)->exists()
+            || DB::table('checkout_intents')->where('plan_id', $planId)->exists()
+            || Entitlement::query()->where('plan_id', $planId)->exists();
 
-        if ($activeSubscriptions > 0) {
-            return $this->fail(
-                'Cannot delete plan with active subscriptions',
-                ['code' => 'PLAN_HAS_SUBSCRIPTIONS'],
-                422
-            );
+        if ($hasHistory) {
+            $old = $plan->only(['is_active', 'is_visible']);
+            $plan->update(['is_active' => false, 'is_visible' => false]);
+            $this->audit($request, 'plan.archive', 'Plan', $planId, $old, ['is_active' => false, 'is_visible' => false]);
+
+            return $this->ok(['id' => $planId, 'archived' => true], 'Paket sudah punya riwayat langganan/pembayaran, jadi diarsipkan (tidak tampil & tidak bisa dibeli), bukan dihapus.');
         }
 
-        $planIdOld = $plan->id;
         $plan->delete();
 
-        $this->audit($request, 'plan.delete', 'Plan', $planIdOld, null, ['deleted_plan_id' => $planIdOld]);
+        $this->audit($request, 'plan.delete', 'Plan', $planId, null, ['deleted_plan_id' => $planId]);
 
-        return $this->ok(null, __('hellom.plan_deleted'));
+        return $this->ok(['id' => $planId, 'archived' => false], __('hellom.plan_deleted'));
     }
 
     public function planSubscriptions(Request $request, int $planId): JsonResponse

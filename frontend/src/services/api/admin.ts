@@ -382,7 +382,8 @@ export function updateAdminPlan(planId: number, payload: Record<string, unknown>
 }
 
 export function deleteAdminPlan(planId: number) {
-  return apiRequest<Record<string, unknown>>(`/admin/plans/${planId}`, {
+  // Plans with billing history are archived (archived: true) instead of deleted.
+  return apiRequest<{ id: number; archived: boolean }>(`/admin/plans/${planId}`, {
     method: 'DELETE',
   });
 }
