@@ -58,11 +58,12 @@ class InvoiceController extends BaseApiController
     /** Admin: list all invoices across orgs. */
     public function adminIndex(Request $request): JsonResponse
     {
-        $limit = max(1, min((int) ($request->query('limit') ?: 50), 200));
+        $limit = max(1, min((int) ($request->query('limit') ?: 30), 100));
 
         $query = Invoice::query()
-            ->with('organization')
-            ->orderByDesc('issued_at');
+            ->with('organization:id,name,slug')
+            ->orderByDesc('issued_at')
+            ->orderByDesc('id');
 
         if ($request->filled('organization_id')) {
             $query->where('organization_id', (int) $request->query('organization_id'));
@@ -72,9 +73,26 @@ class InvoiceController extends BaseApiController
             $query->where('status', (string) $request->query('status'));
         }
 
-        $invoices = $query->limit($limit)->get();
+        $search = trim((string) $request->query('search', ''));
+        if ($search !== '') {
+            $like = '%' . addcslashes($search, '%_\\') . '%';
+            $query->where(function ($builder) use ($like) {
+                $builder->where('invoice_number', 'like', $like)
+                    ->orWhereHas('organization', fn ($org) => $org->where('name', 'like', $like));
+            });
+        }
 
-        return $this->ok(['items' => $invoices], 'All invoices');
+        $invoices = $query->paginate($limit);
+
+        return $this->ok([
+            'items' => $invoices->items(),
+            'pagination' => [
+                'total' => $invoices->total(),
+                'per_page' => $invoices->perPage(),
+                'current_page' => $invoices->currentPage(),
+                'last_page' => $invoices->lastPage(),
+            ],
+        ], 'Semua invoice');
     }
 
     // ─── Invoice Generation Helper ───

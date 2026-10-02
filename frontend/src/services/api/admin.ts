@@ -308,6 +308,14 @@ export function getAdminOrganizations(params?: { search?: string; status?: strin
   return apiRequest<{ items: AdminOrganizationListItem[]; pagination: AdminPagination }>(`/admin/organizations${buildQuery(params)}`);
 }
 
+export function suspendAdminOrganization(organizationId: number) {
+  return apiRequest<{ id: number; status: string }>(`/admin/organizations/${organizationId}/suspend`, { method: 'POST', body: {} });
+}
+
+export function reactivateAdminOrganization(organizationId: number) {
+  return apiRequest<{ id: number; status: string }>(`/admin/organizations/${organizationId}/reactivate`, { method: 'POST', body: {} });
+}
+
 export function getAdminUsers(params?: { search?: string; page?: number; limit?: number }) {
   return apiRequest<{ items: AdminUserListItem[]; pagination: AdminPagination }>(`/admin/users${buildQuery(params)}`);
 }
@@ -343,7 +351,16 @@ export function updateAdminUserAppAccess(userId: number, payload: Record<string,
   });
 }
 
-export function overrideEntitlement(payload: Record<string, unknown>) {
+export type EntitlementOverridePayload = {
+  organization_id: number;
+  app_slug: string;
+  status: 'active' | 'locked' | 'cancelled' | 'expired';
+  /** Required for status "active" unless lifetime is true. */
+  ends_at?: string;
+  lifetime?: boolean;
+};
+
+export function overrideEntitlement(payload: EntitlementOverridePayload) {
   return apiRequest<Record<string, unknown>>('/admin/entitlements/override', {
     method: 'POST',
     body: payload,
@@ -542,4 +559,42 @@ export function sendAdminMailTest(email: string) {
     method: 'POST',
     body: { email },
   });
+}
+
+// ─── Admin Audit Log & Invoices ───
+
+export type AdminAuditLogItem = {
+  id: number;
+  action: string;
+  entity_type: string | null;
+  entity_id: number | null;
+  old_values: Record<string, unknown> | null;
+  new_values: Record<string, unknown> | null;
+  metadata: Record<string, unknown> | null;
+  ip_address: string | null;
+  created_at: string;
+  user: { id: number; name: string; email: string } | null;
+  organization: { id: number; name: string; slug: string } | null;
+};
+
+export function getAdminAuditLogs(params?: { action?: string; organization_id?: number; page?: number; limit?: number }) {
+  return apiRequest<{ items: AdminAuditLogItem[]; pagination: AdminPagination }>(`/admin/audit-logs${buildQuery(params)}`);
+}
+
+export type AdminInvoiceItem = {
+  id: number;
+  invoice_number: string;
+  status: string;
+  amount: number;
+  tax: number;
+  total: number;
+  currency: string;
+  issued_at: string | null;
+  paid_at: string | null;
+  metadata: Record<string, unknown> | null;
+  organization: { id: number; name: string; slug: string } | null;
+};
+
+export function getAdminInvoices(params?: { search?: string; status?: string; organization_id?: number; page?: number; limit?: number }) {
+  return apiRequest<{ items: AdminInvoiceItem[]; pagination: AdminPagination }>(`/admin/invoices${buildQuery(params)}`);
 }

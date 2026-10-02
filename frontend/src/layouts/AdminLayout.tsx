@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Settings, LogOut,
-  Menu, X, ShieldCheck, ShieldAlert, Activity, Package, Wallet, Film, Palette, ShoppingBag, FileText
+  Menu, ShieldAlert, Activity, Package, Wallet, Film, Palette, ShoppingBag, FileText, Building2, ScrollText, Receipt
 } from 'lucide-react';
 import NotificationBell from '@/components/admin/NotificationBell';
 import { cn } from '@/lib/utils';
@@ -39,44 +39,27 @@ export default function AdminLayout() {
     });
   }, []);
 
+  // The API enforces super admin on every /admin endpoint; this only keeps others off the UI.
   useEffect(() => {
-    const syncSession = () => {
-      const sessionUser = getSessionUser<{ role?: string }>();
-      const hasToken = Boolean(getToken());
-
-      if (!hasToken || !sessionUser) {
+    const syncSession = (): boolean => {
+      const sessionUser = getSessionUser<{ name?: string; role?: string }>();
+      if (!getToken() || !sessionUser) {
         navigate('/login', { replace: true });
-        return;
+        return false;
       }
-
       if (sessionUser.role !== 'super_admin') {
         navigate('/dashboard', { replace: true });
+        return false;
       }
+      if (sessionUser.name) {
+        setAdminName(sessionUser.name);
+      }
+      return true;
     };
 
-    syncSession();
     window.addEventListener(getSessionEventName(), syncSession);
-
-    return () => {
-      window.removeEventListener(getSessionEventName(), syncSession);
-    };
-  }, [navigate]);
-
-  useEffect(() => {
-    const sessionUser = getSessionUser<{ name?: string; role?: string }>();
-    if (!sessionUser) {
-      navigate('/login', { replace: true });
-      return;
-    }
-
-    const isSuperAdmin = sessionUser.role === 'super_admin';
-    if (!isSuperAdmin) {
-      navigate('/dashboard', { replace: true });
-      return;
-    }
-
-    if (sessionUser?.name) {
-      setAdminName(sessionUser.name);
+    if (!syncSession()) {
+      return () => window.removeEventListener(getSessionEventName(), syncSession);
     }
 
     const loadOrgContext = async () => {
@@ -89,6 +72,8 @@ export default function AdminLayout() {
     };
 
     void loadOrgContext();
+
+    return () => window.removeEventListener(getSessionEventName(), syncSession);
   }, [navigate]);
 
   const handleSwitchOrganization = async (organizationId: number) => {
@@ -130,23 +115,33 @@ export default function AdminLayout() {
   };
 
   const menuItems = [
-    { icon: LayoutDashboard, label: 'Overview', path: '/admin' },
-    { icon: Users, label: 'User Management', path: '/admin/users' },
-    { icon: Package, label: 'App Management', path: '/admin/apps' },
-    { icon: Film, label: 'Showcase', path: '/admin/showcase' },
-    { icon: FileText, label: 'Landing Content', path: '/admin/landing-content' },
-    { icon: Palette, label: 'Brand Settings', path: '/admin/brand' },
-    { icon: Wallet, label: 'Finance', path: '/admin/finance' },
+    { icon: LayoutDashboard, label: 'Ringkasan', path: '/admin' },
+    { icon: Users, label: 'Pengguna', path: '/admin/users' },
+    { icon: Building2, label: 'Organisasi', path: '/admin/organizations' },
+    { icon: Package, label: 'Aplikasi & Paket', path: '/admin/apps' },
+    { icon: Receipt, label: 'Invoice', path: '/admin/invoices' },
+    { icon: Wallet, label: 'Keuangan Platform', path: '/admin/finance' },
     { icon: Wallet, label: 'Keuangan Penjual', path: '/admin/keuangan-penjual' },
     { icon: ShieldAlert, label: 'Moderasi Toko', path: '/admin/moderasi-toko' },
-    { icon: Activity, label: 'System Health', path: '/admin/system' },
-    { icon: Settings, label: 'Settings', path: '/admin/settings' },
+    { icon: Film, label: 'Showcase', path: '/admin/showcase' },
+    { icon: FileText, label: 'Konten Situs', path: '/admin/landing-content' },
+    { icon: Palette, label: 'Branding', path: '/admin/brand' },
+    { icon: ScrollText, label: 'Log Audit', path: '/admin/audit-log' },
+    { icon: Activity, label: 'Kesehatan Sistem', path: '/admin/system' },
+    { icon: Settings, label: 'Pengaturan', path: '/admin/settings' },
   ];
 
   const productMenuItems = [
-    { icon: ShoppingBag, label: 'Kelola Produk', path: '/admin/products' },
-    { icon: Package, label: 'Pembelian', path: '/admin/products/purchases' },
+    { icon: ShoppingBag, label: 'Kelola Produk', path: '/admin/products', exact: false },
+    { icon: Package, label: 'Pembelian', path: '/admin/products/purchases', exact: true },
   ];
+
+  // "/admin" only matches itself; other items also stay active on their sub-pages.
+  const isActivePath = (path: string, exact = path === '/admin') => {
+    if (exact) return location.pathname === path;
+    if (path === '/admin/products' && location.pathname.startsWith('/admin/products/purchases')) return false;
+    return location.pathname === path || location.pathname.startsWith(path + '/');
+  };
 
   const currentOrg = organizations.find((org) => org.id === currentOrgId) ?? null;
 
@@ -170,9 +165,9 @@ export default function AdminLayout() {
           <span className="font-bold text-lg tracking-tight">{brand?.app_name || BRAND_NAME} Admin</span>
         </div>
 
-        <nav className="p-4 space-y-1">
+        <nav className="p-4 space-y-1 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 8.5rem)' }}>
           {menuItems.map((item) => {
-            const isActive = location.pathname === item.path;
+            const isActive = isActivePath(item.path);
             return (
               <Link
                 key={item.path}
@@ -195,7 +190,7 @@ export default function AdminLayout() {
             Produk Digital
           </div>
           {productMenuItems.map((item) => {
-            const isActive = location.pathname === item.path;
+            const isActive = isActivePath(item.path, item.exact);
             return (
               <Link
                 key={item.path}
@@ -218,7 +213,7 @@ export default function AdminLayout() {
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-zinc-800">
           <button onClick={() => void handleLogout()} className="flex items-center gap-3 px-4 py-3 w-full text-zinc-400 hover:text-red-400 hover:bg-zinc-800 rounded-lg transition-colors">
             <LogOut className="w-5 h-5" />
-            Sign Out
+            Keluar
           </button>
         </div>
       </aside>
@@ -246,7 +241,7 @@ export default function AdminLayout() {
                   }}
                   disabled={switchingOrg}
                   className="hidden md:block rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm text-zinc-700 focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none disabled:opacity-60"
-                  title="Switch organization context"
+                  title="Ganti organisasi aktif"
                 >
                   {organizations.map((org) => (
                     <option key={org.id} value={org.id}>
@@ -267,7 +262,7 @@ export default function AdminLayout() {
 
         <div className="px-4 lg:px-8 py-3 border-b border-zinc-100 bg-yellow-50/70">
           <div className="text-xs sm:text-sm text-zinc-700 flex items-center gap-2">
-            <span className="font-semibold text-zinc-900">Context Organization:</span>
+            <span className="font-semibold text-zinc-900">Organisasi aktif:</span>
             <span className="font-medium">{currentOrg ? `${currentOrg.name} (${currentOrg.role})` : 'Belum ada organisasi aktif'}</span>
           </div>
         </div>

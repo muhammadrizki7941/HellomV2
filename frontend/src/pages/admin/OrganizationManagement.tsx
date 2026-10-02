@@ -1,209 +1,262 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Building2, Search, Eye, RefreshCw, CheckCircle } from 'lucide-react';
+import { Building2, Search, Eye, RefreshCw, Ban, CheckCircle, X, KeyRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getAdminOrganizations, getOrganizationDetail, overrideEntitlement, updateOrganizationOutletLimit } from '@/lib/hellomApi';
-
-type Organization = {
-  id: number;
-  name: string;
-  slug: string;
-  status: string;
-  users_count: number;
-  created_at: string;
-  max_outlets_override?: number | null;
-};
+import AdminPager from '@/components/admin/AdminPager';
+import {
+  getAdminOrganizations,
+  getOrganizationDetail,
+  overrideEntitlement,
+  reactivateAdminOrganization,
+  suspendAdminOrganization,
+  updateOrganizationOutletLimit,
+  type AdminOrganizationListItem,
+  type AdminPagination,
+} from '@/lib/hellomApi';
 
 type Entitlement = {
   id: number;
-  app: { id: number; name: string; slug: string };
-  plan: { id: number; name: string; slug: string };
+  app: { id: number; name: string; slug: string } | null;
+  plan: { id: number; name: string; slug: string } | null;
   status: string;
   starts_at: string | null;
   ends_at: string | null;
 };
 
-// Implemented in hellomApi.ts
+type AccessDraft = { appSlug: string; status: 'active' | 'locked'; endsAt: string; lifetime: boolean };
 
+const PER_PAGE = 20;
 
+const STATUS_LABEL: Record<string, string> = { active: 'Aktif', suspended: 'Disuspend' };
+const ENTITLEMENT_LABEL: Record<string, string> = { active: 'Aktif', locked: 'Dikunci', expired: 'Kedaluwarsa', cancelled: 'Dibatalkan', suspended: 'Disuspend', trialing: 'Uji coba' };
 
-
+const formatDate = (value: string | null) => (value ? new Date(value).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
+const inDays = (days: number) => new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
+const errorText = (error: unknown, fallback: string) => (error instanceof Error && error.message ? error.message : fallback);
 
 export default function OrganizationManagement() {
   const [searchParams] = useSearchParams();
-  const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [organizations, setOrganizations] = useState<AdminOrganizationListItem[]>([]);
+  const [pagination, setPagination] = useState<AdminPagination | null>(null);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
+  const [notice, setNotice] = useState<string | null>(null);
+  const [searchInput, setSearchInput] = useState(searchParams.get('search') || '');
+  const [search, setSearch] = useState(searchInput);
   const [statusFilter, setStatusFilter] = useState('all');
-  const [selectedOrg, setSelectedOrg] = useState<Organization | null>(null);
-  const [orgDetail, setOrgDetail] = useState<{ organization: Organization; entitlements: Entitlement[] } | null>(null);
+  const [busyOrgId, setBusyOrgId] = useState<number | null>(null);
+
+  const [selectedOrg, setSelectedOrg] = useState<AdminOrganizationListItem | null>(null);
+  const [entitlements, setEntitlements] = useState<Entitlement[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const [outletOverride, setOutletOverride] = useState('');
   const [outletSaving, setOutletSaving] = useState(false);
   const [outletMessage, setOutletMessage] = useState<string | null>(null);
+  const [accessDraft, setAccessDraft] = useState<AccessDraft | null>(null);
+  const [accessSaving, setAccessSaving] = useState(false);
 
-  const saveOutletOverride = async () => {
-    if (!orgDetail) return;
-    setOutletSaving(true);
-    setOutletMessage(null);
-    try {
-      const value = outletOverride.trim() === '' ? null : Math.max(1, Number(outletOverride));
-      await updateOrganizationOutletLimit(orgDetail.organization.id, value);
-      setOutletMessage(value === null ? 'Override dihapus — pakai batas paket.' : `Batas outlet di-set ke ${value}.`);
-    } catch (err) {
-      setOutletMessage(err instanceof Error ? err.message : 'Gagal menyimpan batas outlet');
-    } finally {
-      setOutletSaving(false);
-    }
-  };
+  // Search waits for the admin to stop typing instead of firing a request per key.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setSearch(searchInput.trim());
+      setPage(1);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
 
-  const loadOrganizations = async () => {
+  const loadOrganizations = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const result = await getAdminOrganizations({
-        limit: 50,
+        limit: PER_PAGE,
+        page,
         status: statusFilter === 'all' ? undefined : statusFilter,
-        search: searchTerm || undefined,
+        search: search || undefined,
       });
       setOrganizations(result.items || []);
+      setPagination(result.pagination ?? null);
     } catch (err) {
-      setError('Failed to load organizations');
+      setError(errorText(err, 'Gagal memuat daftar organisasi.'));
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, search, statusFilter]);
 
-  const loadOrgDetail = async (org: Organization) => {
+  useEffect(() => {
+    void loadOrganizations();
+  }, [loadOrganizations]);
+
+  const loadOrgDetail = async (org: AdminOrganizationListItem) => {
     setSelectedOrg(org);
     setDetailLoading(true);
+    setDetailError(null);
+    setAccessDraft(null);
+    setOutletMessage(null);
     try {
-      const result = await getOrganizationDetail(org.id) as { organization: Organization; entitlements: Entitlement[] };
-      setOrgDetail(result);
+      const result = await getOrganizationDetail(org.id) as { organization: AdminOrganizationListItem; entitlements: Entitlement[] };
+      setSelectedOrg(result.organization);
+      setEntitlements(result.entitlements || []);
       setOutletOverride(result.organization.max_outlets_override != null ? String(result.organization.max_outlets_override) : '');
-      setOutletMessage(null);
     } catch (err) {
-      setError('Failed to load organization detail');
+      setDetailError(errorText(err, 'Gagal memuat detail organisasi.'));
     } finally {
       setDetailLoading(false);
     }
   };
 
-  const handleBypass = async (orgId: number, appSlug: string) => {
+  const toggleSuspend = async (org: AdminOrganizationListItem) => {
+    const suspending = org.status === 'active';
+    const question = suspending
+      ? `Suspend "${org.name}"? Semua anggotanya tidak bisa memakai POS dan aplikasi berbayar sampai diaktifkan lagi.`
+      : `Aktifkan lagi "${org.name}"?`;
+    if (!window.confirm(question)) return;
+
+    setBusyOrgId(org.id);
+    setError(null);
     try {
-      await overrideEntitlement({ organization_id: orgId, app_slug: appSlug, status: 'active' });
-      // Reload detail
-      if (selectedOrg) await loadOrgDetail(selectedOrg);
+      if (suspending) await suspendAdminOrganization(org.id);
+      else await reactivateAdminOrganization(org.id);
+      setNotice(suspending ? `"${org.name}" disuspend.` : `"${org.name}" aktif lagi.`);
+      await loadOrganizations();
+      if (selectedOrg?.id === org.id) setSelectedOrg({ ...org, status: suspending ? 'suspended' : 'active' });
     } catch (err) {
-      setError('Failed to bypass entitlement');
+      setError(errorText(err, 'Gagal mengubah status organisasi.'));
+    } finally {
+      setBusyOrgId(null);
     }
   };
 
-  useEffect(() => {
-    void loadOrganizations();
-  }, [searchTerm, statusFilter]);
+  const saveOutletOverride = async () => {
+    if (!selectedOrg) return;
+    setOutletSaving(true);
+    setOutletMessage(null);
+    try {
+      const value = outletOverride.trim() === '' ? null : Math.max(1, Number(outletOverride));
+      await updateOrganizationOutletLimit(selectedOrg.id, value);
+      setOutletMessage(value === null ? 'Override dihapus — memakai batas paket.' : `Batas outlet diatur ke ${value}.`);
+    } catch (err) {
+      setOutletMessage(errorText(err, 'Gagal menyimpan batas outlet.'));
+    } finally {
+      setOutletSaving(false);
+    }
+  };
+
+  const saveAccess = async () => {
+    if (!selectedOrg || !accessDraft) return;
+    if (accessDraft.status === 'active' && !accessDraft.lifetime && !accessDraft.endsAt) {
+      setDetailError('Isi tanggal berakhir akses, atau centang "Seumur hidup".');
+      return;
+    }
+    setAccessSaving(true);
+    setDetailError(null);
+    try {
+      await overrideEntitlement({
+        organization_id: selectedOrg.id,
+        app_slug: accessDraft.appSlug,
+        status: accessDraft.status,
+        ...(accessDraft.status === 'active' ? (accessDraft.lifetime ? { lifetime: true } : { ends_at: accessDraft.endsAt }) : {}),
+      });
+      setAccessDraft(null);
+      await loadOrgDetail(selectedOrg);
+    } catch (err) {
+      setDetailError(errorText(err, 'Gagal mengubah akses aplikasi.'));
+    } finally {
+      setAccessSaving(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-zinc-900">Organization Management</h1>
-        <p className="text-zinc-600 mt-1">Manage organizations and their app entitlements</p>
+        <h1 className="text-2xl font-bold text-zinc-900">Organisasi</h1>
+        <p className="mt-1 text-zinc-600">Semua toko/bisnis di Hellom: status, akses aplikasi, dan batas outlet.</p>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-4">
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-400 w-4 h-4" />
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
           <input
-            type="text"
-            placeholder="Search organizations..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            type="search"
+            placeholder="Cari nama atau slug organisasi…"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            className="w-full rounded-lg border border-zinc-200 py-2 pl-10 pr-4 outline-none focus:border-transparent focus:ring-2 focus:ring-yellow-400"
           />
         </div>
         <select
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-4 py-2 border border-zinc-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
+          className="rounded-lg border border-zinc-200 px-4 py-2 outline-none focus:ring-2 focus:ring-yellow-400"
         >
-          <option value="all">All Status</option>
-          <option value="active">Active</option>
-          <option value="suspended">Suspended</option>
+          <option value="all">Semua status</option>
+          <option value="active">Aktif</option>
+          <option value="suspended">Disuspend</option>
         </select>
         <button
           onClick={() => void loadOrganizations()}
-          className="px-4 py-2 bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors"
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-zinc-100 px-4 py-2 text-sm font-medium transition-colors hover:bg-zinc-200"
+          title="Muat ulang"
         >
-          <RefreshCw className="w-4 h-4" />
+          <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} /> <span className="sm:hidden">Muat ulang</span>
         </button>
       </div>
 
-      {error && (
-        <div className="p-3 rounded-lg bg-red-50 border border-red-100 text-sm text-red-600">
-          {error}
-        </div>
-      )}
+      {error && <div className="rounded-lg border border-red-100 bg-red-50 p-3 text-sm text-red-600">{error}</div>}
+      {notice && !error && <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-700">{notice}</div>}
 
-      {/* Organizations List */}
-      <div className="bg-white border border-zinc-200 rounded-xl overflow-hidden">
+      <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-zinc-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Organization</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Users</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Created</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Actions</th>
+                {['Organisasi', 'Status', 'Anggota', 'Dibuat', 'Aksi'].map((label) => (
+                  <th key={label} className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-500">{label}</th>
+                ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-200">
-          {loading ? (
-            <tr>
-              <td colSpan={5} className="px-6 py-4 text-center text-zinc-500">Loading...</td>
-            </tr>
-          ) : organizations.length === 0 ? (
-            <tr>
-              <td colSpan={5} className="px-6 py-12 text-center text-zinc-500">
-              No organizations found. Make sure users have registered and organizations exist.
-            </td>
-            </tr>
-          ) : (
+              {loading && organizations.length === 0 ? (
+                <tr><td colSpan={5} className="px-6 py-10 text-center text-zinc-500">Memuat organisasi…</td></tr>
+              ) : organizations.length === 0 ? (
+                <tr><td colSpan={5} className="px-6 py-12 text-center text-zinc-500">{search || statusFilter !== 'all' ? 'Tidak ada organisasi yang cocok dengan filter.' : 'Belum ada organisasi.'}</td></tr>
+              ) : (
                 organizations.map((org) => (
                   <tr key={org.id} className="hover:bg-zinc-50">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="p-2 bg-zinc-100 rounded-lg">
-                          <Building2 className="w-4 h-4 text-zinc-600" />
-                        </div>
-                        <div>
-                          <p className="font-medium text-zinc-900">{org.name}</p>
-                          <p className="text-sm text-zinc-500">{org.slug}</p>
+                        <div className="rounded-lg bg-zinc-100 p-2"><Building2 className="h-4 w-4 text-zinc-600" /></div>
+                        <div className="min-w-0">
+                          <p className="truncate font-medium text-zinc-900">{org.name}</p>
+                          <p className="truncate text-sm text-zinc-500">{org.slug}</p>
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <span className={cn(
-                        "inline-flex px-2 py-1 text-xs font-medium rounded-full",
-                        org.status === 'active' ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-                      )}>
-                        {org.status}
+                      <span className={cn('inline-flex rounded-full px-2 py-1 text-xs font-medium', org.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800')}>
+                        {STATUS_LABEL[org.status] ?? org.status}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-zinc-900">{org.users_count}</td>
-                    <td className="px-6 py-4 text-sm text-zinc-500">
-                      {new Date(org.created_at).toLocaleDateString('id-ID')}
-                    </td>
+                    <td className="px-6 py-4 text-sm text-zinc-500">{formatDate(org.created_at)}</td>
                     <td className="px-6 py-4">
-                      <button
-                        onClick={() => void loadOrgDetail(org)}
-                        className="inline-flex items-center gap-2 px-3 py-1 text-sm bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors"
-                      >
-                        <Eye className="w-4 h-4" />
-                        Detail
-                      </button>
+                      <div className="flex flex-wrap gap-2">
+                        <button onClick={() => void loadOrgDetail(org)} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1 text-sm text-blue-700 transition-colors hover:bg-blue-100">
+                          <Eye className="h-4 w-4" /> Detail
+                        </button>
+                        <button
+                          onClick={() => void toggleSuspend(org)}
+                          disabled={busyOrgId === org.id}
+                          className={cn(
+                            'inline-flex items-center gap-1.5 rounded-lg px-3 py-1 text-sm transition-colors disabled:opacity-60',
+                            org.status === 'active' ? 'bg-red-50 text-red-700 hover:bg-red-100' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                          )}
+                        >
+                          {org.status === 'active' ? <><Ban className="h-4 w-4" /> Suspend</> : <><CheckCircle className="h-4 w-4" /> Aktifkan</>}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -211,63 +264,99 @@ export default function OrganizationManagement() {
             </tbody>
           </table>
         </div>
+        <AdminPager pagination={pagination} loading={loading} unit="organisasi" onPage={setPage} />
       </div>
 
-      {/* Organization Detail Modal */}
       {selectedOrg && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto">
-            <div className="p-6 border-b border-zinc-200">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-zinc-900">Organization Detail</h3>
-                <button
-                  onClick={() => setSelectedOrg(null)}
-                  className="text-zinc-400 hover:text-zinc-600"
-                >
-                  ×
-                </button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setSelectedOrg(null)}>
+          <div className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between border-b border-zinc-200 p-6">
+              <div>
+                <h3 className="text-lg font-semibold text-zinc-900">{selectedOrg.name}</h3>
+                <p className="mt-1 text-sm text-zinc-600">{selectedOrg.slug} · {STATUS_LABEL[selectedOrg.status] ?? selectedOrg.status}</p>
               </div>
-              <p className="text-sm text-zinc-600 mt-1">{selectedOrg.name} ({selectedOrg.slug})</p>
+              <button onClick={() => setSelectedOrg(null)} className="rounded-lg p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600" aria-label="Tutup">
+                <X className="h-5 w-5" />
+              </button>
             </div>
 
-            <div className="p-6">
+            <div className="space-y-6 p-6">
+              {detailError && <p className="rounded-lg border border-red-100 bg-red-50 p-3 text-sm text-red-600">{detailError}</p>}
+
               {detailLoading ? (
-                <p className="text-center text-zinc-500">Loading details...</p>
-              ) : orgDetail ? (
-                <div className="space-y-4">
-                  <h4 className="font-medium text-zinc-900">App Entitlements</h4>
-                  {orgDetail.entitlements.length === 0 ? (
-                    <p className="text-sm text-zinc-500">No entitlements found</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {orgDetail.entitlements.map((ent) => (
-                        <div key={ent.id} className="flex items-center justify-between p-3 border border-zinc-200 rounded-lg">
+                <p className="text-center text-zinc-500">Memuat detail…</p>
+              ) : (
+                <>
+                  <section className="space-y-3">
+                    <h4 className="font-medium text-zinc-900">Akses aplikasi</h4>
+                    {entitlements.length === 0 ? (
+                      <p className="text-sm text-zinc-500">Belum ada akses aplikasi.</p>
+                    ) : entitlements.map((ent) => (
+                      <div key={ent.id} className="rounded-lg border border-zinc-200 p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
                           <div>
-                            <p className="font-medium text-zinc-900">{ent.app.name}</p>
-                            <p className="text-sm text-zinc-500">Plan: {ent.plan.name}</p>
+                            <p className="font-medium text-zinc-900">{ent.app?.name ?? 'Aplikasi'}</p>
+                            <p className="text-sm text-zinc-500">Paket: {ent.plan?.name ?? '—'}</p>
                             <p className="text-xs text-zinc-400">
-                              Status: {ent.status} | Starts: {ent.starts_at || 'N/A'} | Ends: {ent.ends_at || 'N/A'}
+                              {ENTITLEMENT_LABEL[ent.status] ?? ent.status} · mulai {formatDate(ent.starts_at)} · berakhir {ent.ends_at ? formatDate(ent.ends_at) : ent.status === 'active' ? 'seumur hidup' : '—'}
                             </p>
                           </div>
-                          {ent.status !== 'active' && (
+                          {ent.app && (
                             <button
-                              onClick={() => void handleBypass(orgDetail.organization.id, ent.app.slug)}
-                              className="inline-flex items-center gap-2 px-3 py-2 text-sm bg-green-50 hover:bg-green-100 text-green-700 rounded-lg transition-colors"
+                              onClick={() => setAccessDraft({ appSlug: ent.app!.slug, status: 'active', endsAt: inDays(30), lifetime: false })}
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-100 px-3 py-2 text-sm text-zinc-700 transition-colors hover:bg-zinc-200"
                             >
-                              <CheckCircle className="w-4 h-4" />
-                              Bypass
+                              <KeyRound className="h-4 w-4" /> Atur akses
                             </button>
                           )}
                         </div>
-                      ))}
-                    </div>
-                  )}
 
-                  <div className="border-t border-zinc-200 pt-4">
-                    <h4 className="font-medium text-zinc-900">Batas Outlet (POS)</h4>
-                    <p className="mt-1 text-sm text-zinc-500">
-                      Override batas jumlah outlet untuk organisasi ini. Kosongkan untuk memakai batas dari paket POS-nya.
-                    </p>
+                        {accessDraft && accessDraft.appSlug === ent.app?.slug && (
+                          <div className="mt-3 space-y-3 rounded-lg bg-zinc-50 p-3">
+                            <div className="flex flex-wrap items-center gap-3 text-sm">
+                              <select
+                                value={accessDraft.status}
+                                onChange={(e) => setAccessDraft({ ...accessDraft, status: e.target.value as AccessDraft['status'] })}
+                                className="rounded-lg border border-zinc-300 px-3 py-2"
+                              >
+                                <option value="active">Buka akses</option>
+                                <option value="locked">Kunci akses</option>
+                              </select>
+                              {accessDraft.status === 'active' && (
+                                <>
+                                  <label className="flex items-center gap-2">
+                                    Sampai
+                                    <input
+                                      type="date"
+                                      value={accessDraft.endsAt}
+                                      min={inDays(1)}
+                                      disabled={accessDraft.lifetime}
+                                      onChange={(e) => setAccessDraft({ ...accessDraft, endsAt: e.target.value })}
+                                      className="rounded-lg border border-zinc-300 px-3 py-2 disabled:opacity-50"
+                                    />
+                                  </label>
+                                  <label className="flex items-center gap-2">
+                                    <input type="checkbox" checked={accessDraft.lifetime} onChange={(e) => setAccessDraft({ ...accessDraft, lifetime: e.target.checked })} />
+                                    Seumur hidup
+                                  </label>
+                                </>
+                              )}
+                            </div>
+                            <div className="flex gap-2">
+                              <button onClick={() => void saveAccess()} disabled={accessSaving} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-60">
+                                {accessSaving ? 'Menyimpan…' : 'Simpan akses'}
+                              </button>
+                              <button onClick={() => setAccessDraft(null)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm">Batal</button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </section>
+
+                  <section className="border-t border-zinc-200 pt-4">
+                    <h4 className="font-medium text-zinc-900">Batas outlet (POS)</h4>
+                    <p className="mt-1 text-sm text-zinc-500">Override batas jumlah outlet untuk organisasi ini. Kosongkan untuk memakai batas dari paket POS-nya.</p>
                     <div className="mt-3 flex items-center gap-2">
                       <input
                         type="number"
@@ -277,19 +366,27 @@ export default function OrganizationManagement() {
                         placeholder="Pakai batas paket"
                         className="w-44 rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-amber-400"
                       />
-                      <button
-                        onClick={() => void saveOutletOverride()}
-                        disabled={outletSaving}
-                        className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-60"
-                      >
+                      <button onClick={() => void saveOutletOverride()} disabled={outletSaving} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-60">
                         {outletSaving ? 'Menyimpan…' : 'Simpan'}
                       </button>
                     </div>
                     {outletMessage && <p className="mt-2 text-xs text-zinc-600">{outletMessage}</p>}
-                  </div>
-                </div>
-              ) : (
-                <p className="text-center text-zinc-500">Failed to load details</p>
+                  </section>
+
+                  <section className="flex items-center justify-between border-t border-zinc-200 pt-4">
+                    <div>
+                      <h4 className="font-medium text-zinc-900">Status organisasi</h4>
+                      <p className="mt-1 text-sm text-zinc-500">Organisasi yang disuspend tidak bisa memakai POS dan aplikasi berbayar.</p>
+                    </div>
+                    <button
+                      onClick={() => void toggleSuspend(selectedOrg)}
+                      disabled={busyOrgId === selectedOrg.id}
+                      className={cn('rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-60', selectedOrg.status === 'active' ? 'bg-red-50 text-red-700 hover:bg-red-100' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100')}
+                    >
+                      {selectedOrg.status === 'active' ? 'Suspend' : 'Aktifkan'}
+                    </button>
+                  </section>
+                </>
               )}
             </div>
           </div>

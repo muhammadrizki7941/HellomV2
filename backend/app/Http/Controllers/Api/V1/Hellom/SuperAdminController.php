@@ -11,6 +11,7 @@ use App\Models\Plan;
 use App\Models\ProductPurchase;
 use App\Models\Subscription;
 use App\Models\User;
+use App\Services\Billing\EntitlementService;
 use App\Services\Hellom\PosProvisioningService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -159,9 +160,7 @@ class SuperAdminController extends BaseApiController
         $oldStatus = $org->status;
         $org->update(['status' => 'suspended']);
 
-        $this->audit($request, 'organization.suspend', 'Organization', $organizationId, [
-            'old_status' => $oldStatus,
-        ]);
+        $this->audit($request, 'organization.suspend', 'Organization', $organizationId, ['status' => $oldStatus], ['status' => 'suspended'], $organizationId);
 
         return $this->ok(['id' => $org->id, 'status' => 'suspended'], __('hellom.org_suspended'));
     }
@@ -176,9 +175,7 @@ class SuperAdminController extends BaseApiController
         $oldStatus = $org->status;
         $org->update(['status' => 'active']);
 
-        $this->audit($request, 'organization.reactivate', 'Organization', $organizationId, [
-            'old_status' => $oldStatus,
-        ]);
+        $this->audit($request, 'organization.reactivate', 'Organization', $organizationId, ['status' => $oldStatus], ['status' => 'active'], $organizationId);
 
         return $this->ok(['id' => $org->id, 'status' => 'active'], __('hellom.org_reactivated'));
     }
@@ -201,7 +198,7 @@ class SuperAdminController extends BaseApiController
         $old = ['max_outlets_override' => $org->max_outlets_override];
         $org->update(['max_outlets_override' => $validated['max_outlets_override'] ?? null]);
 
-        $this->audit($request, 'organization.outlet_limit', 'Organization', $organizationId, $old, $validated);
+        $this->audit($request, 'organization.outlet_limit', 'Organization', $organizationId, $old, $validated, $organizationId);
 
         return $this->ok($org->fresh(), 'Outlet limit updated');
     }
@@ -545,7 +542,7 @@ class SuperAdminController extends BaseApiController
             app(PosProvisioningService::class)->ensureProvisionedForPos($organizationId);
         }
 
-        $this->audit($request, 'user.app_access.update', 'Entitlement', (int) $entitlement->id, null, $validated);
+        $this->audit($request, 'user.app_access.update', 'Entitlement', (int) $entitlement->id, null, $validated, $organizationId);
 
         return $this->ok([
             'entitlement' => $entitlement,
@@ -728,39 +725,53 @@ class SuperAdminController extends BaseApiController
             'organization_id' => ['required', 'integer', 'exists:organizations,id'],
             'app_slug' => ['required', 'string'],
             'status' => ['required', 'string', 'in:active,locked,cancelled,expired'],
+            'ends_at' => ['nullable', 'date', 'after:now'],
+            'lifetime' => ['nullable', 'boolean'],
         ]);
 
         $app = AppCatalog::query()->where('slug', $validated['app_slug'])->first();
         if (!$app) {
-            return $this->fail('App not found', ['code' => 'APP_NOT_FOUND'], 404);
+            return $this->fail('Aplikasi tidak ditemukan', ['code' => 'APP_NOT_FOUND'], 404);
         }
 
+        $organizationId = (int) $validated['organization_id'];
         $status = (string) $validated['status'];
-        $payload = ['status' => $status];
+        $existing = Entitlement::query()->where('organization_id', $organizationId)->where('app_id', $app->id)->first();
+        $old = $existing?->only(['status', 'plan_id', 'starts_at', 'ends_at']);
 
-        if (in_array($status, ['active', 'trialing'], true)) {
-            $payload['starts_at'] = now();
-            $payload['ends_at'] = null;
-        } elseif (in_array($status, ['cancelled', 'expired'], true)) {
-            $payload['ends_at'] = now();
-        } elseif ($status === 'locked') {
-            $payload['starts_at'] = null;
-            $payload['ends_at'] = null;
+        if ($status === 'active') {
+            // Opening access is paid access: always an explicit period, never a silent lifetime.
+            $lifetime = (bool) ($validated['lifetime'] ?? false);
+            if (empty($validated['ends_at']) && !$lifetime) {
+                return $this->fail('Isi tanggal berakhir akses, atau pilih akses seumur hidup.', ['code' => 'ENDS_AT_REQUIRED'], 422);
+            }
+            $entitlement = app(EntitlementService::class)->grant(
+                $organizationId,
+                (int) $app->id,
+                $existing?->plan_id ? (int) $existing->plan_id : null,
+                now(),
+                $lifetime ? null : now()->parse((string) $validated['ends_at'])
+            );
+
+            if ($app->slug === 'pos') {
+                app(PosProvisioningService::class)->ensureProvisionedForPos($organizationId);
+            }
+        } else {
+            $payload = ['status' => $status];
+            if (in_array($status, ['cancelled', 'expired'], true)) {
+                $payload['ends_at'] = now();
+            } elseif ($status === 'locked') {
+                $payload['starts_at'] = null;
+                $payload['ends_at'] = null;
+            }
+
+            $entitlement = Entitlement::query()->updateOrCreate(
+                ['organization_id' => $organizationId, 'app_id' => $app->id],
+                $payload
+            );
         }
 
-        $entitlement = Entitlement::query()->updateOrCreate(
-            [
-                'organization_id' => $validated['organization_id'],
-                'app_id' => $app->id,
-            ],
-            $payload
-        );
-
-        if ($app->slug === 'pos' && in_array($status, ['active', 'trialing'], true)) {
-            app(PosProvisioningService::class)->ensureProvisionedForPos((int) $validated['organization_id']);
-        }
-
-        $this->audit($request, 'entitlement.override', 'Entitlement', $entitlement->id, null, $validated);
+        $this->audit($request, 'entitlement.override', 'Entitlement', (int) $entitlement->id, $old, $validated, $organizationId);
 
         return $this->ok([
             'entitlement' => $entitlement->fresh(),
@@ -775,10 +786,11 @@ class SuperAdminController extends BaseApiController
         $action = $request->query('action');
         $organizationId = $request->query('organization_id');
 
-        $query = AuditLog::query()->with('user:id,name,email')->orderByDesc('created_at');
+        $query = AuditLog::query()->with(['user:id,name,email', 'organization:id,name,slug'])->orderByDesc('created_at')->orderByDesc('id');
 
         if ($action) {
-            $query->where('action', $action);
+            // Prefix match, so "billing." lists every billing action.
+            $query->where('action', 'like', addcslashes((string) $action, '%_\\') . '%');
         }
         if ($organizationId) {
             $query->where('organization_id', $organizationId);
@@ -806,12 +818,14 @@ class SuperAdminController extends BaseApiController
         ?int $entityId = null,
         ?array $oldValues = null,
         ?array $newValues = null,
+        ?int $targetOrganizationId = null,
     ): void {
+        // organization_id = the organization the action was about, so the log filters per tenant.
         $user = $request->user();
         AuditLog::record(
             action: $action,
             userId: $user?->id,
-            organizationId: $user?->current_organization_id,
+            organizationId: $targetOrganizationId,
             entityType: $entityType,
             entityId: $entityId,
             oldValues: $oldValues,

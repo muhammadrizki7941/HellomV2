@@ -51,6 +51,8 @@ const AdminSettings = lazy(() => import('@/pages/admin/AdminSettings'));
 const EmailSetting = lazy(() => import('@/pages/admin/settings/EmailSetting'));
 const Notifications = lazy(() => import('@/pages/admin/Notifications'));
 const SystemHealth = lazy(() => import('@/pages/admin/SystemHealth'));
+const AdminAuditLog = lazy(() => import('@/pages/admin/AuditLog'));
+const AdminInvoices = lazy(() => import('@/pages/admin/Invoices'));
 const FinanceManagement = lazy(() => import('@/pages/admin/FinanceManagement'));
 const AdminSellerFinance = lazy(() => import('@/pages/admin/SellerFinance'));
 const AdminLandingModeration = lazy(() => import('@/pages/admin/LandingModeration'));
@@ -210,6 +212,8 @@ export default function App() {
           <Route path="settings/email" element={<EmailSetting />} />
           <Route path="notifications" element={<Notifications />} />
           <Route path="system" element={<SystemHealth />} />
+          <Route path="audit-log" element={<AdminAuditLog />} />
+          <Route path="invoices" element={<AdminInvoices />} />
         </Route>
       </Routes>
     </Suspense>

@@ -126,6 +126,10 @@ export {
   updateAdminPromo,
   updateAdminUserAppAccess,
   validatePromoCode,
+  suspendAdminOrganization,
+  reactivateAdminOrganization,
+  getAdminAuditLogs,
+  getAdminInvoices,
 } from './admin';
 export {
   cancelProductPurchase,
@@ -285,6 +289,9 @@ export type {
   AdminUserListItem,
   EmailDeliveryResult,
   GatewayProviderCard,
+  EntitlementOverridePayload,
+  AdminAuditLogItem,
+  AdminInvoiceItem,
 } from './admin';
 export type { EmailDelivery, OrganizationRef, TeamInvitation, TeamMember } from './organizations';
 export type { PayoutPolicy, WalletBalance, WalletOverview, WalletTransaction, WalletWithdrawal } from './billing';
