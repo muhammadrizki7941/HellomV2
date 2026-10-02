@@ -222,6 +222,11 @@ export function updateSellerFinanceSeller(organizationId: number, body: { is_fro
   return apiRequest<unknown>(`/admin/seller-finance/sellers/${organizationId}`, { method: 'PATCH', body });
 }
 
+// Manual correction of a seller balance (ledger entry type "adjustment", audited).
+export function adjustSellerBalance(organizationId: number, body: { amount: number; bucket: 'available' | 'pending'; reason: string }) {
+  return apiRequest<unknown>(`/admin/seller-finance/sellers/${organizationId}/adjustment`, { method: 'POST', body });
+}
+
 export function exportSellerFinance(type: 'withdrawals' | 'ledger' | 'orders', from?: string, to?: string) {
   return apiRequestBlob(`/admin/seller-finance/export${buildQuery({ type, from, to })}`);
 }

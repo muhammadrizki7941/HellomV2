@@ -427,6 +427,7 @@ export {
   reportLandingOrderReturn,
   requestSellerWithdrawal,
   updateSellerFinanceSeller,
+  adjustSellerBalance,
   updateSellerFinanceSettings,
 } from './sellerFinance';
 export type {

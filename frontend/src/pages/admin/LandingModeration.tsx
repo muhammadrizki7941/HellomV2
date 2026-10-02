@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { BadgeCheck, ExternalLink, RefreshCw, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
+  adjustSellerBalance,
   disableAdminLandingProduct,
   getAdminLandingProducts,
   getAdminLandingReports,
@@ -134,6 +135,7 @@ function SellersTab({ onProducts }: { onProducts: (organizationId: number) => vo
   const [rows, setRows] = useState<AdminSeller[]>([]);
   const [page, setPage] = useState({ current: 1, last: 1 });
   const [error, setError] = useState<string | null>(null);
+  const [adjusting, setAdjusting] = useState<AdminSeller | null>(null);
 
   const load = useCallback((p = 1) => {
     getAdminLandingSellers({ filter, q: query || undefined, page: p }).then((r) => { setRows(r.data); setPage({ current: r.current_page, last: r.last_page }); setError(null); })
@@ -211,6 +213,7 @@ function SellersTab({ onProducts }: { onProducts: (organizationId: number) => vo
                     >
                       {s.balance_frozen ? 'Lepas tahanan saldo' : 'Tahan saldo'}
                     </button>
+                    <button type="button" onClick={() => setAdjusting(s)} className="rounded-lg border px-3 py-1.5 text-xs font-semibold">Sesuaikan saldo</button>
                   </div>
                 </td>
               </tr>
@@ -219,6 +222,72 @@ function SellersTab({ onProducts }: { onProducts: (organizationId: number) => vo
         </table>
       </div>
       <Pager page={page} onPage={load} />
+      {adjusting && (
+        <AdjustBalanceDialog
+          seller={adjusting}
+          onClose={() => setAdjusting(null)}
+          onDone={() => { setAdjusting(null); load(page.current); }}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Manual balance correction: a signed amount on the available or held bucket, with a reason (audited). */
+function AdjustBalanceDialog({ seller, onClose, onDone }: { seller: AdminSeller; onClose: () => void; onDone: () => void }) {
+  const [direction, setDirection] = useState<'add' | 'subtract'>('add');
+  const [amount, setAmount] = useState('');
+  const [bucket, setBucket] = useState<'available' | 'pending'>('available');
+  const [reason, setReason] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const value = Math.round(Number(amount) || 0);
+  const signed = direction === 'add' ? value : -value;
+  const current = bucket === 'available' ? seller.balance_available : seller.balance_pending;
+
+  const submit = async () => {
+    if (value <= 0) { setError('Isi nominal lebih dari 0.'); return; }
+    if (reason.trim().length < 5) { setError('Tulis alasan minimal 5 karakter (tercatat di log audit).'); return; }
+    if (!window.confirm(`${direction === 'add' ? 'Tambah' : 'Kurangi'} saldo ${bucket === 'available' ? 'tersedia' : 'tertahan'} ${seller.name} sebesar ${rupiah(value)}?`)) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await adjustSellerBalance(seller.id, { amount: signed, bucket, reason: reason.trim() });
+      onDone();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Penyesuaian gagal.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="w-full max-w-md space-y-4 rounded-2xl bg-white p-5" onClick={(e) => e.stopPropagation()}>
+        <div>
+          <h2 className="text-lg font-bold">Sesuaikan saldo</h2>
+          <p className="text-sm text-zinc-500">{seller.name} · tersedia {rupiah(seller.balance_available)} · tertahan {rupiah(seller.balance_pending)}</p>
+        </div>
+        <div className="grid grid-cols-2 gap-2 text-sm">
+          <select value={direction} onChange={(e) => setDirection(e.target.value as 'add' | 'subtract')} className="min-h-10 rounded-xl border border-zinc-200 px-3">
+            <option value="add">Tambah</option>
+            <option value="subtract">Kurangi</option>
+          </select>
+          <select value={bucket} onChange={(e) => setBucket(e.target.value as 'available' | 'pending')} className="min-h-10 rounded-xl border border-zinc-200 px-3">
+            <option value="available">Saldo tersedia</option>
+            <option value="pending">Saldo tertahan</option>
+          </select>
+        </div>
+        <input type="number" min={1} inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Nominal (Rp)" className="min-h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm" />
+        <textarea rows={3} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Alasan, mis. koreksi biaya layanan pesanan lps_…" className="w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm" />
+        {value > 0 && <p className="text-xs text-zinc-500">Saldo {bucket === 'available' ? 'tersedia' : 'tertahan'} menjadi <strong>{rupiah(current + signed)}</strong>.</p>}
+        {error && <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="min-h-10 rounded-xl border border-zinc-200 px-4 text-sm">Batal</button>
+          <button type="button" onClick={() => void submit()} disabled={saving} className="min-h-10 rounded-xl bg-zinc-900 px-4 text-sm font-semibold text-white disabled:opacity-60">{saving ? 'Menyimpan…' : 'Simpan penyesuaian'}</button>
+        </div>
+      </div>
     </div>
   );
 }
