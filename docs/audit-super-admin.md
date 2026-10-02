@@ -102,6 +102,30 @@
 
 Tidak ada controller/model/job/command super admin yang benar-benar yatim. Semua route admin punya controller, dan semua 46 fungsi `admin.ts` dipakai halaman.
 
+## Status perbaikan (Fase 2)
+Keputusan pemilik (2026-10-02): "kerjakan bertahap" → semua usulan di bawah dijalankan sesuai rekomendasi.
+
+| ID | Status | Commit | Catatan |
+|---|---|---|---|
+| P0-1 | ✅ fixed | `906210f` | Role `admin` tetap (tanpa migrasi role), tetapi akses selalu dari pivot. Migration `2026_10_05_000001` mengembalikan `current_organization_id` asing (tabel cadangan, `down()` memulihkan). Pengaturan organisasi butuh owner/admin. Tes `tests/Admin/OrganizationIsolationTest`. |
+| P0-2 | ✅ fixed | `625b409` | Paket yang punya riwayat → diarsipkan. User: tolak hapus diri sendiri, super admin, owner tunggal, dan yang punya riwayat uang. Tes `DeleteSafetyTest`. |
+| P0-3 | ✅ fixed | `d306053` | `IpaymuPaymentVerifier` (status + referensi + nominal + transaksi tidak dipakai ulang) untuk langganan, produk digital, top-up dan reconcile. Notify URL ditandatangani HMAC. Tes `tests/Landing/IpaymuBillingWebhookTest`. |
+| P0-4 *(baru)* | ✅ fixed | `d306053` | Ditemukan saat perbaikan: langganan **tahunan** lewat iPaymu/Xendit ditagih **harga bulanan** (`$plan->price`), padahal akses 12 bulan. Sekarang ditagih `intent.amount`. |
+| P1-1 | ✅ fixed | `215fdf3` | Satu jalur approve (service ber-lock) untuk halaman Billing & tombol Notifikasi; klik kedua → "sudah disetujui". Tes `ManualCheckoutTest`. |
+| P1-2 | ✅ fixed | `215fdf3` | Reject hanya membatalkan langganan `pending_payment/draft`. (Catatan: setiap checkout membuat langganan baru, jadi risikonya lebih kecil dari dugaan awal.) |
+| P1-3 | ✅ fixed | `1983e0f` | Semua notifikasi DOKU wajib HMAC; status/nominal dari API DOKU; status lunas tidak pernah turun. Tes `DokuBillingWebhookTest`. |
+| P1-4 | ✅ fixed | `1983e0f` | `merchant_inactive` → pesan jelas (production vs sandbox). |
+| P1-5 | ✅ fixed | `b51e3ca` | Foto KTP dimuat dengan token dan ditampilkan inline; approve minta konfirmasi. |
+| P1-6 | ✅ fixed | `531b33d` | Menu Organisasi + tombol suspend/aktifkan (+ konfirmasi), paginasi, pencarian debounce, tidak crash bila paket null. |
+| P1-7 | ✅ fixed | `fbccfd2` | Kesehatan Sistem membaca `/api/health` (DB, cache, scheduler, queue), refresh tiap menit. |
+| P1-8 | ✅ fixed | `7ba8c36` | Artikel disanitasi di server (simpan + hasil AI) dan di browser. Bonus: buat artikel/layanan tanpa slug tidak 500 lagi; judul kembar → slug `-2`. Tes `ContentSecurityTest`. |
+| P1-9 | ✅ fixed | `e89deb3` | Refund hanya untuk yang lunas; konfirmasi ber-lock; audit log. Tes `ProductPurchaseAdminTest`. |
+| P1-10 | ✅ fixed | `531b33d` | Override akses lewat `EntitlementService`, wajib tanggal berakhir atau "seumur hidup" eksplisit. Tes `OrganizationAdminTest`. (Form akses di detail Pengguna sudah menampilkan tanggal berakhir secara eksplisit, jadi dibiarkan.) |
+| P2-3 | ✅ fixed | `531b33d` | Audit SuperAdmin mencatat organisasi target. Log promo menyusul di P2-4. |
+| P2-8 | ✅ fixed | `7ba8c36` | Pesan error AI generik + `report()`, `throttle:10,1`. |
+| P2-9 (sebagian) | ✅ | `531b33d` | Halaman baru **Log Audit** dan **Invoice** (invoice kini berpaginasi + cari). |
+| P2-12 | ✅ fixed | `215fdf3` | Execute notifikasi memakai service yang sama + audit. |
+
 ## Butuh keputusan pemilik sebelum Fase 2
 1. **P0-1**: register memberi `member`, dan role `admin` tidak lagi lintas organisasi. Apakah ada staf Hellom yang benar-benar butuh akses lintas organisasi selain super admin?
 2. **P0-2**: hapus paket = arsip, hapus user = ditolak bila ada riwayat keuangan (sarankan suspend). Setuju?
