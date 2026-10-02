@@ -154,7 +154,10 @@ export async function apiRequest<T>(
 
   const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | null;
 
-  if (response.status === 401 && token && autoLogout) {
+  // A token the API no longer accepts (expired, revoked, user suspended) ends the session
+  // on any endpoint; other 401s (e.g. a wrong password) only do so for /auth/me and logout.
+  const tokenRejected = (payload?.error as { code?: unknown } | null | undefined)?.code === 'UNAUTHORIZED';
+  if (response.status === 401 && token && (autoLogout || tokenRejected)) {
     clearSession();
   }
 
