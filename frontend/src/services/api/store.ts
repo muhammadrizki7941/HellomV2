@@ -36,14 +36,6 @@ export function getPublicFlagshipApps() {
   return publicApiRequest<PublicFlagshipApp[]>('/public/flagship-apps');
 }
 
-export function getPublicProductBySlug(slug: string) {
-  return publicApiRequest<Record<string, unknown>>(`/public/products/${encodeURIComponent(slug)}`);
-}
-
-export function getProductCategories() {
-  return publicApiRequest<Record<string, unknown>>('/public/products/categories');
-}
-
 // ─── Admin Digital Products ───
 
 export function getAdminProducts(params?: Record<string, string | number | boolean | undefined>) {

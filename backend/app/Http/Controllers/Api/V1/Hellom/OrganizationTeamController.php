@@ -72,7 +72,7 @@ class OrganizationTeamController extends BaseApiController
 
         $validated = $request->validate([
             'email' => ['required', 'email', 'max:255'],
-            'role' => ['nullable', 'in:admin,member,super_admin'],
+            'role' => ['nullable', 'in:admin,member'],
         ]);
 
         $email = strtolower((string) $validated['email']);
@@ -125,7 +125,7 @@ class OrganizationTeamController extends BaseApiController
         }
 
         $validated = $request->validate([
-            'role' => ['required', 'in:admin,member,super_admin'],
+            'role' => ['required', 'in:admin,member'],
         ]);
 
         $member = $organization->users()->where('users.id', $userId)->first();
@@ -508,7 +508,7 @@ class OrganizationTeamController extends BaseApiController
 
         $validated = $request->validate([
             'email' => ['required', 'email', 'max:255'],
-            'role' => ['nullable', 'in:admin,member,super_admin'],
+            'role' => ['nullable', 'in:admin,member'],
             'expires_in_days' => ['nullable', 'integer', 'min:1', 'max:30'],
         ]);
 

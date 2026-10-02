@@ -584,15 +584,12 @@ class SuperAdminController extends BaseApiController
 
     public function listPlans(Request $request): JsonResponse
     {
-        $appSlug = $request->query('app_slug');
+        // Plans are not tied to one app (no app_id), so there is no app filter.
         $type = $request->query('type');
         $visibility = $request->query('visibility');
 
         $query = Plan::query()->withCount('subscriptions');
 
-        if ($appSlug) {
-            $query->whereHas('entitlements.app', fn($q) => $q->where('slug', $appSlug));
-        }
         if ($type) {
             $query->where('type', $type);
         }
