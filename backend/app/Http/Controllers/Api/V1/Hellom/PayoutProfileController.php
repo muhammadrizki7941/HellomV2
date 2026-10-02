@@ -212,13 +212,14 @@ class PayoutProfileController extends BaseApiController
             return [null, null, $this->fail('No active organization selected', ['code' => 'NO_ACTIVE_ORGANIZATION'], 403)];
         }
 
-        if (in_array((string) ($user->role ?? ''), ['admin', 'super_admin'], true)) {
+        // users.role "admin" (every self-registered owner) gets its role from the pivot.
+        if ((string) ($user->role ?? '') === 'super_admin') {
             $organization = Organization::query()->find($orgId);
             if (!$organization instanceof Organization) {
                 return [null, null, $this->fail('Current organization not found', ['code' => 'ORG_NOT_FOUND'], 404)];
             }
 
-            return [$organization, (string) $user->role === 'super_admin' ? 'super_admin' : 'owner', null];
+            return [$organization, 'super_admin', null];
         }
 
         $organization = $user->organizations()->where('organizations.id', $orgId)->first();

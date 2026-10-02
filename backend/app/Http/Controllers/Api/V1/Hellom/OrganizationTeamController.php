@@ -782,15 +782,7 @@ class OrganizationTeamController extends BaseApiController
             return [null, null, $this->fail('No active organization selected', ['code' => 'NO_ACTIVE_ORGANIZATION'], 403)];
         }
 
-        if ((string) ($user->role ?? '') === 'admin') {
-            $organization = Organization::query()->find($orgId);
-            if (!$organization instanceof Organization) {
-                return [null, null, $this->fail('Current organization not found', ['code' => 'ORG_NOT_FOUND'], 404)];
-            }
-
-            return [$organization, 'owner', null];
-        }
-
+        // The role in the team always comes from the membership (pivot), never from users.role.
         $organization = $user->organizations()
             ->where('organizations.id', $orgId)
             ->first();

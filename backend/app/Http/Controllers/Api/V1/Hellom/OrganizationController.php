@@ -22,28 +22,18 @@ class OrganizationController extends BaseApiController
             return $this->fail('Unauthorized', ['code' => 'UNAUTHORIZED'], 401);
         }
 
-        if ((string) ($user->role ?? '') === 'admin') {
-            $organizations = Organization::query()
-                ->select('id', 'name', 'slug', 'status', 'default_locale')
-                ->orderBy('name')
-                ->get()
-                ->map(fn(Organization $organization) => [
-                    'id' => $organization->id,
-                    'name' => $organization->name,
-                    'slug' => $organization->slug,
-                    'status' => $organization->status,
-                    'default_locale' => $organization->default_locale,
-                    'role' => 'admin',
-                ])
-                ->values();
-
-            return $this->ok($organizations, 'Organizations');
-        }
-
-        $organizations = $user->organizations()
+        // Only organizations the user is a member of (pivot). users.role "admin" is what every
+        // self-registered owner gets, so it must not unlock other organizations.
+        $memberships = $user->organizations()
             ->select('organizations.id', 'organizations.name', 'organizations.slug', 'organizations.status', 'organizations.default_locale')
             ->orderBy('organizations.name')
-            ->get()
+            ->get();
+
+        if ($this->mayHoldSeveralOrganizations($user)) {
+            return $this->ok($memberships->map(fn (Organization $organization) => $this->organizationListItem($organization))->values(), 'Organizations');
+        }
+
+        $organizations = $memberships
             ->filter(function (Organization $organization) use ($user): bool {
                 $currentOrgId = (int) ($user->current_organization_id ?? 0);
 
@@ -54,17 +44,28 @@ class OrganizationController extends BaseApiController
                 return true;
             })
             ->take(1)
-            ->map(fn(Organization $organization) => [
-                'id' => $organization->id,
-                'name' => $organization->name,
-                'slug' => $organization->slug,
-                'status' => $organization->status,
-                'default_locale' => $organization->default_locale,
-                'role' => (string) ($organization->pivot->role ?? 'member'),
-            ])
+            ->map(fn (Organization $organization) => $this->organizationListItem($organization))
             ->values();
 
         return $this->ok($organizations, 'Organizations');
+    }
+
+    /** Owners who registered themselves (users.role "admin") may own several businesses. */
+    private function mayHoldSeveralOrganizations(User $user): bool
+    {
+        return (string) ($user->role ?? '') === 'admin';
+    }
+
+    private function organizationListItem(Organization $organization): array
+    {
+        return [
+            'id' => $organization->id,
+            'name' => $organization->name,
+            'slug' => $organization->slug,
+            'status' => $organization->status,
+            'default_locale' => $organization->default_locale,
+            'role' => (string) ($organization->pivot->role ?? 'member'),
+        ];
     }
 
     public function store(Request $request): JsonResponse
@@ -74,7 +75,7 @@ class OrganizationController extends BaseApiController
             return $this->fail('Unauthorized', ['code' => 'UNAUTHORIZED'], 401);
         }
 
-        if ((string) ($user->role ?? '') !== 'admin' && $user->organizations()->exists()) {
+        if (!$this->mayHoldSeveralOrganizations($user) && $user->organizations()->exists()) {
             return $this->fail(
                 'Akun ini sudah terhubung ke organisasi lain dan tidak boleh membuat organisasi tambahan.',
                 ['code' => 'USER_ALREADY_HAS_ORGANIZATION'],
@@ -141,24 +142,21 @@ class OrganizationController extends BaseApiController
             'organization_id' => ['required', 'integer'],
         ]);
 
-        if ((string) ($user->role ?? '') === 'admin') {
-            $organization = Organization::query()->find((int) $validated['organization_id']);
-        } else {
-            if ((int) ($user->current_organization_id ?? 0) !== (int) $validated['organization_id']) {
-                return $this->fail(
-                    'Akun ini dibatasi ke satu organisasi aktif dan tidak boleh berpindah ke organisasi lain.',
-                    ['code' => 'ORG_SWITCH_DISABLED'],
-                    403
-                );
-            }
-
-            $organization = $user->organizations()
-                ->where('organizations.id', (int) $validated['organization_id'])
-                ->first();
+        if (!$this->mayHoldSeveralOrganizations($user) && (int) ($user->current_organization_id ?? 0) !== (int) $validated['organization_id']) {
+            return $this->fail(
+                'Akun ini dibatasi ke satu organisasi aktif dan tidak boleh berpindah ke organisasi lain.',
+                ['code' => 'ORG_SWITCH_DISABLED'],
+                403
+            );
         }
 
+        // Membership is always required, whatever users.role says.
+        $organization = $user->organizations()
+            ->where('organizations.id', (int) $validated['organization_id'])
+            ->first();
+
         if (!$organization) {
-            return $this->fail('Organization not found in your access list', ['code' => 'ORG_NOT_ACCESSIBLE'], 404);
+            return $this->fail('Organisasi ini tidak ada di daftar akses kamu', ['code' => 'ORG_NOT_ACCESSIBLE'], 404);
         }
 
         $user->forceFill(['current_organization_id' => $organization->id])->save();
@@ -244,6 +242,11 @@ class OrganizationController extends BaseApiController
 
         if (!$org) {
             return $this->fail('No current organization', ['code' => 'NO_CURRENT_ORG'], 404);
+        }
+
+        $pivotRole = (string) ($user->organizations()->where('organizations.id', $org->id)->first()?->pivot?->role ?? '');
+        if (!in_array($pivotRole, ['owner', 'admin'], true)) {
+            return $this->fail('Hanya pemilik/admin organisasi yang bisa mengubah pengaturan ini', ['code' => 'INSUFFICIENT_ROLE'], 403);
         }
 
         $validated = $request->validate([

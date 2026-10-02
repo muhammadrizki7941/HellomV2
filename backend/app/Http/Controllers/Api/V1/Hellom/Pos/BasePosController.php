@@ -60,10 +60,6 @@ abstract class BasePosController extends BaseApiController
             return false;
         }
 
-        if (method_exists($user, 'isAdmin') && $user->isAdmin()) {
-            return true;
-        }
-
         $membership = $user->organizations()
             ->where('organizations.id', $org->id)
             ->first();
