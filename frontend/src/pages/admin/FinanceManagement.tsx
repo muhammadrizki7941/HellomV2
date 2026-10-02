@@ -101,6 +101,7 @@ export default function FinanceManagement() {
   const [statusFilter, setStatusFilter] = useState<QueueStatus>('pending');
   const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
   const [manualCheckouts, setManualCheckouts] = useState<ManualCheckoutRequest[]>([]);
+  const [manualTotal, setManualTotal] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -149,8 +150,9 @@ export default function FinanceManagement() {
     setLoadingManual(true);
     setError(null);
     try {
-      const result = await getAdminManualCheckouts({ limit: 50 });
+      const result = await getAdminManualCheckouts({ limit: 100 });
       setManualCheckouts(result.items || []);
+      setManualTotal(result.total ?? (result.items || []).length);
     } catch (loadError) {
       const message = loadError instanceof Error ? loadError.message : 'Gagal memuat checkout manual';
       setError(message);
@@ -484,7 +486,7 @@ export default function FinanceManagement() {
             <h2 className="font-bold text-zinc-900">Pending Subscription Checkouts</h2>
             <p className="text-sm text-zinc-500">Antrean pembayaran langsung yang masih butuh konfirmasi owner.</p>
           </div>
-          <div className="text-sm font-semibold text-zinc-600">{filteredManualCheckouts.length} antrean</div>
+          <div className="text-sm font-semibold text-zinc-600">{filteredManualCheckouts.length} antrean{manualTotal > manualCheckouts.length ? ` (100 terbaru dari ${manualTotal})` : ''}</div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">

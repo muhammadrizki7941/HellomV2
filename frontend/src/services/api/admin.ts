@@ -285,7 +285,7 @@ export function updateAdminManualPaymentConfig(payload: FormData | Record<string
 }
 
 export function getAdminManualCheckouts(params?: { limit?: number }) {
-  return apiRequest<{ items: AdminManualCheckout[] }>(`/admin/billing/manual-checkouts${buildQuery(params)}`);
+  return apiRequest<{ items: AdminManualCheckout[]; total?: number }>(`/admin/billing/manual-checkouts${buildQuery(params)}`);
 }
 
 export function approveAdminManualCheckout(intentId: number) {
@@ -408,7 +408,7 @@ export function deleteAdminPlan(planId: number) {
 // ─── Admin Promos ───
 
 export function getAdminPromos() {
-  return apiRequest<Record<string, unknown>>('/admin/promos');
+  return apiRequest<{ items: unknown[]; pagination?: AdminPagination }>('/admin/promos');
 }
 
 export function createAdminPromo(payload: Record<string, unknown>) {

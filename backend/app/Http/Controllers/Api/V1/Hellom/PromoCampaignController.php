@@ -12,15 +12,17 @@ class PromoCampaignController extends BaseApiController
 
     public function index(Request $request): JsonResponse
     {
-        $limit = max(1, min((int) ($request->query('limit') ?: 30), 100));
+        $limit = max(1, min((int) ($request->query('limit') ?: 100), 100));
 
         $items = PromoCampaign::query()
             ->with(['app', 'plan'])
             ->orderByDesc('id')
-            ->limit($limit)
-            ->get();
+            ->paginate($limit);
 
-        return $this->ok(['items' => $items], 'Promo campaigns');
+        return $this->ok([
+            'items' => $items->items(),
+            'pagination' => ['total' => $items->total(), 'per_page' => $items->perPage(), 'current_page' => $items->currentPage(), 'last_page' => $items->lastPage()],
+        ], 'Promo campaigns');
     }
 
     public function show(int $id): JsonResponse

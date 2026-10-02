@@ -24,7 +24,7 @@ class ManualCheckoutReviewController extends BaseApiController
 
     public function adminPendingCheckouts(Request $request): JsonResponse
     {
-        $limit = max(1, min((int) ($request->query('limit') ?: 50), 100));
+        $limit = max(1, min((int) ($request->query('limit') ?: 100), 100));
 
         $items = CheckoutIntent::query()
             ->with([
@@ -36,11 +36,11 @@ class ManualCheckoutReviewController extends BaseApiController
             ])
             ->whereIn('status', ['manual_review', 'awaiting_manual_review'])
             ->orderByDesc('created_at')
-            ->limit($limit)
-            ->get();
+            ->paginate($limit);
 
         return $this->ok([
-            'items' => $items->map(function (CheckoutIntent $intent): array {
+            'total' => $items->total(), // more than the page holds: the UI says so
+            'items' => collect($items->items())->map(function (CheckoutIntent $intent): array {
                 return [
                     'id' => (int) $intent->id,
                     'intent_token' => (string) $intent->intent_token,
