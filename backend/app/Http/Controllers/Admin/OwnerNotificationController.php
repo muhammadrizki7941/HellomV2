@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Api\V1\Hellom\BaseApiController;
+use App\Models\AuditLog;
 use App\Models\CheckoutIntent;
 use App\Models\OwnerNotification;
 use App\Services\Hellom\SubscriptionCheckoutActivationService;
@@ -29,7 +30,7 @@ class OwnerNotificationController extends BaseApiController
             $query->where('type', $type);
         }
 
-        $perPage = (int) $request->query('per_page', 20);
+        $perPage = max(1, min((int) $request->query('per_page', 20), 100));
         $notifications = $query->paginate($perPage);
 
         return $this->ok([
@@ -72,7 +73,7 @@ class OwnerNotificationController extends BaseApiController
         return $this->ok($notification, 'Notification loaded');
     }
 
-    public function executeAction(string $id): JsonResponse
+    public function executeAction(Request $request, string $id): JsonResponse
     {
         $notification = OwnerNotification::query()->findOrFail($id);
 
@@ -92,8 +93,11 @@ class OwnerNotificationController extends BaseApiController
             try {
                 $approvedNow = false;
                 if (in_array((string) $intent->status, ['manual_review', 'awaiting_manual_review'], true)) {
-                    $intent = $this->checkoutActivation->approveManualCheckout($intent);
-                    $approvedNow = true;
+                    $intent = $this->checkoutActivation->approveManualCheckout($intent, $approvedNow);
+                    if ($approvedNow) {
+                        AuditLog::record('billing.manual_checkout_approved', $request->user()?->id, (int) $intent->organization_id, 'checkout_intent', (int) $intent->id,
+                            null, ['amount' => (int) $intent->amount], ['via' => 'notification'], $request->ip());
+                    }
                 } elseif (in_array((string) $intent->status, ['confirmed', 'paid'], true)) {
                     $this->checkoutActivation->ensureActiveAccessForConfirmedCheckout($intent);
                 } else {

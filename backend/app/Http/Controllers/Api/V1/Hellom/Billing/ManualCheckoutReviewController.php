@@ -3,10 +3,10 @@
 namespace App\Http\Controllers\Api\V1\Hellom\Billing;
 
 use App\Http\Controllers\Api\V1\Hellom\BaseApiController;
-use App\Http\Controllers\Api\V1\Hellom\Billing\Concerns\ActivatesPlans;
-use App\Http\Controllers\Api\V1\Hellom\InvoiceController;
+use App\Models\AuditLog;
 use App\Models\CheckoutIntent;
 use App\Services\Billing\CheckoutNotifier;
+use App\Services\Hellom\SubscriptionCheckoutActivationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,10 +16,9 @@ use Illuminate\Support\Facades\DB;
  */
 class ManualCheckoutReviewController extends BaseApiController
 {
-    use ActivatesPlans;
-
     public function __construct(
         private readonly CheckoutNotifier $checkoutNotifier,
+        private readonly SubscriptionCheckoutActivationService $activation,
     ) {
     }
 
@@ -74,73 +73,26 @@ class ManualCheckoutReviewController extends BaseApiController
 
     public function adminApproveManualCheckout(Request $request, int $intentId): JsonResponse
     {
-        $intent = CheckoutIntent::query()
-            ->with(['subscription', 'app', 'plan'])
-            ->find($intentId);
-
+        $intent = CheckoutIntent::query()->find($intentId);
         if (!$intent) {
-            return $this->fail('Checkout intent not found', ['code' => 'INTENT_NOT_FOUND'], 404);
+            return $this->fail('Checkout tidak ditemukan', ['code' => 'INTENT_NOT_FOUND'], 404);
         }
 
-        if (!in_array((string) $intent->status, ['manual_review', 'awaiting_manual_review'], true)) {
-            return $this->fail('Checkout intent is not awaiting manual review', ['code' => 'INTENT_NOT_REVIEWABLE'], 422);
+        // Same locked service as the notification "execute" button: one approval, one
+        // revenue entry and one invoice, however often it is clicked.
+        try {
+            $approvedNow = false;
+            $intent = $this->activation->approveManualCheckout($intent, $approvedNow);
+        } catch (\DomainException) {
+            return $this->fail('Checkout ini tidak sedang menunggu konfirmasi manual', ['code' => 'INTENT_NOT_REVIEWABLE'], 422);
         }
 
-        DB::transaction(function () use ($intent): void {
-            $now = now();
+        if (!$approvedNow) {
+            return $this->ok(['intent_id' => (int) $intent->id, 'status' => (string) $intent->status], 'Checkout ini sudah disetujui sebelumnya');
+        }
 
-            $intent->forceFill([
-                'status' => 'confirmed',
-            ])->save();
-
-            if ($intent->subscription) {
-                $subMeta = is_array($intent->subscription->metadata) ? $intent->subscription->metadata : [];
-                $subMeta['activation_source'] = 'manual_confirmation';
-                $subMeta['manual_confirmed_at'] = $now->toISOString();
-
-                $intent->subscription->forceFill([
-                    'status' => 'active',
-                    'starts_at' => $now,
-                    'ends_at' => $this->entitlements()->subscriptionEndsAt($intent->subscription, $now, $intent->plan),
-                    'metadata' => $subMeta,
-                ])->save();
-            }
-
-            $this->entitlements()->grant(
-                (int) $intent->organization_id,
-                (int) $intent->app_id,
-                (int) $intent->plan_id,
-                $now,
-                $intent->subscription
-                    ? $intent->subscription->ends_at
-                    : $this->entitlements()->periodEndsAt($intent->plan, $now)
-            );
-
-            if ((int) $intent->amount > 0) {
-                \App\Models\PlatformFinanceLedger::recordRevenue(
-                    'manual_subscription_payment',
-                    (int) $intent->amount,
-                    (int) $intent->organization_id,
-                    'checkout_intents',
-                    (int) $intent->id,
-                    'Manual subscription checkout approved by admin'
-                );
-            }
-
-            if ($intent->subscription && (int) $intent->amount > 0) {
-                InvoiceController::generateFromCheckout(
-                    organizationId: (int) $intent->organization_id,
-                    subscriptionId: (int) $intent->subscription->id,
-                    amount: (int) $intent->amount,
-                    discount: 0,
-                    appSlug: (string) ($intent->app?->slug ?? ''),
-                    planSlug: (string) ($intent->plan?->slug ?? ''),
-                    paymentMethod: 'manual_confirmation',
-                );
-            }
-
-            $this->ensurePosProvisioning((string) ($intent->app?->slug ?? ''), (int) $intent->organization_id);
-        });
+        AuditLog::record('billing.manual_checkout_approved', $request->user()?->id, (int) $intent->organization_id, 'checkout_intent', (int) $intent->id,
+            null, ['amount' => (int) $intent->amount], null, $request->ip());
 
         $freshIntent = $intent->fresh(['subscription.organization.users', 'app', 'plan', 'user']);
         if ($freshIntent instanceof CheckoutIntent) {
@@ -150,43 +102,42 @@ class ManualCheckoutReviewController extends BaseApiController
         return $this->ok([
             'intent_id' => (int) $intent->id,
             'status' => 'confirmed',
-        ], 'Manual checkout approved');
+        ], 'Checkout manual disetujui');
     }
 
     public function adminRejectManualCheckout(Request $request, int $intentId): JsonResponse
     {
-        $intent = CheckoutIntent::query()
-            ->with('subscription')
-            ->find($intentId);
-
-        if (!$intent) {
-            return $this->fail('Checkout intent not found', ['code' => 'INTENT_NOT_FOUND'], 404);
-        }
-
-        if (!in_array((string) $intent->status, ['manual_review', 'awaiting_manual_review'], true)) {
-            return $this->fail('Checkout intent is not awaiting manual review', ['code' => 'INTENT_NOT_REVIEWABLE'], 422);
-        }
-
-        DB::transaction(function () use ($intent): void {
-            $intent->forceFill([
-                'status' => 'rejected',
-            ])->save();
-
-            if ($intent->subscription) {
-                $intent->subscription->forceFill([
-                    'status' => 'cancelled',
-                ])->save();
+        $rejected = DB::transaction(function () use ($intentId): ?CheckoutIntent {
+            $intent = CheckoutIntent::query()->with('subscription')->lockForUpdate()->find($intentId);
+            if (!$intent || !in_array((string) $intent->status, ['manual_review', 'awaiting_manual_review'], true)) {
+                return null;
             }
-        });
 
-        $freshIntent = $intent->fresh(['subscription.organization.users', 'app', 'plan', 'user']);
+            $intent->forceFill(['status' => 'rejected'])->save();
+
+            // Only the subscription this checkout created and that was never paid.
+            if ($intent->subscription && in_array((string) $intent->subscription->status, ['pending_payment', 'draft'], true)) {
+                $intent->subscription->forceFill(['status' => 'cancelled'])->save();
+            }
+
+            return $intent;
+        }, 3);
+
+        if (!$rejected instanceof CheckoutIntent) {
+            return $this->fail('Checkout ini tidak sedang menunggu konfirmasi manual', ['code' => 'INTENT_NOT_REVIEWABLE'], 422);
+        }
+
+        AuditLog::record('billing.manual_checkout_rejected', $request->user()?->id, (int) $rejected->organization_id, 'checkout_intent', (int) $rejected->id,
+            null, null, null, $request->ip());
+
+        $freshIntent = $rejected->fresh(['subscription.organization.users', 'app', 'plan', 'user']);
         if ($freshIntent instanceof CheckoutIntent) {
             $this->checkoutNotifier->sendCheckoutDecisionNotifications($freshIntent, false);
         }
 
         return $this->ok([
-            'intent_id' => (int) $intent->id,
+            'intent_id' => (int) $rejected->id,
             'status' => 'rejected',
-        ], 'Manual checkout rejected');
+        ], 'Checkout manual ditolak');
     }
 }

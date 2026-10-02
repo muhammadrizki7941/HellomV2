@@ -119,9 +119,15 @@ class SubscriptionCheckoutActivationService
         return true;
     }
 
-    public function approveManualCheckout(CheckoutIntent $intent): CheckoutIntent
+    /**
+     * Super admin approval of a manual transfer. Locked, so a double click or two admins
+     * approve once; $approvedNow tells the caller whether this call did it (notifications).
+     */
+    public function approveManualCheckout(CheckoutIntent $intent, ?bool &$approvedNow = null): CheckoutIntent
     {
-        return DB::transaction(function () use ($intent): CheckoutIntent {
+        $approvedNow = false;
+
+        return DB::transaction(function () use ($intent, &$approvedNow): CheckoutIntent {
             $lockedIntent = CheckoutIntent::query()
                 ->with(['subscription.plan', 'app', 'plan'])
                 ->lockForUpdate()
@@ -186,9 +192,10 @@ class SubscriptionCheckoutActivationService
             }
 
             $this->ensurePosProvisioning($lockedIntent);
+            $approvedNow = true;
 
             return $lockedIntent->fresh(['subscription', 'app', 'plan']) ?? $lockedIntent;
-        });
+        }, 3);
     }
 
     public function ensureActiveAccessForConfirmedCheckout(CheckoutIntent $intent): void
