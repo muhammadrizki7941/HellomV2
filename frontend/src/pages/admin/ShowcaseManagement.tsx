@@ -413,7 +413,7 @@ export default function ShowcaseManagement() {
                 )}
                 <label className="flex items-center gap-2 px-4 py-2 border border-dashed border-zinc-300 rounded-lg cursor-pointer hover:border-zinc-400 transition-colors text-sm text-zinc-600">
                   {uploadingVideo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                  {uploadingVideo ? 'Uploading...' : 'Upload Video (mp4, webm, mov — max 50MB)'}
+                  {uploadingVideo ? 'Mengunggah…' : 'Unggah video (mp4, webm, mov — maks 20 MB)'}
                   <input type="file" accept="video/mp4,video/webm,video/quicktime" className="hidden" disabled={uploadingVideo}
                     onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(f, setUploadingVideo, url => setPortfolioForm(prev => ({ ...prev, video_url: url }))); }} />
                 </label>

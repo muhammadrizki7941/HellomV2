@@ -190,7 +190,7 @@ class ShowcaseController extends BaseApiController
     public function uploadMedia(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'file' => ['required', 'file', 'max:51200', 'mimes:mp4,webm,mov,jpg,jpeg,png,webp,gif,svg'],
+            'file' => ['required', 'file', 'max:20480', 'mimes:mp4,webm,mov,jpg,jpeg,png,webp,gif,svg'], // = Nginx client_max_body_size 20m
         ]);
 
         $file = $validated['file'];

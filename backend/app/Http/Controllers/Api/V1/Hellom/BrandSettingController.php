@@ -26,12 +26,12 @@ class BrandSettingController extends BaseApiController
             'app_name' => 'nullable|string|max:100',
             'business_name' => 'nullable|string|max:100',
             'tagline' => 'nullable|string|max:200',
-            'logo' => 'nullable|image|mimes:jpg,jpeg,png,webp,svg|max:2048',
-            'favicon' => 'nullable|image|mimes:jpg,jpeg,png,ico,webp,svg|max:512',
-            'primary_color' => 'nullable|string|max:20',
-            'secondary_color' => 'nullable|string|max:20',
-            'accent_color' => 'nullable|string|max:20',
-            'background_color' => 'nullable|string|max:20',
+            'logo' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,svg', 'max:2048'],
+            'favicon' => ['nullable', 'file', 'mimes:jpg,jpeg,png,ico,webp,svg', 'max:512'],
+            'primary_color' => ['nullable', 'string', 'regex:/^#(?:[0-9a-fA-F]{3}){1,2}$/'],
+            'secondary_color' => ['nullable', 'string', 'regex:/^#(?:[0-9a-fA-F]{3}){1,2}$/'],
+            'accent_color' => ['nullable', 'string', 'regex:/^#(?:[0-9a-fA-F]{3}){1,2}$/'],
+            'background_color' => ['nullable', 'string', 'regex:/^#(?:[0-9a-fA-F]{3}){1,2}$/'],
             'login_title' => 'nullable|string|max:100',
             'login_subtitle' => 'nullable|string|max:200',
             'register_title' => 'nullable|string|max:100',
@@ -88,7 +88,7 @@ class BrandSettingController extends BaseApiController
             'business_name' => $appName,
             'tagline' => $settings->tagline,
             'logo_url' => $settings->logoUrl(),
-            'logo_base64' => $this->getBase64($settings->logo_path),
+            'logo_base64' => null, // kept for older clients; use logo_url
             'logo_dark_url' => $settings->logoDarkUrl(),
             'favicon_url' => $settings->faviconUrl(),
             'primary_color' => $settings->primary_color ?: '#0c0c0c',
@@ -109,22 +109,5 @@ class BrandSettingController extends BaseApiController
             'meta_title' => $settings->meta_title ?: $appName,
             'meta_description' => $settings->meta_description,
         ];
-    }
-
-    private function getBase64(?string $path): ?string
-    {
-        if (!$path) {
-            return null;
-        }
-
-        $fullPath = storage_path('app/public/' . ltrim($path, '/'));
-        if (!is_file($fullPath)) {
-            return null;
-        }
-
-        $content = file_get_contents($fullPath);
-        $mime = mime_content_type($fullPath) ?: 'application/octet-stream';
-
-        return 'data:' . $mime . ';base64,' . base64_encode($content);
     }
 }

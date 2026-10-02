@@ -180,7 +180,15 @@ export function deleteAdminClient(clientId: number) {
   });
 }
 
+/** Same as the server limit (and Nginx client_max_body_size 20m). */
+export const SHOWCASE_MEDIA_MAX_BYTES = 20 * 1024 * 1024;
+
 export function uploadShowcaseMedia(payload: FormData | File) {
+  const file = payload instanceof File ? payload : payload.get('file');
+  if (file instanceof File && file.size > SHOWCASE_MEDIA_MAX_BYTES) {
+    // Checked here: a bigger body is refused by Nginx with an HTML 413 before Laravel answers.
+    return Promise.reject(new Error(`Ukuran file maksimal 20 MB (file ini ${(file.size / 1024 / 1024).toFixed(1)} MB).`));
+  }
   const body = payload instanceof File
     ? (() => {
         const formData = new FormData();
