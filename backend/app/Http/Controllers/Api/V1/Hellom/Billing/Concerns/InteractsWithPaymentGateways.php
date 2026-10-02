@@ -11,6 +11,7 @@ use App\Services\Hellom\ManualPaymentSettingsService;
 use App\Services\Hellom\PaymentGatewaySettingsService;
 use App\Services\Hellom\XenditService;
 use App\Services\Hellom\XenditSettingsService;
+use App\Services\Payments\IpaymuPaymentVerifier;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -89,6 +90,7 @@ trait InteractsWithPaymentGateways
         $query = array_filter([
             ...$params,
             'token' => (string) $this->ipaymuSettings()->getConfig()['callback_token'],
+            'sig' => IpaymuPaymentVerifier::sign($params),
         ], fn ($value) => $value !== '' && $value !== 0);
 
         return url($this->providerWebhookPath('ipaymu')) . '?' . http_build_query($query);

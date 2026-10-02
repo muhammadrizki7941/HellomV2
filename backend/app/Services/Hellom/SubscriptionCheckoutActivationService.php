@@ -43,7 +43,14 @@ class SubscriptionCheckoutActivationService
 
         $meta = array_filter($gatewayMeta, fn ($value) => $value !== null && $value !== '' && $value !== 0);
 
-        DB::transaction(function () use ($intent, $meta, $providerKey, $providerLabel): void {
+        // Webhook, return URL and reconcile can arrive together: the row lock makes sure
+        // only one of them activates (one revenue entry, one invoice update).
+        $activated = DB::transaction(function () use ($intent, $meta, $providerKey, $providerLabel): bool {
+            $locked = CheckoutIntent::query()->lockForUpdate()->find((int) $intent->id);
+            if (!$locked instanceof CheckoutIntent || in_array((string) $locked->status, ['confirmed', 'paid'], true)) {
+                return false;
+            }
+            $intent->setRawAttributes($locked->getAttributes(), true);
             $now = now();
 
             $intentMeta = is_array($intent->metadata) ? $intent->metadata : [];
@@ -89,7 +96,15 @@ class SubscriptionCheckoutActivationService
             }
 
             $this->ensurePosProvisioning($intent);
-        });
+
+            return true;
+        }, 3);
+
+        if (!$activated) {
+            $this->ensureActiveAccessForConfirmedCheckout($intent->refresh());
+
+            return false;
+        }
 
         // In-app notifications: owner success + consumer activation.
         $this->notificationService->createGatewayPaymentSuccessNotif($intent, $providerLabel);

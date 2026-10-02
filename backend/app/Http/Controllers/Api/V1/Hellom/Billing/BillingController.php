@@ -15,6 +15,7 @@ use App\Services\Billing\CheckoutNotifier;
 use App\Services\Hellom\SubscriptionCheckoutActivationService;
 use App\Services\NotificationService;
 use App\Services\Billing\PaymentPolicy;
+use App\Services\Payments\IpaymuPaymentVerifier;
 use App\Support\FrontendUrl;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -216,7 +217,8 @@ class BillingController extends BaseApiController
                     $session = $this->ipaymu()->createRedirectPayment([
                         'product' => ["{$app->name} - {$plan->name}"],
                         'qty' => [1],
-                        'price' => [(int) $plan->price],
+                        // The intent amount (yearly = price x 10) is what grants the period.
+                        'price' => [(int) $intent->amount],
                         'paymentMethod' => $this->ipaymuSettings()->enabledPaymentMethods(),
                         'referenceId' => (string) $intent->intent_token,
                         'description' => ["Aktivasi {$app->name} - {$plan->name}"],
@@ -331,7 +333,7 @@ class BillingController extends BaseApiController
                                 'reference_id' => (string) $plan->slug,
                                 'type' => 'DIGITAL_SERVICE',
                                 'name' => "{$app->name} - {$plan->name}",
-                                'net_unit_amount' => (int) $plan->price,
+                                'net_unit_amount' => (int) $intent->amount,
                                 'quantity' => 1,
                                 'category' => 'SAAS',
                             ],
@@ -780,25 +782,21 @@ class BillingController extends BaseApiController
 
         $meta = is_array($intent->metadata) ? $intent->metadata : [];
         $ipaymuMeta = is_array($meta['ipaymu'] ?? null) ? $meta['ipaymu'] : [];
-        $transactionId = trim((string) ($validated['transaction_id'] ?? ''))
-            ?: trim((string) ($ipaymuMeta['transaction_id'] ?? ''))
-            ?: trim((string) ($ipaymuMeta['payment_session_id'] ?? ''));
+        // An id we stored ourselves is trusted; one the browser brings back is only a hint,
+        // so iPaymu must then also confirm that the payment belongs to this checkout.
+        $storedTransactionId = trim((string) ($ipaymuMeta['transaction_id'] ?? '')) ?: trim((string) ($ipaymuMeta['payment_session_id'] ?? ''));
+        $transactionId = $storedTransactionId ?: trim((string) ($validated['transaction_id'] ?? ''));
 
         if ($transactionId === '') {
             return $this->ok(['active' => false, 'status' => 'pending'], 'Menunggu pembayaran.');
         }
 
         try {
-            $result = $this->ipaymu()->checkTransaction($transactionId);
-            $data = (array) ($result['Data'] ?? $result['data'] ?? []);
-            $statusCode = $data['Status'] ?? $data['StatusCode'] ?? null;
-            $statusDesc = strtolower((string) ($data['StatusDesc'] ?? $data['StatusDescription'] ?? ''));
-            $paid = (int) $statusCode === 1
-                || in_array($statusDesc, ['berhasil', 'success', 'paid', 'settled', 'settlement'], true);
+            $check = app(IpaymuPaymentVerifier::class)->verify((string) $intent->intent_token, (int) $intent->amount, $transactionId, $storedTransactionId !== '');
 
-            if ($paid) {
+            if ($check['ok']) {
                 $activator->confirmGatewayCheckout($intent, [
-                    'transaction_id' => $transactionId,
+                    'transaction_id' => (string) ($check['status']->transactionId ?: $transactionId),
                     'invoice_id' => (int) ($meta['invoice_id'] ?? 0),
                     'reconciled' => true,
                 ], 'iPaymu');

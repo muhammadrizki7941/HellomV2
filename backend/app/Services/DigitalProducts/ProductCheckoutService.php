@@ -13,7 +13,9 @@ use App\Services\Hellom\IpaymuSettingsService;
 use App\Services\Hellom\ManualPaymentSettingsService;
 use App\Services\Hellom\XenditService;
 use App\Services\NotificationService;
+use App\Services\Payments\IpaymuPaymentVerifier;
 use App\Support\FrontendUrl;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
@@ -291,24 +293,27 @@ class ProductCheckoutService
      */
     public function syncIpaymuPurchaseStatus(ProductPurchase $purchase): void
     {
+        if ($purchase->payment_status === 'paid' || (string) $purchase->gateway_ref === '') {
+            return;
+        }
+
         try {
-            $response = app(IpaymuService::class)->checkTransaction((string) $purchase->gateway_ref);
-            $data = (array) (data_get($response, 'Data') ?: data_get($response, 'data') ?: []);
-
-            $statusCode = (string) (data_get($data, 'StatusCode') ?? data_get($data, 'statusCode') ?? '');
-            $statusText = strtolower(trim((string) (data_get($data, 'Status') ?: data_get($data, 'status') ?: '')));
-
-            $paid = $statusCode === '1'
-                || in_array($statusText, ['berhasil', 'success', 'successful', 'completed', 'paid', 'settlement', 'settled'], true);
-
-            if ($paid && $purchase->payment_status !== 'paid') {
-                $purchase->forceFill([
-                    'payment_status' => 'paid',
-                    'paid_at' => now(),
-                ])->save();
-
-                $purchase->product?->increment('total_purchases');
+            // gateway_ref was stored by us when the charge was created: trusted id, but
+            // iPaymu must still confirm the amount and that the payment is ours.
+            $check = app(IpaymuPaymentVerifier::class)->verify((string) $purchase->transaction_code, (int) $purchase->amount_paid, (string) $purchase->gateway_ref, true);
+            if (!$check['ok']) {
+                return;
             }
+
+            DB::transaction(function () use ($purchase): void {
+                $locked = ProductPurchase::query()->lockForUpdate()->find((int) $purchase->id);
+                if (!$locked instanceof ProductPurchase || $locked->payment_status === 'paid') {
+                    return;
+                }
+                $locked->forceFill(['payment_status' => 'paid', 'paid_at' => now()])->save();
+                $locked->product?->increment('total_purchases');
+                $purchase->setRawAttributes($locked->getAttributes(), true);
+            }, 3);
         } catch (\Throwable $exception) {
             report($exception);
         }
@@ -513,7 +518,9 @@ class ProductCheckoutService
      */
     private function ipaymuNotifyUrl(array $params): string
     {
-        // IpaymuWebhookController rejects notifications without the callback token.
+        // IpaymuWebhookController rejects notifications without the callback token; the
+        // signature binds the purchase/product/user ids to this URL.
+        $params['sig'] = IpaymuPaymentVerifier::sign($params);
         $params['token'] = (string) app(IpaymuSettingsService::class)->getConfig()['callback_token'];
         $base = url('/api/v1/hellom/webhooks/ipaymu');
         $query = http_build_query(array_filter($params, fn ($value) => $value !== '' && $value !== null));

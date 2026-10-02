@@ -3,8 +3,6 @@
 namespace App\Http\Controllers\Api\V1\Hellom;
 
 use App\Models\CheckoutIntent;
-use App\Models\Entitlement;
-use App\Models\Invoice;
 use App\Models\OrganizationWallet;
 use App\Models\OrganizationWalletTransaction;
 use App\Models\PaymentEvent;
@@ -14,8 +12,9 @@ use App\Mail\HellomCheckoutStatusMail;
 use App\Services\Hellom\IpaymuSettingsService;
 use App\Services\SellerFinance\LandingPaymentService;
 use App\Services\Hellom\PlatformMailService;
-use App\Services\Hellom\PosProvisioningService;
 use App\Services\Hellom\SubscriptionCheckoutActivationService;
+use App\Services\Payments\IpaymuPaymentVerifier;
+use App\Services\Payments\PaymentStatus;
 use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -100,152 +99,211 @@ class IpaymuWebhookController extends BaseApiController
             return $this->ok(['event_id' => $eventId, 'status' => $outcome], 'iPaymu webhook processed');
         }
 
-        if (!$this->isSuccessPayload($payload)) {
-            if ($organizationId > 0 && (string) $metadata['purpose'] === 'subscription_checkout') {
-                $intent = $this->resolveSubscriptionIntent($metadata);
-                if ($intent instanceof CheckoutIntent && $intent->user instanceof \App\Models\User) {
-                    $status = $this->normalizePaymentStatus($payload);
-                    $productName = (string) ($intent->app?->name ?? 'Aplikasi');
-                    if (in_array($status, ['pending', 'processing', 'waiting'], true)) {
-                        $this->notificationService->notifyConsumerPaymentPending($intent->user, $intent, $productName);
-                    } else {
-                        $this->notificationService->notifyConsumerPaymentFailed($intent->user, $intent, $productName);
-                    }
-                }
-            }
+        // Subscription checkout, digital product, wallet top-up: the notification is only a
+        // trigger. Status, reference and amount come from iPaymu's transaction API.
+        $purpose = (string) $metadata['purpose'];
+        $transactionId = (string) ($payload['trx_id'] ?? $payload['transaction_id'] ?? $payload['transactionId'] ?? '');
+        $signature = IpaymuPaymentVerifier::signatureValid($request->query());
 
-            if ((string) $metadata['purpose'] === 'product_purchase') {
-                $purchase = $this->resolveProductPurchase($metadata, $payload);
-                if ($purchase instanceof ProductPurchase && $purchase->user && $purchase->product) {
-                    $status = $this->normalizePaymentStatus($payload);
-                    if (in_array($status, ['pending', 'processing', 'waiting', 'unpaid'], true)) {
-                        $this->updateProductPurchaseStatus($purchase, 'pending', $payload);
-                        $this->notificationService->notifyConsumerPaymentPending($purchase->user, $purchase, $purchase->product->name);
-                    } else {
-                        $this->updateProductPurchaseStatus($purchase, 'failed', $payload);
-                        $this->notificationService->notifyConsumerPaymentFailed($purchase->user, $purchase, $purchase->product->name);
-                    }
-                }
-            }
+        if ($signature === false) {
+            $paymentEvent->forceFill(['status' => 'failed', 'error_message' => 'invalid notify URL signature'])->save();
 
-
-            $paymentEvent->forceFill([
-                'status' => 'ignored',
-                'error_message' => 'iPaymu notification was not marked successful.',
-            ])->save();
-
-            return $this->ok([
-                'event_id' => $eventId,
-                'status' => 'ignored',
-            ], 'iPaymu webhook ignored');
+            return $this->fail('Invalid iPaymu notification signature', ['code' => 'INVALID_IPAYMU_SIGNATURE'], 401);
         }
 
         try {
-            if ($organizationId > 0 && (string) $metadata['purpose'] === 'subscription_checkout') {
-                $this->activateSubscriptionCheckout($payload, $metadata);
-            }
-
-            if ($organizationId > 0 && (string) $metadata['purpose'] === 'wallet_topup') {
-                $this->creditWalletTopup($payload, $metadata, $eventId);
-            }
-
-            if ((string) $metadata['purpose'] === 'product_purchase') {
-                $purchase = $this->resolveProductPurchase($metadata, $payload);
-                if ($purchase instanceof ProductPurchase && $purchase->user && $purchase->product) {
-                    $this->updateProductPurchaseStatus($purchase, 'paid', $payload);
-                    $this->notificationService->notifyConsumerPaymentSuccess($purchase->user, $purchase, $purchase->product->name);
-                    $this->notificationService->notifyConsumerAccessActivated($purchase->user, null, $purchase->product->name);
-                }
-            }
-
-
-            $paymentEvent->forceFill([
-                'status' => 'processed',
-                'error_message' => null,
-            ])->save();
+            $outcome = match ($purpose) {
+                'subscription_checkout' => $this->processSubscriptionCheckout($metadata, $transactionId),
+                'product_purchase' => $this->processProductPurchase($metadata, $transactionId),
+                // A top-up has no stored amount to compare with: only signed URLs are credited.
+                'wallet_topup' => $signature === true ? $this->processWalletTopup($metadata, $transactionId, $eventId) : 'unsigned',
+                default => 'unknown_purpose',
+            };
         } catch (\Throwable $exception) {
-            $paymentEvent->forceFill([
-                'status' => 'failed',
-                'error_message' => $exception->getMessage(),
-            ])->save();
+            report($exception);
+            $paymentEvent->forceFill(['status' => 'failed', 'error_message' => $exception->getMessage()])->save();
 
-            throw $exception;
+            // 5xx so iPaymu retries; the return URL / reconcile can also confirm the payment.
+            return $this->fail('Verifikasi pembayaran sementara gagal', ['code' => 'GATEWAY_CHECK_FAILED'], 503);
         }
+
+        $paymentEvent->forceFill([
+            'status' => in_array($outcome, ['processed', 'duplicate'], true) ? 'processed' : 'ignored',
+            'error_message' => $outcome === 'processed' ? null : $outcome,
+        ])->save();
 
         return $this->ok([
             'event_id' => $eventId,
-            'status' => 'processed',
+            'status' => $outcome,
         ], 'iPaymu webhook processed');
     }
 
-    /**
-     * @param array<string,mixed> $payload
-     * @param array<string,mixed> $metadata
-     */
-    private function activateSubscriptionCheckout(array $payload, array $metadata): void
+    /** @param array<string,mixed> $metadata */
+    private function processSubscriptionCheckout(array $metadata, string $transactionId): string
     {
-        $intentId = (int) ($metadata['checkout_intent_id'] ?? 0);
-        $referenceId = (string) ($metadata['reference_id'] ?? '');
-        $transactionId = (string) ($payload['transaction_id'] ?? $payload['transactionId'] ?? $payload['trx_id'] ?? '');
-        $sessionId = (string) ($payload['sid'] ?? '');
-
-        $intent = CheckoutIntent::query()
-            ->with(['subscription', 'app', 'plan', 'user'])
-            ->when($intentId > 0, fn ($query) => $query->where('id', $intentId))
-            ->when($intentId <= 0 && $referenceId !== '', fn ($query) => $query->where('intent_token', $referenceId))
-            ->first();
-
+        $intent = $this->resolveSubscriptionIntent($metadata);
         if (!$intent instanceof CheckoutIntent) {
-            return;
+            return 'unknown_reference';
         }
 
-        // Shared activation (correct plan duration, entitlement, POS provisioning, in-app notifications).
-        $newlyConfirmed = app(SubscriptionCheckoutActivationService::class)->confirmGatewayCheckout($intent, [
-            'transaction_id' => $transactionId,
-            'session_id' => $sessionId,
+        $activator = app(SubscriptionCheckoutActivationService::class);
+        if (in_array((string) $intent->status, ['confirmed', 'paid'], true)) {
+            $activator->ensureActiveAccessForConfirmedCheckout($intent);
+
+            return 'duplicate';
+        }
+
+        $check = app(IpaymuPaymentVerifier::class)->verify((string) $intent->intent_token, (int) $intent->amount, $transactionId, true);
+        if (!$check['ok']) {
+            $this->notifyUnpaidCheckout($intent, $check['reason']);
+
+            return $check['reason'];
+        }
+
+        $newlyConfirmed = $activator->confirmGatewayCheckout($intent, [
+            'transaction_id' => (string) ($check['status']->transactionId ?: $transactionId),
             'invoice_id' => (int) ($metadata['invoice_id'] ?? 0),
         ], 'iPaymu');
 
         if ($newlyConfirmed) {
             $this->sendCheckoutEmails($intent->loadMissing(['subscription.organization.users', 'app', 'plan', 'user']));
         }
+
+        return $newlyConfirmed ? 'processed' : 'duplicate';
     }
 
-    /**
-     * @param array<string,mixed> $payload
-     * @param array<string,mixed> $metadata
-     */
-    private function creditWalletTopup(array $payload, array $metadata, string $eventId): void
+    private function notifyUnpaidCheckout(CheckoutIntent $intent, string $state): void
     {
-        $organizationId = (int) ($metadata['organization_id'] ?? 0);
-        $userId = (int) ($metadata['user_id'] ?? 0);
-        $amount = (int) ($payload['amount'] ?? $payload['nominal'] ?? $payload['total'] ?? 0);
-        $referenceId = (string) ($metadata['reference_id'] ?? '');
-        $transactionId = (string) ($payload['transaction_id'] ?? $payload['transactionId'] ?? $payload['trx_id'] ?? '');
+        if (!$intent->user instanceof \App\Models\User) {
+            return;
+        }
+        $productName = (string) ($intent->app?->name ?? 'Aplikasi');
+        if ($state === PaymentStatus::PENDING) {
+            $this->notificationService->notifyConsumerPaymentPending($intent->user, $intent, $productName);
+        } elseif (in_array($state, [PaymentStatus::FAILED, PaymentStatus::EXPIRED], true)) {
+            $this->notificationService->notifyConsumerPaymentFailed($intent->user, $intent, $productName);
+        }
+    }
 
-        if ($organizationId <= 0 || $amount <= 0) {
+    /** @param array<string,mixed> $metadata */
+    private function processProductPurchase(array $metadata, string $transactionId): string
+    {
+        $purchase = $this->resolveProductPurchase($metadata);
+        if (!$purchase instanceof ProductPurchase) {
+            return 'unknown_reference';
+        }
+        if ($purchase->payment_status === 'paid') {
+            return 'duplicate';
+        }
+
+        $check = app(IpaymuPaymentVerifier::class)->verify((string) $purchase->transaction_code, (int) $purchase->amount_paid, $transactionId, true);
+        if (!$check['ok']) {
+            $this->recordUnpaidPurchase($purchase, $check['reason']);
+
+            return $check['reason'];
+        }
+
+        $paidNow = DB::transaction(function () use ($purchase, $check, $transactionId): bool {
+            $locked = ProductPurchase::query()->lockForUpdate()->find((int) $purchase->id);
+            if (!$locked instanceof ProductPurchase || $locked->payment_status === 'paid') {
+                return false;
+            }
+            $locked->forceFill([
+                'payment_status' => 'paid',
+                'payment_gateway' => 'ipaymu',
+                'gateway_ref' => (string) ($check['status']->transactionId ?: $transactionId),
+                'paid_at' => now(),
+            ])->save();
+            $locked->product?->increment('total_purchases');
+
+            return true;
+        }, 3);
+
+        if ($paidNow && $purchase->user && $purchase->product) {
+            $this->notificationService->notifyConsumerPaymentSuccess($purchase->user, $purchase, $purchase->product->name);
+            $this->notificationService->notifyConsumerAccessActivated($purchase->user, null, $purchase->product->name);
+        }
+
+        return $paidNow ? 'processed' : 'duplicate';
+    }
+
+    /** Pending/failed/expired as reported by iPaymu; a paid purchase is never downgraded. */
+    private function recordUnpaidPurchase(ProductPurchase $purchase, string $state): void
+    {
+        $status = match ($state) {
+            PaymentStatus::PENDING => 'pending',
+            PaymentStatus::FAILED, PaymentStatus::EXPIRED => 'failed',
+            default => null,
+        };
+        if ($status === null || $purchase->payment_status === $status) {
             return;
         }
 
-        DB::transaction(function () use ($organizationId, $userId, $amount, $referenceId, $transactionId, $eventId, $metadata): void {
+        $changed = ProductPurchase::query()->whereKey($purchase->id)->where('payment_status', '!=', 'paid')
+            ->update(['payment_status' => $status, 'payment_gateway' => 'ipaymu', 'updated_at' => now()]);
+        if (!$changed || !$purchase->user || !$purchase->product) {
+            return;
+        }
+
+        if ($status === 'pending') {
+            $this->notificationService->notifyConsumerPaymentPending($purchase->user, $purchase, $purchase->product->name);
+        } else {
+            $this->notificationService->notifyConsumerPaymentFailed($purchase->user, $purchase, $purchase->product->name);
+        }
+    }
+
+    /** @param array<string,mixed> $metadata */
+    private function processWalletTopup(array $metadata, string $transactionId, string $eventId): string
+    {
+        $organizationId = (int) ($metadata['organization_id'] ?? 0);
+        $referenceId = (string) ($metadata['reference_id'] ?? '');
+        if ($organizationId <= 0 || $referenceId === '') {
+            return 'unknown_reference';
+        }
+
+        // No stored amount for a top-up: iPaymu must confirm our reference, and the
+        // amount it reports is what gets credited.
+        $check = app(IpaymuPaymentVerifier::class)->verify($referenceId, null, $transactionId, false);
+        if (!$check['ok']) {
+            return $check['reason'];
+        }
+        $amount = (int) $check['status']->amount;
+        if ($amount <= 0) {
+            return 'amount_unknown';
+        }
+
+        $credited = $this->creditWalletTopup($metadata, $amount, (string) ($check['status']->transactionId ?: $transactionId), $eventId);
+
+        return $credited ? 'processed' : 'duplicate';
+    }
+
+    /** @param array<string,mixed> $metadata */
+    private function creditWalletTopup(array $metadata, int $amount, string $transactionId, string $eventId): bool
+    {
+        $organizationId = (int) ($metadata['organization_id'] ?? 0);
+        $userId = (int) ($metadata['user_id'] ?? 0);
+        $referenceId = (string) ($metadata['reference_id'] ?? '');
+
+        return DB::transaction(function () use ($organizationId, $userId, $amount, $referenceId, $transactionId, $eventId, $metadata): bool {
+            OrganizationWallet::query()->firstOrCreate(
+                ['organization_id' => $organizationId],
+                ['currency' => 'IDR', 'available_balance' => 0, 'pending_balance' => 0, 'total_in' => 0, 'total_out' => 0, 'status' => 'active']
+            );
+            // Lock the wallet first so two notifications for one payment cannot both credit.
+            $wallet = OrganizationWallet::query()->where('organization_id', $organizationId)->lockForUpdate()->firstOrFail();
+
             $existingCredit = OrganizationWalletTransaction::query()
                 ->where('organization_id', $organizationId)
                 ->where('type', 'payment_credit')
                 ->where(function ($query) use ($eventId, $referenceId, $transactionId): void {
-                    $query->where('metadata->event_id', $eventId);
-
-                    if ($referenceId !== '') {
-                        $query->orWhere('external_ref', $referenceId);
-                    }
-
-                    if ($transactionId !== '') {
-                        $query->orWhere('metadata->transaction_id', $transactionId);
-                    }
+                    $query->where('metadata->event_id', $eventId)
+                        ->orWhere('external_ref', $referenceId)
+                        ->orWhere('metadata->transaction_id', $transactionId);
                 })
                 ->exists();
 
             if ($existingCredit) {
-                return;
+                return false;
             }
 
             if ($userId > 0) {
@@ -256,23 +314,6 @@ class IpaymuWebhookController extends BaseApiController
                     null,
                     'User wallet top-up via iPaymu webhook'
                 );
-            }
-
-            $wallet = OrganizationWallet::query()
-                ->where('organization_id', $organizationId)
-                ->lockForUpdate()
-                ->first();
-
-            if (!$wallet instanceof OrganizationWallet) {
-                $wallet = OrganizationWallet::query()->create([
-                    'organization_id' => $organizationId,
-                    'currency' => 'IDR',
-                    'available_balance' => 0,
-                    'pending_balance' => 0,
-                    'total_in' => 0,
-                    'total_out' => 0,
-                    'status' => 'active',
-                ]);
             }
 
             $wallet->forceFill([
@@ -290,7 +331,7 @@ class IpaymuWebhookController extends BaseApiController
                 'balance_after' => (int) $wallet->available_balance,
                 'reference_type' => 'ipaymu_event',
                 'reference_id' => 'success',
-                'external_ref' => $referenceId !== '' ? $referenceId : $transactionId,
+                'external_ref' => $referenceId,
                 'description' => 'Incoming payment credited from iPaymu webhook',
                 'metadata' => [
                     'event_id' => $eventId,
@@ -298,82 +339,26 @@ class IpaymuWebhookController extends BaseApiController
                     'channel' => (string) ($metadata['channel'] ?? 'redirect'),
                     'settlement_mode' => 'assumed_instant',
                     'settlement_status' => 'settled',
+                    'verified_with_gateway' => true,
                 ],
             ]);
-        });
+
+            return true;
+        }, 3);
     }
 
-    /**
-     * @param array<string,mixed> $metadata
-     * @param array<string,mixed> $payload
-     */
-    private function resolveProductPurchase(array $metadata, array $payload): ?ProductPurchase
+    /** Only the (signed) notify URL decides which purchase this is, never the request body. */
+    private function resolveProductPurchase(array $metadata): ?ProductPurchase
     {
         $purchaseId = (int) ($metadata['purchase_id'] ?? 0);
         $referenceId = (string) ($metadata['reference_id'] ?? '');
-        $transactionRef = (string) (
-            $payload['reference_id']
-            ?? $payload['referenceId']
-            ?? $referenceId
-        );
 
         return ProductPurchase::query()
             ->with(['user', 'product'])
             ->when($purchaseId > 0, fn ($query) => $query->where('id', $purchaseId))
-            ->when($purchaseId <= 0 && $transactionRef !== '', fn ($query) => $query->where('transaction_code', $transactionRef))
+            ->when($purchaseId <= 0 && $referenceId !== '', fn ($query) => $query->where('transaction_code', $referenceId))
+            ->when($purchaseId <= 0 && $referenceId === '', fn ($query) => $query->whereRaw('1 = 0'))
             ->first();
-    }
-
-    /**
-     * @param array<string,mixed> $payload
-     */
-    private function updateProductPurchaseStatus(ProductPurchase $purchase, string $status, array $payload): void
-    {
-        if ($status === 'paid' && $purchase->payment_status === 'paid') {
-            return;
-        }
-
-        $purchase->forceFill([
-            'payment_status' => $status,
-            'payment_gateway' => 'ipaymu',
-            'gateway_ref' => (string) (
-                $payload['transaction_id']
-                ?? $payload['transactionId']
-                ?? $payload['trx_id']
-                ?? $purchase->gateway_ref
-                ?? ''
-            ),
-            'paid_at' => $status === 'paid' ? now() : $purchase->paid_at,
-        ])->save();
-
-        if ($status === 'paid') {
-            $purchase->product?->increment('total_purchases');
-        }
-    }
-
-    /**
-     * @param array<string,mixed> $payload
-     */
-    private function isSuccessPayload(array $payload): bool
-    {
-        $status = strtolower(trim((string) (
-            $payload['status']
-            ?? $payload['Status']
-            ?? $payload['transactionStatus']
-            ?? $payload['payment_status']
-            ?? ''
-        )));
-
-        if (in_array($status, ['berhasil', 'success', 'successful', 'completed', 'paid', 'settlement', 'settled'], true)) {
-            return true;
-        }
-
-        $success = $payload['success'] ?? $payload['Success'] ?? null;
-        if ($success !== null) {
-            return filter_var($success, FILTER_VALIDATE_BOOLEAN);
-        }
-
-        return false;
     }
 
     private function sendCheckoutEmails(CheckoutIntent $intent): void
@@ -432,17 +417,7 @@ class IpaymuWebhookController extends BaseApiController
             ->with(['subscription', 'app', 'plan', 'user'])
             ->when($intentId > 0, fn ($query) => $query->where('id', $intentId))
             ->when($intentId <= 0 && $referenceId !== '', fn ($query) => $query->where('intent_token', $referenceId))
+            ->when($intentId <= 0 && $referenceId === '', fn ($query) => $query->whereRaw('1 = 0'))
             ->first();
-    }
-
-    private function normalizePaymentStatus(array $payload): string
-    {
-        return strtolower(trim((string) (
-            $payload['status']
-            ?? $payload['Status']
-            ?? $payload['transactionStatus']
-            ?? $payload['payment_status']
-            ?? ''
-        )));
     }
 }
