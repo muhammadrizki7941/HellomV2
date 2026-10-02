@@ -101,8 +101,6 @@ Route::prefix('admin')->name('admin.')->middleware('superAdmin')->group(function
     Route::get('/mail-settings', [AdminMailController::class, 'showSettings']);
     Route::put('/mail-settings', [AdminMailController::class, 'updateSettings']);
     Route::post('/mail-settings/test', [AdminMailController::class, 'sendTest']);
-    Route::post('/mail-settings/promo', [AdminMailController::class, 'sendPromo']);
-    Route::post('/mail-settings/billing-reminder/{subscriptionId}', [AdminMailController::class, 'sendBillingReminder']);
 
     Route::get('/notifications', [\App\Http\Controllers\Admin\OwnerNotificationController::class, 'index']);
     Route::get('/notifications/unread-count', [\App\Http\Controllers\Admin\OwnerNotificationController::class, 'unreadCount']);
