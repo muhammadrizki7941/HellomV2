@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
-import { BadgeCheck, ShieldCheck, X, RefreshCw } from 'lucide-react';
-import { getAdminPayoutProfiles, approvePayoutProfile, rejectPayoutProfile } from '@/lib/hellomApi';
+import { useEffect, useRef, useState } from 'react';
+import { BadgeCheck, Eye, ShieldCheck, X, RefreshCw } from 'lucide-react';
+import { getAdminPayoutProfiles, approvePayoutProfile, rejectPayoutProfile, fetchAuthorizedBlobUrl } from '@/lib/hellomApi';
 
 interface KycProfile {
   id: number;
@@ -22,6 +22,29 @@ export default function PayoutKycReview() {
   const [loading, setLoading] = useState(false);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The KTP image is behind the API token, so it is loaded as a blob, never a plain link.
+  const [ktpPreview, setKtpPreview] = useState<Record<number, string>>({});
+  const [ktpLoadingId, setKtpLoadingId] = useState<number | null>(null);
+  const previewUrls = useRef<string[]>([]);
+
+  useEffect(() => () => previewUrls.current.forEach((url) => URL.revokeObjectURL(url)), []);
+
+  const toggleKtp = async (id: number) => {
+    if (ktpPreview[id]) {
+      setKtpPreview(({ [id]: _hidden, ...rest }) => rest);
+      return;
+    }
+    setKtpLoadingId(id);
+    try {
+      const url = await fetchAuthorizedBlobUrl(`/admin/payout-profiles/${id}/ktp`);
+      previewUrls.current.push(url);
+      setKtpPreview((current) => ({ ...current, [id]: url }));
+    } catch {
+      setError('Foto KTP tidak bisa dimuat. Coba refresh halaman.');
+    } finally {
+      setKtpLoadingId(null);
+    }
+  };
 
   const load = async () => {
     setLoading(true);
@@ -39,6 +62,7 @@ export default function PayoutKycReview() {
   useEffect(() => { void load(); }, []);
 
   const approve = async (id: number) => {
+    if (!window.confirm('Setujui verifikasi ini? Pastikan nama di KTP sama dengan nama pemilik rekening.')) return;
     setBusyId(id);
     try {
       await approvePayoutProfile(id);
@@ -90,7 +114,12 @@ export default function PayoutKycReview() {
                 <p className="mt-1 text-sm text-zinc-600">{p.full_name} · NIK {p.nik}</p>
                 <p className="text-sm text-zinc-600">{p.bank_code} {p.bank_name} · {p.account_number} a.n. {p.account_name}</p>
                 {p.ktp_image_url && (
-                  <a href={p.ktp_image_url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-xs font-semibold text-blue-600 underline">Lihat foto KTP</a>
+                  <button type="button" onClick={() => void toggleKtp(p.id)} disabled={ktpLoadingId === p.id} className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-blue-600 underline disabled:opacity-60">
+                    <Eye className="h-3.5 w-3.5" /> {ktpLoadingId === p.id ? 'Memuat foto KTP…' : ktpPreview[p.id] ? 'Sembunyikan foto KTP' : 'Lihat foto KTP'}
+                  </button>
+                )}
+                {ktpPreview[p.id] && (
+                  <img src={ktpPreview[p.id]} alt={`KTP ${p.full_name ?? ''}`} className="mt-2 max-h-72 w-full max-w-md rounded-lg border border-zinc-200 object-contain" />
                 )}
               </div>
               <div className="flex shrink-0 gap-2">
