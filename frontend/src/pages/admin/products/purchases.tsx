@@ -39,15 +39,16 @@ export default function AdminProductPurchases() {
 
   const handleApprove = async (purchase: Purchase) => {
     try {
+      if (!window.confirm('Konfirmasi pembayaran manual ini? Pastikan dana sudah masuk ke rekening.')) return;
       await approveProductPurchase(purchase.id);
       await loadPurchases();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Gagal approve');
+      setError(err instanceof Error ? err.message : 'Gagal mengonfirmasi');
     }
   };
 
   const handleRefund = async (purchase: Purchase) => {
-    if (!window.confirm('Refund pembelian ini?')) return;
+    if (!window.confirm('Tandai pembelian ini sebagai direfund? Akses pembeli akan dicabut. Uangnya dikembalikan manual (transfer/dashboard gateway).')) return;
     try {
       await refundProductPurchase(purchase.id);
       await loadPurchases();
@@ -117,7 +118,7 @@ export default function AdminProductPurchases() {
                             ? 'bg-red-100 text-red-700'
                             : 'bg-zinc-100 text-zinc-600'
                     }`}>
-                      {item.payment_status}
+                      {({ paid: 'Lunas', pending: 'Menunggu', failed: 'Gagal', refunded: 'Direfund' } as Record<string, string>)[item.payment_status] ?? item.payment_status}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-zinc-500">{String(item.created_at || '').split('T')[0]}</td>
@@ -128,7 +129,7 @@ export default function AdminProductPurchases() {
                           onClick={() => void handleApprove(item)}
                           className="text-xs font-semibold text-emerald-700 inline-flex items-center gap-1"
                         >
-                          <CheckCircle className="w-3 h-3" /> Approve
+                          <CheckCircle className="w-3 h-3" /> Konfirmasi
                         </button>
                       )}
                       {item.payment_status === 'pending' && item.payment_gateway !== 'manual' && (

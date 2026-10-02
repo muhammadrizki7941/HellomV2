@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Api\V1\Hellom\BaseApiController;
+use App\Models\AuditLog;
+use App\Models\OwnerNotification;
 use App\Models\ProductPurchase;
 use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
@@ -45,7 +47,7 @@ class ProductPurchaseController extends BaseApiController
             $query->whereDate('created_at', '<=', $endDate);
         }
 
-        $perPage = (int) $request->query('per_page', 20);
+        $perPage = max(1, min((int) $request->query('per_page', 20), 100));
         $items = $query->orderByDesc('created_at')->paginate($perPage);
 
         return $this->ok([
@@ -66,54 +68,88 @@ class ProductPurchaseController extends BaseApiController
         return $this->ok($purchase, 'Purchase detail');
     }
 
-    public function approve(string $id, NotificationService $notificationService): JsonResponse
+    public function approve(Request $request, string $id, NotificationService $notificationService): JsonResponse
     {
         $purchase = ProductPurchase::query()->with(['user', 'product'])->findOrFail($id);
-        if ($purchase->payment_status === 'paid') {
-            return $this->ok($purchase, 'Purchase already approved');
-        }
-
         if ($purchase->payment_gateway !== 'manual') {
             return $this->fail('Hanya pembayaran manual yang bisa dikonfirmasi manual oleh super admin.', ['code' => 'ONLY_MANUAL_PURCHASE_CAN_BE_APPROVED'], 422);
         }
 
-        DB::transaction(function () use ($purchase) {
-            $purchase->forceFill([
+        // Locked: a double click or two admins confirm (and count) the purchase once.
+        $outcome = DB::transaction(function () use ($purchase): string {
+            $locked = ProductPurchase::query()->lockForUpdate()->find((int) $purchase->id);
+            if (!$locked instanceof ProductPurchase || $locked->payment_status === 'paid') {
+                return 'already_paid';
+            }
+            if ($locked->payment_status === 'refunded') {
+                return 'refunded';
+            }
+
+            $locked->forceFill([
                 'payment_status' => 'paid',
-                'paid_at' => $purchase->paid_at ?? now(),
+                'paid_at' => $locked->paid_at ?? now(),
             ])->save();
+            $locked->product?->increment('total_purchases');
 
-            $purchase->product?->increment('total_purchases');
-
-            \App\Models\OwnerNotification::query()
+            OwnerNotification::query()
                 ->where('reference_type', 'digital_product_purchase')
-                ->where('reference_id', $purchase->id)
+                ->where('reference_id', $locked->id)
                 ->where('action_status', 'pending')
                 ->update([
                     'action_status' => 'done',
                     'action_done_at' => now(),
                 ]);
-        });
+
+            return 'approved';
+        }, 3);
+
+        if ($outcome === 'refunded') {
+            return $this->fail('Pembelian ini sudah direfund dan tidak bisa dikonfirmasi lagi.', ['code' => 'PURCHASE_REFUNDED'], 422);
+        }
+        if ($outcome === 'already_paid') {
+            return $this->ok($purchase->fresh(), 'Pembelian ini sudah dikonfirmasi');
+        }
+
+        AuditLog::record('digital_product.purchase_approved', $request->user()?->id, null, 'product_purchase', (int) $purchase->id,
+            null, ['amount_paid' => (int) $purchase->amount_paid], null, $request->ip());
 
         if ($purchase->user && $purchase->product) {
             $notificationService->notifyConsumerPaymentSuccess($purchase->user, $purchase, $purchase->product->name);
             $notificationService->notifyConsumerAccessActivated($purchase->user, null, $purchase->product->name);
         }
 
-        return $this->ok($purchase->fresh(), 'Purchase approved');
+        return $this->ok($purchase->fresh(), 'Pembelian dikonfirmasi');
     }
 
-    public function refund(string $id, NotificationService $notificationService): JsonResponse
+    /**
+     * Marks a paid purchase as refunded (access ends). The money itself is returned
+     * outside Hellom (gateway dashboard / bank transfer), so only paid purchases qualify.
+     */
+    public function refund(Request $request, string $id, NotificationService $notificationService): JsonResponse
     {
         $purchase = ProductPurchase::query()->with(['user', 'product'])->findOrFail($id);
-        $purchase->forceFill([
-            'payment_status' => 'refunded',
-        ])->save();
+
+        $refundedNow = DB::transaction(function () use ($purchase): bool {
+            $locked = ProductPurchase::query()->lockForUpdate()->find((int) $purchase->id);
+            if (!$locked instanceof ProductPurchase || $locked->payment_status !== 'paid') {
+                return false;
+            }
+            $locked->forceFill(['payment_status' => 'refunded'])->save();
+
+            return true;
+        }, 3);
+
+        if (!$refundedNow) {
+            return $this->fail('Hanya pembelian yang sudah lunas yang bisa direfund.', ['code' => 'PURCHASE_NOT_REFUNDABLE'], 422);
+        }
+
+        AuditLog::record('digital_product.purchase_refunded', $request->user()?->id, null, 'product_purchase', (int) $purchase->id,
+            ['payment_status' => 'paid'], ['payment_status' => 'refunded'], null, $request->ip());
 
         if ($purchase->user) {
             $notificationService->notifyConsumerRefundProcessed($purchase->user, $purchase);
         }
 
-        return $this->ok($purchase->fresh(), 'Purchase refunded');
+        return $this->ok($purchase->fresh(), 'Pembelian direfund');
     }
 }
