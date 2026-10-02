@@ -102,9 +102,17 @@ class DokuService
             }
             $response = $client->send($method, $path)->throw();
         } catch (RequestException $exception) {
-            $message = data_get($exception->response?->json(), 'message.0')
-                ?: data_get($exception->response?->json(), 'message')
-                ?: $exception->getMessage();
+            $json = $exception->response?->json();
+            $message = (string) (data_get($json, 'message.0') ?: data_get($json, 'message') ?: $exception->getMessage());
+            $code = strtolower((string) (data_get($json, 'error.code') ?: data_get($json, 'error.type') ?: ''));
+
+            // Production keys of a DOKU account that is still being verified answer 401
+            // merchant_inactive: not a code problem, so say what to do instead.
+            if (str_contains($code . ' ' . strtolower($message), 'merchant_inactive')) {
+                throw new \RuntimeException($config['is_production']
+                    ? 'Akun DOKU production belum aktif (masih diverifikasi DOKU). Pakai mode sandbox atau gateway lain dulu sampai akun disetujui.'
+                    : 'Akun DOKU sandbox ini belum aktif. Cek Client ID dan Secret Key di dashboard DOKU.', previous: $exception);
+            }
 
             throw new \RuntimeException('DOKU API error: ' . $message, previous: $exception);
         }
