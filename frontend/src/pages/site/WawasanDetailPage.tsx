@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Clock, User } from 'lucide-react';
 import useBrand from '@/hooks/useBrand';
+import { safeHtml } from '@/lib/safeHtml';
 import useSeo from '@/hooks/useSeo';
 import { getImageUrl, getPublicInsightBySlug } from '@/lib/hellomApi';
 
@@ -158,7 +159,7 @@ export default function WawasanDetailPage() {
               {article.content ? (
                 <div
                   className="article-content mt-8 text-[15px] leading-relaxed text-[#C9C9CC] [&_a]:text-[#F6B400] [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-[#F6B400]/50 [&_blockquote]:pl-4 [&_blockquote]:text-[#B6B6B8] [&_h2]:mt-8 [&_h2]:font-display [&_h2]:text-2xl [&_h2]:font-medium [&_h2]:text-white [&_h3]:mt-6 [&_h3]:text-xl [&_h3]:font-semibold [&_h3]:text-white [&_img]:my-6 [&_img]:rounded-xl [&_li]:mt-1 [&_ol]:mt-4 [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:mt-4 [&_ul]:mt-4 [&_ul]:list-disc [&_ul]:pl-6"
-                  dangerouslySetInnerHTML={{ __html: article.content }}
+                  dangerouslySetInnerHTML={{ __html: safeHtml(article.content) }}
                 />
               ) : null}
 

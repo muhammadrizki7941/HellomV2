@@ -6,6 +6,7 @@ use App\Models\LandingAboutSetting;
 use App\Models\LandingArticle;
 use App\Models\LandingService;
 use App\Services\Hellom\GeminiService;
+use App\Support\SafeHtml;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -218,9 +219,9 @@ class LandingContentController extends BaseApiController
     public function storeService(Request $request): JsonResponse
     {
         $validated = $this->validateService($request);
-        $validated['slug'] = $validated['slug'] ?: Str::slug($validated['title']);
+        $validated['slug'] = $this->uniqueSlug(LandingService::class, (string) (($validated['slug'] ?? null) ?: $validated['title']));
 
-        return $this->ok(LandingService::query()->create($validated), 'Service created', 201);
+        return $this->ok(LandingService::query()->create($validated), 'Layanan dibuat', 201);
     }
 
     public function updateService(Request $request, int $id): JsonResponse
@@ -232,7 +233,7 @@ class LandingContentController extends BaseApiController
 
         $validated = $this->validateService($request, $id);
         if (array_key_exists('slug', $validated) && !$validated['slug']) {
-            $validated['slug'] = Str::slug((string) ($validated['title'] ?? $service->title));
+            $validated['slug'] = $this->uniqueSlug(LandingService::class, (string) ($validated['title'] ?? $service->title), $id);
         }
         $service->update($validated);
 
@@ -248,9 +249,9 @@ class LandingContentController extends BaseApiController
     public function storeArticle(Request $request): JsonResponse
     {
         $validated = $this->validateArticle($request);
-        $validated['slug'] = $validated['slug'] ?: Str::slug($validated['title']);
+        $validated['slug'] = $this->uniqueSlug(LandingArticle::class, (string) (($validated['slug'] ?? null) ?: $validated['title']));
 
-        return $this->ok(LandingArticle::query()->create($validated), 'Article created', 201);
+        return $this->ok(LandingArticle::query()->create($validated), 'Artikel dibuat', 201);
     }
 
     public function updateArticle(Request $request, int $id): JsonResponse
@@ -262,7 +263,7 @@ class LandingContentController extends BaseApiController
 
         $validated = $this->validateArticle($request, $id);
         if (array_key_exists('slug', $validated) && !$validated['slug']) {
-            $validated['slug'] = Str::slug((string) ($validated['title'] ?? $article->title));
+            $validated['slug'] = $this->uniqueSlug(LandingArticle::class, (string) ($validated['title'] ?? $article->title), $id);
         }
         $article->update($validated);
 
@@ -354,7 +355,7 @@ class LandingContentController extends BaseApiController
                     . "Judul: {$title}\n\nKonten:\n{$content}";
                 $raw = $gemini->generate($prompt, 0.6, 4000);
 
-                return $this->ok(['result' => $this->cleanHtml($raw)], 'Konten dirapikan');
+                return $this->ok(['result' => SafeHtml::clean($this->cleanHtml($raw))], 'Konten dirapikan');
             }
 
             // draft
@@ -367,9 +368,11 @@ class LandingContentController extends BaseApiController
                 . "Jangan sertakan judul utama (h1), <html>, <head>, <body>, atau blok kode markdown.";
             $raw = $gemini->generate($prompt, 0.8, 4000);
 
-            return $this->ok(['result' => $this->cleanHtml($raw)], 'Draft artikel dibuat');
+            return $this->ok(['result' => SafeHtml::clean($this->cleanHtml($raw))], 'Draft artikel dibuat');
         } catch (\Throwable $exception) {
-            return $this->fail($exception->getMessage(), ['code' => 'AI_FAILED'], 422);
+            report($exception);
+
+            return $this->fail('AI sedang tidak bisa dipakai. Coba lagi sebentar lagi.', ['code' => 'AI_FAILED'], 422);
         }
     }
 
@@ -410,6 +413,22 @@ class LandingContentController extends BaseApiController
         return $out;
     }
 
+    /**
+     * Slug from the given text, with "-2", "-3"… when it is taken (titles often repeat).
+     *
+     * @param class-string<\Illuminate\Database\Eloquent\Model> $model
+     */
+    private function uniqueSlug(string $model, string $text, ?int $ignoreId = null): string
+    {
+        $base = Str::slug($text) ?: 'konten';
+        $slug = $base;
+        for ($i = 2; $model::query()->where('slug', $slug)->when($ignoreId, fn ($q) => $q->where('id', '!=', $ignoreId))->exists(); $i++) {
+            $slug = $base . '-' . $i;
+        }
+
+        return $slug;
+    }
+
     private function validateService(Request $request, ?int $id = null): array
     {
         return $request->validate([
@@ -439,7 +458,7 @@ class LandingContentController extends BaseApiController
 
     private function validateArticle(Request $request, ?int $id = null): array
     {
-        return $request->validate([
+        $validated = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'slug' => ['nullable', 'string', 'max:255', 'unique:landing_articles,slug,' . ($id ?? 'NULL') . ',id'],
             'meta_title' => ['nullable', 'string', 'max:255'],
@@ -456,5 +475,12 @@ class LandingContentController extends BaseApiController
             'is_featured' => ['boolean'],
             'is_active' => ['boolean'],
         ]);
+
+        // The body is rendered as HTML on the public site, which shares the dashboard origin.
+        if (array_key_exists('content', $validated)) {
+            $validated['content'] = SafeHtml::clean($validated['content']);
+        }
+
+        return $validated;
     }
 }

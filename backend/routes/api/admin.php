@@ -85,7 +85,7 @@ Route::prefix('admin')->name('admin.')->middleware('superAdmin')->group(function
     Route::post('/landing-content/services', [LandingContentController::class, 'storeService'])->name('landing_content.services.store');
     Route::put('/landing-content/services/{id}', [LandingContentController::class, 'updateService'])->name('landing_content.services.update');
     Route::delete('/landing-content/services/{id}', [LandingContentController::class, 'destroyService'])->name('landing_content.services.destroy');
-    Route::post('/landing-content/articles/ai-assist', [LandingContentController::class, 'aiAssist'])->name('landing_content.articles.ai_assist');
+    Route::post('/landing-content/articles/ai-assist', [LandingContentController::class, 'aiAssist'])->middleware('throttle:10,1')->name('landing_content.articles.ai_assist');
     Route::post('/landing-content/articles', [LandingContentController::class, 'storeArticle'])->name('landing_content.articles.store');
     Route::put('/landing-content/articles/{id}', [LandingContentController::class, 'updateArticle'])->name('landing_content.articles.update');
     Route::delete('/landing-content/articles/{id}', [LandingContentController::class, 'destroyArticle'])->name('landing_content.articles.destroy');
