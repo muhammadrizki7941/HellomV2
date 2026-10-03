@@ -1,0 +1,101 @@
+{
+  "id": "retro-y2k",
+  "order": 8,
+  "name": "Retro Y2K",
+  "category": "fashion",
+  "badge": "baru",
+  "description": "Gradien warna-warni dan tombol pill berbayang. Playful untuk thrift & fashion anak muda.",
+  "slots": {
+    "banner": "Banner 3:1 — koleksi thrift / flatlay warna-warni",
+    "avatar": "Logo toko"
+  },
+  "document": {
+    "theme": {
+      "preset": "retro",
+      "primary": "#4338ca",
+      "buttonText": "#ffffff",
+      "text": "#1e1b4b",
+      "background": "#a5f3fc",
+      "headingFont": "montserrat",
+      "bodyFont": "montserrat",
+      "bg": {
+        "type": "gradient",
+        "from": "#a5f3fc",
+        "via": "#f0abfc",
+        "to": "#fde68a",
+        "angle": 120
+      },
+      "button": {
+        "shape": "pill",
+        "fill": "solid",
+        "shadow": "hard",
+        "borderWidth": 2,
+        "hover": "grow"
+      },
+      "motion": {
+        "entrance": "zoom",
+        "speed": "fast",
+        "stagger": true
+      }
+    },
+    "blocks": [
+      {
+        "type": "profile",
+        "content": {
+          "name": "Thrift Kala",
+          "bio": "Barang preloved pilihan, kondisi 9/10 ✌️\nDrop baru tiap Sabtu jam 7 malam",
+          "avatarUrl": "{{slot:avatar}}",
+          "coverUrl": "{{slot:banner}}",
+          "showVerified": true
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Drop Sabtu ini",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "star",
+          "featured": true,
+          "featuredStyle": "shake"
+        }
+      },
+      {
+        "type": "catalog",
+        "content": {
+          "title": "Masih tersedia",
+          "showAll": true,
+          "productIds": [],
+          "columns": 2,
+          "buttonText": "Ambil"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Cara order & pembayaran",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "info",
+          "fill": "glass"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Tanya ukuran & detail",
+          "actionType": "whatsapp",
+          "whatsappMessage": "Halo Thrift Kala, aku mau tanya detail barang",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "whatsapp",
+          "fill": "glass"
+        }
+      }
+    ]
+  }
+}

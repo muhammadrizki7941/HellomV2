@@ -1,0 +1,135 @@
+{
+  "id": "pastel-glow",
+  "order": 4,
+  "name": "Pastel Glow",
+  "category": "fashion",
+  "badge": "populer",
+  "description": "Gradien pastel lembut dan tombol membulat. Untuk beauty, skincare, dan fashion.",
+  "slots": {
+    "banner": "Banner 3:1 — produk skincare dengan latar pastel",
+    "avatar": "Logo brand",
+    "product": "Foto produk unggulan"
+  },
+  "document": {
+    "theme": {
+      "preset": "pastel",
+      "primary": "#be185d",
+      "buttonText": "#ffffff",
+      "text": "#3f3f46",
+      "background": "#fdf2f8",
+      "headingFont": "dmserif",
+      "bodyFont": "dmsans",
+      "bg": {
+        "type": "gradient",
+        "from": "#fce7f3",
+        "to": "#e0e7ff",
+        "angle": 160
+      },
+      "button": {
+        "shape": "pill",
+        "fill": "solid",
+        "shadow": "soft",
+        "hover": "lift"
+      },
+      "motion": {
+        "entrance": "slide",
+        "speed": "normal",
+        "stagger": true
+      }
+    },
+    "blocks": [
+      {
+        "type": "profile",
+        "content": {
+          "name": "Glowé Skin",
+          "bio": "Skincare lokal untuk kulit tropis ✨\nBPOM • Halal • Cruelty-free",
+          "avatarUrl": "{{slot:avatar}}",
+          "coverUrl": "{{slot:banner}}",
+          "showVerified": true,
+          "coverFade": true
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Belanja di Shopee",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "shopee",
+          "featured": true
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Belanja di Tokopedia",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "tokopedia"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Konsultasi kulit gratis",
+          "actionType": "whatsapp",
+          "whatsappMessage": "Halo Glowé, aku mau konsultasi jenis kulit",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "whatsapp",
+          "fill": "outline"
+        }
+      },
+      {
+        "type": "catalog",
+        "content": {
+          "title": "Produk favorit",
+          "showAll": true,
+          "productIds": [],
+          "columns": 2,
+          "buttonText": "Beli"
+        }
+      },
+      {
+        "type": "testimonials",
+        "content": {
+          "title": "Kata mereka",
+          "items": [
+            {
+              "name": "Salsa, 24",
+              "role": "Contoh — ganti dengan ulasan pembeli asli",
+              "text": "Serumnya ringan banget, jerawat mulai kalem setelah dua minggu.",
+              "rating": 5
+            },
+            {
+              "name": "Dinda, 29",
+              "role": "Contoh — ganti dengan ulasan pembeli asli",
+              "text": "Sunscreen-nya nggak bikin whitecast, cocok buat kulit sawo matang.",
+              "rating": 5
+            }
+          ]
+        }
+      },
+      {
+        "type": "faq",
+        "content": {
+          "title": "Tanya jawab",
+          "items": [
+            {
+              "q": "Aman untuk ibu hamil?",
+              "a": "Sebagian besar produk aman; cek label \"aman untuk ibu hamil\" di tiap produk atau tanya kami lewat WhatsApp."
+            },
+            {
+              "q": "Berapa lama pengiriman?",
+              "a": "1–3 hari untuk Jabodetabek, 3–6 hari untuk luar Jawa."
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

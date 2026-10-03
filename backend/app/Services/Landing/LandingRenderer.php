@@ -142,10 +142,9 @@ final class LandingRenderer
             $block['products'] = $list->map($shape)->filter(fn ($p) => $p['available'] || !$p['in_stock'])->values()->all();
         }
         if ($block['type'] === 'video') {
-            $block['youtube_id'] = $this->youtubeId((string) ($block['content']['videoUrl'] ?? ''));
-            // TikTok links in the video block play as the official TikTok embed.
-            $embed = $block['youtube_id'] ? null : Embed::resolve((string) ($block['content']['videoUrl'] ?? ''));
-            $block['embed'] = $embed && $embed['provider'] === 'tiktok' ? $embed : null;
+            // YouTube (lite facade), TikTok and Instagram Reels/posts as their official embeds (Fase 7.3).
+            $embed = Embed::resolve((string) ($block['content']['videoUrl'] ?? ''));
+            $block['embed'] = $embed && in_array($embed['provider'], ['youtube', 'tiktok', 'instagram'], true) ? $embed : null;
         }
         if ($block['type'] === 'embed') {
             $block['embed'] = Embed::resolve((string) ($block['content']['url'] ?? ''));
@@ -171,15 +170,6 @@ final class LandingRenderer
         }
 
         return $out;
-    }
-
-    public function youtubeId(string $url): ?string
-    {
-        if (preg_match('~(?:youtube\.com/(?:watch\?v=|embed/|shorts/|live/)|youtu\.be/)([A-Za-z0-9_-]{11})~', $url, $m)) {
-            return $m[1];
-        }
-
-        return null;
     }
 
     /** URL of the generated share card (OgImage); its hash follows the content. Null when GD/FreeType is missing. */

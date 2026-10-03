@@ -107,7 +107,7 @@ class ThemeStyleTest extends SellerFinanceTestCase
 
         $this->assertStringContainsString('<html lang="id" style="background:#fde68a;background-image:linear-gradient(160deg,#fde68a,#fca5a5)', $html);
         $this->assertStringContainsString('<link rel="preload" href="/fonts/landing/bebas.woff2" as="font"', $html);
-        $this->assertMatchesRegularExpression('~<body class="bg-gradient hv-shine">~', $html);
+        $this->assertMatchesRegularExpression('~<body class="bg-gradient hv-shine" style="--ent-dur:600ms;--ent-step:0ms">~', $html);
         $this->assertMatchesRegularExpression('~class="btn featured has-ico"\s+style="--btn-bg:transparent;[^"]*--radius:4px"~', $html);
         $this->assertStringContainsString('<span class="btn-ico"><svg viewBox="0 0 24 24"', $html);
         $this->assertStringContainsString('<span class="btn-ico"><img src="/media/landing-builder/1/t.webp" alt=""', $html);

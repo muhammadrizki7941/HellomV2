@@ -1,0 +1,115 @@
+{
+  "id": "alam",
+  "order": 9,
+  "name": "Alam",
+  "category": "kuliner",
+  "badge": null,
+  "description": "Warna tanah yang tenang dan huruf serif lembut. Untuk kopi, teh, produk organik, dan wellness.",
+  "slots": {
+    "banner": "Banner 16:9 — kebun / biji kopi",
+    "avatar": "Logo",
+    "photo": "Foto proses / petani"
+  },
+  "document": {
+    "theme": {
+      "preset": "alam",
+      "primary": "#3f6212",
+      "buttonText": "#ffffff",
+      "text": "#1a2e05",
+      "background": "#f4f1ea",
+      "headingFont": "lora",
+      "bodyFont": "dmsans",
+      "bg": {
+        "type": "gradient",
+        "from": "#f4f1ea",
+        "to": "#e7efd9",
+        "angle": 180
+      },
+      "button": {
+        "shape": "pill",
+        "fill": "solid",
+        "shadow": "none",
+        "hover": "lift"
+      },
+      "motion": {
+        "entrance": "fade",
+        "speed": "normal",
+        "stagger": true
+      }
+    },
+    "blocks": [
+      {
+        "type": "profile",
+        "content": {
+          "name": "Kopi Lereng",
+          "bio": "Kopi single origin dari petani Temanggung ☕\nDipanggang mingguan, dikirim segar",
+          "avatarUrl": "{{slot:avatar}}",
+          "coverUrl": "{{slot:banner}}",
+          "showVerified": true,
+          "coverRatio": "wide",
+          "coverFade": true
+        }
+      },
+      {
+        "type": "catalog",
+        "content": {
+          "title": "Biji & bubuk kopi",
+          "showAll": true,
+          "productIds": [],
+          "columns": 2,
+          "buttonText": "Beli"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Langganan kopi bulanan",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "calendar",
+          "featured": true,
+          "featuredStyle": "shimmer"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Cerita petani kami",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "heart",
+          "fill": "outline"
+        }
+      },
+      {
+        "type": "image",
+        "content": {
+          "imageUrl": "{{slot:photo}}",
+          "caption": "Panen di lereng Sumbing",
+          "alt": "Panen di lereng Sumbing"
+        }
+      },
+      {
+        "type": "list",
+        "content": {
+          "title": "Kenapa Kopi Lereng",
+          "items": [
+            {
+              "text": "Dibeli langsung dari petani dengan harga adil"
+            },
+            {
+              "text": "Dipanggang setiap Senin, dikirim Selasa"
+            },
+            {
+              "text": "Kemasan valve, tahan 3 bulan"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

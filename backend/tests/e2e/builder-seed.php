@@ -37,6 +37,12 @@ if ($org = Organization::query()->where('slug', $slug)->first()) {
     DB::table('users')->whereIn('id', $userIds)->delete();
     $org->delete();
 }
+// Super admin for the template settings (Fase 7.4) and the template layout it changed.
+$adminIds = DB::table('users')->where('email', 'e2e-builder-admin@example.test')->pluck('id');
+DB::table('api_tokens')->whereIn('user_id', $adminIds)->delete();
+DB::table('audit_logs')->whereIn('user_id', $adminIds)->delete();
+DB::table('users')->whereIn('id', $adminIds)->delete();
+DB::table('system_settings')->where('key', 'landing_templates')->delete();
 if (($argv[1] ?? '') === 'cleanup') {
     echo "cleaned\n";
     exit(0);
@@ -50,8 +56,13 @@ Entitlement::query()->create(['organization_id' => $org->id, 'app_id' => $appRow
 $plain = Str::random(40);
 ApiToken::query()->create(['user_id' => $user->id, 'name' => 'e2e', 'token_hash' => hash('sha256', $plain), 'expires_at' => now()->addHours(3)]);
 
+$admin = User::query()->create(['name' => 'Super Admin E2E', 'email' => 'e2e-builder-admin@example.test', 'password' => bcrypt(Str::random(20)), 'role' => 'super_admin']);
+$adminPlain = Str::random(40);
+ApiToken::query()->create(['user_id' => $admin->id, 'name' => 'e2e', 'token_hash' => hash('sha256', $adminPlain), 'expires_at' => now()->addHours(3)]);
+
 file_put_contents(storage_path('app/builder_seed.json'), json_encode([
     'token' => $plain, 'username' => $slug,
+    'admin_token' => $adminPlain, 'admin_user' => ['id' => $admin->id, 'name' => $admin->name, 'email' => $admin->email, 'role' => 'super_admin'],
     'user' => ['id' => $user->id, 'name' => $user->name, 'email' => $user->email, 'role' => $user->role],
 ]));
 echo "seeded\n";

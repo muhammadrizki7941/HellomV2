@@ -26,8 +26,21 @@
 @endphp
 @switch($b['type'])
     @case('profile')
-        <section class="profile {{ $cls }}" @if($style) style="{{ $style }}" @endif>
-            @if (!empty($c['coverUrl']))<div class="cover" style="background-image:url('{{ $cssUrl($c['coverUrl']) }}')"></div>@endif
+        @php
+            $coverYt = !empty($c['coverVideo']) ? \App\Support\Landing\Embed::resolve($c['coverVideo']) : null;
+            $coverYt = $coverYt && $coverYt['provider'] === 'youtube' ? $coverYt : null;
+            $coverImg = !empty($c['coverUrl']) ? $c['coverUrl'] : ($coverYt ? 'https://i.ytimg.com/vi/' . $coverYt['id'] . '/hqdefault.jpg' : null);
+            $ratio = ['wide' => '16/9', 'banner' => '3/1', 'square' => '1/1'][$c['coverRatio'] ?? 'banner'];
+            $focus = (int) ($c['coverFocusX'] ?? 50) . '% ' . (int) ($c['coverFocusY'] ?? 50) . '%';
+        @endphp
+        <section class="profile {{ $cls }}{{ $coverImg ? ' has-cover' : '' }}{{ ($c['avatarPosition'] ?? 'overlap') === 'below' ? ' av-below' : '' }}" @if($style) style="{{ $style }}" @endif>
+            @if ($coverImg)
+                <div class="cover" style="aspect-ratio:{{ $ratio }}">
+                    <img src="{{ $coverImg }}" @if(!empty($c['coverUrl'])) {!! $srcset($c['coverUrl'], '(max-width: 720px) 100vw, 720px') !!} @endif alt="" style="object-position:{{ $focus }}" fetchpriority="high">
+                    @if ($coverYt)<div class="cover-yt" data-cover-yt="{{ $coverYt['id'] }}" @if(!empty($coverYt['start'])) data-start="{{ (int) $coverYt['start'] }}" @endif></div>@endif
+                    @if (!empty($c['coverFade']))<div class="cover-fade" aria-hidden="true"></div>@endif
+                </div>
+            @endif
             <div class="wrap center">
                 @if (!empty($c['avatarUrl']))
                     <img class="avatar" src="{{ $c['avatarUrl'] }}" {!! $srcset($c['avatarUrl'], '104px') !!} alt="{{ $c['name'] ?? $organization->name }}" width="104" height="104" {!! $imgAttrs($first) !!}>
@@ -114,20 +127,16 @@
         @break
 
     @case('video')
-        @if (!empty($b['youtube_id']))
+        @php $e = $b['embed'] ?? null; $square = ($c['corners'] ?? 'rounded') === 'square'; @endphp
+        @if ($e)
             <section class="{{ $cls }}" @if($style) style="{{ $style }}" @endif>
                 <div class="wrap">
-                    @if (!empty($c['title']))<h2 class="center">{{ $c['title'] }}</h2>@endif
-                    <button type="button" class="yt" data-yt="{{ $b['youtube_id'] }}" aria-label="Putar video {{ $c['title'] ?? '' }}">
-                        <img src="https://i.ytimg.com/vi/{{ $b['youtube_id'] }}/hqdefault.jpg" alt="" loading="lazy" decoding="async"><span></span>
-                    </button>
-                </div>
-            </section>
-        @elseif (!empty($b['embed']))
-            <section class="{{ $cls }}" @if($style) style="{{ $style }}" @endif>
-                <div class="wrap">
-                    @if (!empty($c['title']))<h2 class="center">{{ $c['title'] }}</h2>@endif
-                    <div class="embed vertical"><iframe src="{{ $b['embed']['src'] }}" title="{{ $c['title'] ?? 'Video TikTok' }}" loading="lazy" allow="encrypted-media; fullscreen; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div>
+                    @if (!empty($c['title']) && empty($c['hideTitle']))<h2 class="center">{{ $c['title'] }}</h2>@endif
+                    @if ($e['provider'] === 'youtube')
+                        @include('landing.youtube', ['e' => $e, 'title' => $c['title'] ?? '', 'autoplay' => !empty($c['autoplay']), 'square' => $square])
+                    @else
+                        <div class="embed{{ $e['vertical'] && !$e['height'] ? ' vertical' : '' }}{{ $square ? ' square' : '' }}" @if($e['height']) style="height:{{ $e['height'] }}px" @endif><iframe src="{{ $e['src'] }}" title="{{ $c['title'] ?? ('Video ' . $e['label']) }}" loading="lazy" allow="encrypted-media; fullscreen; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div>
+                    @endif
                 </div>
             </section>
         @endif
@@ -270,9 +279,9 @@
                         $btnVars = $ownLook ? \App\Support\Landing\ThemeStyle::buttonVars($theme, $c['fill'] ?? null, $c['shape'] ?? null, $c['shadow'] ?? null) : '';
                         $btnIco = !empty($c['thumbUrl']) ? '<img src="' . e($c['thumbUrl']) . '" alt="" loading="lazy" decoding="async">' : (!empty($c['icon']) ? \App\Support\Landing\ButtonIcons::svg($c['icon']) : '');
                     @endphp
-                    <a class="btn{{ !empty($c['fullWidth']) ? ' block' : '' }}{{ !empty($c['featured']) ? ' featured' : '' }}{{ $btnIco ? ' has-ico' : '' }}" @if($btnVars) style="{{ $btnVars }}" @endif href="{{ $btnHref }}"
+                    <a class="btn{{ !empty($c['fullWidth']) ? ' block' : '' }}{{ !empty($c['featured']) ? ' featured' . (!empty($c['featuredStyle']) ? ' fx-' . $c['featuredStyle'] : '') : '' }}{{ $btnIco ? ' has-ico' : '' }}" @if($btnVars) style="{{ $btnVars }}" @endif href="{{ $btnHref }}"
                        @if (!str_starts_with($btnHref, '/') && !str_starts_with($btnHref, '#')) target="_blank" rel="noopener" @endif data-track="click" data-label="{{ $c['text'] ?? '' }}">@if ($btnIco)<span class="btn-ico">{!! $btnIco !!}</span>@endif{{ $c['text'] ?? 'Klik di sini' }}</a>
-                    @if (!empty($editor) && $btnHref === '#')<p class="small muted" style="margin:6px 0 0">Belum ada link — ketuk untuk mengisi</p>@endif
+                    @if (!empty($editor) && empty($sample) && $btnHref === '#')<p class="small muted" style="margin:6px 0 0">Belum ada link — ketuk untuk mengisi</p>@endif
                 </div>
             </section>
         @endif
@@ -284,6 +293,7 @@
 
     @case('whatsapp')
         @php $waHref = $wa(($c['number'] ?? '') !== '' ? $c['number'] : ($settings['whatsappNumber'] ?? null), $c['message'] ?? null); @endphp
+        @php $waHref = $waHref ?: (!empty($sample) ? '#' : null); @endphp
         @if ($waHref)
             <section class="{{ $cls }} center" style="{{ trim('padding-top:8px;padding-bottom:8px;' . $style, ';') }}">
                 <div class="wrap">
@@ -307,9 +317,7 @@
                 <div class="wrap">
                     @if (!empty($c['title']))<h2 class="center">{{ $c['title'] }}</h2>@endif
                     @if ($e['provider'] === 'youtube')
-                        <button type="button" class="yt{{ $e['vertical'] ? ' vertical' : '' }}" data-yt="{{ $e['id'] }}" aria-label="Putar video {{ $c['title'] ?? '' }}">
-                            <img src="https://i.ytimg.com/vi/{{ $e['id'] }}/hqdefault.jpg" alt="" loading="lazy" decoding="async"><span></span>
-                        </button>
+                        @include('landing.youtube', ['e' => $e, 'title' => $c['title'] ?? ''])
                     @else
                         <div class="embed{{ $e['vertical'] && !$e['height'] ? ' vertical' : '' }}" @if($e['height']) style="height:{{ $e['height'] }}px" @endif>
                             <iframe src="{{ $e['src'] }}" title="{{ $c['title'] ?? $e['label'] }}" loading="lazy" allow="encrypted-media; clipboard-write; fullscreen; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>

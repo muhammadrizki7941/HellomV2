@@ -1,0 +1,109 @@
+{
+  "id": "neon-glass",
+  "order": 1,
+  "name": "Neon Glass",
+  "category": "kreator",
+  "badge": "populer",
+  "description": "Gelap dengan gradien neon bergerak dan tombol kaca. Cocok untuk kreator teknologi & gaming.",
+  "slots": {
+    "banner": "Banner 16:9 — suasana malam / setup lampu neon",
+    "avatar": "Foto profil kreator"
+  },
+  "document": {
+    "theme": {
+      "preset": "neon",
+      "primary": "#22d3ee",
+      "buttonText": "#0f172a",
+      "text": "#f8fafc",
+      "background": "#0f172a",
+      "headingFont": "spacegrotesk",
+      "bodyFont": "inter",
+      "bg": {
+        "type": "animated",
+        "animation": "aurora",
+        "color": "#0f172a",
+        "from": "#1e1b4b",
+        "via": "#7c3aed",
+        "to": "#db2777",
+        "angle": 140
+      },
+      "button": {
+        "shape": "pill",
+        "fill": "glass",
+        "shadow": "none",
+        "hover": "shine"
+      },
+      "motion": {
+        "entrance": "slide",
+        "speed": "normal",
+        "stagger": true
+      }
+    },
+    "blocks": [
+      {
+        "type": "profile",
+        "content": {
+          "name": "Raka Pratama",
+          "bio": "Kreator teknologi & gaming 🎮\nLive tiap Jumat jam 8 malam",
+          "avatarUrl": "{{slot:avatar}}",
+          "coverUrl": "{{slot:banner}}",
+          "showVerified": true,
+          "coverRatio": "wide",
+          "coverFade": true
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Jadwal live minggu ini",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "calendar",
+          "featured": true,
+          "featuredStyle": "glow"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Gear & setup yang aku pakai",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "bag"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Gabung komunitas Discord",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "discord"
+        }
+      },
+      {
+        "type": "video",
+        "content": {
+          "videoUrl": "",
+          "title": "Video terbaru"
+        }
+      },
+      {
+        "type": "catalog",
+        "content": {
+          "title": "Preset & template digital",
+          "showAll": true,
+          "productIds": [],
+          "columns": 2,
+          "buttonText": "Beli"
+        }
+      }
+    ]
+  }
+}

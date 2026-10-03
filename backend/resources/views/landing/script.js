@@ -122,15 +122,46 @@
     tick();
   });
 
-  // YouTube: thumbnail first, player only on tap (keeps the page light).
+  // YouTube: thumbnail first, player only on tap (keeps the page light). "Autoplay" videos start
+  // muted when they scroll into view (browsers block sound without a tap); not in the editor preview.
+  function playYt(b, muted) {
+    if (b.getAttribute('data-playing')) return;
+    b.setAttribute('data-playing', '1');
+    var start = parseInt(b.getAttribute('data-start') || '0', 10);
+    var f = document.createElement('iframe');
+    f.src = 'https://www.youtube-nocookie.com/embed/' + b.getAttribute('data-yt') + '?autoplay=1&rel=0&playsinline=1' + (muted ? '&mute=1' : '') + (start ? '&start=' + start : '');
+    f.allow = 'autoplay; encrypted-media; picture-in-picture'; f.allowFullscreen = true; f.title = b.getAttribute('aria-label') || 'Video';
+    b.innerHTML = ''; b.appendChild(f);
+  }
   qa('button.yt').forEach(function (b) {
-    b.addEventListener('click', function () {
-      var f = document.createElement('iframe');
-      f.src = 'https://www.youtube-nocookie.com/embed/' + b.getAttribute('data-yt') + '?autoplay=1&rel=0';
-      f.allow = 'autoplay; encrypted-media; picture-in-picture'; f.allowFullscreen = true; f.title = b.getAttribute('aria-label') || 'Video';
-      b.innerHTML = ''; b.appendChild(f);
-    }, { once: true });
+    b.addEventListener('click', function () { playYt(b, false); }, { once: true });
   });
+  // Banner video (Fase 7.1): the thumbnail shows at once; the muted looping player is added after
+  // the page has loaded — never in the editor, with "less motion", "animations off" or data saver.
+  var coverYt = q('[data-cover-yt]');
+  var calm = (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) || document.body.classList.contains('no-anim')
+    || (navigator.connection && navigator.connection.saveData);
+  if (coverYt && !C.preview && !calm) {
+    var startCover = function () {
+      var id = coverYt.getAttribute('data-cover-yt');
+      var start = parseInt(coverYt.getAttribute('data-start') || '0', 10);
+      var f = document.createElement('iframe');
+      f.src = 'https://www.youtube-nocookie.com/embed/' + id + '?autoplay=1&mute=1&loop=1&playlist=' + id + '&controls=0&playsinline=1&rel=0&disablekb=1' + (start ? '&start=' + start : '');
+      f.allow = 'autoplay; encrypted-media'; f.title = 'Video banner'; f.tabIndex = -1; f.setAttribute('aria-hidden', 'true');
+      f.addEventListener('load', function () { setTimeout(function () { f.className = 'on'; }, 700); });
+      coverYt.appendChild(f);
+    };
+    var later = function () { ('requestIdleCallback' in window) ? requestIdleCallback(startCover, { timeout: 2500 }) : setTimeout(startCover, 1200); };
+    if (document.readyState === 'complete') later(); else window.addEventListener('load', later);
+  }
+
+  var autoYt = qa('button.yt[data-autoplay]');
+  if (autoYt.length && !C.preview && 'IntersectionObserver' in window) {
+    var ytObs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) { if (en.isIntersecting) { ytObs.unobserve(en.target); playYt(en.target, true); } });
+    }, { threshold: 0.5 });
+    autoYt.forEach(function (b) { ytObs.observe(b); });
+  }
 
   // Ad pixels: loaded after the page is interactive so they never slow the first paint.
   var T = C.tracking || {};

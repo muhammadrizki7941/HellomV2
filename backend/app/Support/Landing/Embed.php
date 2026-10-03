@@ -37,10 +37,27 @@ final class Embed
             return ['provider' => 'instagram', 'id' => $m[2], 'label' => 'Instagram', 'vertical' => $kind === 'reel',
                 'src' => "https://www.instagram.com/{$kind}/{$m[2]}/embed", 'height' => $kind === 'p' ? 560 : null];
         }
-        if (preg_match('~(?:youtube\.com/(?:watch\?(?:.*&)?v=|embed/|shorts/|live/)|youtu\.be/)([A-Za-z0-9_-]{11})~', $url, $m)) {
-            return ['provider' => 'youtube', 'id' => $m[1], 'label' => 'YouTube', 'vertical' => str_contains($url, '/shorts/'), 'src' => null, 'height' => null];
+        // youtube.com/watch?v=, m./music. hosts, youtu.be/, /shorts/, /live/, /embed/ (Fase 7.3); t= / start= keeps the start time.
+        if (preg_match('~^https?://(?:(?:www\.|m\.|music\.)?youtube(?:-nocookie)?\.com/(?:watch\?(?:[^#]*&)?v=|embed/|shorts/|live/|v/)|youtu\.be/)([A-Za-z0-9_-]{11})(?![A-Za-z0-9_-])~i', $url, $m)) {
+            return ['provider' => 'youtube', 'id' => $m[1], 'label' => str_contains($url, '/shorts/') ? 'YouTube Shorts' : 'YouTube', 'vertical' => str_contains($url, '/shorts/'),
+                'src' => null, 'height' => null, 'start' => self::startSeconds($url)];
         }
 
         return null;
+    }
+
+    /** "t=90", "t=90s", "t=1m30s", "start=90" → seconds (0 when absent). */
+    public static function startSeconds(string $url): int
+    {
+        if (!preg_match('~[?&#](?:t|start)=([0-9hms]+)~i', $url, $m)) {
+            return 0;
+        }
+        $value = strtolower($m[1]);
+        if (ctype_digit($value)) {
+            return min((int) $value, 86400);
+        }
+        preg_match('~^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$~', $value, $p);
+
+        return min((int) ($p[1] ?? 0) * 3600 + (int) ($p[2] ?? 0) * 60 + (int) ($p[3] ?? 0), 86400);
     }
 }

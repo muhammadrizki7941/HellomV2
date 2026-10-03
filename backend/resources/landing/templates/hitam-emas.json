@@ -1,0 +1,128 @@
+{
+  "id": "hitam-emas",
+  "order": 3,
+  "name": "Hitam Emas",
+  "category": "bisnis",
+  "badge": null,
+  "description": "Minimalis mewah hitam–emas dengan huruf serif. Untuk properti, jasa premium, dan konsultan.",
+  "slots": {
+    "banner": "Banner 3:1 — properti / interior mewah",
+    "avatar": "Foto profil profesional"
+  },
+  "document": {
+    "theme": {
+      "preset": "mewah",
+      "primary": "#d4af37",
+      "buttonText": "#000000",
+      "text": "#f5f5f4",
+      "background": "#0a0a0a",
+      "headingFont": "playfair",
+      "bodyFont": "lora",
+      "bg": {
+        "type": "solid",
+        "color": "#0a0a0a"
+      },
+      "button": {
+        "shape": "square",
+        "fill": "outline",
+        "borderWidth": 1,
+        "shadow": "none",
+        "hover": "grow"
+      },
+      "motion": {
+        "entrance": "fade",
+        "speed": "slow",
+        "stagger": true
+      }
+    },
+    "blocks": [
+      {
+        "type": "profile",
+        "content": {
+          "name": "Adrian Wijaya",
+          "bio": "Konsultan properti premium Jakarta Selatan & BSD\n12 tahun membantu keluarga menemukan rumah",
+          "avatarUrl": "{{slot:avatar}}",
+          "coverUrl": "{{slot:banner}}",
+          "showVerified": true,
+          "coverFade": true
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Listing rumah & apartemen terbaru",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "map"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Jadwalkan survei lokasi",
+          "actionType": "whatsapp",
+          "whatsappMessage": "Halo Pak Adrian, saya ingin jadwalkan survei lokasi",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "whatsapp",
+          "featured": true,
+          "featuredStyle": "shimmer",
+          "fill": "solid"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Simulasi KPR",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "info"
+        }
+      },
+      {
+        "type": "list",
+        "content": {
+          "title": "Layanan",
+          "items": [
+            {
+              "text": "Jual–beli rumah & apartemen"
+            },
+            {
+              "text": "Sewa jangka panjang untuk ekspatriat"
+            },
+            {
+              "text": "Pendampingan KPR sampai akad"
+            },
+            {
+              "text": "Penilaian harga properti"
+            }
+          ]
+        }
+      },
+      {
+        "type": "testimonials",
+        "content": {
+          "title": "Kata klien",
+          "items": [
+            {
+              "name": "Ibu Maya",
+              "role": "Contoh — ganti dengan ulasan pembeli asli",
+              "text": "Prosesnya rapi dan transparan, dari survei sampai akad semuanya didampingi.",
+              "rating": 5
+            },
+            {
+              "name": "Bapak Hendra",
+              "role": "Contoh — ganti dengan ulasan pembeli asli",
+              "text": "Dapat unit sesuai budget dalam dua minggu. Sangat membantu.",
+              "rating": 5
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

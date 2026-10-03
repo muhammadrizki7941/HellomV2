@@ -60,4 +60,9 @@ return [
         'sandbox_url' => env('RAJAONGKIR_SANDBOX_URL'),
     ],
 
+    // Video titles for the Hellom Page editor (Fase 7.3). Local e2e points it at tests/e2e/mocks.mjs.
+    'youtube' => [
+        'oembed_url' => env('YOUTUBE_OEMBED_URL', 'https://www.youtube.com/oembed'),
+    ],
+
 ];

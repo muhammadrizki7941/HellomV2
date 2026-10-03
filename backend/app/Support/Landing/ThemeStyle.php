@@ -68,6 +68,7 @@ final class ThemeStyle
             'bgLayers' => $bgLayers,
             'hover' => in_array($button['hover'] ?? null, ['lift', 'grow', 'shine'], true) ? $button['hover'] : 'none',
             'textAdjusted' => $textAdjusted,
+            'motion' => self::motion(is_array($theme['motion'] ?? null) ? $theme['motion'] : []),
         ];
         $resolved['button'] = [
             'shape' => isset(self::RADIUS[$button['shape'] ?? null]) ? $button['shape'] : 'rounded',
@@ -160,14 +161,15 @@ final class ThemeStyle
 
                 return ["background-color:{$color};background-image:{$layers};background-size:{$tile}", 'bg-pattern', '', $color];
             case 'animated':
-                $animation = in_array($bg['animation'] ?? null, ['aurora', 'blobs', 'particles'], true) ? $bg['animation'] : 'aurora';
+                $animation = in_array($bg['animation'] ?? null, ['aurora', 'blobs', 'particles', 'waves'], true) ? $bg['animation'] : 'aurora';
                 $layer = match ($animation) {
                     'blobs' => '<div class="bg-layer bg-blobs" aria-hidden="true"><i style="background:' . $from . '"></i><i style="background:' . ($via ?? $to) . '"></i><i style="background:' . $to . '"></i></div>',
                     'particles' => '<div class="bg-layer bg-particles" aria-hidden="true">' . str_repeat('<i></i>', 14) . '</div>',
+                    'waves' => '<div class="bg-layer bg-waves" aria-hidden="true"><i style="background-image:' . self::wave($from, 0.35) . '"></i><i style="background-image:' . self::wave($via ?? $to, 0.3) . '"></i><i style="background-image:' . self::wave($to, 0.45) . '"></i></div>',
                     default => '<div class="bg-layer bg-aurora" style="background-image:linear-gradient(' . $angle . 'deg,' . $stops . ',' . $from . ')" aria-hidden="true"></div>',
                 };
 
-                return ["background:{$color}", 'bg-animated anim-' . $animation, $layer, $animation === 'particles' ? $color : self::mix(self::mix($color, $average, 0.5), $color, 0.3)];
+                return ["background:{$color}", 'bg-animated anim-' . $animation, $layer, in_array($animation, ['particles', 'waves'], true) ? $color : self::mix(self::mix($color, $average, 0.5), $color, 0.3)];
             default:
                 return ["background:{$color}", 'bg-solid', '', $color];
         }
@@ -228,5 +230,31 @@ final class ThemeStyle
     private static function bestOf(string $background): string
     {
         return self::contrast('#000000', $background) >= self::contrast('#ffffff', $background) ? '#000000' : '#ffffff';
+    }
+
+    /**
+     * Page motion (Fase 7.2): entrance per block on load, duration, stagger step; off = the page
+     * gets class no-anim (every animation and transition stops; banner video stays a picture).
+     *
+     * @return array{entrance: string, duration: int, step: int, off: bool}
+     */
+    public static function motion(array $motion): array
+    {
+        $off = !empty($motion['off']);
+
+        return [
+            'entrance' => $off ? 'none' : (in_array($motion['entrance'] ?? null, ['fade', 'slide', 'zoom'], true) ? $motion['entrance'] : 'none'),
+            'duration' => ['slow' => 900, 'normal' => 600, 'fast' => 350][$motion['speed'] ?? 'normal'] ?? 600,
+            'step' => !empty($motion['stagger']) ? 80 : 0,
+            'off' => $off,
+        ];
+    }
+
+    /** Wave strip (SVG data URI) in one colour, for the animated "waves" background. */
+    private static function wave(string $color, float $opacity): string
+    {
+        $svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 120" preserveAspectRatio="none"><path d="M0 60 C150 0 300 120 450 60 S750 0 900 60 1050 120 1200 60 V120 H0Z" fill="' . $color . '" fill-opacity="' . $opacity . '"/></svg>';
+
+        return 'url(&quot;data:image/svg+xml,' . rawurlencode($svg) . '&quot;)';
     }
 }

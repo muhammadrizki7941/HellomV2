@@ -1,0 +1,122 @@
+{
+  "id": "dapur-hangat",
+  "order": 6,
+  "name": "Dapur Hangat",
+  "category": "kuliner",
+  "badge": "populer",
+  "description": "Warna hangat, foto makanan besar, tombol pesan WhatsApp dan menu. Untuk UMKM makanan.",
+  "slots": {
+    "banner": "Banner 16:9 — foto makanan andalan",
+    "avatar": "Logo warung",
+    "menu": "Foto daftar menu (potret)"
+  },
+  "document": {
+    "theme": {
+      "preset": "kuliner",
+      "primary": "#c2410c",
+      "buttonText": "#ffffff",
+      "text": "#431407",
+      "background": "#fff7ed",
+      "headingFont": "poppins",
+      "bodyFont": "poppins",
+      "bg": {
+        "type": "pattern",
+        "pattern": "waves",
+        "color": "#fff7ed",
+        "patternColor": "#ea580c",
+        "patternOpacity": 0.1
+      },
+      "button": {
+        "shape": "rounded",
+        "fill": "solid",
+        "shadow": "soft",
+        "hover": "lift"
+      },
+      "motion": {
+        "entrance": "slide",
+        "speed": "normal",
+        "stagger": true
+      }
+    },
+    "blocks": [
+      {
+        "type": "profile",
+        "content": {
+          "name": "Dapur Bu Ratna",
+          "bio": "Nasi bakar & lauk rumahan khas Sunda 🍃\nBuka setiap hari 10.00–21.00",
+          "avatarUrl": "{{slot:avatar}}",
+          "coverUrl": "{{slot:banner}}",
+          "showVerified": true,
+          "coverRatio": "wide"
+        }
+      },
+      {
+        "type": "whatsapp",
+        "content": {
+          "title": "Pesan sekarang",
+          "text": "Pesan via WhatsApp",
+          "number": "",
+          "message": "Halo Dapur Bu Ratna, saya mau pesan:",
+          "style": "card"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Lihat menu lengkap",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "book"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Lokasi di Google Maps",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "map",
+          "fill": "outline"
+        }
+      },
+      {
+        "type": "catalog",
+        "content": {
+          "title": "Paket favorit",
+          "showAll": true,
+          "productIds": [],
+          "columns": 2,
+          "buttonText": "Pesan"
+        }
+      },
+      {
+        "type": "image",
+        "content": {
+          "imageUrl": "{{slot:menu}}",
+          "caption": "Menu Dapur Bu Ratna",
+          "alt": "Menu Dapur Bu Ratna"
+        }
+      },
+      {
+        "type": "faq",
+        "content": {
+          "title": "Info pemesanan",
+          "items": [
+            {
+              "q": "Bisa antar?",
+              "a": "Bisa, area Bandung kota lewat kurir instan. Ongkir mengikuti jarak."
+            },
+            {
+              "q": "Terima pesanan untuk acara?",
+              "a": "Bisa, untuk nasi kotak minimal 20 porsi, pesan H-2."
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

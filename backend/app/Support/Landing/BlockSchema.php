@@ -20,7 +20,11 @@ final class BlockSchema
 
     /** field => spec. Specs: str:N, text:N, url, img, bool, int:min:max, num:min:max, enum:a|b, color, date, html, pid, pids, font, icon, ['list', N, spec], ['obj', spec] */
     public const TYPES = [
-        'profile' => ['name' => 'str:80', 'bio' => 'text:300', 'avatarUrl' => 'img', 'coverUrl' => 'img', 'showVerified' => 'bool'],
+        // Banner (Fase 7.1): image/GIF (coverUrl) or a YouTube link playing muted (coverVideo); ratio, focus point,
+        // fade into the page background, avatar overlapping the banner edge or below it.
+        'profile' => ['name' => 'str:80', 'bio' => 'text:300', 'avatarUrl' => 'img', 'coverUrl' => 'img', 'showVerified' => 'bool',
+            'coverVideo' => 'url', 'coverRatio' => 'enum:wide|banner|square', 'coverFocusX' => 'int:0:100', 'coverFocusY' => 'int:0:100',
+            'coverFade' => 'bool', 'avatarPosition' => 'enum:overlap|below'],
         'hero' => ['title' => 'str:160', 'subtitle' => 'text:400', 'buttonText' => 'str:40', 'showButton' => 'bool', 'linkUrl' => 'url', 'imageUrl' => 'img'],
         'features' => ['title' => 'str:160', 'items' => ['list', 12, ['title' => 'str:80', 'desc' => 'text:300']]],
         'cta' => ['title' => 'str:160', 'subtitle' => 'text:400', 'buttonText' => 'str:40', 'actionType' => 'enum:whatsapp|link', 'whatsappNumber' => 'str:20', 'whatsappMessage' => 'text:300', 'linkUrl' => 'url'],
@@ -29,7 +33,8 @@ final class BlockSchema
         'banner' => ['imageUrl' => 'img', 'title' => 'str:160', 'subtitle' => 'text:400', 'textColor' => 'color', 'overlayOpacity' => 'num:0:1'],
         'image' => ['imageUrl' => 'img', 'caption' => 'str:200', 'linkUrl' => 'url', 'alt' => 'str:160'],
         'gif' => ['gifUrl' => 'img', 'caption' => 'str:200'],
-        'video' => ['videoUrl' => 'url', 'title' => 'str:160'],
+        // Fase 7.3: YouTube (incl. Shorts), TikTok, Instagram Reels; autoplay = muted, starts when visible.
+        'video' => ['videoUrl' => 'url', 'title' => 'str:160', 'autoplay' => 'bool', 'hideTitle' => 'bool', 'corners' => 'enum:rounded|square'],
         // kind: which products the editor's picker offers (digital / physical gallery cards).
         'product' => ['productId' => 'pid', 'buttonText' => 'str:40', 'layout' => 'enum:card|wide', 'kind' => 'enum:digital|physical',
             // Legacy inline product (before Fase 3); only for blocks not linked to a product.
@@ -44,7 +49,9 @@ final class BlockSchema
             'align' => 'enum:left|center|right', 'style' => 'enum:solid|outline', 'fullWidth' => 'bool',
             // Fase 5: this button's own look (empty = theme), left icon or thumbnail, featured animation.
             'shape' => 'enum:square|rounded|pill', 'fill' => 'enum:solid|outline|glass', 'shadow' => 'enum:none|soft|hard',
-            'icon' => 'icon', 'thumbUrl' => 'img', 'featured' => 'bool'],
+            'icon' => 'icon', 'thumbUrl' => 'img', 'featured' => 'bool',
+            // Fase 7.2: featured animation (empty = pulse + shimmer).
+            'featuredStyle' => 'enum:pulse|shake|glow|shimmer'],
         'divider' => ['style' => 'enum:solid|dashed|dotted', 'thickness' => 'int:1:8', 'width' => 'int:10:100'],
         'testimonials' => ['title' => 'str:160', 'items' => ['list', 20, ['name' => 'str:80', 'role' => 'str:80', 'text' => 'text:600', 'rating' => 'int:1:5', 'avatarUrl' => 'img']]],
         'faq' => ['title' => 'str:160', 'items' => ['list', 30, ['q' => 'str:200', 'a' => 'text:1500']]],
@@ -62,6 +69,8 @@ final class BlockSchema
     public const STYLES = [
         'backgroundColor' => 'color', 'textColor' => 'color', 'buttonColor' => 'color', 'buttonTextColor' => 'color', 'accentColor' => 'color',
         'backgroundImage' => 'img', 'paddingY' => 'enum:py-0|py-4|py-8|py-12|py-16|py-20|py-24|py-32', 'textAlign' => 'enum:left|center|right',
+        // Fase 7.2: this block's own entrance (empty = page setting).
+        'entrance' => 'enum:none|fade|slide|zoom',
     ];
 
     /** Page look (schema v3, Fase 5). Rendered by ThemeStyle::resolve. */
@@ -72,12 +81,14 @@ final class BlockSchema
             'type' => 'enum:solid|gradient|image|pattern|animated', 'color' => 'color', 'from' => 'color', 'via' => 'color', 'to' => 'color', 'angle' => 'int:0:360',
             'image' => 'img', 'overlay' => 'num:0:0.9', 'blur' => 'int:0:20', 'position' => 'enum:center|top|bottom',
             'pattern' => 'enum:dots|grid|diagonal|checks|waves|plus', 'patternColor' => 'color', 'patternOpacity' => 'num:0.03:0.5',
-            'animation' => 'enum:aurora|blobs|particles',
+            'animation' => 'enum:aurora|blobs|particles|waves',
         ]],
         'button' => ['obj', [
             'shape' => 'enum:square|rounded|pill', 'fill' => 'enum:solid|outline|glass', 'borderWidth' => 'int:1:4',
             'shadow' => 'enum:none|soft|hard', 'hover' => 'enum:none|lift|grow|shine',
         ]],
+        // Fase 7.2: blocks appear on page load (fade / slide up / zoom, optional stagger); off = no animation at all.
+        'motion' => ['obj', ['entrance' => 'enum:none|fade|slide|zoom', 'speed' => 'enum:slow|normal|fast', 'stagger' => 'bool', 'off' => 'bool']],
     ];
 
     public const SETTINGS = ['whatsappNumber' => 'str:20', 'whatsappMessage' => 'text:300', 'showFloatingWhatsapp' => 'bool'];

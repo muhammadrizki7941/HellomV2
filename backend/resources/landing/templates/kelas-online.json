@@ -1,0 +1,131 @@
+{
+  "id": "kelas-online",
+  "order": 10,
+  "name": "Kelas Online",
+  "category": "edukasi",
+  "badge": "populer",
+  "description": "Rapi dan meyakinkan: produk digital, testimoni, FAQ. Untuk kursus, e-book, dan mentoring.",
+  "slots": {
+    "banner": "Banner 16:9 — mentor mengajar / layar laptop",
+    "avatar": "Foto mentor"
+  },
+  "document": {
+    "theme": {
+      "preset": "edukasi",
+      "primary": "#1d4ed8",
+      "buttonText": "#ffffff",
+      "text": "#0f172a",
+      "background": "#eff6ff",
+      "headingFont": "jakarta",
+      "bodyFont": "jakarta",
+      "bg": {
+        "type": "gradient",
+        "from": "#eff6ff",
+        "to": "#ffffff",
+        "angle": 180
+      },
+      "button": {
+        "shape": "rounded",
+        "fill": "solid",
+        "shadow": "soft",
+        "hover": "lift"
+      },
+      "motion": {
+        "entrance": "slide",
+        "speed": "normal",
+        "stagger": true
+      }
+    },
+    "blocks": [
+      {
+        "type": "profile",
+        "content": {
+          "name": "Kelas Excel Praktis",
+          "bio": "Belajar Excel untuk kerja bareng Dimas 📊\n8.000+ alumni dari 30 kota",
+          "avatarUrl": "{{slot:avatar}}",
+          "coverUrl": "{{slot:banner}}",
+          "showVerified": true,
+          "coverRatio": "wide"
+        }
+      },
+      {
+        "type": "product",
+        "content": {
+          "kind": "digital",
+          "layout": "card",
+          "buttonText": "Daftar sekarang"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Ikut kelas gratis dulu",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "play",
+          "featured": true
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Unduh silabus (PDF)",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "download",
+          "fill": "outline"
+        }
+      },
+      {
+        "type": "testimonials",
+        "content": {
+          "title": "Kata alumni",
+          "items": [
+            {
+              "name": "Rina, staf admin",
+              "role": "Contoh — ganti dengan ulasan pembeli asli",
+              "text": "Sekarang laporan bulanan selesai setengah hari, bukan dua hari lagi.",
+              "rating": 5
+            },
+            {
+              "name": "Fajar, fresh graduate",
+              "role": "Contoh — ganti dengan ulasan pembeli asli",
+              "text": "Materinya runtut, langsung kepakai waktu tes kerja.",
+              "rating": 5
+            },
+            {
+              "name": "Yuni, pemilik toko",
+              "role": "Contoh — ganti dengan ulasan pembeli asli",
+              "text": "Akhirnya bisa bikin stok & laporan untung rugi sendiri.",
+              "rating": 5
+            }
+          ]
+        }
+      },
+      {
+        "type": "faq",
+        "content": {
+          "title": "Pertanyaan umum",
+          "items": [
+            {
+              "q": "Akses kelasnya berapa lama?",
+              "a": "Selamanya, termasuk update materi."
+            },
+            {
+              "q": "Perlu laptop?",
+              "a": "Disarankan laptop dengan Microsoft Excel atau Google Sheets."
+            },
+            {
+              "q": "Ada sertifikat?",
+              "a": "Ada, setelah menyelesaikan semua kuis."
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

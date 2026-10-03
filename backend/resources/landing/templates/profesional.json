@@ -1,0 +1,155 @@
+{
+  "id": "profesional",
+  "order": 12,
+  "name": "Profesional",
+  "category": "bisnis",
+  "badge": null,
+  "description": "Bersih dan korporat dengan huruf Inter. Untuk konsultan, agensi, dan layanan B2B.",
+  "slots": {
+    "avatar": "Foto profil profesional",
+    "banner": "Banner 3:1 — kantor / tim (opsional)"
+  },
+  "document": {
+    "theme": {
+      "preset": "profesional",
+      "primary": "#1d4ed8",
+      "buttonText": "#ffffff",
+      "text": "#0f172a",
+      "background": "#f8fafc",
+      "headingFont": "inter",
+      "bodyFont": "inter",
+      "bg": {
+        "type": "solid",
+        "color": "#f8fafc"
+      },
+      "button": {
+        "shape": "rounded",
+        "fill": "solid",
+        "shadow": "none",
+        "hover": "none"
+      },
+      "motion": {
+        "entrance": "fade",
+        "speed": "fast",
+        "stagger": false
+      }
+    },
+    "blocks": [
+      {
+        "type": "profile",
+        "content": {
+          "name": "Rina Hartono, CPA",
+          "bio": "Konsultan pajak & keuangan untuk UMKM\nSurabaya • melayani online se-Indonesia",
+          "avatarUrl": "{{slot:avatar}}",
+          "coverUrl": "{{slot:banner}}",
+          "showVerified": true
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Konsultasi 30 menit",
+          "actionType": "whatsapp",
+          "whatsappMessage": "Halo Bu Rina, saya ingin konsultasi pajak usaha",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "whatsapp",
+          "featured": true,
+          "featuredStyle": "pulse"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Unduh panduan pajak UMKM 2026",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "download",
+          "fill": "outline"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Profil LinkedIn",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "linkedin",
+          "fill": "outline"
+        }
+      },
+      {
+        "type": "list",
+        "content": {
+          "title": "Layanan",
+          "items": [
+            {
+              "text": "Pelaporan SPT tahunan badan & pribadi"
+            },
+            {
+              "text": "Pembukuan bulanan UMKM"
+            },
+            {
+              "text": "Pendampingan pemeriksaan pajak"
+            }
+          ]
+        }
+      },
+      {
+        "type": "testimonials",
+        "content": {
+          "title": "Klien kami",
+          "items": [
+            {
+              "name": "Pemilik kedai kopi, Surabaya",
+              "role": "Contoh — ganti dengan ulasan pembeli asli",
+              "text": "Pembukuan jadi rapi dan laporan pajak tidak pernah telat lagi.",
+              "rating": 5
+            },
+            {
+              "name": "Pemilik toko online",
+              "role": "Contoh — ganti dengan ulasan pembeli asli",
+              "text": "Penjelasannya mudah dipahami orang awam.",
+              "rating": 5
+            }
+          ]
+        }
+      },
+      {
+        "type": "form",
+        "content": {
+          "title": "Minta penawaran",
+          "subtitle": "Ceritakan kebutuhan Anda, kami balas dalam 1 hari kerja.",
+          "buttonText": "Kirim",
+          "successMessage": "Terima kasih! Kami akan menghubungi Anda.",
+          "fields": [
+            {
+              "id": "name",
+              "label": "Nama",
+              "type": "text",
+              "required": true,
+              "system": true
+            },
+            {
+              "id": "phone",
+              "label": "Nomor WhatsApp",
+              "type": "tel",
+              "required": true,
+              "system": true
+            },
+            {
+              "id": "kebutuhan",
+              "label": "Kebutuhan",
+              "type": "textarea",
+              "required": true
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

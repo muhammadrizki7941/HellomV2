@@ -49,7 +49,7 @@
 @if (!empty($tracking['meta_pixel_id']))<link rel="preconnect" href="https://connect.facebook.net" crossorigin>@endif
 <style>{!! $theme['fontFaces'] !!}:root{--bg:{{ $theme['effectiveBackground'] }};--fg:{{ $theme['text'] }};--primary:{{ $theme['primary'] }};--btn-text:{{ $theme['buttonText'] }};--muted:{{ $theme['muted'] }};--surface:{{ $theme['surface'] }};--font:{!! $theme['font'] !!};--font-h:{!! $theme['headingFont'] !!};{{ $theme['buttonVars'] }}}{!! $css !!}</style>
 </head>
-<body class="{{ trim((($theme['dark'] ?? false) ? 'dark ' : '') . ($theme['bgClass'] ?? '') . ' hv-' . ($theme['hover'] ?? 'none')) }}">
+<body class="{{ trim((($theme['dark'] ?? false) ? 'dark ' : '') . ($theme['bgClass'] ?? '') . ' hv-' . ($theme['hover'] ?? 'none') . (!empty($theme['motion']['off']) ? ' no-anim' : '')) }}" style="--ent-dur:{{ (int) ($theme['motion']['duration'] ?? 600) }}ms;--ent-step:{{ (int) ($theme['motion']['step'] ?? 0) }}ms">
 {!! $theme['bgLayers'] ?? '' !!}
 @if ($preview && empty($editor))<div class="preview-bar">Pratinjau draft — belum tayang ke publik</div>@endif
 <main>
@@ -116,7 +116,7 @@
 <div id="hl-toast" class="toast" role="status"></div>
 <script type="application/json" id="hl-data">{!! json_encode($config, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) !!}</script>
 <script>{!! $js !!}</script>
-@if (!empty($editor))
+@if (!empty($editor) && empty($sample))
 {{-- Editor phone preview (sandboxed iframe in the dashboard): tap to select, highlight. --}}
 <style>[data-hl-block]>*{cursor:pointer}[data-hl-block]>*:hover{outline:1px dashed rgba(250,204,21,.9);outline-offset:-1px}.hl-sel{outline:2px solid #facc15!important;outline-offset:-2px}</style>
 <script>{!! file_get_contents(resource_path('views/landing/editor.js')) !!}</script>

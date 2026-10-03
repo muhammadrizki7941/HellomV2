@@ -1,0 +1,109 @@
+{
+  "id": "spotlight",
+  "order": 5,
+  "name": "Spotlight",
+  "category": "kreator",
+  "badge": null,
+  "description": "Gelap dengan aksen menyala dan blob warna bergerak. Untuk streamer & kreator hiburan.",
+  "slots": {
+    "banner": "Banner 16:9 — foto kreator / thumbnail kanal",
+    "avatar": "Foto profil"
+  },
+  "document": {
+    "theme": {
+      "preset": "kreator",
+      "primary": "#e11d48",
+      "buttonText": "#ffffff",
+      "text": "#fafafa",
+      "background": "#09090b",
+      "headingFont": "bebas",
+      "bodyFont": "inter",
+      "bg": {
+        "type": "animated",
+        "animation": "blobs",
+        "color": "#09090b",
+        "from": "#f43f5e",
+        "via": "#7c3aed",
+        "to": "#f59e0b"
+      },
+      "button": {
+        "shape": "rounded",
+        "fill": "solid",
+        "shadow": "soft",
+        "hover": "shine"
+      },
+      "motion": {
+        "entrance": "zoom",
+        "speed": "normal",
+        "stagger": true
+      }
+    },
+    "blocks": [
+      {
+        "type": "profile",
+        "content": {
+          "name": "Nadia Kirana",
+          "bio": "Streamer & host podcast \"Ngobrol Santai\" 🎙️\nKolaborasi: lihat tombol di bawah",
+          "avatarUrl": "{{slot:avatar}}",
+          "coverUrl": "{{slot:banner}}",
+          "showVerified": true,
+          "coverRatio": "wide",
+          "coverFade": true
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Tonton live sekarang",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "play",
+          "featured": true,
+          "featuredStyle": "pulse"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Dengarkan podcast terbaru",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "spotify"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Kerja sama & endorse",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "gift",
+          "fill": "outline"
+        }
+      },
+      {
+        "type": "video",
+        "content": {
+          "videoUrl": "",
+          "title": "Highlight minggu ini"
+        }
+      },
+      {
+        "type": "catalog",
+        "content": {
+          "title": "Merch & produk digital",
+          "showAll": true,
+          "productIds": [],
+          "columns": 2,
+          "buttonText": "Beli"
+        }
+      }
+    ]
+  }
+}

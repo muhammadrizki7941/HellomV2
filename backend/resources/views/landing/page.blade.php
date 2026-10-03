@@ -32,12 +32,20 @@
                 @if ($blockHtml !== '')
                     {!! $blockHtml !!}
                 @else
-                    <section class="blk center" style="padding-top:10px;padding-bottom:10px"><div class="wrap"><p class="small muted" style="margin:0;padding:14px;border:1px dashed currentColor;border-radius:14px;opacity:.75">{{ $editorLabels[$b['type']] ?? 'Bagian' }} — ketuk untuk melengkapi</p></div></section>
+                    <section class="blk center" style="padding-top:10px;padding-bottom:10px"><div class="wrap"><p class="small muted" style="margin:0;padding:14px;border:1px dashed currentColor;border-radius:14px;opacity:.75">{{ $editorLabels[$b['type']] ?? 'Bagian' }} — {{ !empty($sample) ? 'isi milikmu tampil di sini' : 'ketuk untuk melengkapi' }}</p></div></section>
                 @endif
             </div>
         @else
-            {{-- Clicks remember which block they came from (statistics per link, Fase 6). --}}
-            {!! str_replace(' data-track="', ' data-item="' . e($b['id']) . '" data-track="', $__env->make('landing.block', ['b' => $b, 'first' => $loop->first], \Illuminate\Support\Arr::except(get_defined_vars(), ['__data', '__path']))->render()) !!}
+            {{-- Clicks remember which block they came from (statistics per link, Fase 6); entrance animation (Fase 7.2). --}}
+            @php
+                $enter = empty($theme['motion']['off']) ? ($b['styles']['entrance'] ?? $theme['motion']['entrance'] ?? 'none') : 'none';
+                $publicHtml = str_replace(' data-track="', ' data-item="' . e($b['id']) . '" data-track="', $__env->make('landing.block', ['b' => $b, 'first' => $loop->first], \Illuminate\Support\Arr::except(get_defined_vars(), ['__data', '__path']))->render());
+            @endphp
+            @if ($enter !== 'none' && trim($publicHtml) !== '')
+                <div class="ent ent-{{ $enter }}" style="--i:{{ min($loop->index, 10) }}">{!! $publicHtml !!}</div>
+            @else
+                {!! $publicHtml !!}
+            @endif
         @endif
         @if ($hasSocial && $profileAt === $loop->index && ($social['position'] ?? 'bottom') === 'bottom'){!! $socialRow() !!}@endif
     @endforeach

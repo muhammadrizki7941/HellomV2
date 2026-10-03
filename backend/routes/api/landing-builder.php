@@ -10,6 +10,8 @@ use App\Http\Controllers\Api\V1\Hellom\EmailVerificationController;
 use App\Http\Controllers\Api\V1\Hellom\EntitlementController;
 use App\Http\Controllers\Api\V1\Hellom\FileAssetController;
 use App\Http\Controllers\Api\V1\Hellom\LandingBuilderController;
+use App\Http\Controllers\Api\V1\Hellom\LandingMediaController;
+use App\Http\Controllers\Api\V1\Hellom\LandingTemplateController;
 use App\Http\Controllers\Api\V1\Hellom\LandingSiteController;
 use App\Http\Controllers\Api\V1\Hellom\SellerMarketingController;
 use App\Http\Controllers\Api\V1\Hellom\SellerCouponController;
@@ -121,6 +123,9 @@ Route::middleware('canUseApp:landing_builder')->group(function () {
         Route::post('/site/pages/{pageId}/unpublish', [LandingSiteController::class, 'unpublish'])->whereNumber('pageId')->name('site.pages.unpublish');
         Route::get('/site/pages/{pageId}/history', [LandingSiteController::class, 'history'])->whereNumber('pageId')->name('site.pages.history');
         Route::post('/site/pages/{pageId}/history/{versionId}/restore', [LandingSiteController::class, 'restore'])->whereNumber('pageId')->whereNumber('versionId')->name('site.pages.restore');
+        Route::get('/page-templates', [LandingTemplateController::class, 'index'])->name('page_templates.index');
+        Route::post('/page-templates/{templateId}/preview', [LandingTemplateController::class, 'preview'])->where('templateId', '[a-z0-9-]{2,40}')->middleware('throttle:120,1')->name('page_templates.preview');
+        Route::get('/video-preview', [LandingMediaController::class, 'videoPreview'])->middleware('throttle:60,1')->name('video_preview');
         Route::post('/site/pages/{pageId}/preview-link', [LandingSiteController::class, 'previewLink'])->whereNumber('pageId')->name('site.pages.preview');
         // Ads & stats.
         Route::get('/tracking', [SellerMarketingController::class, 'tracking'])->name('tracking.show');

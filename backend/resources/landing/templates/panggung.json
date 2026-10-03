@@ -1,0 +1,116 @@
+{
+  "id": "panggung",
+  "order": 11,
+  "name": "Panggung",
+  "category": "musik",
+  "badge": "baru",
+  "description": "Gelap dengan gelombang bergerak, banner video YouTube, embed Spotify. Untuk band & musisi.",
+  "slots": {
+    "banner": "Banner 16:9 — foto panggung / band",
+    "avatar": "Logo band"
+  },
+  "document": {
+    "theme": {
+      "preset": "musik",
+      "primary": "#f97316",
+      "buttonText": "#111111",
+      "text": "#fafaf9",
+      "background": "#111111",
+      "headingFont": "bebas",
+      "bodyFont": "dmsans",
+      "bg": {
+        "type": "animated",
+        "animation": "waves",
+        "color": "#111111",
+        "from": "#f97316",
+        "via": "#dc2626",
+        "to": "#7c2d12"
+      },
+      "button": {
+        "shape": "rounded",
+        "fill": "solid",
+        "shadow": "none",
+        "hover": "grow"
+      },
+      "motion": {
+        "entrance": "slide",
+        "speed": "normal",
+        "stagger": true
+      }
+    },
+    "blocks": [
+      {
+        "type": "profile",
+        "content": {
+          "name": "Senja Kala",
+          "bio": "Band indie folk dari Malang 🎸\nAlbum baru \"Pulang\" sudah rilis",
+          "avatarUrl": "{{slot:avatar}}",
+          "coverUrl": "{{slot:banner}}",
+          "showVerified": true,
+          "coverRatio": "wide",
+          "coverFade": true
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Dengarkan \"Pulang\"",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "spotify",
+          "featured": true,
+          "featuredStyle": "glow"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Tiket tur 2026",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "calendar"
+        }
+      },
+      {
+        "type": "embed",
+        "content": {
+          "url": "",
+          "title": "Putar di Spotify"
+        }
+      },
+      {
+        "type": "video",
+        "content": {
+          "videoUrl": "",
+          "title": "Video klip terbaru"
+        }
+      },
+      {
+        "type": "catalog",
+        "content": {
+          "title": "Merch resmi",
+          "showAll": true,
+          "productIds": [],
+          "columns": 2,
+          "buttonText": "Beli"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Booking manggung",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "phone",
+          "fill": "outline"
+        }
+      }
+    ]
+  }
+}

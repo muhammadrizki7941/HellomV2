@@ -28,7 +28,16 @@ p{margin:0 0 1em}
 .hero-img{border-radius:20px;margin:0 auto 24px;max-height:420px;object-fit:cover;width:100%}
 /* profile */
 .profile{text-align:center;padding-top:32px}
-.cover{height:140px;border-radius:0 0 24px 24px;background:var(--primary) center/cover;margin-bottom:-56px}
+/* Banner (Fase 7.1): fixed ratio, image cropped at the focus point; avatar overlaps the edge or sits below. */
+.cover{position:relative;max-width:720px;margin:0 auto -56px;overflow:hidden;border-radius:0 0 24px 24px;background:var(--primary);container-type:size}
+.cover img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.cover-yt{position:absolute;inset:0;pointer-events:none}
+.cover-yt iframe{position:absolute;top:50%;left:50%;width:max(100cqw,177.78cqh);height:max(100cqh,56.25cqw);transform:translate(-50%,-50%);border:0;opacity:0;transition:opacity .6s}
+.cover-yt iframe.on{opacity:1}
+.cover-fade{position:absolute;inset:auto 0 0;height:60%;background:linear-gradient(to bottom,transparent,var(--bg))}
+.profile.has-cover{padding-top:0}
+.profile.has-cover .avatar{position:relative}
+.profile.av-below .cover{margin-bottom:20px}
 .avatar{width:104px;height:104px;border-radius:50%;object-fit:cover;margin:0 auto 12px;border:4px solid var(--bg);background:var(--surface)}
 .avatar.initial{display:flex;align-items:center;justify-content:center;font-size:2.4rem;font-weight:800;background:var(--primary);color:var(--btn-fg)}
 .badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:999px;background:rgba(16,185,129,.12);color:#047857;font-size:.8rem;font-weight:700}
@@ -116,6 +125,7 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 .embed iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
 .embed.vertical{aspect-ratio:9/16;max-width:340px;margin:0 auto;background:#000}
 .yt.vertical{aspect-ratio:9/16;max-width:340px;margin:0 auto}
+.yt.square,.embed.square{border-radius:0}
 .wa-btn{background:#25d366;border-color:#25d366;color:#fff}
 .wa-btn svg{width:22px;height:22px;flex:none}
 .wa-card{border-radius:18px;padding:18px;background:var(--surface);box-shadow:0 1px 0 rgba(0,0,0,.04),0 0 0 1px rgba(127,127,127,.15)}
@@ -156,4 +166,23 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 .btn-ico{position:absolute;left:8px;top:50%;transform:translateY(-50%);width:36px;height:36px;display:flex;align-items:center;justify-content:center}
 .btn-ico svg{width:22px;height:22px}
 .btn-ico img{width:36px;height:36px;border-radius:10px;object-fit:cover}
-@media (prefers-reduced-motion:reduce){.bg-layer,.bg-layer i,.btn.featured,.btn.featured::after{animation:none!important}.hv-lift .btn:hover,.hv-grow .btn:hover{transform:none}}
+/* Fase 7.2: featured styles, waves, entrance; all transform/opacity. */
+.btn.featured.fx-pulse::after,.btn.featured.fx-shake::after,.btn.featured.fx-glow::after{display:none}
+.btn.featured.fx-shimmer{animation:none}
+.btn.featured.fx-shake{animation:hl-shake 3.4s ease-in-out infinite}
+@keyframes hl-shake{0%,84%,100%{transform:none}87%{transform:rotate(-2.5deg)}90%{transform:rotate(2.5deg)}93%{transform:rotate(-1.5deg)}96%{transform:rotate(1deg)}}
+.btn.featured.fx-glow{animation:none;overflow:visible;isolation:isolate}
+.btn.featured.fx-glow::before{content:"";position:absolute;inset:-4px;border-radius:inherit;box-shadow:0 0 24px 6px var(--btn-bg),0 0 0 2px var(--btn-bg);opacity:.15;z-index:-1;pointer-events:none;animation:hl-glow 2.4s ease-in-out infinite}
+@keyframes hl-glow{0%,100%{opacity:.15}50%{opacity:.7}}
+.bg-waves i{position:absolute;left:0;bottom:-2px;width:200%;height:28vh;background-repeat:repeat-x;background-size:50% 100%;animation:hl-wave 18s linear infinite;will-change:transform}
+.bg-waves i:nth-child(2){height:22vh;animation-duration:26s;animation-direction:reverse;opacity:.9}
+.bg-waves i:nth-child(3){height:16vh;animation-duration:13s}
+@keyframes hl-wave{0%{transform:translate3d(0,0,0)}100%{transform:translate3d(-50%,0,0)}}
+.ent{animation-duration:var(--ent-dur,600ms);animation-timing-function:cubic-bezier(.2,.7,.2,1);animation-fill-mode:both;animation-delay:calc(var(--i,0) * var(--ent-step,0ms))}
+.ent-fade{animation-name:hl-ent-fade}.ent-slide{animation-name:hl-ent-slide}.ent-zoom{animation-name:hl-ent-zoom}
+@keyframes hl-ent-fade{from{opacity:0}to{opacity:1}}
+@keyframes hl-ent-slide{from{opacity:0;transform:translate3d(0,28px,0)}to{opacity:1;transform:none}}
+@keyframes hl-ent-zoom{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:none}}
+/* "Matikan semua animasi" and the visitor's "less motion" setting. */
+body.no-anim *,body.no-anim *::before,body.no-anim *::after{animation:none!important;transition:none!important}
+@media (prefers-reduced-motion:reduce){.bg-layer,.bg-layer i,.btn.featured,.btn.featured::before,.btn.featured::after,.ent{animation:none!important}.hv-lift .btn:hover,.hv-grow .btn:hover{transform:none}}

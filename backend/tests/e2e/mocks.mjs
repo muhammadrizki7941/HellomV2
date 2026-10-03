@@ -18,6 +18,13 @@ http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://127.0.0.1:8020');
   const raw = req.method === 'POST' ? await readBody(req) : '';
 
+  // YouTube oEmbed stand-in (YOUTUBE_OEMBED_URL=http://127.0.0.1:8020/youtube/oembed): any id has a title except deadvideo00.
+  if (url.pathname === '/youtube/oembed') {
+    const id = /[?&]v=([A-Za-z0-9_-]{11})/.exec(url.searchParams.get('url') || '')?.[1] ?? '';
+    console.log(`[youtube] oembed ${id}`);
+    return id && id !== 'deadvideo00' ? send(res, 200, { title: `Video contoh ${id}`, author_name: 'Kanal Contoh' }) : send(res, 404, 'Not Found');
+  }
+
   // RajaOngkir (Komerce v1) stand-in, used with RAJAONGKIR_SANDBOX_URL=http://127.0.0.1:8020/rajaongkir/api/v1
   if (url.pathname === '/rajaongkir/api/v1/destination/domestic-destination') {
     const q = (url.searchParams.get('search') || '').toLowerCase();

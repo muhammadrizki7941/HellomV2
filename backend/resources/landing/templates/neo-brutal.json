@@ -1,0 +1,134 @@
+{
+  "id": "neo-brutal",
+  "order": 2,
+  "name": "Neo-Brutal",
+  "category": "kreator",
+  "badge": "baru",
+  "description": "Warna kontras, garis tebal, dan bayangan keras. Berani dan mudah diingat.",
+  "slots": {
+    "banner": "Banner 3:1 (opsional) — meja kerja / karya",
+    "avatar": "Logo / foto studio",
+    "work1": "Karya 1 (persegi)",
+    "work2": "Karya 2 (persegi)",
+    "work3": "Karya 3 (persegi)",
+    "work4": "Karya 4 (persegi)"
+  },
+  "document": {
+    "theme": {
+      "preset": "brutal",
+      "primary": "#ffffff",
+      "buttonText": "#000000",
+      "text": "#000000",
+      "background": "#fde047",
+      "headingFont": "archivo",
+      "bodyFont": "spacegrotesk",
+      "bg": {
+        "type": "pattern",
+        "pattern": "dots",
+        "color": "#fde047",
+        "patternColor": "#000000",
+        "patternOpacity": 0.14
+      },
+      "button": {
+        "shape": "square",
+        "fill": "solid",
+        "shadow": "hard",
+        "borderWidth": 3,
+        "hover": "lift"
+      },
+      "motion": {
+        "entrance": "zoom",
+        "speed": "fast",
+        "stagger": true
+      }
+    },
+    "blocks": [
+      {
+        "type": "profile",
+        "content": {
+          "name": "Studio Kertas",
+          "bio": "Ilustrasi custom, stiker, dan merch lucu ✏️\nDikirim dari Bandung ke seluruh Indonesia",
+          "avatarUrl": "{{slot:avatar}}",
+          "coverUrl": "{{slot:banner}}",
+          "showVerified": true
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Order ilustrasi custom",
+          "actionType": "whatsapp",
+          "whatsappMessage": "Halo Studio Kertas, aku mau order ilustrasi custom",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "whatsapp",
+          "featured": true,
+          "featuredStyle": "shake"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Katalog stiker & merch",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "cart"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Lihat portofolio lengkap",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "star"
+        }
+      },
+      {
+        "type": "gallery",
+        "content": {
+          "title": "Karya terbaru",
+          "columns": 2,
+          "images": [
+            {
+              "url": "{{slot:work1}}",
+              "caption": ""
+            },
+            {
+              "url": "{{slot:work2}}",
+              "caption": ""
+            },
+            {
+              "url": "{{slot:work3}}",
+              "caption": ""
+            },
+            {
+              "url": "{{slot:work4}}",
+              "caption": ""
+            }
+          ]
+        }
+      },
+      {
+        "type": "faq",
+        "content": {
+          "title": "Pertanyaan yang sering ditanya",
+          "items": [
+            {
+              "q": "Berapa lama pengerjaan ilustrasi custom?",
+              "a": "Biasanya 3–5 hari kerja setelah sketsa disetujui."
+            },
+            {
+              "q": "Bisa revisi?",
+              "a": "Bisa, termasuk 2 kali revisi minor di tahap sketsa."
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

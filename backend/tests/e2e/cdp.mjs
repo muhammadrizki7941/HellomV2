@@ -36,20 +36,22 @@ export async function openChrome(port, profile) {
   const ev = async (expr) => (await send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true })).result?.result?.value;
   const waitFor = async (expr, ms = 15000) => { const t = Date.now(); while (Date.now() - t < ms) { if (await ev(expr)) return true; await sleep(200); } return false; };
 
-  /** Evaluate inside the visible preview iframe (two take turns; the visible one has the title). */
-  const inPreview = async (expr) => {
+  /** Evaluate inside the visible preview iframe (two take turns; the visible one has the title). `title` = title prefix of another iframe. */
+  const inPreview = async (expr, wanted = 'Pratinjau halaman') => {
     const box = await ev(`document.querySelector('iframe[title="Pratinjau halaman"]')?.getBoundingClientRect().toJSON() ?? null`);
     for (const [frameId, sessionId] of frames) {
       const owner = await send('DOM.getFrameOwner', { frameId });
       const node = owner.result?.backendNodeId && await send('DOM.resolveNode', { backendNodeId: owner.result.backendNodeId });
       const title = node?.result && await send('Runtime.callFunctionOn', { objectId: node.result.object.objectId, functionDeclaration: 'function () { return this.title; }', returnByValue: true });
-      if (title?.result?.result?.value !== 'Pratinjau halaman') continue;
+      const name = String(title?.result?.result?.value ?? '');
+      // The editor preview by exact title (its hidden twin is "Pratinjau (memuat)"); others by prefix.
+      if (wanted === 'Pratinjau halaman' ? name !== wanted : !name.startsWith(wanted)) continue;
       const res = await send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true }, sessionId);
       return { value: res.result?.result?.value ?? null, box };
     }
     return { value: null, box };
   };
-  const waitPreview = async (expr, ms = 12000) => { const t = Date.now(); while (Date.now() - t < ms) { if ((await inPreview(expr)).value) return true; await sleep(300); } return false; };
+  const waitPreview = async (expr, ms = 12000, title) => { const t = Date.now(); while (Date.now() - t < ms) { if ((await inPreview(expr, title)).value) return true; await sleep(300); } return false; };
 
   const tap = async (x, y) => {
     await send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 });

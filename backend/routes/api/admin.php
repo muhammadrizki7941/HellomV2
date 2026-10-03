@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\V1\Hellom\SuperAdminController;
 use App\Http\Controllers\Api\V1\Hellom\AdminLandingModerationController;
 use App\Http\Controllers\Api\V1\Hellom\AdminSellerFinanceController;
 use App\Http\Controllers\Api\V1\Hellom\AdminShippingController;
+use App\Http\Controllers\Api\V1\Hellom\AdminLandingTemplateController;
 use Illuminate\Support\Facades\Route;
 
 // ─── AUTH + superAdmin ───
@@ -133,6 +134,11 @@ Route::prefix('admin')->name('admin.')->middleware('superAdmin')->group(function
     Route::get('shipping-settings', [AdminShippingController::class, 'show'])->name('shipping_settings.show');
     Route::put('shipping-settings', [AdminShippingController::class, 'update'])->name('shipping_settings.update');
     Route::post('shipping-settings/test', [AdminShippingController::class, 'test'])->middleware('throttle:10,1')->name('shipping_settings.test');
+    // Hellom Page templates (Fase 7.4): slot images, show/hide, order.
+    Route::get('landing-templates', [AdminLandingTemplateController::class, 'index'])->name('landing_templates.index');
+    Route::put('landing-templates', [AdminLandingTemplateController::class, 'updateLayout'])->name('landing_templates.layout');
+    Route::post('landing-templates/{templateId}/images/{slot}', [AdminLandingTemplateController::class, 'uploadImage'])->where(['templateId' => '[a-z0-9-]{2,40}', 'slot' => '[a-z0-9_-]{1,30}'])->name('landing_templates.image');
+    Route::delete('landing-templates/{templateId}/images/{slot}', [AdminLandingTemplateController::class, 'deleteImage'])->where(['templateId' => '[a-z0-9-]{2,40}', 'slot' => '[a-z0-9_-]{1,30}'])->name('landing_templates.image.destroy');
     Route::prefix('seller-finance')->name('seller_finance.')->group(function () {
         Route::get('/summary', [AdminSellerFinanceController::class, 'summary'])->name('summary');
         Route::get('/withdrawals', [AdminSellerFinanceController::class, 'withdrawals'])->name('withdrawals');

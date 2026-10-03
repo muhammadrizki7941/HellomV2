@@ -1,0 +1,124 @@
+{
+  "id": "editorial",
+  "order": 7,
+  "name": "Editorial",
+  "category": "fashion",
+  "badge": null,
+  "description": "Tipografi serif besar dan banyak ruang kosong, seperti majalah. Untuk butik & fashion.",
+  "slots": {
+    "banner": "Banner 1:1 — foto lookbook",
+    "avatar": "Logo butik",
+    "look1": "Lookbook 1 (potret)",
+    "look2": "Lookbook 2 (potret)"
+  },
+  "document": {
+    "theme": {
+      "preset": "editorial",
+      "primary": "#1c1917",
+      "buttonText": "#ffffff",
+      "text": "#1c1917",
+      "background": "#f5f5f0",
+      "headingFont": "playfair",
+      "bodyFont": "inter",
+      "bg": {
+        "type": "solid",
+        "color": "#f5f5f0"
+      },
+      "button": {
+        "shape": "square",
+        "fill": "outline",
+        "borderWidth": 1,
+        "shadow": "none",
+        "hover": "none"
+      },
+      "motion": {
+        "entrance": "fade",
+        "speed": "slow",
+        "stagger": false
+      }
+    },
+    "blocks": [
+      {
+        "type": "profile",
+        "content": {
+          "name": "Atelier Sora",
+          "bio": "Busana modest yang tenang dan tahan lama.\nKoleksi baru setiap musim.",
+          "avatarUrl": "{{slot:avatar}}",
+          "coverUrl": "{{slot:banner}}",
+          "showVerified": true,
+          "coverRatio": "square",
+          "avatarPosition": "below"
+        }
+      },
+      {
+        "type": "spacer",
+        "content": {
+          "height": 16
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Koleksi Musim Hujan",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "fill": "solid"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Panduan ukuran",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Kunjungi butik kami",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "map"
+        }
+      },
+      {
+        "type": "divider",
+        "content": {
+          "style": "solid",
+          "thickness": 1,
+          "width": 40
+        }
+      },
+      {
+        "type": "gallery",
+        "content": {
+          "title": "Lookbook",
+          "columns": 2,
+          "images": [
+            {
+              "url": "{{slot:look1}}",
+              "caption": ""
+            },
+            {
+              "url": "{{slot:look2}}",
+              "caption": ""
+            }
+          ]
+        }
+      },
+      {
+        "type": "text",
+        "content": {
+          "body": "Setiap potong dijahit di Yogyakarta oleh penjahit kami sendiri, dari kain katun dan linen pilihan."
+        }
+      }
+    ]
+  }
+}
