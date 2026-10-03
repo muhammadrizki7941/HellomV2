@@ -8,11 +8,12 @@ use App\Models\User;
 use App\Services\Billing\PaymentPolicy;
 use App\Services\Hellom\DokuService;
 use App\Services\Hellom\DokuSettingsService;
-use App\Services\Hellom\IpaymuService;
 use App\Services\Hellom\IpaymuSettingsService;
 use App\Services\Hellom\ManualPaymentSettingsService;
 use App\Services\Hellom\XenditService;
 use App\Services\NotificationService;
+use App\Services\Payments\ChargeRequest;
+use App\Services\Payments\GatewayRegistry;
 use App\Services\Payments\IpaymuPaymentVerifier;
 use App\Support\FrontendUrl;
 use Illuminate\Support\Facades\DB;
@@ -30,6 +31,7 @@ class ProductCheckoutService
 {
     public function __construct(
         private readonly NotificationService $notificationService,
+        private readonly GatewayRegistry $gateways,
     ) {
     }
 
@@ -399,28 +401,12 @@ class ProductCheckoutService
         $returnUrl = $this->returnUrl($product, $context);
 
         if ($provider === 'ipaymu') {
-            $session = app(IpaymuService::class)->createRedirectPayment([
-                'product' => [(string) $product->name],
-                'qty' => [1],
-                'price' => [(int) $product->price],
-                'paymentMethod' => app(IpaymuSettingsService::class)->enabledPaymentMethods(),
-                'referenceId' => (string) $purchase->transaction_code,
-                'description' => ["Pembelian {$product->name}"],
-                'buyerName' => (string) $user->name,
-                'buyerEmail' => (string) $user->email,
-                'notifyUrl' => $this->ipaymuNotifyUrl([
-                    'purpose' => 'product_purchase',
-                    'purchase_id' => (int) $purchase->id,
-                    'product_id' => (int) $product->id,
-                    'user_id' => (int) $user->id,
-                    'reference_id' => (string) $purchase->transaction_code,
-                ]),
-                'returnUrl' => $returnUrl,
-            ]);
+            // iPaymu's hosted page, through the shared adapter (one request builder/parser).
+            $charge = $this->gateways->get('ipaymu')->createCharge($this->ipaymuChargeRequest($purchase, $product, $user, $context, 'other', $returnUrl));
 
             return [
-                'checkout_url' => (string) (data_get($session, 'Data.Url') ?: data_get($session, 'Url') ?: ''),
-                'gateway_ref' => (string) (data_get($session, 'Data.SessionID') ?: data_get($session, 'Data.TransactionId') ?: ''),
+                'checkout_url' => (string) ($charge->paymentUrl ?? ''),
+                'gateway_ref' => (string) ($charge->sessionId ?: $charge->transactionId ?: ''),
             ];
         }
 
@@ -513,21 +499,6 @@ class ProductCheckoutService
         ];
     }
 
-    /**
-     * @param array<string,mixed> $params
-     */
-    private function ipaymuNotifyUrl(array $params): string
-    {
-        // IpaymuWebhookController rejects notifications without the callback token; the
-        // signature binds the purchase/product/user ids to this URL.
-        $params['sig'] = IpaymuPaymentVerifier::sign($params);
-        $params['token'] = (string) app(IpaymuSettingsService::class)->getConfig()['callback_token'];
-        $base = url('/api/v1/hellom/webhooks/ipaymu');
-        $query = http_build_query(array_filter($params, fn ($value) => $value !== '' && $value !== null));
-
-        return $query !== '' ? $base . '?' . $query : $base;
-    }
-
     private function dokuNotifyUrl(): string
     {
         $token = (string) app(DokuSettingsService::class)->getConfig()['callback_token'];
@@ -544,6 +515,36 @@ class ProductCheckoutService
     }
 
     /**
+     * The iPaymu charge for a digital product purchase. Request building, signed notify
+     * URL and response parsing live in IpaymuGateway (shared with Hellom Page shops).
+     *
+     * @param array<string,mixed> $context
+     */
+    private function ipaymuChargeRequest(ProductPurchase $purchase, DigitalProduct $product, User $user, array $context, string $method, ?string $returnUrl = null): ChargeRequest
+    {
+        return new ChargeRequest(
+            reference: (string) $purchase->transaction_code,
+            amount: (int) $product->price,
+            productName: (string) $product->name,
+            buyerName: (string) ($user->name ?: 'Pelanggan Hellom'),
+            buyerEmail: (string) $user->email,
+            buyerPhone: $this->resolveBuyerPhone($user, $context),
+            returnUrl: $returnUrl ?? $this->returnUrl($product, $context),
+            notifyContext: [
+                'purpose' => 'product_purchase',
+                'purchase_id' => (int) $purchase->id,
+                'product_id' => (int) $product->id,
+                'user_id' => (int) $user->id,
+                'reference_id' => (string) $purchase->transaction_code,
+            ],
+            preferredMethod: $method,
+            description: "Pembelian {$product->name}",
+        );
+    }
+
+    /**
+     * VA number / QRIS shown on our page (payment instructions for the purchase page).
+     *
      * @param array<string,mixed> $context
      * @return array<string,mixed>
      */
@@ -553,72 +554,24 @@ class ProductCheckoutService
         if (!isset($channels[$channelKey])) {
             throw new \RuntimeException('Metode pembayaran ini sedang tidak tersedia. Silakan pilih metode lain.');
         }
+        [$method, $channel] = $channels[$channelKey];
 
-        [$method, $channel, $label] = $channels[$channelKey];
-
-        $response = app(IpaymuService::class)->createDirectPayment([
-            'name' => (string) ($user->name ?: 'Pelanggan Hellom'),
-            'phone' => $this->resolveBuyerPhone($user, $context),
-            'email' => (string) $user->email,
-            'amount' => (int) $product->price,
-            'notifyUrl' => $this->ipaymuNotifyUrl([
-                'purpose' => 'product_purchase',
-                'purchase_id' => (int) $purchase->id,
-                'product_id' => (int) $product->id,
-                'user_id' => (int) $user->id,
-                'reference_id' => (string) $purchase->transaction_code,
-                'channel' => $channel,
-            ]),
-            'referenceId' => (string) $purchase->transaction_code,
-            'paymentMethod' => $method,
-            'paymentChannel' => $channel,
-            'comments' => "Pembelian {$product->name}",
-        ]);
-
-        $data = (array) (data_get($response, 'Data') ?: data_get($response, 'data') ?: []);
-        $status = (int) (data_get($response, 'Status') ?? data_get($response, 'status') ?? 0);
-        if ($status !== 200 && $data === []) {
-            throw new \RuntimeException((string) (data_get($response, 'Message') ?: data_get($response, 'message') ?: 'Gagal membuat pembayaran iPaymu.'));
-        }
-
-        $expiredRaw = (string) (data_get($data, 'Expired') ?: data_get($data, 'expired') ?: '');
-        $expiresAt = null;
-        if ($expiredRaw !== '') {
-            try {
-                $expiresAt = \Illuminate\Support\Carbon::parse($expiredRaw)->toIso8601String();
-            } catch (\Throwable) {
-                $expiresAt = null;
-            }
-        }
-
-        $paymentNo = (string) (data_get($data, 'PaymentNo') ?: data_get($data, 'paymentNo') ?: '');
-        $qrString = (string) (data_get($data, 'QrString') ?: data_get($data, 'qrString') ?: '');
-        $qrImage = (string) (data_get($data, 'QrImage') ?: data_get($data, 'qrImage') ?: data_get($data, 'QrTemplate') ?: '');
-
-        // For QRIS the EMVCo payload may arrive in PaymentNo rather than QrString.
-        // Treat it as the QR string (never a VA number) so the client renders a
-        // scannable QR code instead of an unscannable, overflowing text blob.
-        if ($method === 'qris') {
-            if ($qrString === '' && $paymentNo !== '') {
-                $qrString = $paymentNo;
-            }
-            $paymentNo = '';
-        }
+        $charge = $this->gateways->get('ipaymu')->createCharge($this->ipaymuChargeRequest($purchase, $product, $user, $context, $channelKey));
 
         return array_filter([
             'provider' => 'ipaymu',
             'method' => $method,
             'channel' => $channel,
-            'channel_label' => $label,
-            'va_number' => $paymentNo,
-            'qr_string' => $qrString,
-            'qr_image_url' => $qrImage,
-            'amount' => (int) (data_get($data, 'Total') ?: $product->price),
-            'fee' => (int) (data_get($data, 'Fee') ?: 0),
-            'expires_at' => $expiresAt,
+            'channel_label' => $charge->channelLabel,
+            'va_number' => $charge->vaNumber,
+            'qr_string' => $charge->qrString,
+            'qr_image_url' => $charge->qrImageUrl,
+            'amount' => $charge->total ?: (int) $product->price,
+            'fee' => (int) ($charge->fee ?? 0),
+            'expires_at' => $charge->expiresAt,
             'reference_id' => (string) $purchase->transaction_code,
-            'transaction_id' => (string) (data_get($data, 'TransactionId') ?: data_get($data, 'transactionId') ?: ''),
-            'session_id' => (string) (data_get($data, 'SessionId') ?: data_get($data, 'SessionID') ?: ''),
+            'transaction_id' => (string) ($charge->transactionId ?? ''),
+            'session_id' => (string) ($charge->sessionId ?? ''),
         ], static fn ($value) => $value !== '' && $value !== null);
     }
 

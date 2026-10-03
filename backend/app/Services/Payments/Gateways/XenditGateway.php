@@ -8,6 +8,7 @@ use App\Services\Payments\ChargeRequest;
 use App\Services\Payments\ChargeResult;
 use App\Services\Payments\DisbursementRequest;
 use App\Services\Payments\DisbursementResult;
+use App\Services\Payments\GatewayBalance;
 use App\Services\Payments\PaymentGateway;
 use App\Services\Payments\PaymentStatus;
 use Illuminate\Http\Request;
@@ -111,6 +112,17 @@ final class XenditGateway implements PaymentGateway
             transactionId: (string) (data_get($session, 'payment_id') ?: data_get($session, 'payment_request_id') ?: '') ?: null,
             raw: $session,
         );
+    }
+
+    public function getBalance(): ?GatewayBalance
+    {
+        if (!$this->isReady()) {
+            return null;
+        }
+        $balance = $this->api->getBalance();
+        $available = $balance['balance'] ?? $balance['available'] ?? null;
+
+        return is_numeric($available) ? new GatewayBalance('xendit', (int) $available, isset($balance['pending']) ? (int) $balance['pending'] : null, $balance) : null;
     }
 
     public function supportsDisbursement(): bool

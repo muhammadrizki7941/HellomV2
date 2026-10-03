@@ -37,6 +37,9 @@ interface PaymentGateway
      */
     public function getStatus(string $reference, ?string $gatewayRef, ?string $transactionId): PaymentStatus;
 
+    /** Money in Hellom's account at the provider, or null when the provider has no balance API. */
+    public function getBalance(): ?GatewayBalance;
+
     public function supportsDisbursement(): bool;
 
     /** Send money to a seller account (automatic withdrawal mode). */

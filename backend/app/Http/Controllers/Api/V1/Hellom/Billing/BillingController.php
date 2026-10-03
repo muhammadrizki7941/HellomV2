@@ -15,6 +15,7 @@ use App\Services\Billing\CheckoutNotifier;
 use App\Services\Hellom\SubscriptionCheckoutActivationService;
 use App\Services\NotificationService;
 use App\Services\Billing\PaymentPolicy;
+use App\Services\Payments\ChargeRequest;
 use App\Services\Payments\IpaymuPaymentVerifier;
 use App\Support\FrontendUrl;
 use Illuminate\Http\JsonResponse;
@@ -214,32 +215,34 @@ class BillingController extends BaseApiController
         if ($paymentFlow === 'direct' && $checkoutMode === 'gateway_automatic') {
             try {
                 if ($gatewayProvider === 'ipaymu') {
-                    $session = $this->ipaymu()->createRedirectPayment([
-                        'product' => ["{$app->name} - {$plan->name}"],
-                        'qty' => [1],
+                    // iPaymu's hosted page through the shared adapter (one request builder,
+                    // signed notify URL, one response parser).
+                    $charge = $this->gateways()->get('ipaymu')->createCharge(new ChargeRequest(
+                        reference: (string) $intent->intent_token,
                         // The intent amount (yearly = price x 10) is what grants the period.
-                        'price' => [(int) $intent->amount],
-                        'paymentMethod' => $this->ipaymuSettings()->enabledPaymentMethods(),
-                        'referenceId' => (string) $intent->intent_token,
-                        'description' => ["Aktivasi {$app->name} - {$plan->name}"],
-                        'buyerName' => (string) $user->name,
-                        'buyerEmail' => (string) $user->email,
-                        'notifyUrl' => $this->ipaymuNotifyUrl([
+                        amount: (int) $intent->amount,
+                        productName: "{$app->name} - {$plan->name}",
+                        buyerName: (string) $user->name,
+                        buyerEmail: (string) $user->email,
+                        buyerPhone: null,
+                        // Browser redirect back to the app so we can reconcile even when the
+                        // server-to-server webhook can't reach us (e.g. local/sandbox).
+                        returnUrl: $this->checkoutReturnUrl($request, (string) $intent->intent_token),
+                        notifyContext: [
                             'purpose' => 'subscription_checkout',
                             'organization_id' => $organizationId,
                             'subscription_id' => (int) $subscription->id,
                             'checkout_intent_id' => (int) $intent->id,
                             'invoice_id' => (int) ($invoice?->id ?? 0),
                             'reference_id' => (string) $intent->intent_token,
-                        ]),
-                        // Browser redirect back to the app so we can reconcile even when the
-                        // server-to-server webhook can't reach us (e.g. local/sandbox).
-                        'returnUrl' => $this->checkoutReturnUrl($request, (string) $intent->intent_token),
-                        'cancelUrl' => $this->checkoutReturnUrl($request, (string) $intent->intent_token, true),
-                    ]);
+                        ],
+                        preferredMethod: 'other',
+                        cancelUrl: $this->checkoutReturnUrl($request, (string) $intent->intent_token, true),
+                        description: "Aktivasi {$app->name} - {$plan->name}",
+                    ));
 
-                    $paymentUrl = (string) (data_get($session, 'Data.Url') ?: data_get($session, 'Url') ?: '');
-                    $paymentSessionId = (string) (data_get($session, 'Data.SessionID') ?: data_get($session, 'Data.TransactionId') ?: '');
+                    $paymentUrl = (string) ($charge->paymentUrl ?? '');
+                    $paymentSessionId = (string) ($charge->sessionId ?: $charge->transactionId ?: '');
 
                     $intentMeta = is_array($intent->metadata) ? $intent->metadata : [];
                     $intentMeta['ipaymu'] = array_filter([
@@ -476,23 +479,25 @@ class BillingController extends BaseApiController
 
         try {
             if ($this->activeGatewayProvider() === 'ipaymu') {
-                $session = $this->ipaymu()->createRedirectPayment([
-                    'product' => ['Top up wallet Hellom'],
-                    'qty' => [1],
-                    'price' => [(int) $validated['amount']],
-                    'paymentMethod' => $this->ipaymuSettings()->enabledPaymentMethods(),
-                    'referenceId' => $referenceId,
-                    'description' => ['Top up saldo wallet Hellom'],
-                    'buyerName' => (string) $user->name,
-                    'buyerEmail' => (string) $user->email,
-                    'notifyUrl' => $this->ipaymuNotifyUrl([
+                $charge = $this->gateways()->get('ipaymu')->createCharge(new ChargeRequest(
+                    reference: $referenceId,
+                    amount: (int) $validated['amount'],
+                    productName: 'Top up wallet Hellom',
+                    buyerName: (string) $user->name,
+                    buyerEmail: (string) $user->email,
+                    buyerPhone: null,
+                    returnUrl: FrontendUrl::to('/dashboard/payments'),
+                    notifyContext: [
                         'purpose' => 'wallet_topup',
                         'organization_id' => $organizationId,
                         'user_id' => (int) $user->id,
                         'reference_id' => $referenceId,
                         'channel' => $channel,
-                    ]),
-                ]);
+                    ],
+                    preferredMethod: 'other',
+                    description: 'Top up saldo wallet Hellom',
+                ));
+                $session = ['Data' => ['SessionID' => (string) ($charge->sessionId ?? ''), 'Url' => (string) ($charge->paymentUrl ?? '')]];
             } elseif ($this->activeGatewayProvider() === 'doku') {
                 $session = $this->doku()->createCheckout([
                     'order' => [

@@ -5,13 +5,12 @@ namespace App\Http\Controllers\Api\V1\Hellom\Billing\Concerns;
 use App\Models\User;
 use App\Services\Hellom\DokuService;
 use App\Services\Hellom\DokuSettingsService;
-use App\Services\Hellom\IpaymuService;
 use App\Services\Hellom\IpaymuSettingsService;
 use App\Services\Hellom\ManualPaymentSettingsService;
 use App\Services\Hellom\PaymentGatewaySettingsService;
 use App\Services\Hellom\XenditService;
 use App\Services\Hellom\XenditSettingsService;
-use App\Services\Payments\IpaymuPaymentVerifier;
+use App\Services\Payments\GatewayRegistry;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -83,20 +82,6 @@ trait InteractsWithPaymentGateways
     }
 
     /**
-     * @param array<string,int|string> $params
-     */
-    private function ipaymuNotifyUrl(array $params): string
-    {
-        $query = array_filter([
-            ...$params,
-            'token' => (string) $this->ipaymuSettings()->getConfig()['callback_token'],
-            'sig' => IpaymuPaymentVerifier::sign($params),
-        ], fn ($value) => $value !== '' && $value !== 0);
-
-        return url($this->providerWebhookPath('ipaymu')) . '?' . http_build_query($query);
-    }
-
-    /**
      * Browser return URL for the SPA after a gateway redirect. Uses the request
      * Origin (the dashboard) so the redirect reaches the user's app even on localhost.
      */
@@ -136,9 +121,10 @@ trait InteractsWithPaymentGateways
         return app(IpaymuSettingsService::class);
     }
 
-    private function ipaymu(): IpaymuService
+    /** Payment adapters (iPaymu requests are built and parsed only in IpaymuGateway). */
+    private function gateways(): GatewayRegistry
     {
-        return app(IpaymuService::class);
+        return app(GatewayRegistry::class);
     }
 
     private function dokuSettings(): DokuSettingsService

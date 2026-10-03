@@ -8,6 +8,8 @@ use App\Services\Payments\ChargeRequest;
 use App\Services\Payments\ChargeResult;
 use App\Services\Payments\DisbursementRequest;
 use App\Services\Payments\DisbursementResult;
+use App\Services\Payments\GatewayBalance;
+use App\Services\Payments\IpaymuPaymentVerifier;
 use App\Services\Payments\PaymentGateway;
 use App\Services\Payments\PaymentStatus;
 use Illuminate\Http\Request;
@@ -73,11 +75,11 @@ final class IpaymuGateway implements PaymentGateway
             'price' => [$request->amount],
             'paymentMethod' => $this->settings->enabledPaymentMethods(),
             'referenceId' => $request->reference,
-            'description' => ['Pembelian: ' . $request->productName],
+            'description' => [$request->description ?? 'Pembelian: ' . $request->productName],
             'buyerName' => $request->buyerName,
             'buyerEmail' => $request->buyerEmail,
             'returnUrl' => $request->returnUrl,
-            'cancelUrl' => $request->returnUrl,
+            'cancelUrl' => $request->cancelUrl ?? $request->returnUrl,
             'notifyUrl' => $notifyUrl,
         ];
         // An empty buyerPhone is rejected by iPaymu; omit it like the subscription checkout does.
@@ -94,12 +96,14 @@ final class IpaymuGateway implements PaymentGateway
             gatewayRef: (string) (data_get($session, 'Data.SessionID') ?: data_get($session, 'Data.SessionId') ?: ''),
             transactionId: (string) (data_get($session, 'Data.TransactionId') ?: '') ?: null,
             raw: $session,
+            sessionId: (string) (data_get($session, 'Data.SessionID') ?: data_get($session, 'Data.SessionId') ?: '') ?: null,
         );
     }
 
     /**
-     * iPaymu direct charge — same request and response handling as
-     * ProductCheckoutService::createIpaymuDirectCharge (Hellom's own products).
+     * iPaymu direct charge (QR / VA / retail code shown on our page). The only place
+     * that builds this request and reads its answer — shop sales, Hellom's own digital
+     * products and subscriptions all come through here.
      *
      * @param array{0:string,1:string,2:string,3:string} $channel [method, channel, label, group]
      */
@@ -164,6 +168,9 @@ final class IpaymuGateway implements PaymentGateway
             vaNumber: $paymentNo !== '' ? $paymentNo : null,
             channelLabel: $label,
             expiresAt: $expiresAt,
+            total: is_numeric(data_get($data, 'Total')) ? (int) round((float) data_get($data, 'Total')) : null,
+            fee: is_numeric(data_get($data, 'Fee')) ? (int) round((float) data_get($data, 'Fee')) : null,
+            sessionId: (string) (data_get($data, 'SessionId') ?: data_get($data, 'SessionID') ?: '') ?: null,
         );
     }
 
@@ -240,6 +247,21 @@ final class IpaymuGateway implements PaymentGateway
         );
     }
 
+    public function getBalance(): ?GatewayBalance
+    {
+        if (!$this->isReady()) {
+            return null;
+        }
+        $response = $this->api->getBalance();
+        $this->assertAccepted($response);
+        $available = data_get($response, 'Data.MerchantBalance');
+        if (!is_numeric($available)) {
+            return null;
+        }
+
+        return new GatewayBalance('ipaymu', (int) round((float) $available), null, (array) data_get($response, 'Data', []));
+    }
+
     public function supportsDisbursement(): bool
     {
         return false;
@@ -263,7 +285,12 @@ final class IpaymuGateway implements PaymentGateway
     /** @param array<string, scalar> $context */
     private function notifyUrl(array $context): string
     {
-        $query = array_filter([...$context, 'token' => (string) ($this->settings->getConfig()['callback_token'] ?? '')], fn ($v) => $v !== '' && $v !== null);
+        // sig binds the ids (organization, intent, purchase…) to this URL; see IpaymuPaymentVerifier.
+        $query = array_filter([
+            ...$context,
+            'sig' => IpaymuPaymentVerifier::sign($context),
+            'token' => (string) ($this->settings->getConfig()['callback_token'] ?? ''),
+        ], fn ($v) => $v !== '' && $v !== null);
 
         return url('/api/v1/hellom/webhooks/ipaymu') . '?' . http_build_query($query);
     }

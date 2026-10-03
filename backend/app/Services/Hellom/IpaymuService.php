@@ -56,6 +56,19 @@ class IpaymuService
     }
 
     /**
+     * Merchant balance (official iPaymu v2: POST /api/v2/balance {"account": VA};
+     * response Data.MerchantBalance / Data.MemberBalance).
+     *
+     * @return array<string,mixed>
+     */
+    public function getBalance(): array
+    {
+        return $this->request('POST', '/api/v2/balance', [
+            'account' => (string) $this->settings->getConfig()['va'],
+        ]);
+    }
+
+    /**
      * Best-effort active status lookup for a transaction so we can confirm
      * a payment even if the webhook is delayed.
      *

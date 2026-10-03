@@ -8,6 +8,7 @@ use App\Services\Payments\ChargeRequest;
 use App\Services\Payments\ChargeResult;
 use App\Services\Payments\DisbursementRequest;
 use App\Services\Payments\DisbursementResult;
+use App\Services\Payments\GatewayBalance;
 use App\Services\Payments\PaymentGateway;
 use App\Services\Payments\PaymentStatus;
 use Illuminate\Http\Request;
@@ -115,6 +116,12 @@ final class DokuGateway implements PaymentGateway
             reference: (string) (data_get($data, 'order.invoice_number') ?: '') ?: null,
             raw: $data,
         );
+    }
+
+    /** DOKU Checkout has no merchant balance API (balance only in the DOKU dashboard). */
+    public function getBalance(): ?GatewayBalance
+    {
+        return null;
     }
 
     public function supportsDisbursement(): bool
