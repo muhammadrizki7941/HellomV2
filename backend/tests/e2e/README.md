@@ -20,6 +20,7 @@ with local stand-ins for iPaymu and email. Nothing reaches a real gateway or inb
 | `builder-social.mjs` | Fase 4 Sosial media panel: import from the old block, live check (✓ / explanation), top position + brand colours in the preview, tap the icon row → panel, published page, phone bottom sheet. Laravel :8010 + Vite :3010. Expect `7/7 checks OK`. |
 | `builder-appearance.mjs` | Fase 5 Tampilan: preset Neo-brutal (pola, tombol kotak + bayangan keras, font Archivo benar-benar termuat di pratinjau sandbox), background gradien & animasi, tombol global (pill/garis/besar), satu tombol dengan isi/ikon/unggulan sendiri, halaman terbit + preload font, sheet Tampilan di HP 360 px. Laravel :8010 + Vite :3010. Expect `8/8 checks OK`. |
 | `builder-stats.mjs` | Fase 6: klik asli di halaman publik tercatat untuk link itu, Statistik › Klik per link (jumlah, %, sumber) di 1366 & 360 px, kartu og:image 1200×630 di Halaman › Atur. Laravel :8010 + Vite :3010. Expect `6/6 checks OK`. |
+| `builder-extras.mjs` | Fase 7: banner dari link YouTube (thumbnail, 16:9, titik fokus), video Shorts vertikal + pesan link tak dikenal, animasi masuk + tombol unggulan + "Matikan semua animasi", galeri template (kategori, pratinjau, gaya saja / semuanya, 360 px), super admin sembunyikan & urutkan. Laravel :8010 dengan `YOUTUBE_OEMBED_URL=http://127.0.0.1:8020/youtube/oembed` + mocks.mjs + Vite :3010. Expect `8/8 checks OK`. |
 | `social-parity.mjs` | Editor (`socialPlatforms.ts`) vs server (`SocialLinks::url`) give the same link for 828 inputs; only needs PHP + Node 22.18+. Expect `828/828 cases agree`. |
 | `captcha.mjs` | Turnstile on repeated checkouts in the browser. Start the :8010 server with `CACHE_STORE=database` and Cloudflare's test keys `TURNSTILE_SITE_KEY=1x00000000000000000000AA TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA` (always pass; calls challenges.cloudflare.com). |
 
@@ -36,6 +37,7 @@ DB_DATABASE=hellom_pos_test php tests/e2e/seed.php
 node tests/e2e/mocks.mjs
 DB_DATABASE=hellom_pos_test APP_URL=http://127.0.0.1:8010 FRONTEND_URL=http://127.0.0.1:3010 \
   CORS_ALLOWED_ORIGINS=http://127.0.0.1:3010 IPAYMU_SANDBOX_URL=http://127.0.0.1:8020 \
+  RAJAONGKIR_SANDBOX_URL=http://127.0.0.1:8020/rajaongkir/api/v1 YOUTUBE_OEMBED_URL=http://127.0.0.1:8020/youtube/oembed \
   MAIL_MAILER=smtp MAIL_HOST=127.0.0.1 MAIL_PORT=1025 MAIL_SCHEME=smtp MAIL_USERNAME= MAIL_PASSWORD= \
   QUEUE_CONNECTION=sync CACHE_STORE=array PHP_CLI_SERVER_WORKERS=4 \
   php artisan serve --host=127.0.0.1 --port=8010

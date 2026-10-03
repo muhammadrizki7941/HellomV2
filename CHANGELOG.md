@@ -12,6 +12,12 @@ Audit & status: [docs/audit-linkinbio-builder.md](docs/audit-linkinbio-builder.m
 - Editor desktop halaman kosong langsung menampilkan panel blok; editor tidak terkunci lagi saat halaman pertama dibuat bersamaan.
 - **Editor baru gaya link-in-bio (Fase 2)**: daftar blok + pratinjau HP yang merupakan halaman asli (dirender server, aman di iframe terpisah); ketuk bagian di pratinjau untuk mengedit; galeri "+ Tambah" bergambar; tampil/sembunyi, duplikat, hapus, geser urutan (juga keyboard), Urungkan/Ulangi; Lihat halaman & Salin link. Di HP: pratinjau penuh dengan bilah bawah dan bottom sheet. Blok bergaya landing page panjang tidak ditawarkan lagi (halaman lama tetap tampil).
 
+### Hellom Page — banner, animasi, video, template premium (Fase 7, 2026-10-04)
+- **Banner di atas profil**: gambar, GIF, atau video YouTube yang diputar tanpa suara; pilih bentuk 16:9 / 3:1 / 1:1, titik fokus, efek memudar, dan posisi foto profil.
+- **Animasi**: bagian halaman muncul dengan animasi (muncul, naik, membesar, berurutan), tombol unggulan bisa berdenyut, bergoyang halus, berpendar, atau berkilau, background gelombang baru — dan satu tombol **Matikan semua animasi**.
+- **Video**: tempel link YouTube (termasuk Shorts dan waktu mulai), TikTok, atau Reels — judul & gambar langsung muncul di editor; Shorts tampil tegak; opsi putar otomatis tanpa suara.
+- **12 template premium** dengan pratinjau langsung, kategori, dan pilihan "Pakai gaya saja" atau "Pakai semuanya". Super admin mengatur gambar, urutan, dan template yang tampil di Pengaturan › Template Halaman.
+
 ### Hellom Page — statistik per link & gambar saat dibagikan (Fase 6, 2026-10-04)
 - Tab **Statistik** kini menampilkan **klik per link**: berapa kali tiap tombol/ikon sosial/WhatsApp diklik, persentasenya dari kunjungan, dan dari mana pengunjungnya datang (Instagram, TikTok, langsung, …).
 - Saat link halaman dibagikan di WhatsApp/Facebook, tampil **kartu otomatis** berisi foto profil, nama toko, bio, dan warna halaman. Bisa diganti dengan gambar sendiri di Halaman › Atur.
