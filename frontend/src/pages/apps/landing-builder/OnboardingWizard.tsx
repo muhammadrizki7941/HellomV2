@@ -111,7 +111,7 @@ export default function OnboardingWizard({ data, onClose, onDone }: { data: Land
       const shopName = getSessionUser<{ current_organization?: { name?: string } }>()?.current_organization?.name ?? '';
       doc = {
         ...doc,
-        theme: { preset: chosen.themeId, ...chosen.options },
+        theme: { preset: chosen.themeId, ...chosen.theme },
         blocks: chosen.blocks().map((b): LandingDocBlock => {
           const { styles: _legacy, ...content } = (b.content || {}) as Record<string, unknown>;
           if (b.type === 'profile' && !content.name) content.name = shopName;

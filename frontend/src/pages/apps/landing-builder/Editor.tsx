@@ -5,15 +5,12 @@ import {
   Link2, Loader2, MoreHorizontal, Palette, Plus, Redo2, RefreshCw, Share2, Sparkles, Trash2, Undo2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { THEMES } from './constants';
 import { LanguageProvider } from './i18n';
 import { useOptionalEditorPreference } from './editorPreference';
 import { DEFAULT_PRESET, presetTerms } from './presets';
 import type { EditorPreset } from './presets';
 import EditorTour from './EditorTour';
 import { PropertyPanel } from './components/PropertyPanel';
-import { SettingsModal } from './components/SettingsModal';
-import type { ThemeOptions } from './components/SettingsModal';
 import { HistoryDialog, PagesDialog, TemplatesDialog } from './components/EditorDialogs';
 import type { PageTemplate } from './templates';
 import type { Block } from './types';
@@ -23,6 +20,7 @@ import PhonePreview from './editor/PhonePreview';
 import BlockList from './editor/BlockList';
 import AddBlockGallery from './editor/AddBlockGallery';
 import SocialPanel, { SocialIcon } from './editor/SocialPanel';
+import AppearancePanel from './editor/AppearancePanel';
 import type { SocialPlatform } from './editor/socialPlatforms';
 import Sheet from './editor/Sheet';
 import { BLOCK_META } from './editor/blockMeta';
@@ -34,8 +32,9 @@ import type { GalleryItem } from './editor/blockMeta';
  * bottom bar; list, gallery and settings open as bottom sheets. The preview is the real page
  * (server-rendered), autosave keeps a draft, nothing is public until "Terbitkan".
  */
-type Dialog = 'none' | 'design' | 'templates' | 'history' | 'pages';
-type MobileSheet = 'none' | 'list' | 'add' | 'block' | 'social';
+type Dialog = 'none' | 'templates' | 'history' | 'pages';
+type Opener = Dialog | 'design';
+type MobileSheet = 'none' | 'list' | 'add' | 'block' | 'social' | 'design';
 /** The social icon row in the preview (page.blade.php data-hl-block="__social"). */
 const SOCIAL_ID = '__social';
 
@@ -48,7 +47,7 @@ export default function Editor() {
   const preset = preference?.preset ?? DEFAULT_PRESET;
   const terms = useMemo(() => presetTerms(preset), [preset]);
   const [dialog, setDialog] = useState<Dialog>('none');
-  const [panel, setPanel] = useState<'list' | 'add' | 'social'>('list');
+  const [panel, setPanel] = useState<'list' | 'add' | 'social' | 'design'>('list');
   const [sheet, setSheet] = useState<MobileSheet>('none');
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 1024);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -131,9 +130,10 @@ export default function Editor() {
   }
 
   const page = ed.page;
-  const themeId = ed.doc.theme.preset && THEMES.some((t) => t.id === ed.doc.theme.preset) ? ed.doc.theme.preset : 'industrial';
-  const activeTheme = THEMES.find((t) => t.id === themeId) ?? THEMES[0];
-  const themeOptions: ThemeOptions = { font: ed.doc.theme.font ?? 'sans', buttonShape: ed.doc.theme.buttonShape ?? 'rounded', buttonStyle: ed.doc.theme.buttonStyle ?? 'solid' };
+  // Page colors as defaults for a block's own colors (Gaya bagian ini).
+  const activeTheme = { colors: { backgroundColor: ed.doc.theme.bg?.color ?? ed.doc.theme.background ?? '#ffffff', textColor: ed.doc.theme.text ?? '#18181b' } };
+  const openDesign = () => { setSelectedId(null); setPanel('design'); setSheet('design'); };
+  const open = (target: Opener) => (target === 'design' ? openDesign() : setDialog(target));
   const onFile = (e: React.ChangeEvent<HTMLInputElement>, field: string, isStyle?: boolean) => {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -167,6 +167,9 @@ export default function Editor() {
     <SocialPanel social={ed.doc.social} onChange={(patch, key) => actions.setSocial(patch, key)} legacyBlocks={ed.doc.blocks.filter((b) => b.type === 'social')} />
   );
   const socialCount = ed.doc.social.items.filter((i) => i.value.trim() !== '').length;
+  const designPanel = (
+    <AppearancePanel theme={ed.doc.theme} settings={ed.doc.settings} onTheme={(patch, key) => actions.setTheme(patch, key)} onReplace={actions.replaceTheme} onSettings={(patch) => actions.setSettings(patch)} />
+  );
   const preview = (framed: boolean) => (
     <PhonePreview pageId={page.id} document={ed.document} selectedId={selectedId} onSelect={(id) => (id ? select(id) : setSelectedId(null))} framed={framed} />
   );
@@ -174,7 +177,7 @@ export default function Editor() {
   return (
     <LanguageProvider overrides={terms} fixedLang="id">
       <div className="flex h-full flex-col bg-zinc-50">
-        <TopBar ed={ed} isMobile={isMobile} linkCopied={linkCopied} onCopy={() => void copyLink(page.url)} onView={() => void viewPage()} onDialog={setDialog} />
+        <TopBar ed={ed} isMobile={isMobile} linkCopied={linkCopied} onCopy={() => void copyLink(page.url)} onView={() => void viewPage()} onDialog={open} />
         <Banners ed={ed} linkCopied={linkCopied} onCopy={(url) => void copyLink(url)} />
 
         {isMobile ? (
@@ -186,7 +189,7 @@ export default function Editor() {
                 <Plus className="h-5 w-5 rounded-full bg-yellow-400 p-0.5 text-black" strokeWidth={3} /> Tambah
               </button>
               <BarButton tour="social" icon={<Share2 className="h-5 w-5" />} label="Sosial" onClick={() => setSheet('social')} />
-              <BarButton tour="design" icon={<Palette className="h-5 w-5" />} label="Tampilan" onClick={() => setDialog('design')} />
+              <BarButton tour="design" icon={<Palette className="h-5 w-5" />} label="Tampilan" onClick={openDesign} />
             </nav>
             {sheet === 'list' && (
               <Sheet title={preset.terms.list} onClose={() => setSheet('none')}>
@@ -196,6 +199,11 @@ export default function Editor() {
             {sheet === 'add' && (
               <Sheet title={preset.terms.add} onClose={() => setSheet('none')} tall>
                 <AddBlockGallery preset={preset} onPick={add} />
+              </Sheet>
+            )}
+            {sheet === 'design' && (
+              <Sheet title="Tampilan" onClose={() => setSheet('none')} tall>
+                {designPanel}
               </Sheet>
             )}
             {sheet === 'social' && (
@@ -216,6 +224,11 @@ export default function Editor() {
                 <>
                   <PanelHeader title={BLOCK_META[selected.type].label} onBack={() => setSelectedId(null)} actions={blockActions} />
                   <div className="min-h-0 flex-1 overflow-y-auto">{settingsPanel}</div>
+                </>
+              ) : panel === 'design' ? (
+                <>
+                  <PanelHeader title="Tampilan" onBack={() => setPanel('list')} />
+                  <div className="min-h-0 flex-1 overflow-y-auto p-4">{designPanel}</div>
                 </>
               ) : panel === 'social' ? (
                 <>
@@ -256,16 +269,6 @@ export default function Editor() {
         )}
       </div>
 
-      <SettingsModal
-        isOpen={dialog === 'design'}
-        onClose={() => setDialog('none')}
-        settings={ed.doc.settings}
-        setSettings={(settings) => actions.setSettings(settings)}
-        themeId={themeId}
-        setThemeId={(id) => actions.setTheme({ preset: id })}
-        themeOptions={themeOptions}
-        setThemeOptions={(options) => actions.setTheme(options)}
-      />
       {dialog === 'templates' && <TemplatesDialog onClose={() => setDialog('none')} onApply={applyTemplate} />}
       {dialog === 'history' && <HistoryDialog pageId={page.id} onClose={() => setDialog('none')} onRestore={async (id, no) => { await ed.restore(id, no); setDialog('none'); }} />}
       {dialog === 'pages' && (
@@ -285,7 +288,7 @@ function TopBar({ ed, isMobile, linkCopied, onCopy, onView, onDialog }: {
   linkCopied: boolean;
   onCopy: () => void;
   onView: () => void;
-  onDialog: (dialog: Dialog) => void;
+  onDialog: (target: Opener) => void;
 }) {
   const [menu, setMenu] = useState(false);
   const page = ed.page!;

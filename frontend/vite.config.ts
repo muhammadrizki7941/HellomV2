@@ -47,6 +47,8 @@ export default defineConfig(({ mode }) => {
       proxy: {
         '/media': { target: backend, changeOrigin: true },
         '/storage': { target: backend, changeOrigin: true },
+        // Page fonts via Laravel: it sends the CORS header the sandboxed preview (null origin) needs.
+        '/fonts/landing': { target: backend, changeOrigin: true },
       },
     },
   };

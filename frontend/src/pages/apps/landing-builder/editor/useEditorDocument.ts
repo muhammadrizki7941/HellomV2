@@ -248,7 +248,10 @@ export function useEditorDocument() {
   const actions = {
     undo: () => dispatch({ type: 'undo' }),
     redo: () => dispatch({ type: 'redo' }),
-    setTheme: (patch: Partial<EditorTheme>) => change((d) => ({ ...d, theme: { ...d.theme, ...patch } }), 'theme'),
+    /** key: merge a dragged slider / typed color into one undo step. */
+    setTheme: (patch: Partial<EditorTheme>, key = 'theme') => change((d) => ({ ...d, theme: { ...d.theme, ...patch } }), key),
+    /** A ready-made look replaces the whole theme (one undo step). */
+    replaceTheme: (theme: EditorTheme) => change((d) => ({ ...d, theme })),
     setSettings: (patch: Partial<EditorSettings>) => change((d) => ({ ...d, settings: { ...d.settings, ...patch } }), 'settings'),
     /** key: merge typing in one field into one undo step. */
     setSocial: (patch: Partial<LandingSocial>, key = 'social') => change((d) => ({ ...d, social: { ...d.social, ...patch } }), key),
@@ -289,7 +292,7 @@ export function useEditorDocument() {
     applyTemplate: (template: PageTemplate, mode: 'all' | 'style' = 'all') => {
       change((d) => ({
         ...d,
-        theme: { ...d.theme, preset: template.themeId, ...template.options },
+        theme: { ...d.theme, preset: template.themeId, ...template.theme },
         blocks: mode === 'all' ? template.blocks() : d.blocks,
       }));
       setSelectedId(null);

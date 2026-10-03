@@ -8,6 +8,7 @@ import { Block, BlockStyles } from '../types';
 import { useLang } from '../i18n';
 import LinkedProductPicker from './LinkedProductPicker';
 import { getImageUrl, uploadLandingAsset } from '@/lib/hellomApi';
+import { BUTTON_ICONS, ICON_LABELS } from '../editor/buttonIcons';
 import { useSellerProducts } from '../sellerProducts';
 
 interface PropertyPanelProps {
@@ -205,6 +206,7 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
                 <input type="text" value={block.content.linkUrl || ''} onChange={(e) => patch({ linkUrl: e.target.value })} className={inputClass} placeholder="https://..." />
               </div>
             )}
+            <ButtonLook content={block.content} patch={patch} onThumb={(e) => handleFileUpload(e, 'thumbUrl')} />
           </div>
         )}
 
@@ -965,4 +967,61 @@ function EmbedHint({ url, allowed }: { url?: string; allowed: string[] }) {
   if (found) return <p className="text-xs font-medium text-green-700">✓ Link {found[1]} dikenali.</p>;
   const names = EMBED_PATTERNS.filter(([key]) => allowed.includes(key)).map(([, name]) => name).join(', ');
   return <p className="text-xs font-medium text-red-600">Link belum dikenali. Pakai link video/lagu/postingan dari {names} (contoh tiktok.com/@akun/video/123…). Link pendek seperti vt.tiktok.com perlu dibuka dulu lalu salin link lengkapnya.</p>;
+}
+
+/** Fase 5: this button's own look (empty = theme), left icon or thumbnail, featured animation. */
+function ButtonLook({ content, patch, onThumb }: {
+  content: Record<string, any>;
+  patch: (changes: Record<string, unknown>) => void;
+  onThumb: (e: React.ChangeEvent<HTMLInputElement>) => void;
+}) {
+  const choice = (key: 'shape' | 'fill' | 'shadow', label: string, options: Array<[string, string]>) => (
+    <div className="space-y-1.5">
+      <p className="text-xs font-bold text-zinc-700">{label}</p>
+      <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label={label}>
+        {[['', 'Ikut tema'] as [string, string], ...options].map(([value, text]) => (
+          <button key={value || 'theme'} type="button" role="radio" aria-checked={(content[key] ?? '') === value}
+            onClick={() => patch({ [key]: value || undefined })}
+            className={`min-h-10 flex-1 rounded-lg border px-2 text-xs font-semibold ${(content[key] ?? '') === value ? 'border-zinc-900 bg-zinc-900 text-white' : 'border-zinc-200 text-zinc-700'}`}>
+            {text}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="space-y-4 rounded-xl border border-zinc-200 p-3">
+      <p className="text-sm font-bold text-zinc-900">Tampilan tombol ini</p>
+      <label className="flex min-h-11 items-center gap-2 text-sm text-zinc-800">
+        <input type="checkbox" className="h-5 w-5" checked={!!content.featured} onChange={(e) => patch({ featured: e.target.checked || undefined })} />
+        <span><strong>Tombol unggulan</strong> — berdenyut & berkilau halus supaya menarik perhatian</span>
+      </label>
+      {choice('shape', 'Bentuk', [['square', 'Kotak'], ['rounded', 'Rounded'], ['pill', 'Pill']])}
+      {choice('fill', 'Isi', [['solid', 'Solid'], ['outline', 'Garis'], ['glass', 'Kaca']])}
+      {choice('shadow', 'Bayangan', [['none', 'Tanpa'], ['soft', 'Lembut'], ['hard', 'Tegas']])}
+
+      <div className="space-y-1.5">
+        <p className="text-xs font-bold text-zinc-700">Ikon di kiri</p>
+        <div className="grid max-h-40 grid-cols-6 gap-1.5 overflow-y-auto pr-1" role="radiogroup" aria-label="Ikon tombol">
+          <button type="button" role="radio" aria-checked={!content.icon && !content.thumbUrl} onClick={() => patch({ icon: undefined, thumbUrl: undefined })}
+            className={`flex h-11 items-center justify-center rounded-lg border text-[11px] ${!content.icon && !content.thumbUrl ? 'border-zinc-900 bg-zinc-900 text-white' : 'border-zinc-200 text-zinc-600'}`}>
+            Tanpa
+          </button>
+          {BUTTON_ICONS.map((icon) => (
+            <button key={icon.key} type="button" role="radio" aria-checked={content.icon === icon.key} aria-label={ICON_LABELS[icon.key] ?? icon.label} title={ICON_LABELS[icon.key] ?? icon.label}
+              onClick={() => patch({ icon: icon.key, thumbUrl: undefined })}
+              className={`flex h-11 items-center justify-center rounded-lg border ${content.icon === icon.key ? 'border-zinc-900 bg-zinc-900 text-white' : 'border-zinc-200 text-zinc-700'}`}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden="true" dangerouslySetInnerHTML={{ __html: icon.svg }} />
+            </button>
+          ))}
+        </div>
+        <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-dashed border-zinc-300 px-3 text-sm text-zinc-700 hover:border-zinc-900">
+          {content.thumbUrl ? <img src={getImageUrl(content.thumbUrl)} alt="" className="h-8 w-8 rounded-md object-cover" /> : <Upload className="h-4 w-4" />}
+          {content.thumbUrl ? 'Ganti gambar kecil' : 'Atau pakai gambar kecil (thumbnail)'}
+          <input type="file" className="hidden" accept="image/jpeg,image/png,image/webp" onChange={onThumb} />
+        </label>
+      </div>
+    </div>
+  );
 }

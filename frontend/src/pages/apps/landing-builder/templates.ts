@@ -1,6 +1,6 @@
 import { nanoid } from 'nanoid';
 import type { Block } from './types';
-import type { ThemeOptions } from './components/SettingsModal';
+import type { LandingTheme } from '@/lib/hellomApi';
 
 // Ready-made Hellom Page templates (Fase 4). No stock photos or fake prices: products come
 // from the seller's Produk tab (catalog / featured product blocks), text is a starting point.
@@ -9,7 +9,8 @@ export type PageTemplate = {
   name: string;
   description: string;
   themeId: string;
-  options: ThemeOptions;
+  /** Fonts and button look (schema v3); colors come from themeId. */
+  theme: LandingTheme;
   blocks: () => Block[];
 };
 
@@ -21,7 +22,7 @@ export const PAGE_TEMPLATES: PageTemplate[] = [
     name: 'Link-in-bio kreator',
     description: 'Profil, tombol link, katalog produk, dan sosial media. Cocok untuk bio Instagram/TikTok.',
     themeId: 'blush',
-    options: { font: 'rounded', buttonShape: 'pill', buttonStyle: 'solid' },
+    theme: { headingFont: 'rounded', bodyFont: 'rounded', button: { shape: 'pill', fill: 'solid' } },
     blocks: () => [
       b('profile', { name: '', bio: 'Konten kreator • berbagi tips & produk digital', showVerified: true }),
       b('button', { text: 'Produk terbaru aku', actionType: 'link', linkUrl: '#produk', align: 'center', fullWidth: true }),
@@ -35,7 +36,7 @@ export const PAGE_TEMPLATES: PageTemplate[] = [
     name: 'Jualan e-book',
     description: 'Headline, manfaat, isi e-book, testimoni, FAQ, dan tombol beli.',
     themeId: 'sunset',
-    options: { font: 'serif', buttonShape: 'rounded', buttonStyle: 'solid' },
+    theme: { headingFont: 'serif', bodyFont: 'serif', button: { shape: 'rounded', fill: 'solid' } },
     blocks: () => [
       b('hero', { title: 'Panduan praktis yang langsung bisa kamu pakai hari ini', subtitle: 'E-book ringkas, contoh nyata, dan template siap pakai.', buttonText: 'Beli e-book', showButton: true, linkUrl: '#produk' }, { paddingY: 'py-20' }),
       b('list', { title: 'Yang kamu dapatkan', items: [{ text: 'E-book PDF, bisa dibaca di HP' }, { text: 'Template & checklist siap pakai' }, { text: 'Update gratis kalau ada revisi' }] }),
@@ -50,7 +51,7 @@ export const PAGE_TEMPLATES: PageTemplate[] = [
     name: 'Kelas online',
     description: 'Untuk kelas/webinar/mentoring: video perkenalan, materi, profil pengajar, harga.',
     themeId: 'ocean',
-    options: { font: 'sans', buttonShape: 'rounded', buttonStyle: 'solid' },
+    theme: { headingFont: 'sans', bodyFont: 'sans', button: { shape: 'rounded', fill: 'solid' } },
     blocks: () => [
       b('hero', { title: 'Kuasai skill baru dalam 4 minggu', subtitle: 'Kelas online terstruktur, bisa belajar kapan saja, ada grup diskusi.', buttonText: 'Daftar kelas', showButton: true, linkUrl: '#produk' }, { paddingY: 'py-20' }),
       b('video', { title: 'Kenalan dulu yuk', videoUrl: '' }),
@@ -65,7 +66,7 @@ export const PAGE_TEMPLATES: PageTemplate[] = [
     name: 'Produk fisik',
     description: 'Etalase barang: galeri foto, katalog, ongkir, dan tombol WhatsApp.',
     themeId: 'minimal',
-    options: { font: 'sans', buttonShape: 'rounded', buttonStyle: 'solid' },
+    theme: { headingFont: 'sans', bodyFont: 'sans', button: { shape: 'rounded', fill: 'solid' } },
     blocks: () => [
       b('profile', { name: '', bio: 'Produk handmade • kirim ke seluruh Indonesia', showVerified: true }),
       b('gallery', { title: '', columns: 3, images: [] }),
@@ -79,7 +80,7 @@ export const PAGE_TEMPLATES: PageTemplate[] = [
     name: 'Jasa / booking',
     description: 'Untuk jasa desain, konsultasi, foto, dll: layanan, portofolio, testimoni, pesan.',
     themeId: 'forest',
-    options: { font: 'sans', buttonShape: 'rounded', buttonStyle: 'solid' },
+    theme: { headingFont: 'sans', bodyFont: 'sans', button: { shape: 'rounded', fill: 'solid' } },
     blocks: () => [
       b('hero', { title: 'Jasa profesional, hasil rapi, tepat waktu', subtitle: 'Ceritakan kebutuhan kamu saat pesan, kami hubungi dalam 1×24 jam.', buttonText: 'Pesan jasa', showButton: true, linkUrl: '#produk' }, { paddingY: 'py-20' }),
       b('catalog', { title: 'Paket layanan', showAll: true, productIds: [], columns: 2, buttonText: 'Pesan' }),

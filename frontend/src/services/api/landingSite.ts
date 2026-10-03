@@ -14,20 +14,49 @@ export type LandingDocBlock = {
 export type LandingDocument = {
   /** Set by the server (App\Support\Landing\DocumentMigrator); older documents are upgraded on read. */
   schema_version?: number;
-  theme: {
-    preset?: string;
-    primary?: string;
-    background?: string;
-    text?: string;
-    buttonText?: string;
-    font?: 'sans' | 'serif' | 'rounded' | 'mono';
-    buttonShape?: 'rounded' | 'pill' | 'square';
-    buttonStyle?: 'solid' | 'outline';
-  };
+  theme: LandingTheme;
   settings: { whatsappNumber?: string; whatsappMessage?: string; showFloatingWhatsapp?: boolean };
   /** Social media panel (Fase 4); the server rebuilds every url from platform + value. */
   social?: LandingSocial;
   blocks: LandingDocBlock[];
+};
+
+/** Page look, schema v3 (Fase 5) — rendered by App\Support\Landing\ThemeStyle. */
+export type LandingTheme = {
+  preset?: string;
+  primary?: string;
+  background?: string;
+  text?: string;
+  buttonText?: string;
+  headingFont?: string;
+  bodyFont?: string;
+  bg?: LandingBackground;
+  button?: LandingButtonStyle;
+};
+
+export type LandingBackground = {
+  type?: 'solid' | 'gradient' | 'image' | 'pattern' | 'animated';
+  color?: string;
+  from?: string;
+  via?: string;
+  to?: string;
+  angle?: number;
+  image?: string;
+  overlay?: number;
+  blur?: number;
+  position?: 'center' | 'top' | 'bottom';
+  pattern?: 'dots' | 'grid' | 'diagonal' | 'checks' | 'waves' | 'plus';
+  patternColor?: string;
+  patternOpacity?: number;
+  animation?: 'aurora' | 'blobs' | 'particles';
+};
+
+export type LandingButtonStyle = {
+  shape?: 'square' | 'rounded' | 'pill';
+  fill?: 'solid' | 'outline' | 'glass';
+  borderWidth?: number;
+  shadow?: 'none' | 'soft' | 'hard';
+  hover?: 'none' | 'lift' | 'grow' | 'shine';
 };
 
 export type LandingSocial = {
