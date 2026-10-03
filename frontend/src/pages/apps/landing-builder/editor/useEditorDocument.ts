@@ -12,7 +12,7 @@ import {
   saveLandingDraft,
   uploadLandingAsset,
 } from '@/lib/hellomApi';
-import type { LandingDocument, LandingSite, LandingSitePage } from '@/lib/hellomApi';
+import type { LandingDocument, LandingSite, LandingSitePage, LandingSocial } from '@/lib/hellomApi';
 import { defaultContent } from '../constants';
 import { BLOCK_TYPES } from '../types';
 import type { Block, BlockStyles, BlockType } from '../types';
@@ -26,7 +26,7 @@ import type { PageTemplate } from '../templates';
 export type SaveState = 'saved' | 'dirty' | 'saving' | 'error' | 'conflict';
 export type EditorTheme = LandingDocument['theme'];
 export type EditorSettings = { whatsappNumber: string; whatsappMessage: string; showFloatingWhatsapp: boolean };
-export interface EditorDoc { theme: EditorTheme; settings: EditorSettings; blocks: Block[] }
+export interface EditorDoc { theme: EditorTheme; settings: EditorSettings; social: LandingSocial; blocks: Block[] }
 export type Notice = { kind: 'ok' | 'error'; text: string; url?: string } | null;
 
 const AUTOSAVE_MS = 1500;
@@ -34,7 +34,8 @@ const COALESCE_MS = 800;
 const HISTORY_LIMIT = 100;
 const PAGE_KEY = 'hellom_landing_editor_page';
 const DEFAULT_SETTINGS: EditorSettings = { whatsappNumber: '', whatsappMessage: 'Halo, saya tertarik dengan produk Anda.', showFloatingWhatsapp: false };
-const EMPTY: EditorDoc = { theme: { preset: 'industrial' }, settings: DEFAULT_SETTINGS, blocks: [] };
+export const EMPTY_SOCIAL: LandingSocial = { items: [], position: 'bottom', size: 'md', color: 'mono', customColor: null };
+const EMPTY: EditorDoc = { theme: { preset: 'industrial' }, settings: DEFAULT_SETTINGS, social: EMPTY_SOCIAL, blocks: [] };
 
 // ── History (pure reducer: React may run it twice in development) ──
 interface HistoryState { present: EditorDoc; past: EditorDoc[]; future: EditorDoc[]; lastKey: string | null; lastAt: number; version: number; loaded: number }
@@ -84,6 +85,7 @@ function toEditorDoc(doc: LandingDocument): EditorDoc {
       whatsappMessage: doc.settings?.whatsappMessage ?? DEFAULT_SETTINGS.whatsappMessage,
       showFloatingWhatsapp: !!doc.settings?.showFloatingWhatsapp,
     },
+    social: { ...EMPTY_SOCIAL, ...(doc.social ?? {}), items: (doc.social?.items ?? []).map(({ platform, value }) => ({ platform, value })) },
     blocks: (doc.blocks || [])
       .filter((b) => BLOCK_TYPES.includes(b.type as BlockType))
       .map((b) => ({ id: b.id, type: b.type as BlockType, hidden: !!b.hidden, content: { ...(b.content || {}) } as Record<string, unknown>, styles: (b.styles || {}) as BlockStyles })),
@@ -118,6 +120,7 @@ export function useEditorDocument() {
     ...(baseRef.current ?? { theme: {}, settings: {}, blocks: [] }),
     theme: current.theme,
     settings: current.settings,
+    social: current.social,
     blocks: current.blocks.map((b) => {
       const { styles: _legacy, ...content } = (b.content || {}) as Record<string, unknown>;
       return { id: b.id, type: b.type, hidden: !!b.hidden, content, styles: (b.styles || {}) as Record<string, unknown> };
@@ -247,6 +250,8 @@ export function useEditorDocument() {
     redo: () => dispatch({ type: 'redo' }),
     setTheme: (patch: Partial<EditorTheme>) => change((d) => ({ ...d, theme: { ...d.theme, ...patch } }), 'theme'),
     setSettings: (patch: Partial<EditorSettings>) => change((d) => ({ ...d, settings: { ...d.settings, ...patch } }), 'settings'),
+    /** key: merge typing in one field into one undo step. */
+    setSocial: (patch: Partial<LandingSocial>, key = 'social') => change((d) => ({ ...d, social: { ...d.social, ...patch } }), key),
     addBlock: (type: BlockType, index?: number, content?: Record<string, unknown>) => {
       const block = newBlock(type, content);
       setBlocks((blocks) => {

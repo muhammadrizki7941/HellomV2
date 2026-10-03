@@ -71,7 +71,7 @@ final class BlockSchema
     /**
      * Clean a whole document. Always returns a valid document (bad parts dropped).
      *
-     * @return array{schema_version:int, theme:array, settings:array, blocks:list<array>}
+     * @return array{schema_version:int, theme:array, settings:array, social:array, blocks:list<array>}
      */
     public static function normalize(mixed $document): array
     {
@@ -94,6 +94,8 @@ final class BlockSchema
             'schema_version' => DocumentMigrator::CURRENT,
             'theme' => self::fields(is_array($doc['theme'] ?? null) ? $doc['theme'] : [], self::THEME),
             'settings' => self::fields(is_array($doc['settings'] ?? null) ? $doc['settings'] : [], self::SETTINGS),
+            // Social media panel (Fase 4): a part of the page, not a block.
+            'social' => SocialLinks::normalize($doc['social'] ?? null),
             'blocks' => $blocks,
         ];
     }

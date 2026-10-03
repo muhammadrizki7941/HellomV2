@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
   AlertTriangle, ArrowLeft, Check, CheckCircle2, ChevronDown, Copy, ExternalLink, Eye, EyeOff, FileStack, History, LayoutList,
-  Link2, Loader2, MoreHorizontal, Palette, Plus, Redo2, RefreshCw, Sparkles, Trash2, Undo2,
+  Link2, Loader2, MoreHorizontal, Palette, Plus, Redo2, RefreshCw, Share2, Sparkles, Trash2, Undo2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { THEMES } from './constants';
@@ -22,6 +22,8 @@ import type { EditorApi } from './editor/useEditorDocument';
 import PhonePreview from './editor/PhonePreview';
 import BlockList from './editor/BlockList';
 import AddBlockGallery from './editor/AddBlockGallery';
+import SocialPanel, { SocialIcon } from './editor/SocialPanel';
+import type { SocialPlatform } from './editor/socialPlatforms';
 import Sheet from './editor/Sheet';
 import { BLOCK_META } from './editor/blockMeta';
 import type { GalleryItem } from './editor/blockMeta';
@@ -33,7 +35,9 @@ import type { GalleryItem } from './editor/blockMeta';
  * (server-rendered), autosave keeps a draft, nothing is public until "Terbitkan".
  */
 type Dialog = 'none' | 'design' | 'templates' | 'history' | 'pages';
-type MobileSheet = 'none' | 'list' | 'add' | 'block';
+type MobileSheet = 'none' | 'list' | 'add' | 'block' | 'social';
+/** The social icon row in the preview (page.blade.php data-hl-block="__social"). */
+const SOCIAL_ID = '__social';
 
 const isTyping = (target: EventTarget | null) =>
   target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
@@ -44,7 +48,7 @@ export default function Editor() {
   const preset = preference?.preset ?? DEFAULT_PRESET;
   const terms = useMemo(() => presetTerms(preset), [preset]);
   const [dialog, setDialog] = useState<Dialog>('none');
-  const [panel, setPanel] = useState<'list' | 'add'>('list');
+  const [panel, setPanel] = useState<'list' | 'add' | 'social'>('list');
   const [sheet, setSheet] = useState<MobileSheet>('none');
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 1024);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -75,6 +79,12 @@ export default function Editor() {
   }, [actions]);
 
   const select = useCallback((id: string | null) => {
+    if (id === SOCIAL_ID) { // tap on the icon row in the preview
+      setSelectedId(null);
+      setPanel('social');
+      setSheet('social');
+      return;
+    }
     setSelectedId(id);
     if (id) { setPanel('list'); setSheet('block'); }
   }, [setSelectedId]);
@@ -153,6 +163,10 @@ export default function Editor() {
     />
   );
   const empty = <EmptyHint preset={preset} onTemplates={() => setDialog('templates')} />;
+  const socialPanel = (
+    <SocialPanel social={ed.doc.social} onChange={(patch, key) => actions.setSocial(patch, key)} legacyBlocks={ed.doc.blocks.filter((b) => b.type === 'social')} />
+  );
+  const socialCount = ed.doc.social.items.filter((i) => i.value.trim() !== '').length;
   const preview = (framed: boolean) => (
     <PhonePreview pageId={page.id} document={ed.document} selectedId={selectedId} onSelect={(id) => (id ? select(id) : setSelectedId(null))} framed={framed} />
   );
@@ -166,11 +180,12 @@ export default function Editor() {
         {isMobile ? (
           <>
             <div className="relative min-h-0 flex-1">{preview(false)}</div>
-            <nav className="grid grid-cols-3 gap-1 border-t border-zinc-200 bg-white px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2" aria-label="Alat editor">
+            <nav className="grid grid-cols-4 gap-1 border-t border-zinc-200 bg-white px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2" aria-label="Alat editor">
               <BarButton tour="list" icon={<LayoutList className="h-5 w-5" />} label={preset.terms.list} onClick={() => setSheet('list')} />
               <button type="button" data-tour="add" onClick={() => setSheet('add')} className="flex min-h-12 items-center justify-center gap-1.5 rounded-2xl bg-zinc-900 px-2 text-sm font-semibold text-white">
                 <Plus className="h-5 w-5 rounded-full bg-yellow-400 p-0.5 text-black" strokeWidth={3} /> Tambah
               </button>
+              <BarButton tour="social" icon={<Share2 className="h-5 w-5" />} label="Sosial" onClick={() => setSheet('social')} />
               <BarButton tour="design" icon={<Palette className="h-5 w-5" />} label="Tampilan" onClick={() => setDialog('design')} />
             </nav>
             {sheet === 'list' && (
@@ -181,6 +196,11 @@ export default function Editor() {
             {sheet === 'add' && (
               <Sheet title={preset.terms.add} onClose={() => setSheet('none')} tall>
                 <AddBlockGallery preset={preset} onPick={add} />
+              </Sheet>
+            )}
+            {sheet === 'social' && (
+              <Sheet title="Sosial media" onClose={() => setSheet('none')} tall>
+                {socialPanel}
               </Sheet>
             )}
             {sheet === 'block' && selected && (
@@ -197,6 +217,11 @@ export default function Editor() {
                   <PanelHeader title={BLOCK_META[selected.type].label} onBack={() => setSelectedId(null)} actions={blockActions} />
                   <div className="min-h-0 flex-1 overflow-y-auto">{settingsPanel}</div>
                 </>
+              ) : panel === 'social' ? (
+                <>
+                  <PanelHeader title="Sosial media" onBack={() => setPanel('list')} />
+                  <div className="min-h-0 flex-1 overflow-y-auto p-4">{socialPanel}</div>
+                </>
               ) : panel === 'add' ? (
                 <>
                   <PanelHeader title={preset.terms.add} onBack={() => setPanel('list')} />
@@ -206,6 +231,18 @@ export default function Editor() {
                 <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
                   <button type="button" data-tour="add" onClick={() => setPanel('add')} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-zinc-900 text-sm font-semibold text-white hover:bg-zinc-800">
                     <Plus className="h-5 w-5 rounded-full bg-yellow-400 p-0.5 text-black" strokeWidth={3} /> {preset.terms.add}
+                  </button>
+                  <button type="button" data-tour="social" onClick={() => setPanel('social')} className="flex min-h-14 w-full items-center gap-3 rounded-2xl border border-zinc-200 bg-white px-3 text-left hover:border-zinc-900">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-yellow-50 text-yellow-700"><Share2 className="h-5 w-5" /></span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-semibold text-zinc-900">Sosial media</span>
+                      <span className="block truncate text-xs text-zinc-500">{socialCount > 0 ? `${socialCount} akun` : 'Instagram, TikTok, WhatsApp, …'}</span>
+                    </span>
+                    <span className="flex shrink-0 -space-x-1">
+                      {ed.doc.social.items.slice(0, 4).map((i) => (
+                        <span key={i.platform} className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-zinc-700 ring-1 ring-zinc-200"><SocialIcon platform={i.platform as SocialPlatform} className="h-4 w-4" /></span>
+                      ))}
+                    </span>
                   </button>
                   <section data-tour="list" aria-label={preset.terms.list}>
                     <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">{preset.terms.list}</h2>

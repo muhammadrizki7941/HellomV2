@@ -6,13 +6,24 @@
         'profile' => 'Profil', 'button' => 'Tombol link', 'social' => 'Ikon sosial media', 'text' => 'Teks', 'divider' => 'Pemisah',
         'product' => 'Produk', 'catalog' => 'Katalog produk', 'pdf' => 'File / PDF', 'form' => 'Formulir', 'countdown' => 'Hitung mundur',
         'testimonials' => 'Testimoni', 'image' => 'Gambar', 'banner' => 'Banner', 'slider' => 'Carousel gambar', 'gallery' => 'Galeri',
-        'video' => 'Video YouTube', 'faq' => 'Tanya jawab', 'hero' => 'Hero', 'features' => 'Keunggulan', 'cta' => 'Ajakan',
-        'content' => 'Konten', 'list' => 'Daftar', 'gif' => 'GIF', 'html' => 'HTML',
+        'video' => 'Video', 'faq' => 'Tanya jawab', 'hero' => 'Hero', 'features' => 'Keunggulan', 'cta' => 'Ajakan',
+        'content' => 'Konten', 'list' => 'Daftar', 'gif' => 'GIF', 'html' => 'HTML', 'social' => 'Ikon sosial media',
+        'spacer' => 'Spasi', 'whatsapp' => 'Tombol WhatsApp', 'embed' => 'Embed',
     ];
 @endphp
 
 @section('content')
+    @php
+        // Social icons sit right above / below the first profile block, or at the top of a page without one.
+        $hasSocial = !empty($social['items']);
+        $profileAt = $hasSocial ? collect($blocks)->search(fn ($x) => $x['type'] === 'profile') : false;
+        $socialRow = fn () => !empty($editor)
+            ? '<div data-hl-block="__social" style="display:contents">' . view('landing.social', ['social' => $social])->render() . '</div>'
+            : view('landing.social', ['social' => $social])->render();
+    @endphp
+    @if ($hasSocial && $profileAt === false){!! $socialRow() !!}@endif
     @foreach ($blocks as $b)
+        @if ($hasSocial && $profileAt === $loop->index && ($social['position'] ?? 'bottom') === 'top'){!! $socialRow() !!}@endif
         @if (!empty($editor))
             {{-- Editor phone preview: a tap selects the block (layout unchanged: display contents). A block
                  that has nothing to show yet (no image, no link…) gets a placeholder so it can be tapped. --}}
@@ -27,6 +38,7 @@
         @else
             @include('landing.block', ['b' => $b, 'first' => $loop->first])
         @endif
+        @if ($hasSocial && $profileAt === $loop->index && ($social['position'] ?? 'bottom') === 'bottom'){!! $socialRow() !!}@endif
     @endforeach
     @if (count($blocks) === 0)
         <section class="blk center"><div class="wrap"><h1>{{ $organization->name }}</h1><p class="muted">Halaman ini sedang disiapkan.</p></div></section>

@@ -25,7 +25,17 @@ export type LandingDocument = {
     buttonStyle?: 'solid' | 'outline';
   };
   settings: { whatsappNumber?: string; whatsappMessage?: string; showFloatingWhatsapp?: boolean };
+  /** Social media panel (Fase 4); the server rebuilds every url from platform + value. */
+  social?: LandingSocial;
   blocks: LandingDocBlock[];
+};
+
+export type LandingSocial = {
+  items: Array<{ platform: string; value: string; url?: string }>;
+  position: 'top' | 'bottom';
+  size: 'sm' | 'md' | 'lg';
+  color: 'mono' | 'brand' | 'custom';
+  customColor: string | null;
 };
 
 export type LandingSitePage = {

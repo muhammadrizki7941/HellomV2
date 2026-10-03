@@ -21,6 +21,7 @@ function tourSteps(preset: EditorPreset): TourStep[] {
     { target: 'templates', title: 'Mulai dari template', body: 'Belum tahu mau isi apa? Pilih template siap pakai, lalu ganti teks & gambarnya.', guidedOnly: true },
     { target: 'list', title: list, body: `Ketuk untuk mengubah isi ${item}. Tahan & geser untuk mengatur urutan ${items}.` },
     { target: 'preview', title: 'Pratinjau langsung', body: 'Beginilah halaman kamu terlihat di HP pembeli. Ketuk bagian mana pun untuk mengeditnya.' },
+    { target: 'social', title: 'Sosial media', body: 'Isi akun Instagram, TikTok, WhatsApp, dan lainnya — tampil sebagai baris ikon di dekat profil.' },
     { target: 'design', title: 'Tampilan', body: 'Atur tema warna, huruf, dan bentuk tombol supaya sesuai brand kamu.' },
     { target: 'publish', title: 'Terbitkan', body: 'Perubahan tersimpan otomatis sebagai draf. Tekan Terbitkan agar halaman bisa dilihat & dibagikan.' },
   ].filter((step) => preset.guided || !step.guidedOnly);

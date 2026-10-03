@@ -23,7 +23,8 @@ export interface BlockMeta {
 export const BLOCK_META: Record<BlockType, BlockMeta> = {
   profile: { label: 'Profil', description: 'Foto, nama, bio & lencana', icon: UserCircle, group: 'utama' },
   button: { label: 'Tombol link', description: 'Arahkan ke link atau WhatsApp', icon: ArrowRight, group: 'utama' },
-  social: { label: 'Ikon sosial media', description: 'Instagram, TikTok, YouTube…', icon: Share2, group: 'utama' },
+  // Replaced by the Sosial media panel (Fase 4): old pages keep it, not offered in the gallery.
+  social: { label: 'Ikon sosial media (lama)', description: 'Pindahkan ke panel Sosial media', icon: Share2, group: 'utama', legacy: true },
   text: { label: 'Teks', description: 'Paragraf atau pengumuman', icon: Type, group: 'utama' },
   divider: { label: 'Pemisah', description: 'Garis untuk memberi jarak', icon: Minus, group: 'utama' },
   product: { label: 'Produk digital', description: 'E-book, kelas, file + tombol beli', icon: ShoppingBag, group: 'jualan' },

@@ -39,7 +39,7 @@ export const EDITOR_PRESETS: Record<BuilderPreference, EditorPreset> = {
     label: 'Linktree',
     description: 'Kumpulan link ke semua tempat kamu',
     terms: { item: 'link', items: 'link', add: 'Tambah link', addNew: 'Tambah link baru', list: 'Daftar link' },
-    featured: ['button', 'profile', 'social', 'video', 'embed', 'image', 'text', 'spacer'],
+    featured: ['button', 'profile', 'video', 'embed', 'whatsapp', 'image', 'text', 'spacer'],
     templateId: 'creator',
     guided: false,
     lead: 'list',

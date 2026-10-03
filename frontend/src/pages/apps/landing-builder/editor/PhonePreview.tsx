@@ -135,7 +135,8 @@ export default function PhonePreview({ pageId, document, selectedId, onSelect, f
     <div className={cn('flex h-full items-center justify-center', className)}>
       <div data-tour="preview" className="relative aspect-[9/19] h-full max-h-[760px] min-h-[480px] rounded-[2.75rem] bg-zinc-900 p-3 shadow-2xl ring-1 ring-black/10">
         <div className="absolute left-1/2 top-3 z-10 h-5 w-24 -translate-x-1/2 rounded-b-2xl bg-zinc-900" aria-hidden="true" />
-        <div className="h-full overflow-hidden rounded-[2.1rem]">{screen}</div>
+        {/* The page starts below the notch (like a phone's safe area), so nothing at the top hides behind it. */}
+        <div className="h-full overflow-hidden rounded-[2.1rem] bg-white pt-6">{screen}</div>
       </div>
     </div>
   );

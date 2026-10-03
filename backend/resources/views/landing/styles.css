@@ -119,3 +119,12 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 .wa-btn{background:#25d366;border-color:#25d366;color:#fff}
 .wa-btn svg{width:22px;height:22px;flex:none}
 .wa-card{border-radius:18px;padding:18px;background:var(--surface);box-shadow:0 1px 0 rgba(0,0,0,.04),0 0 0 1px rgba(127,127,127,.15)}
+.social-row{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;padding:4px 16px 14px}
+.social-row a{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:999px;color:var(--fg);transition:transform .15s}
+.social-row a:hover{transform:translateY(-2px)}
+.social-row svg{width:24px;height:24px}
+.social-row.sm a{width:40px;height:40px}.social-row.sm svg{width:20px;height:20px}
+.social-row.lg a{width:52px;height:52px}.social-row.lg svg{width:30px;height:30px}
+.social-row.custom a{color:var(--soc)}
+.social-row.brand a{background:var(--soc);color:var(--soc-fg,#fff)}
+@media (prefers-reduced-motion:reduce){.social-row a{transition:none}.social-row a:hover{transform:none}}

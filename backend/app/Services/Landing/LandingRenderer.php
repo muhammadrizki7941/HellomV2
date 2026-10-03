@@ -9,6 +9,7 @@ use App\Models\OrganizationLandingPage;
 use App\Support\FrontendUrl;
 use App\Support\Landing\BlockSchema;
 use App\Support\Landing\Embed;
+use App\Support\Landing\SocialLinks;
 use Illuminate\Support\Collection;
 
 /**
@@ -102,6 +103,7 @@ final class LandingRenderer
             'homeUrl' => $this->shop->publicUrl($organization),
             'theme' => $theme,
             'settings' => $document['settings'] ?? [],
+            'social' => $document['social'] ?? SocialLinks::normalize(null),
             'tracking' => $tracking?->publicIds() ?? [],
             'preview' => $preview,
             'apiBase' => '/api/v1/hellom', // public pages are served from the API origin
