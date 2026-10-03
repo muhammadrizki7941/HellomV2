@@ -36,6 +36,7 @@ class Organization extends Model
             'pos_provisioned_at' => 'datetime',
             'max_outlets_override' => 'integer',
             'landing_suspended_at' => 'datetime', // Hellom Page shop switched off by super admin
+            'landing_shipping' => 'array', // { origin: { id, label }, couriers: [...] } for courier rates
         ];
     }
 

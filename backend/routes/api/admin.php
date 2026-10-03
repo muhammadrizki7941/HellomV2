@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\V1\Hellom\ShowcaseController;
 use App\Http\Controllers\Api\V1\Hellom\SuperAdminController;
 use App\Http\Controllers\Api\V1\Hellom\AdminLandingModerationController;
 use App\Http\Controllers\Api\V1\Hellom\AdminSellerFinanceController;
+use App\Http\Controllers\Api\V1\Hellom\AdminShippingController;
 use Illuminate\Support\Facades\Route;
 
 // ─── AUTH + superAdmin ───
@@ -128,6 +129,10 @@ Route::prefix('admin')->name('admin.')->middleware('superAdmin')->group(function
     Route::post('product-purchases/{id}/approve', [ProductPurchaseController::class, 'approve']);
     Route::post('product-purchases/{id}/refund', [ProductPurchaseController::class, 'refund']);
     // ─── Keuangan penjual (landing page sales, Fase 2) ───
+    // ─── Ongkir (RajaOngkir) untuk produk fisik Hellom Page ───
+    Route::get('shipping-settings', [AdminShippingController::class, 'show'])->name('shipping_settings.show');
+    Route::put('shipping-settings', [AdminShippingController::class, 'update'])->name('shipping_settings.update');
+    Route::post('shipping-settings/test', [AdminShippingController::class, 'test'])->middleware('throttle:10,1')->name('shipping_settings.test');
     Route::prefix('seller-finance')->name('seller_finance.')->group(function () {
         Route::get('/summary', [AdminSellerFinanceController::class, 'summary'])->name('summary');
         Route::get('/withdrawals', [AdminSellerFinanceController::class, 'withdrawals'])->name('withdrawals');

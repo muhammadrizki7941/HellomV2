@@ -67,9 +67,13 @@ class PublicStoreController extends BaseApiController
         $validated = $request->validate([
             'quantity' => ['nullable', 'integer', 'min:1', 'max:20'],
             'coupon_code' => ['nullable', 'string', 'max:40'],
+            // Courier shipping: the buyer's place + chosen courier (the server prices it).
+            'destination_id' => ['nullable', 'string', 'max:40'],
+            'courier' => ['nullable', 'string', 'max:60'],
         ]);
 
-        return $this->ok($this->checkout->quote($product, (int) ($validated['quantity'] ?? 1), $validated['coupon_code'] ?? null), 'Rincian harga');
+        return $this->ok($this->checkout->quote($product, (int) ($validated['quantity'] ?? 1), $validated['coupon_code'] ?? null,
+            $validated['destination_id'] ?? null, $validated['courier'] ?? null), 'Rincian harga');
     }
 
     public function checkout(Request $request, string $publicId, PaymentStarter $payments, CheckoutCaptcha $captcha): JsonResponse

@@ -45,13 +45,16 @@ final class FeeCalculator
     /**
      * @return array{gross:int, gateway_fee:int, gateway_fee_source:string, platform_fee:int, seller_net:int, hellom_net:int, method_group:string}
      */
-    public function split(int $gross, ?string $method, ?int $actualGatewayFee = null): array
+    public function split(int $gross, ?string $method, ?int $actualGatewayFee = null, ?int $feeBase = null): array
     {
         $gross = max(0, $gross);
         $settings = $this->settings->all();
+        // The service fee is a share of the product price only: shipping goes to the seller in full
+        // (owner decision, Fase 3). The gateway fee is on everything the buyer pays (Hellom pays it).
+        $base = $feeBase === null ? $gross : max(0, min($gross, $feeBase));
 
         $gatewayFee = $actualGatewayFee !== null && $actualGatewayFee >= 0 ? $actualGatewayFee : $this->estimateGatewayFee($gross, $method);
-        $configured = (int) round($gross * (float) $settings['platform_fee_percent'] / 100) + (int) $settings['platform_fee_flat'];
+        $configured = (int) round($base * (float) $settings['platform_fee_percent'] / 100) + (int) $settings['platform_fee_flat'];
         $platformFee = min($gross, max($configured, $gatewayFee + (int) $settings['min_margin_flat']));
 
         return [

@@ -110,7 +110,7 @@ final class LandingPaymentService
                 return 'illegal_transition';
             }
 
-            $split = $this->fees->split((int) $locked->amount, $status->channel ?: $status->method, $status->fee);
+            $split = $this->fees->split((int) $locked->amount, $status->channel ?: $status->method, $status->fee, (int) $locked->amount - (int) $locked->shipping_amount);
             $holdDays = $this->ledger->holdDaysFor((int) $locked->organization_id);
             $availableAt = now()->addDays($holdDays);
 

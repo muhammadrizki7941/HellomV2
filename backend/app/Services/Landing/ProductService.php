@@ -4,6 +4,7 @@ namespace App\Services\Landing;
 
 use App\Models\LandingProduct;
 use App\Models\Organization;
+use App\Services\Shipping\ShippingService;
 use App\Support\DriveLink;
 use App\Support\FrontendUrl;
 use App\Support\ImageOptimizer;
@@ -46,7 +47,8 @@ final class ProductService
             'access_max_opens' => ['nullable', 'integer', 'min:1', 'max:10000'],
             'access_days' => ['nullable', 'integer', 'min:1', 'max:3650'],
             'download_limit' => ['nullable', 'integer', 'min:1', 'max:1000'],
-            'shipping_mode' => ['nullable', 'in:free,flat,manual'],
+            // courier = real courier rates at checkout (RajaOngkir, needs weight + the shop's ship-from place).
+            'shipping_mode' => ['nullable', 'in:free,flat,manual,courier'],
             'shipping_fee' => ['nullable', 'integer', 'min:0', 'max:10000000'],
             'weight_grams' => ['nullable', 'integer', 'min:0', 'max:1000000'],
             'checkout_fields' => ['nullable', 'array', 'max:10'],
@@ -85,6 +87,16 @@ final class ProductService
         }
         if ($type === LandingProduct::TYPE_PHYSICAL && ($data['shipping_mode'] ?? 'free') === 'flat' && (int) ($data['shipping_fee'] ?? 0) <= 0) {
             $errors['shipping_fee'] = 'Isi ongkir tetap.';
+        }
+        if ($type === LandingProduct::TYPE_PHYSICAL && ($data['shipping_mode'] ?? 'free') === ShippingService::MODE) {
+            $shipping = app(ShippingService::class);
+            if ((int) ($data['weight_grams'] ?? 0) <= 0) {
+                $errors['weight_grams'] = 'Isi berat produk (gram) supaya ongkir bisa dihitung.';
+            } elseif (!$shipping->enabled()) {
+                $errors['shipping_mode'] = 'Ongkir otomatis belum aktif di Hellom. Pakai ongkir tetap dulu.';
+            } elseif ($shipping->shopSetup($organization) === null) {
+                $errors['shipping_mode'] = 'Atur alamat asal pengiriman dulu di Pengaturan › Pengiriman.';
+            }
         }
         if ($errors !== []) {
             throw ValidationException::withMessages($errors);

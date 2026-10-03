@@ -21,6 +21,7 @@ use App\Http\Controllers\Api\V1\Hellom\Pos\PosExperienceController;
 use App\Http\Controllers\Api\V1\Hellom\Pos\PosMemberController;
 use App\Http\Controllers\Api\V1\Hellom\Pos\PosPaymentSettingController;
 use App\Http\Controllers\Api\V1\Hellom\PublicStoreController;
+use App\Http\Controllers\Api\V1\Hellom\ShippingController;
 use App\Http\Controllers\Api\V1\Hellom\ShowcaseController;
 use App\Http\Controllers\Api\V1\Hellom\XenditWebhookController;
 use App\Http\Controllers\Api\V1\Public\GuestProductCheckoutController;
@@ -50,6 +51,11 @@ Route::get('/public/landingpage/orders/{reference}/qr', [LandingSaleController::
 // Hellom Page selling (Fase 3): checkout page /beli/{id}, access page /akses/{token}, "cek pesanan", "laporkan".
 Route::get('/public/landing-products/{publicId}', [PublicStoreController::class, 'product'])->middleware('throttle:hellom-public-lookup')
     ->name('public.landing.products.show');
+// Courier rates (RajaOngkir) for physical products: buyer's place search + rates per product.
+Route::get('/public/shipping/destinations', [ShippingController::class, 'destinations'])->middleware('throttle:hellom-public-lookup')
+    ->name('public.shipping.destinations');
+Route::post('/public/landing-products/{publicId}/shipping-rates', [ShippingController::class, 'rates'])->middleware('throttle:hellom-public-lookup')
+    ->name('public.landing.products.shipping_rates');
 Route::post('/public/landing-products/{publicId}/quote', [PublicStoreController::class, 'quote'])->middleware('throttle:hellom-public-lookup')
     ->name('public.landing.products.quote');
 Route::post('/public/landing-products/{publicId}/checkout', [PublicStoreController::class, 'checkout'])->middleware('throttle:hellom-landing-checkout')

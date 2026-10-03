@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\V1\Hellom\SellerMarketingController;
 use App\Http\Controllers\Api\V1\Hellom\SellerCouponController;
 use App\Http\Controllers\Api\V1\Hellom\SellerOrderController;
 use App\Http\Controllers\Api\V1\Hellom\SellerProductController;
+use App\Http\Controllers\Api\V1\Hellom\ShippingController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('canUseApp:landing_builder')->group(function () {
@@ -87,6 +88,8 @@ Route::middleware('canUseApp:landing_builder')->group(function () {
 
     // Products & coupons (Fase 3) — owner/admin of the shop.
     Route::prefix('/apps/landing-builder')->name('apps.landing_builder.')->group(function () {
+        Route::get('/shipping', [ShippingController::class, 'show'])->name('shipping.show');
+        Route::put('/shipping', [ShippingController::class, 'update'])->name('shipping.update');
         Route::get('/products', [SellerProductController::class, 'index'])->name('products.index');
         Route::post('/products', [SellerProductController::class, 'store'])->name('products.store');
         Route::post('/products/check-drive-link', [SellerProductController::class, 'checkDriveLink'])->name('products.check_drive_link');

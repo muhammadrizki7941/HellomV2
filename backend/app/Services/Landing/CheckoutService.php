@@ -9,6 +9,9 @@ use App\Models\LandingProduct;
 use App\Models\Organization;
 use App\Services\SellerFinance\FeeCalculator;
 use App\Services\SellerFinance\FinanceSettings;
+use App\Services\Shipping\ShippingException;
+use App\Services\Shipping\ShippingRate;
+use App\Services\Shipping\ShippingService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -28,19 +31,33 @@ final class CheckoutService
     public function __construct(
         private readonly FeeCalculator $fees,
         private readonly FinanceSettings $settings,
+        private readonly ShippingService $shipping,
     ) {
     }
 
     /**
      * Price breakdown for the checkout page (no reservation).
      *
-     * @return array{subtotal:int, discount:int, shipping:int, total:int, coupon: ?array, coupon_error: ?string}
+     * Courier shipping (ongkir otomatis) is added once the buyer picked a destination and a courier.
+     *
+     * @return array{subtotal:int, discount:int, shipping:int, total:int, coupon: ?array, coupon_error: ?string, shipping_rate: ?array, shipping_error: ?string}
      */
-    public function quote(LandingProduct $product, int $quantity, ?string $couponCode): array
+    public function quote(LandingProduct $product, int $quantity, ?string $couponCode, ?string $destinationId = null, ?string $courier = null): array
     {
         $quantity = $this->clampQuantity($product, $quantity);
         $subtotal = (int) $product->price * $quantity;
         $shipping = $this->shippingFor($product);
+        $shippingRate = null;
+        $shippingError = null;
+        if ($this->usesCourier($product) && $destinationId && $courier) {
+            try {
+                $rate = $this->shipping->rateFor($product, $quantity, $destinationId, $courier);
+                $shipping = $rate->cost;
+                $shippingRate = $rate->toArray();
+            } catch (ShippingException $e) {
+                $shippingError = $e->getMessage();
+            }
+        }
         $coupon = null;
         $couponError = null;
         $discount = 0;
@@ -62,6 +79,8 @@ final class CheckoutService
             'total' => $subtotal - $discount + $shipping,
             'coupon' => $coupon,
             'coupon_error' => $couponError,
+            'shipping_rate' => $shippingRate,
+            'shipping_error' => $shippingError,
         ];
     }
 
@@ -84,15 +103,24 @@ final class CheckoutService
             'attribution.*' => ['nullable', 'max:200'],
         ];
         if ($product->type === LandingProduct::TYPE_PHYSICAL) {
+            $courier = $this->usesCourier($product);
             $rules += [
                 'shipping.recipient_name' => ['required', 'string', 'max:150'],
                 'shipping.phone' => ['required', 'string', 'max:20', 'regex:/^\+?[0-9\s-]{8,20}$/'],
                 'shipping.address' => ['required', 'string', 'min:10', 'max:500'],
-                'shipping.city' => ['required', 'string', 'max:100'],
+                // Courier rates: the place comes from the destination search (city & postcode included).
+                'shipping.city' => [$courier ? 'nullable' : 'required', 'string', 'max:100'],
                 'shipping.province' => ['nullable', 'string', 'max:100'],
-                'shipping.postal_code' => ['required', 'string', 'regex:/^[0-9]{5}$/'],
+                'shipping.postal_code' => [$courier ? 'nullable' : 'required', 'string', 'regex:/^[0-9]{5}$/'],
                 'shipping.notes' => ['nullable', 'string', 'max:300'],
             ];
+            if ($courier) {
+                $rules += [
+                    'shipping.destination_id' => ['required', 'string', 'max:40'],
+                    'shipping.destination_label' => ['required', 'string', 'max:255'],
+                    'shipping.courier' => ['required', 'string', 'max:60'],
+                ];
+            }
         }
 
         return $rules;
@@ -129,7 +157,16 @@ final class CheckoutService
                 }
                 $discount = $coupon->discountFor($subtotal);
             }
-            $shipping = $this->shippingFor($locked);
+            $rate = null;
+            if ($this->usesCourier($locked)) {
+                // Priced again here: the browser only says which courier, never the price.
+                try {
+                    $rate = $this->shipping->rateFor($locked, $quantity, (string) ($input['shipping']['destination_id'] ?? ''), (string) ($input['shipping']['courier'] ?? ''));
+                } catch (ShippingException $e) {
+                    throw ValidationException::withMessages(['shipping.courier' => $e->getMessage()]);
+                }
+            }
+            $shipping = $rate?->cost ?? $this->shippingFor($locked);
             $total = $subtotal - $discount + $shipping;
             if ($total < self::MIN_TOTAL) {
                 throw ValidationException::withMessages(['coupon_code' => 'Total bayar minimal Rp ' . number_format(self::MIN_TOTAL, 0, ',', '.') . '.']);
@@ -141,7 +178,7 @@ final class CheckoutService
             }
             $coupon?->increment('used_count');
 
-            $estimate = $this->fees->split($total, null);
+            $estimate = $this->fees->split($total, null, null, $total - $shipping);
             $attribution = $this->attribution($input['attribution'] ?? null);
             $productName = Str::limit((string) $locked->name, 200, '');
             $order = LandingPageOrder::query()->create([
@@ -161,7 +198,8 @@ final class CheckoutService
                 'buyer_name' => trim((string) $input['buyer_name']),
                 'buyer_email' => strtolower(trim((string) $input['buyer_email'])),
                 'buyer_phone' => isset($input['buyer_phone']) ? trim((string) $input['buyer_phone']) ?: null : null,
-                'shipping_address' => $locked->type === LandingProduct::TYPE_PHYSICAL ? array_map(fn ($v) => is_string($v) ? trim($v) : $v, (array) ($input['shipping'] ?? [])) : null,
+                'shipping_address' => $locked->type === LandingProduct::TYPE_PHYSICAL ? $this->shippingAddress((array) ($input['shipping'] ?? []), $rate) : null,
+                'shipping_courier' => $rate?->label(),
                 'custom_fields' => $customFields ?: null,
                 'access_max_opens' => $locked->access_max_opens,
                 'access_days' => $locked->access_days,
@@ -257,6 +295,26 @@ final class CheckoutService
     private function clampQuantity(LandingProduct $product, int $quantity): int
     {
         return $product->type === LandingProduct::TYPE_PHYSICAL ? max(1, min(20, $quantity)) : 1;
+    }
+
+    private function usesCourier(LandingProduct $product): bool
+    {
+        return $product->type === LandingProduct::TYPE_PHYSICAL && $product->shipping_mode === ShippingService::MODE;
+    }
+
+    /** Address as typed (trimmed) + the courier choice for the seller. */
+    private function shippingAddress(array $input, ?ShippingRate $rate): array
+    {
+        $keys = ['recipient_name', 'phone', 'address', 'city', 'province', 'postal_code', 'notes', 'destination_id', 'destination_label'];
+        $address = array_map(fn ($v) => is_string($v) ? trim($v) : $v, array_intersect_key($input, array_flip($keys)));
+        if ($rate) {
+            $address['courier'] = $rate->label();
+            $address['courier_name'] = $rate->courierName;
+            $address['etd'] = $rate->etd;
+            $address['shipping_cost'] = $rate->cost;
+        }
+
+        return $address;
     }
 
     private function shippingFor(LandingProduct $product): int
