@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Check, Copy, Download, ExternalLink, Loader2, Megaphone, Store, Wand2 } from 'lucide-react';
+import { Check, Copy, Download, ExternalLink, Loader2, Megaphone, Store, Truck, Wand2 } from 'lucide-react';
 import QRCode from 'qrcode';
-import { ApiError, getLandingSite, getLandingTracking, updateLandingTracking, updateLandingUsername } from '@/lib/hellomApi';
-import type { LandingSite, LandingTracking, LandingTrackingInput } from '@/lib/hellomApi';
+import { ApiError, getLandingSite, getLandingTracking, getShopShipping, updateLandingTracking, updateLandingUsername, updateShopShipping } from '@/lib/hellomApi';
+import type { LandingSite, LandingTracking, LandingTrackingInput, ShopShipping } from '@/lib/hellomApi';
+import DestinationSearch from '@/components/checkout/DestinationSearch';
 import { useOptionalEditorPreference } from './editorPreference';
 
-// Pengaturan tab: shop address (username), share link + QR, ad pixels (Fase 4), editor style.
+// Pengaturan tab: shop address (username), share link + QR, shipping, ad pixels (Fase 4), editor style.
 const inputClass = 'mt-1 min-h-12 w-full rounded-xl border border-zinc-300 bg-white px-3 text-base outline-none focus:border-zinc-900';
 
 export default function ShopSettingsPanel({ onOpenEditor }: { onOpenEditor?: () => void }) {
@@ -13,9 +14,10 @@ export default function ShopSettingsPanel({ onOpenEditor }: { onOpenEditor?: () 
     <div className="mx-auto max-w-2xl space-y-6 pb-8">
       <div>
         <h1 className="text-2xl font-bold text-zinc-900">Pengaturan toko</h1>
-        <p className="text-sm text-zinc-600">Alamat halaman, link untuk dibagikan, pelacakan iklan, dan gaya editor.</p>
+        <p className="text-sm text-zinc-600">Alamat halaman, link untuk dibagikan, pengiriman, pelacakan iklan, dan gaya editor.</p>
       </div>
       <AddressCard />
+      <ShippingCard />
       <TrackingCard />
       <EditorStyleCard onOpenEditor={onOpenEditor} />
     </div>
@@ -200,6 +202,67 @@ function EditorStyleCard({ onOpenEditor }: { onOpenEditor?: () => void }) {
           </button>
         )}
       </div>
+    </section>
+  );
+}
+
+/** Where parcels ship from + couriers buyers can pick (real courier rates, RajaOngkir). */
+function ShippingCard() {
+  const [shop, setShop] = useState<ShopShipping | null>(null);
+  const [origin, setOrigin] = useState<{ id: string; label: string } | null>(null);
+  const [couriers, setCouriers] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => {
+    getShopShipping().then((data) => { setShop(data); setOrigin(data.origin); setCouriers(data.couriers); }).catch(() => undefined);
+  }, []);
+
+  if (!shop) return null;
+
+  const toggle = (code: string) => setCouriers((list) => (list.includes(code) ? list.filter((c) => c !== code) : [...list, code]));
+  const save = async () => {
+    if (!origin) { setMessage({ ok: false, text: 'Pilih kecamatan asal pengiriman dari daftar.' }); return; }
+    setSaving(true);
+    setMessage(null);
+    try {
+      const next = await updateShopShipping({ origin_id: origin.id, origin_label: origin.label, couriers });
+      setShop(next);
+      setMessage({ ok: true, text: 'Pengiriman disimpan. Produk fisik bisa memakai "Ongkir otomatis".' });
+    } catch (err) {
+      setMessage({ ok: false, text: err instanceof ApiError ? Object.values(err.fieldErrors)[0]?.[0] ?? err.message : 'Belum tersimpan.' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section className="space-y-4 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+      <div>
+        <h2 className="flex items-center gap-2 font-bold"><Truck className="h-5 w-5" /> Pengiriman</h2>
+        <p className="mt-1 text-sm text-zinc-600">Untuk produk fisik dengan <strong>ongkir otomatis</strong>: pembeli memilih kurir dan langsung melihat ongkir asli dari alamatmu ke alamat mereka.</p>
+      </div>
+      {!shop.enabled ? (
+        <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800">Ongkir otomatis belum diaktifkan oleh tim Hellom. Sementara itu pakai gratis ongkir atau ongkir tetap.</p>
+      ) : (
+        <>
+          <DestinationSearch label="Dikirim dari (kecamatan)" value={origin} onChange={(d) => setOrigin(d ? { id: d.id, label: d.label } : null)} />
+          <fieldset>
+            <legend className="text-sm font-medium text-zinc-800">Kurir yang bisa dipilih pembeli</legend>
+            <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {shop.available_couriers.map((c) => (
+                <label key={c.code} className="flex min-h-11 items-center gap-2 rounded-xl border border-zinc-200 px-3 text-sm">
+                  <input type="checkbox" className="h-4 w-4" checked={couriers.includes(c.code)} onChange={() => toggle(c.code)} /> {c.name}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <button type="button" onClick={() => void save()} disabled={saving || couriers.length === 0} className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-zinc-900 px-5 text-sm font-semibold text-white disabled:opacity-50">
+            {saving && <Loader2 className="h-4 w-4 animate-spin" />} Simpan pengiriman
+          </button>
+        </>
+      )}
+      {message && <p className={message.ok ? 'text-sm text-green-700' : 'text-sm text-red-600'} role="status">{message.text}</p>}
     </section>
   );
 }

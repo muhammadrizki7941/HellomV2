@@ -8,6 +8,7 @@ import {
   Save,
   Shield,
   Trash2,
+  Truck,
   Users,
   Wallet,
 } from 'lucide-react';
@@ -25,6 +26,7 @@ import {
   updateAdminPaymentGatewayConfig,
   updateCheckoutRuntimeConfig,
 } from '@/lib/hellomApi';
+import ShippingSettingsCard from './settings/ShippingSettings';
 
 type TeamMember = {
   id: number;
@@ -53,7 +55,7 @@ type ProviderCard = {
 };
 
 export default function AdminSettings() {
-  const [activeTab, setActiveTab] = useState<'payment' | 'landing' | 'team'>('payment');
+  const [activeTab, setActiveTab] = useState<'payment' | 'shipping' | 'landing' | 'team'>('payment');
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [loadingTeam, setLoadingTeam] = useState(false);
@@ -849,6 +851,7 @@ export default function AdminSettings() {
       <div className="flex overflow-x-auto border-b border-zinc-200">
         {[
           { key: 'payment', label: 'Payment Gateways', icon: CreditCard },
+          { key: 'shipping', label: 'Ongkir', icon: Truck },
           { key: 'landing', label: 'Landing Page', icon: Globe },
           { key: 'team', label: 'Team & Account', icon: Users },
         ].map((tab) => (
@@ -1158,6 +1161,8 @@ export default function AdminSettings() {
           </div>
         </div>
       )}
+
+      {activeTab === 'shipping' && <ShippingSettingsCard />}
 
       {activeTab === 'landing' && (
         <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">

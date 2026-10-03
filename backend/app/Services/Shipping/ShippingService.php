@@ -34,7 +34,8 @@ final class ShippingService
             throw new ShippingException('Ongkir otomatis belum aktif. Hubungi tim Hellom.');
         }
 
-        return new RajaOngkirProvider($config['base_url'], $key);
+        // RAJAONGKIR_SANDBOX_URL: local e2e mock only.
+        return new RajaOngkirProvider((string) (config('services.rajaongkir.sandbox_url') ?: $config['base_url']), $key);
     }
 
     /** @return list<array{id:string,label:string,city:?string,province:?string,postal_code:?string}> */

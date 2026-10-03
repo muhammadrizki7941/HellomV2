@@ -55,4 +55,9 @@ return [
         'sandbox_url' => env('IPAYMU_SANDBOX_URL', 'https://sandbox.ipaymu.com'),
     ],
 
+    // Local e2e only (tests/e2e/mocks.mjs): replaces the RajaOngkir base URL. Never set in production.
+    'rajaongkir' => [
+        'sandbox_url' => env('RAJAONGKIR_SANDBOX_URL'),
+    ],
+
 ];

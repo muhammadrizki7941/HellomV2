@@ -5,7 +5,9 @@ import { cn } from '@/lib/utils';
 import { safeHtml } from '@/lib/safeHtml';
 import { EMAIL_PATTERN, suggestEmail } from '@/lib/emailTypo';
 import { captureAttributionFromUrl, firePurchase, getPixelConsent, loadSellerPixels, readAttribution, setPixelConsent, trackSellerEvent } from '@/lib/sellerPixels';
-import { ApiError, checkoutLandingProduct, getLandingOrderPublicStatus, getPublicLandingProduct, quoteLandingProduct } from '@/lib/hellomApi';
+import { ApiError, checkoutLandingProduct, getLandingOrderPublicStatus, getPublicLandingProduct, getShippingRates, quoteLandingProduct } from '@/lib/hellomApi';
+import type { ShippingDestination, ShippingRate } from '@/lib/hellomApi';
+import DestinationSearch from '@/components/checkout/DestinationSearch';
 import type { CheckoutQuote, CheckoutResult, PaymentChannel, PaymentOption, PublicProductPage } from '@/lib/hellomApi';
 import TurnstileWidget from '@/components/checkout/TurnstileWidget';
 import OnPagePayment from '@/components/checkout/OnPagePayment';
@@ -30,6 +32,13 @@ const FALLBACK_CHANNELS: Record<string, PaymentChannel> = {
 
 type Shipping = { recipient_name: string; phone: string; address: string; city: string; province: string; postal_code: string; notes: string };
 
+/** "2-3 day" (RajaOngkir) → "2-3 hari". */
+const etdText = (etd: string | null) => {
+  if (!etd) return null;
+  const clean = etd.replace(/days?|hari/gi, '').trim();
+  return clean ? `${clean} hari` : null;
+};
+
 export default function CheckoutPage() {
   const { productId = '' } = useParams();
   const [page, setPage] = useState<PublicProductPage | null>(null);
@@ -41,6 +50,12 @@ export default function CheckoutPage() {
   const [couponInput, setCouponInput] = useState('');
   const [couponCode, setCouponCode] = useState('');
   const [quote, setQuote] = useState<CheckoutQuote | null>(null);
+  // Courier shipping (ongkir otomatis): buyer's place → real rates → chosen courier.
+  const [destination, setDestination] = useState<ShippingDestination | null>(null);
+  const [rates, setRates] = useState<ShippingRate[]>([]);
+  const [ratesState, setRatesState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [ratesMessage, setRatesMessage] = useState<string | null>(null);
+  const [courier, setCourier] = useState<string | null>(null);
   const [method, setMethod] = useState<PaymentOption | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -88,12 +103,44 @@ export default function CheckoutPage() {
     if (!page) return undefined;
     let cancelled = false;
     const timer = window.setTimeout(() => {
-      quoteLandingProduct(productId, { quantity, coupon_code: couponCode || undefined })
+      quoteLandingProduct(productId, { quantity, coupon_code: couponCode || undefined, destination_id: destination?.id, courier: courier ?? undefined })
         .then((data) => { if (!cancelled) setQuote(data); })
         .catch(() => undefined);
     }, 150);
     return () => { cancelled = true; window.clearTimeout(timer); };
-  }, [page, productId, quantity, couponCode]);
+  }, [page, productId, quantity, couponCode, destination, courier]);
+
+  // Real courier rates for the buyer's place (again when the quantity changes the weight).
+  const courierMode = page?.product.type === 'physical' && page.product.shipping?.mode === 'courier';
+  useEffect(() => {
+    if (!courierMode || !destination) {
+      setRates([]);
+      setRatesState('idle');
+      return undefined;
+    }
+    let cancelled = false;
+    setRatesState('loading');
+    setRatesMessage(null);
+    const timer = window.setTimeout(() => {
+      getShippingRates(productId, { destination_id: destination.id, quantity })
+        .then((data) => {
+          if (cancelled) return;
+          setRates(data.items);
+          setRatesState('ready');
+          setRatesMessage(data.empty_message);
+          // Keep the chosen courier when still offered, otherwise the cheapest.
+          setCourier((current) => (current && data.items.some((r) => r.key === current) ? current : data.items[0]?.key ?? null));
+        })
+        .catch((err: unknown) => {
+          if (cancelled) return;
+          setRates([]);
+          setCourier(null);
+          setRatesState('error');
+          setRatesMessage(err instanceof Error ? err.message : 'Ongkir belum bisa dihitung. Coba lagi.');
+        });
+    }, 200);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [courierMode, destination, productId, quantity]);
 
   // Watch the order until the gateway confirms the payment, then open the product.
   useEffect(() => {
@@ -140,8 +187,13 @@ export default function CheckoutPage() {
       if (!shipping.recipient_name.trim()) e['shipping.recipient_name'] = 'Isi nama penerima.';
       if (shipping.phone.replace(/\D/g, '').length < 8) e['shipping.phone'] = 'Isi nomor HP penerima.';
       if (shipping.address.trim().length < 10) e['shipping.address'] = 'Tulis alamat lengkap (jalan, nomor, RT/RW).';
-      if (!shipping.city.trim()) e['shipping.city'] = 'Isi kota/kabupaten.';
-      if (!/^\d{5}$/.test(shipping.postal_code.trim())) e['shipping.postal_code'] = 'Kode pos 5 angka.';
+      if (courierMode) {
+        if (!destination) e['shipping.destination_id'] = 'Pilih kecamatan tujuan dari daftar.';
+        else if (!courier) e['shipping.courier'] = ratesState === 'loading' ? 'Tunggu ongkir selesai dihitung.' : 'Pilih kurir pengiriman.';
+      } else {
+        if (!shipping.city.trim()) e['shipping.city'] = 'Isi kota/kabupaten.';
+        if (!/^\d{5}$/.test(shipping.postal_code.trim())) e['shipping.postal_code'] = 'Kode pos 5 angka.';
+      }
     }
     if (!method) e.payment_method = 'Pembayaran sedang tidak tersedia.';
     return e;
@@ -169,7 +221,20 @@ export default function CheckoutPage() {
         buyer_email: buyer.email.trim(),
         buyer_phone: buyer.phone.trim() || undefined,
         fields: product.checkout_fields.length ? fields : undefined,
-        shipping: product.type === 'physical' ? { ...shipping, province: shipping.province || undefined, notes: shipping.notes || undefined } : undefined,
+        shipping: product.type === 'physical'
+          ? courierMode && destination
+            ? {
+              ...shipping,
+              city: destination.city ?? undefined,
+              province: destination.province ?? undefined,
+              postal_code: destination.postal_code && /^\d{5}$/.test(destination.postal_code) ? destination.postal_code : undefined,
+              notes: shipping.notes || undefined,
+              destination_id: destination.id,
+              destination_label: destination.label,
+              courier: courier ?? undefined,
+            }
+            : { ...shipping, province: shipping.province || undefined, notes: shipping.notes || undefined }
+          : undefined,
         captcha_token: captcha?.token ?? undefined,
       });
       if (result.mode === 'qris' || result.mode === 'va') {
@@ -362,11 +427,37 @@ export default function CheckoutPage() {
               <textarea rows={3} autoComplete="shipping street-address" value={shipping.address} onChange={(e) => setShipping((s) => ({ ...s, address: e.target.value }))} aria-invalid={errors['shipping.address'] ? true : undefined} className={cn(inputClass, 'py-3', errors['shipping.address'] && 'border-rose-400')} />
               {fieldError('shipping.address')}
             </label>
+            {courierMode ? (
+              <>
+                <DestinationSearch label="Kecamatan tujuan" value={destination} onChange={(d) => { setDestination(d); setCourier(null); }} error={errors['shipping.destination_id'] ?? null} inputClassName="text-base" />
+                {destination && (
+                  <fieldset className="space-y-2" aria-busy={ratesState === 'loading'}>
+                    <legend className="text-sm font-medium">Kurir</legend>
+                    {ratesState === 'loading' && <p className="flex items-center gap-2 text-sm text-zinc-500"><Loader2 className="h-4 w-4 animate-spin" /> Menghitung ongkir…</p>}
+                    {ratesState !== 'loading' && ratesMessage && <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800">{ratesMessage}</p>}
+                    {ratesState === 'ready' && rates.map((rate) => (
+                      <label key={rate.key} className={cn('flex min-h-14 cursor-pointer items-center gap-3 rounded-2xl border p-3', courier === rate.key ? 'border-zinc-900 bg-zinc-50' : 'border-zinc-200')}>
+                        <input type="radio" name="courier" className="h-4 w-4" checked={courier === rate.key} onChange={() => setCourier(rate.key)} />
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-semibold text-zinc-900">{rate.label}</span>
+                          <span className="block text-xs text-zinc-500">{[rate.courier_name, etdText(rate.etd) && `estimasi ${etdText(rate.etd)}`].filter(Boolean).join(' · ')}</span>
+                        </span>
+                        <span className="shrink-0 text-sm font-semibold text-zinc-900">{rupiah(rate.cost)}</span>
+                      </label>
+                    ))}
+                    {fieldError('shipping.courier')}
+                  </fieldset>
+                )}
+              </>
+            ) : (
+            <>
             <div className="grid grid-cols-2 gap-3">
               <label className="block text-sm font-medium">Kota/Kab.<input autoComplete="shipping address-level2" value={shipping.city} onChange={(e) => setShipping((s) => ({ ...s, city: e.target.value }))} {...input('shipping.city')} />{fieldError('shipping.city')}</label>
               <label className="block text-sm font-medium">Kode pos<input inputMode="numeric" autoComplete="shipping postal-code" maxLength={5} value={shipping.postal_code} onChange={(e) => setShipping((s) => ({ ...s, postal_code: e.target.value.replace(/\D/g, '') }))} {...input('shipping.postal_code')} />{fieldError('shipping.postal_code')}</label>
             </div>
             <label className="block text-sm font-medium">Provinsi <span className="font-normal text-zinc-500">(opsional)</span><input value={shipping.province} onChange={(e) => setShipping((s) => ({ ...s, province: e.target.value }))} className={inputClass} /></label>
+            </>
+            )}
             <label className="block text-sm font-medium">Catatan untuk kurir <span className="font-normal text-zinc-500">(opsional)</span><input value={shipping.notes} onChange={(e) => setShipping((s) => ({ ...s, notes: e.target.value }))} className={inputClass} /></label>
             {product.shipping?.mode === 'manual' && <p className="text-xs text-zinc-500">Ongkir dikonfirmasi penjual setelah pesanan masuk.</p>}
           </section>
@@ -432,7 +523,9 @@ export default function CheckoutPage() {
             <div className="flex justify-between"><dt className="text-zinc-500">Harga{quantity > 1 ? ` × ${quantity}` : ''}</dt><dd>{rupiah(quote?.subtotal ?? product.price * quantity)}</dd></div>
             {(quote?.discount ?? 0) > 0 && <div className="flex justify-between text-emerald-700"><dt>Diskon</dt><dd>−{rupiah(quote?.discount ?? 0)}</dd></div>}
             {product.type === 'physical' && (
-              <div className="flex justify-between"><dt className="text-zinc-500">Ongkir</dt><dd>{product.shipping?.mode === 'free' ? 'Gratis' : product.shipping?.mode === 'manual' ? 'Dikonfirmasi penjual' : rupiah(quote?.shipping ?? 0)}</dd></div>
+              <div className="flex justify-between"><dt className="text-zinc-500">Ongkir</dt><dd>{product.shipping?.mode === 'free' ? 'Gratis' : product.shipping?.mode === 'manual' ? 'Dikonfirmasi penjual'
+                : courierMode ? (quote?.shipping_rate ? `${quote.shipping_rate.label} · ${rupiah(quote.shipping)}` : <span className="text-zinc-500">{destination ? 'Pilih kurir' : 'Isi alamat dulu'}</span>)
+                  : rupiah(quote?.shipping ?? 0)}</dd></div>
             )}
             <div className="flex justify-between border-t border-zinc-100 pt-2 text-base font-bold"><dt>Total bayar</dt><dd>{rupiah(total)}</dd></div>
           </dl>

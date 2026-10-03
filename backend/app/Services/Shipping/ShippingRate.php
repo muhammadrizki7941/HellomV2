@@ -20,10 +20,15 @@ final class ShippingRate
         return strtolower($this->courierCode) . ':' . strtoupper($this->service);
     }
 
-    /** "JNE REG" — stored on the order as the courier. */
+    /** How buyers know the couriers (codes otherwise upper-cased: JNE, TIKI, SAP…). */
+    private const SHORT_NAMES = ['jnt' => 'J&T', 'sicepat' => 'SiCepat', 'anteraja' => 'AnterAja', 'ninja' => 'Ninja', 'lion' => 'Lion Parcel', 'ide' => 'IDexpress', 'wahana' => 'Wahana'];
+
+    /** "JNE REG", "J&T EZ" — stored on the order as the courier. */
     public function label(): string
     {
-        return trim(strtoupper($this->courierCode) . ' ' . $this->service);
+        $code = strtolower($this->courierCode);
+
+        return trim((self::SHORT_NAMES[$code] ?? strtoupper($code)) . ' ' . $this->service);
     }
 
     /** @return array{key:string,courier_code:string,courier_name:string,service:string,description:?string,cost:int,etd:?string,label:string} */

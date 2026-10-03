@@ -6,11 +6,12 @@ import {
   checkDriveLink,
   createSellerProduct,
   deleteSellerProductFile,
+  getShopShipping,
   updateSellerProduct,
   uploadSellerProductFile,
   uploadSellerProductImage,
 } from '@/lib/hellomApi';
-import type { CheckoutField, ProductInput, ProductLimits, ProductType, SellerProduct } from '@/lib/hellomApi';
+import type { CheckoutField, ProductInput, ProductLimits, ProductType, SellerProduct, ShippingMode, ShopShipping } from '@/lib/hellomApi';
 import DriveGuide from './DriveGuide';
 import RichTextField from './RichTextField';
 
@@ -41,7 +42,7 @@ type Draft = {
   access_max_opens: string;
   access_days: string;
   download_limit: string;
-  shipping_mode: 'free' | 'flat' | 'manual';
+  shipping_mode: ShippingMode;
   shipping_fee: string;
   weight_grams: string;
   checkout_fields: Array<Pick<CheckoutField, 'label' | 'type' | 'required' | 'options'>>;
@@ -328,8 +329,8 @@ export default function ProductForm({ product, limits, onClose, onSaved }: {
         {draft.type === 'physical' && (
           <section className="space-y-3 rounded-2xl bg-zinc-50 p-4">
             <p className="text-sm font-semibold">Pengiriman</p>
-            <div className="grid grid-cols-3 gap-2" role="radiogroup">
-              {([['free', 'Gratis ongkir'], ['flat', 'Ongkir tetap'], ['manual', 'Diatur manual']] as const).map(([mode, label]) => (
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="radiogroup" aria-label="Cara hitung ongkir">
+              {([['courier', 'Ongkir otomatis'], ['free', 'Gratis ongkir'], ['flat', 'Ongkir tetap'], ['manual', 'Diatur manual']] as const).map(([mode, label]) => (
                 <button key={mode} type="button" role="radio" aria-checked={draft.shipping_mode === mode} onClick={() => set('shipping_mode', mode)}
                   className={cn('min-h-12 rounded-xl border px-2 text-sm font-semibold', draft.shipping_mode === mode ? 'border-zinc-900 bg-white' : 'border-zinc-200 text-zinc-600')}>
                   {label}
@@ -340,7 +341,9 @@ export default function ProductForm({ product, limits, onClose, onSaved }: {
               <label className="block text-sm font-medium">Ongkir (Rp)<input inputMode="numeric" value={draft.shipping_fee} onChange={(e) => set('shipping_fee', money(num(e.target.value)))} aria-invalid={invalid('shipping_fee')} className={inputClass} />{err('shipping_fee')}</label>
             )}
             {draft.shipping_mode === 'manual' && <p className="text-xs text-zinc-500">Pembeli diberi tahu ongkir akan dikonfirmasi setelah pesanan masuk.</p>}
-            <label className="block text-sm font-medium">Berat (gram) <span className="font-normal text-zinc-500">(opsional)</span><input inputMode="numeric" value={draft.weight_grams} onChange={(e) => set('weight_grams', e.target.value.replace(/\D/g, ''))} className={inputClass} /></label>
+            {draft.shipping_mode === 'courier' && <CourierShippingNote />}
+            {err('shipping_mode')}
+            <label className="block text-sm font-medium">Berat per barang (gram) <span className="font-normal text-zinc-500">{draft.shipping_mode === 'courier' ? '(wajib, termasuk kemasan)' : '(opsional)'}</span><input inputMode="numeric" value={draft.weight_grams} onChange={(e) => set('weight_grams', e.target.value.replace(/\D/g, ''))} aria-invalid={invalid('weight_grams')} className={inputClass} />{err('weight_grams')}</label>
           </section>
         )}
 
@@ -425,4 +428,21 @@ function Sheet({ title, onClose, onBack, children }: { title: string; onClose: (
       </div>
     </div>
   );
+}
+
+/** Courier rates need the platform switched on and the shop's ship-from place (Pengaturan › Pengiriman). */
+function CourierShippingNote() {
+  const [shop, setShop] = useState<ShopShipping | null>(null);
+  useEffect(() => { getShopShipping().then(setShop).catch(() => undefined); }, []);
+  if (!shop) return <p className="text-xs text-zinc-500">Pembeli memilih kurir & melihat ongkir asli (JNE, J&T, SiCepat, …) saat checkout.</p>;
+  if (!shop.enabled) return <p className="rounded-xl bg-amber-50 p-3 text-xs text-amber-800">Ongkir otomatis belum diaktifkan oleh tim Hellom. Pakai ongkir tetap dulu.</p>;
+  if (!shop.origin) {
+    return (
+      <p className="rounded-xl bg-amber-50 p-3 text-xs text-amber-800">
+        Atur alamat asal pengiriman dulu di <a href="?tab=pengaturan" className="font-semibold underline">Pengaturan › Pengiriman</a>, lalu simpan produk ini.
+      </p>
+    );
+  }
+  const names = shop.couriers.map((c) => shop.available_couriers.find((a) => a.code === c)?.name ?? c).join(', ');
+  return <p className="text-xs text-zinc-600">Dikirim dari <strong>{shop.origin.label}</strong>. Pembeli memilih kurir ({names}) dan melihat ongkir asli saat checkout. Ongkir untuk kamu sepenuhnya.</p>;
 }

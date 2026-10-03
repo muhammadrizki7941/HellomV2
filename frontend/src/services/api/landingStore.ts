@@ -44,7 +44,8 @@ export type PublicProduct = {
   available: boolean;
   require_phone: boolean;
   checkout_fields: CheckoutField[];
-  shipping: { mode: 'free' | 'flat' | 'manual'; fee: number } | null;
+  /** courier = real courier rates at checkout (RajaOngkir). */
+  shipping: { mode: ShippingMode; fee: number } | null;
   max_quantity: number;
   file: { extension: string; size: number } | null;
 };
@@ -67,6 +68,38 @@ export type CheckoutQuote = {
   total: number;
   coupon: { code: string; type: string; value: number } | null;
   coupon_error: string | null;
+  /** Courier shipping once a destination + courier are chosen (priced by the server). */
+  shipping_rate?: ShippingRate | null;
+  shipping_error?: string | null;
+};
+
+export type ShippingMode = 'free' | 'flat' | 'manual' | 'courier';
+
+export type ShippingDestination = { id: string; label: string; city: string | null; province: string | null; postal_code: string | null };
+
+export type ShippingRate = {
+  key: string; // "jne:REG"
+  courier_code: string;
+  courier_name: string;
+  service: string;
+  description: string | null;
+  cost: number;
+  etd: string | null;
+  label: string; // "JNE REG"
+};
+
+export type CheckoutShipping = {
+  recipient_name: string;
+  phone: string;
+  address: string;
+  city?: string;
+  province?: string;
+  postal_code?: string;
+  notes?: string;
+  /** Courier mode: the place picked from the search and the chosen courier key. */
+  destination_id?: string;
+  destination_label?: string;
+  courier?: string;
 };
 
 export type CheckoutInput = {
@@ -77,7 +110,7 @@ export type CheckoutInput = {
   buyer_email: string;
   buyer_phone?: string;
   fields?: Record<string, string>;
-  shipping?: { recipient_name: string; phone: string; address: string; city: string; province?: string; postal_code: string; notes?: string };
+  shipping?: CheckoutShipping;
   attribution?: Record<string, string>;
   /** Cloudflare Turnstile token, only when the server answered CAPTCHA_REQUIRED. */
   captcha_token?: string;
@@ -138,8 +171,17 @@ export function getPublicLandingProduct(publicId: string) {
   return publicApiRequest<PublicProductPage>(`/public/landing-products/${encodeURIComponent(publicId)}`);
 }
 
-export function quoteLandingProduct(publicId: string, body: { quantity?: number; coupon_code?: string }) {
+export function quoteLandingProduct(publicId: string, body: { quantity?: number; coupon_code?: string; destination_id?: string; courier?: string }) {
   return publicApiRequest<CheckoutQuote>(`/public/landing-products/${encodeURIComponent(publicId)}/quote`, { method: 'POST', body });
+}
+
+/** Buyer's place (sub-district / city / postcode) for courier rates. */
+export function searchShippingDestinations(q: string) {
+  return publicApiRequest<{ items: ShippingDestination[] }>(`/public/shipping/destinations?q=${encodeURIComponent(q)}`);
+}
+
+export function getShippingRates(publicId: string, body: { destination_id: string; quantity?: number }) {
+  return publicApiRequest<{ items: ShippingRate[]; empty_message: string | null }>(`/public/landing-products/${encodeURIComponent(publicId)}/shipping-rates`, { method: 'POST', body });
 }
 
 export function checkoutLandingProduct(publicId: string, body: CheckoutInput) {
@@ -189,7 +231,7 @@ export type SellerProduct = PublicProduct & {
   access_max_opens: number | null;
   access_days: number | null;
   download_limit: number | null;
-  shipping_mode: 'free' | 'flat' | 'manual' | null;
+  shipping_mode: ShippingMode | null;
   shipping_fee: number;
   weight_grams: number | null;
   raw_checkout_fields: CheckoutField[];
@@ -215,7 +257,7 @@ export type ProductInput = {
   access_max_opens?: number | null;
   access_days?: number | null;
   download_limit?: number | null;
-  shipping_mode?: 'free' | 'flat' | 'manual' | null;
+  shipping_mode?: ShippingMode | null;
   shipping_fee?: number | null;
   weight_grams?: number | null;
   checkout_fields?: Array<Pick<CheckoutField, 'label' | 'type' | 'required' | 'options'>>;
@@ -224,6 +266,22 @@ export type ProductInput = {
 export type ProductLimits = { max_file_mb: number; file_extensions: string[] };
 
 const PRODUCTS = '/apps/landing-builder/products';
+
+/** Seller: where parcels ship from + couriers offered (courier rates). */
+export type ShopShipping = {
+  enabled: boolean;
+  origin: { id: string; label: string } | null;
+  couriers: string[];
+  available_couriers: Array<{ code: string; name: string }>;
+};
+
+export function getShopShipping() {
+  return apiRequest<ShopShipping>('/apps/landing-builder/shipping');
+}
+
+export function updateShopShipping(body: { origin_id: string; origin_label: string; couriers: string[] }) {
+  return apiRequest<ShopShipping>('/apps/landing-builder/shipping', { method: 'PUT', body });
+}
 
 export function getSellerProducts() {
   return apiRequest<{ items: SellerProduct[]; limits: ProductLimits }>(PRODUCTS);
@@ -534,4 +592,29 @@ export function markAdminRefundFailed(id: number, reason: string) {
 
 export function downloadAdminRefundProof(id: number) {
   return apiRequestBlob(`/admin/seller-finance/refunds/${id}/proof`);
+}
+
+// ─── Super admin › Pengaturan › Ongkir (RajaOngkir) ───
+
+export type AdminShippingSettings = {
+  provider: 'none' | 'rajaongkir';
+  base_url: string;
+  couriers: string[];
+  cache_hours: number;
+  api_key_set: boolean;
+  ready: boolean;
+  courier_labels: Record<string, string>;
+};
+
+export function getAdminShippingSettings() {
+  return apiRequest<AdminShippingSettings>('/admin/shipping-settings');
+}
+
+/** api_key: only sent when typed (empty keeps the saved key; it is never returned). */
+export function updateAdminShippingSettings(body: { provider: 'none' | 'rajaongkir'; api_key?: string; couriers: string[]; cache_hours?: number }) {
+  return apiRequest<AdminShippingSettings>('/admin/shipping-settings', { method: 'PUT', body });
+}
+
+export function testAdminShipping() {
+  return apiRequest<{ ok: boolean; sample: string | null }>('/admin/shipping-settings/test', { method: 'POST' });
 }

@@ -1,6 +1,7 @@
 // Local stand-ins for the outside world during the Fase 5 journey (never real services):
 //  - iPaymu sandbox API on :8020 (/api/v2/payment, /api/v2/payment/direct, /api/v2/transaction)
 //    plus a "sandbox payment page" /pay/:sid whose button sends the notify webhook like iPaymu;
+//  - RajaOngkir (Komerce v1) destinations + domestic cost under /rajaongkir/api/v1 (RAJAONGKIR_SANDBOX_URL);
 //  - SMTP sink on :1025 capturing every email; GET :8020/mails lists them (JSON).
 import http from 'node:http';
 import net from 'node:net';
@@ -16,6 +17,26 @@ const send = (res, status, body, type = 'application/json') => { res.writeHead(s
 http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://127.0.0.1:8020');
   const raw = req.method === 'POST' ? await readBody(req) : '';
+
+  // RajaOngkir (Komerce v1) stand-in, used with RAJAONGKIR_SANDBOX_URL=http://127.0.0.1:8020/rajaongkir/api/v1
+  if (url.pathname === '/rajaongkir/api/v1/destination/domestic-destination') {
+    const q = (url.searchParams.get('search') || '').toLowerCase();
+    const places = [
+      { id: 17473, label: 'GAMBIR, GAMBIR, JAKARTA PUSAT, DKI JAKARTA, 10110', subdistrict_name: 'GAMBIR', district_name: 'GAMBIR', city_name: 'JAKARTA PUSAT', province_name: 'DKI JAKARTA', zip_code: '10110' },
+      { id: 31555, label: 'SINDUHARJO, NGAGLIK, SLEMAN, DI YOGYAKARTA, 55581', subdistrict_name: 'SINDUHARJO', district_name: 'NGAGLIK', city_name: 'SLEMAN', province_name: 'DI YOGYAKARTA', zip_code: '55581' },
+    ].filter((p) => p.label.toLowerCase().includes(q));
+    console.log(`[rajaongkir] search "${q}" → ${places.length}`);
+    return places.length ? send(res, 200, { meta: { code: 200, status: 'success', message: 'Success' }, data: places })
+      : send(res, 404, { meta: { code: 404, status: 'error', message: 'Data not found' }, data: null });
+  }
+  if (url.pathname === '/rajaongkir/api/v1/calculate/domestic-cost') {
+    const p = new URLSearchParams(raw);
+    const kg = Math.max(1, Math.ceil(Number(p.get('weight')) / 1000));
+    console.log(`[rajaongkir] cost ${p.get('origin')} → ${p.get('destination')} ${p.get('weight')} g ${p.get('courier')}`);
+    const all = { jne: ['Jalur Nugraha Ekakurir (JNE)', 'REG', 18000, '2-3 day'], jnt: ['J&T Express', 'EZ', 16000, '2-4 day'], sicepat: ['SiCepat Express', 'BEST', 27000, '1 day'] };
+    const data = (p.get('courier') || '').split(':').filter((c) => all[c]).map((c) => ({ name: all[c][0], code: c, service: all[c][1], description: 'Layanan', cost: all[c][2] * kg, etd: all[c][3] }));
+    return send(res, 200, { meta: { code: 200, status: 'success', message: 'Success' }, data });
+  }
 
   if (url.pathname === '/api/v2/payment' || url.pathname === '/api/v2/payment/direct') {
     const p = JSON.parse(raw || '{}');
