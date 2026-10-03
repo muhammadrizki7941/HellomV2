@@ -36,7 +36,8 @@
                 @endif
             </div>
         @else
-            @include('landing.block', ['b' => $b, 'first' => $loop->first])
+            {{-- Clicks remember which block they came from (statistics per link, Fase 6). --}}
+            {!! str_replace(' data-track="', ' data-item="' . e($b['id']) . '" data-track="', $__env->make('landing.block', ['b' => $b, 'first' => $loop->first], \Illuminate\Support\Arr::except(get_defined_vars(), ['__data', '__path']))->render()) !!}
         @endif
         @if ($hasSocial && $profileAt === $loop->index && ($social['position'] ?? 'bottom') === 'bottom'){!! $socialRow() !!}@endif
     @endforeach

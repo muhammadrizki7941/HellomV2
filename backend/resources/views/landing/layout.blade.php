@@ -69,7 +69,7 @@
 
 <div class="share">
     @if (!empty($settings['showFloatingWhatsapp']) && $waNumber !== '')
-        <a class="wa" href="https://wa.me/{{ $waNumber }}?text={{ rawurlencode((string) ($settings['whatsappMessage'] ?? 'Halo')) }}" target="_blank" rel="noopener" aria-label="Chat WhatsApp" data-track="click" data-label="WhatsApp mengambang">
+        <a class="wa" href="https://wa.me/{{ $waNumber }}?text={{ rawurlencode((string) ($settings['whatsappMessage'] ?? 'Halo')) }}" target="_blank" rel="noopener" aria-label="Chat WhatsApp" data-item="wa-float" data-track="click" data-label="WhatsApp mengambang">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.5 3.5A11 11 0 0 0 3.3 17.2L2 22l4.9-1.3A11 11 0 0 0 20.5 3.5zM12 20a8.9 8.9 0 0 1-4.6-1.3l-.3-.2-2.9.8.8-2.8-.2-.3A9 9 0 1 1 12 20zm4.9-6.7c-.3-.1-1.6-.8-1.8-.9-.3-.1-.4-.1-.6.1l-.8 1c-.2.2-.3.2-.6.1a7.4 7.4 0 0 1-3.6-3.2c-.3-.5.3-.4.8-1.4.1-.2 0-.3 0-.4l-.8-2c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.8 11.9 11.9 0 0 0 4.6 4c1.7.7 2.4.8 3.2.7.5-.1 1.6-.7 1.8-1.3.2-.6.2-1.2.2-1.3-.1-.2-.3-.2-.6-.3z"/></svg>
         </a>
     @endif

@@ -9,9 +9,12 @@ use App\Models\OrganizationLandingPage;
 use App\Services\Landing\LandingDocumentService;
 use App\Services\Landing\LandingRenderer;
 use App\Services\Landing\LandingShop;
+use App\Support\Landing\BlockSchema;
+use App\Support\Landing\OgImage;
 use App\Support\Landing\PageSecurity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -43,6 +46,42 @@ class LandingPublicController extends Controller
         }
 
         return $this->render($request, $organization, $slug);
+    }
+
+    /**
+     * Generated share card of a published page (Fase 6): /og/{username}/{slug|_}-{hash}. Made once per
+     * content hash and kept on the local disk; an old hash redirects to the current card.
+     */
+    public function ogImage(string $username, string $key): Response
+    {
+        $organization = $this->shop->findByUsername($username);
+        if (!$organization || $organization->landing_suspended_at !== null || !OgImage::supported() || !preg_match('/^([a-z0-9-]+|_)-([a-f0-9]{12})$/', $key, $m)) {
+            abort(404);
+        }
+        $live = $this->shop->livePages($organization);
+        $page = $m[1] === '_' ? ($live->firstWhere('is_home', true) ?? $live->first()) : $live->firstWhere('slug', $m[1]);
+        if (!$page) {
+            abort(404);
+        }
+        $document = BlockSchema::normalize($this->documents->published($page) ?? []);
+        $current = $this->renderer->ogCard($organization, $page, $document, $this->shop->publicUrl($organization, $page->is_home ? '' : (string) $page->slug));
+        if ($current !== '/og/' . $username . '/' . $key) {
+            return redirect((string) $current, 302);
+        }
+
+        $disk = Storage::disk('local');
+        $dir = 'og/' . $organization->id;
+        $file = $dir . '/' . $page->id . '-' . $m[2] . '.jpg';
+        if (!$disk->exists($file)) {
+            foreach ($disk->files($dir) as $old) { // one card per page
+                if (str_starts_with(basename($old), $page->id . '-')) {
+                    $disk->delete($old);
+                }
+            }
+            $disk->put($file, OgImage::render(OgImage::card($organization, $document, (string) preg_replace('#^https?://(www\.)?#', '', $this->shop->publicUrl($organization, $page->is_home ? '' : (string) $page->slug)))));
+        }
+
+        return response()->file($disk->path($file), ['Content-Type' => 'image/jpeg', 'Cache-Control' => 'public, max-age=31536000, immutable']);
     }
 
     /** Editor preview of the draft (signed link, not cached, no tracking). */

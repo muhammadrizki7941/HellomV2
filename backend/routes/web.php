@@ -56,6 +56,19 @@ Route::get('/fonts/landing/{file}', function (string $file) {
 	])
 	->name('landing.fonts');
 
+// Share card image (og:image) of a published page, Fase 6. No extension: Nginx sends it to Laravel.
+Route::get('/og/{username}/{key}', [LandingPublicController::class, 'ogImage'])
+	->where(['username' => '[a-z0-9][a-z0-9-]{0,38}[a-z0-9]', 'key' => '([a-z0-9-]+|_)-[a-f0-9]{12}'])
+	->withoutMiddleware([
+		\Illuminate\Session\Middleware\StartSession::class,
+		\Illuminate\Cookie\Middleware\EncryptCookies::class,
+		\Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse::class,
+		\Illuminate\View\Middleware\ShareErrorsFromSession::class,
+		\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class,
+	])
+	->middleware('throttle:60,1')
+	->name('landing.og');
+
 // Hellom Page (Fase 4): server-rendered shop pages. /{username} and /{username}/{slug};
 // reserved words and unknown usernames fall through to the SPA shell. The editor
 // preview of a draft uses a signed link.

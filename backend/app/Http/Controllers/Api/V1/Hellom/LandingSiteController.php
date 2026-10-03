@@ -421,6 +421,20 @@ class LandingSiteController extends BaseApiController
             'seo_title' => $page->seo_title,
             'seo_description' => $page->seo_description,
             'seo_image' => $page->seo_image,
+            'share_card' => $live ? $this->shareCard($page, $organization) : null,
         ];
+    }
+
+    /** Generated share card of the published version (Fase 6), absolute URL on the API origin. */
+    private function shareCard(OrganizationLandingPage $page, Organization $organization): ?string
+    {
+        $published = $this->documents->published($page);
+        if ($published === null) {
+            return null;
+        }
+        $path = app(LandingRenderer::class)->ogCard($organization, $page, BlockSchema::normalize($published),
+            $this->shop->publicUrl($organization, $page->is_home ? '' : (string) $page->slug));
+
+        return $path ? url($path) : null;
     }
 }

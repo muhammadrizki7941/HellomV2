@@ -90,7 +90,7 @@ class SocialPanelTest extends SellerFinanceTestCase
         $this->assertGreaterThan(strpos($html, '<h1>Toko Kue Bu Ani</h1>'), $row);   // below the profile
         $this->assertLessThan(strpos($html, 'Pesan H-1 ya'), $row);         // before the next block
         $this->assertMatchesRegularExpression('~<a href="https://www\.instagram\.com/toko\.kue"\s+target="_blank" rel="noopener me"\s+aria-label="Instagram"~', $html);
-        $this->assertStringContainsString('data-track="click" data-label="Instagram"', $html);
+        $this->assertStringContainsString('data-track="click" data-item="social:instagram" data-label="Instagram"', $html);
         $this->assertStringContainsString('--soc:#e1306c', $html);
         $this->assertMatchesRegularExpression('~<a href="mailto:halo@toko\.id"\s+aria-label="Email"~', $html); // same tab for email
 

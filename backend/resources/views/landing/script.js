@@ -39,7 +39,7 @@
   track(C.productId ? 'product_view' : 'visit');
   qa('[data-track]').forEach(function (el) {
     el.addEventListener('click', function () {
-      track(el.getAttribute('data-track') === 'buy' ? 'checkout_start' : 'click', { dimension: (el.getAttribute('data-label') || el.textContent || '').trim().slice(0, 100), product_id: el.getAttribute('data-product') || C.productId || null });
+      track(el.getAttribute('data-track') === 'buy' ? 'checkout_start' : 'click', { item: el.getAttribute('data-item') || '', dimension: (el.getAttribute('data-label') || el.textContent || '').trim().slice(0, 100), product_id: el.getAttribute('data-product') || C.productId || null });
       if (el.getAttribute('data-track') === 'buy') fire('InitiateCheckout', { content_ids: [el.getAttribute('data-product')], value: Number(el.getAttribute('data-value') || 0), currency: 'IDR' });
     });
   });

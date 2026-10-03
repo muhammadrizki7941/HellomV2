@@ -9,6 +9,7 @@ use App\Models\OrganizationLandingPage;
 use App\Support\FrontendUrl;
 use App\Support\Landing\BlockSchema;
 use App\Support\Landing\Embed;
+use App\Support\Landing\OgImage;
 use App\Support\Landing\SocialLinks;
 use App\Support\Landing\ThemeStyle;
 use Illuminate\Support\Collection;
@@ -37,7 +38,8 @@ final class LandingRenderer
         $url = $this->shop->publicUrl($organization, $page->is_home ? '' : (string) $page->slug);
         $title = $page->seo_title ?: ($first['title'] ?? null) ?: (string) $organization->name;
         $description = $page->seo_description ?: ($first['description'] ?? null) ?: 'Halaman ' . $organization->name . ' di Hellom';
-        $image = $page->seo_image ?: ($first['image'] ?? null);
+        // Share image: the seller's own (seo_image), else the generated card (Fase 6), else the first image.
+        $image = $page->seo_image ?: ($this->ogCard($organization, $page, $document, $url) ?? ($first['image'] ?? null));
 
         return $this->base($organization, $document, $preview) + [
             'page' => $page,
@@ -178,6 +180,17 @@ final class LandingRenderer
         }
 
         return null;
+    }
+
+    /** URL of the generated share card (OgImage); its hash follows the content. Null when GD/FreeType is missing. */
+    public function ogCard(Organization $organization, OrganizationLandingPage $page, array $document, string $url): ?string
+    {
+        if (!OgImage::supported()) {
+            return null;
+        }
+        $card = OgImage::card($organization, $document, (string) preg_replace('#^https?://(www\.)?#', '', $url));
+
+        return '/og/' . $organization->landingUsername() . '/' . ($page->is_home ? '_' : $page->slug) . '-' . OgImage::hash($card);
     }
 
     private function absolute(?string $url): ?string

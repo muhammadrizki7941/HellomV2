@@ -228,6 +228,7 @@ class PublicStoreController extends BaseApiController
             'product_id' => ['nullable', 'string', 'max:24'],
             'dimension' => ['nullable', 'string', 'max:200'],
             'source' => ['nullable', 'string', 'max:200'],
+            'item' => ['nullable', 'string', 'max:64'],
         ]);
         $organization = $shop->findByUsername($validated['username']);
         if (!$organization) {
@@ -237,8 +238,10 @@ class PublicStoreController extends BaseApiController
             ? OrganizationLandingPage::query()->where('organization_id', $organization->id)->whereKey($validated['page_id'])->value('id') : null;
         $productId = !empty($validated['product_id'])
             ? LandingProduct::query()->where('organization_id', $organization->id)->where('public_id', $validated['product_id'])->value('id') : null;
-        $dimension = $validated['metric'] === 'visit' ? LandingStats::sourceLabel($validated['source'] ?? '') : (string) ($validated['dimension'] ?? '');
-        $stats->record((int) $organization->id, $validated['metric'], $pageId, $productId, $dimension, $request->ip() . '|' . $request->userAgent());
+        $source = LandingStats::sourceLabel($validated['source'] ?? '');
+        $dimension = $validated['metric'] === 'visit' ? $source : (string) ($validated['dimension'] ?? '');
+        $stats->record((int) $organization->id, $validated['metric'], $pageId, $productId, $dimension, $request->ip() . '|' . $request->userAgent(),
+            $validated['metric'] === 'click' ? (string) ($validated['item'] ?? '') : '', $source);
 
         return $this->ok(['recorded' => true], 'OK');
     }

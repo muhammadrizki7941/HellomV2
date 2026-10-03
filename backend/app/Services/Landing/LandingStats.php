@@ -11,13 +11,14 @@ use Illuminate\Support\Str;
 /**
  * Light Hellom Page statistics (Fase 4, audit LB-33): daily counters per shop/page/product,
  * no raw visitor rows and no cookies. A visit is counted once per visitor per page per day
- * (hash of IP + user agent + day, kept only as a cache key).
+ * (hash of IP + user agent + day, kept only as a cache key). Clicks also keep which link (`item`:
+ * block id, "social:instagram", "wa-float") and the visitor's source (Fase 6).
  */
 final class LandingStats
 {
     public const METRICS = ['visit', 'product_view', 'click', 'checkout_start'];
 
-    public function record(int $organizationId, string $metric, ?int $pageId, ?int $productId, string $dimension, string $visitor): void
+    public function record(int $organizationId, string $metric, ?int $pageId, ?int $productId, string $dimension, string $visitor, string $item = '', string $source = ''): void
     {
         if (!in_array($metric, self::METRICS, true)) {
             return;
@@ -30,11 +31,19 @@ final class LandingStats
             }
         }
         DB::statement(
-            'INSERT INTO landing_stats_daily (organization_id, landing_page_id, product_id, day, metric, dimension, count) VALUES (?, ?, ?, ?, ?, ?, 1)
+            'INSERT INTO landing_stats_daily (organization_id, landing_page_id, product_id, day, metric, dimension, item, source, count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
              ON DUPLICATE KEY UPDATE count = count + 1',
-            // 0 instead of NULL: MySQL unique keys never match NULLs, so upserts would add rows.
-            [$organizationId, (int) $pageId, (int) $productId, $day, $metric, Str::limit($dimension, 120, '')]
+            // 0 / '' instead of NULL: MySQL unique keys never match NULLs, so upserts would add rows.
+            [$organizationId, (int) $pageId, (int) $productId, $day, $metric, Str::limit($dimension, 120, ''), self::item($item), Str::limit($source, 60, '')]
         );
+    }
+
+    /** Link key from the page (block id, social:platform, wa-float); anything else is dropped. */
+    public static function item(?string $item): string
+    {
+        $item = (string) $item;
+
+        return preg_match('/^(social:[a-z]{1,20}|wa-float|[A-Za-z0-9_-]{1,40})$/', $item) ? $item : '';
     }
 
     /** "instagram", "google", "langsung"… from utm_source or a referrer host. */
@@ -72,6 +81,27 @@ final class LandingStats
         $clicks = (clone $rows)->where('metric', 'click')->selectRaw('dimension, SUM(count) AS total')->groupBy('dimension')->orderByDesc('total')->limit(10)->get()
             ->map(fn ($r) => ['label' => $r->dimension ?: '(tanpa label)', 'clicks' => (int) $r->total]);
 
+        // Per link (Fase 6): clicks, share of visits, and where those clicks came from. The label is
+        // the newest one (a renamed button stays one link).
+        $visits = (int) ($totals['visit'] ?? 0);
+        $linkRows = (clone $rows)->where('metric', 'click')->where('item', '!=', '')
+            ->selectRaw('item, dimension, source, SUM(count) AS total, MAX(day) AS last_day')->groupBy('item', 'dimension', 'source')->get();
+        $links = $linkRows->groupBy('item')->map(function ($group, $item) use ($visits) {
+            $clicks = (int) $group->sum('total');
+            $sources = $group->groupBy(fn ($r) => $r->source ?: 'langsung')
+                ->map(fn ($g, $source) => ['source' => (string) $source, 'clicks' => (int) $g->sum('total')])
+                ->sortByDesc('clicks')->values()->take(6)->all();
+
+            return [
+                'item' => (string) $item,
+                'label' => (string) ($group->sortByDesc('last_day')->first()->dimension ?: '(tanpa label)'),
+                'kind' => str_starts_with((string) $item, 'social:') ? 'social' : ((string) $item === 'wa-float' ? 'whatsapp' : 'block'),
+                'clicks' => $clicks,
+                'ctr' => $visits > 0 ? round($clicks / $visits * 100, 1) : null,
+                'sources' => $sources,
+            ];
+        })->sortByDesc('clicks')->values()->take(30);
+
         $productViews = (clone $rows)->where('product_id', '>', 0)->whereIn('metric', ['product_view', 'checkout_start'])
             ->selectRaw('product_id, metric, SUM(count) AS total')->groupBy('product_id', 'metric')->get();
         $sales = LandingPageOrder::query()->where('organization_id', $organizationId)->whereNotNull('product_id')
@@ -107,6 +137,7 @@ final class LandingStats
             'daily' => $series,
             'sources' => $sources,
             'clicks' => $clicks,
+            'links' => $links,
             'products' => $perProduct,
             'sales_by_source' => $salesBySource,
         ];
