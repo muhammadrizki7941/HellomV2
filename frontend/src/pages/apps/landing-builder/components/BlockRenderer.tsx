@@ -7,12 +7,17 @@ import {
 } from 'lucide-react';
 import { Block, BlockStyles } from '../types';
 import { useSellerProducts } from '../sellerProducts';
+import { getImageUrl } from '@/lib/hellomApi';
+
+// Uploaded images are stored as same-origin paths (/media/...): resolve them against the API
+// origin so the editor shows them wherever the dashboard runs. Quoted for CSS url().
+const cssUrl = (value: string | undefined | null) => (value ? `url("${getImageUrl(value).replace(/"/g, '%22')}")` : undefined);
 
 const useBlockStyles = (blockStyles: BlockStyles | undefined, theme: any) => {
   return {
     container: {
       backgroundColor: blockStyles?.backgroundColor || theme.colors.backgroundColor,
-      backgroundImage: blockStyles?.backgroundImage ? `url(${blockStyles.backgroundImage})` : undefined,
+      backgroundImage: blockStyles?.backgroundImage ? cssUrl(blockStyles.backgroundImage) : undefined,
       backgroundSize: 'cover',
       backgroundPosition: 'center',
       color: blockStyles?.textColor || theme.colors.textColor,
@@ -109,7 +114,7 @@ const ContentBlock = ({ content, styles }: { content: any, styles: any }) => (
 const BannerBlock = ({ content, styles }: { content: any, styles: any }) => (
   <div
     className={`relative ${styles.padding} px-4 sm:px-8 bg-cover bg-center`}
-    style={{ backgroundImage: `url(${content.imageUrl})`, textAlign: styles.container.textAlign }}
+    style={{ backgroundImage: cssUrl(content.imageUrl), textAlign: styles.container.textAlign }}
   >
     <div className="absolute inset-0 bg-black" style={{ opacity: content.overlayOpacity }} />
     <div
@@ -130,7 +135,7 @@ const ProductBlock = ({ content, styles }: { content: any, styles: any }) => (
   <div className={`${styles.padding} px-4 sm:px-8 border-b border-white/10`} style={{ ...styles.container, textAlign: 'left' }}>
     <div className="max-w-4xl mx-auto flex flex-col md:flex-row gap-5 sm:gap-8 items-center">
       <div className="w-full md:w-1/2">
-        <img src={content.imageUrl} alt={content.name} className="w-full rounded-xl shadow-sm border border-black/5" />
+        <img src={getImageUrl(content.imageUrl)} alt={content.name} className="w-full rounded-xl shadow-sm border border-black/5" />
       </div>
       <div className="w-full md:w-1/2 text-left">
         <h3 className="text-lg sm:text-2xl font-bold mb-1 sm:mb-2">{content.name}</h3>
@@ -181,7 +186,7 @@ const TextBlock = ({ content, styles }: { content: any, styles: any }) => (
 const ImageBlock = ({ content, styles }: { content: any, styles: any }) => (
   <div className={`${styles.padding} px-4 sm:px-8`} style={styles.container}>
     <div className="max-w-4xl mx-auto">
-      <img src={content.imageUrl} alt="Content" className="w-full rounded-xl shadow-sm" />
+      <img src={getImageUrl(content.imageUrl)} alt="Content" className="w-full rounded-xl shadow-sm" />
       {content.caption && (
         <p className="mt-3 text-xs sm:text-sm opacity-60 italic">{content.caption}</p>
       )}
@@ -374,7 +379,7 @@ const SliderBlock = ({ content, styles }: { content: any, styles: any }) => {
     <div className={`${styles.padding} px-4 sm:px-8`} style={styles.container}>
       <div className="max-w-4xl mx-auto">
         <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-black/10">
-          {first?.url && <img src={first.url} alt={first.caption || 'Slide'} className="h-full w-full object-cover" />}
+          {first?.url && <img src={getImageUrl(first.url)} alt={first.caption || 'Slide'} className="h-full w-full object-cover" />}
         </div>
         <div className="mt-3 flex justify-center gap-1.5">
           {images.map((_: any, idx: number) => (
@@ -420,7 +425,7 @@ const CountdownBlock = ({ content, styles }: { content: any, styles: any }) => (
 const GifBlock = ({ content, styles }: { content: any, styles: any }) => (
   <div className={`${styles.padding} px-4 sm:px-8`} style={styles.container}>
     <div className="max-w-3xl mx-auto">
-      {content.gifUrl && <img src={content.gifUrl} alt={content.caption || 'GIF'} className="mx-auto rounded-xl shadow-sm" />}
+      {content.gifUrl && <img src={getImageUrl(content.gifUrl)} alt={content.caption || 'GIF'} className="mx-auto rounded-xl shadow-sm" />}
       {content.caption && <p className="mt-3 text-xs sm:text-sm opacity-60 italic">{content.caption}</p>}
     </div>
   </div>
@@ -428,10 +433,10 @@ const GifBlock = ({ content, styles }: { content: any, styles: any }) => (
 
 const ProfileBlock = ({ content, styles }: { content: any, styles: any }) => (
   <div className={`${styles.padding} px-4 sm:px-8`} style={{ ...styles.container, textAlign: 'center' }}>
-    {content.coverUrl && <div className="-mx-4 -mt-10 mb-[-48px] h-32 bg-cover bg-center sm:-mx-8" style={{ backgroundImage: `url(${content.coverUrl})` }} />}
+    {content.coverUrl && <div className="-mx-4 -mt-10 mb-[-48px] h-32 bg-cover bg-center sm:-mx-8" style={{ backgroundImage: cssUrl(content.coverUrl) }} />}
     <div className="mx-auto max-w-md">
       {content.avatarUrl
-        ? <img src={content.avatarUrl} alt="" className="mx-auto h-24 w-24 rounded-full border-4 border-white object-cover" />
+        ? <img src={getImageUrl(content.avatarUrl)} alt="" className="mx-auto h-24 w-24 rounded-full border-4 border-white object-cover" />
         : <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full text-3xl font-bold" style={styles.button}>{(content.name || 'T').slice(0, 1).toUpperCase()}</div>}
       <h2 className="mt-3 text-2xl font-bold">{content.name || 'Nama toko kamu'}</h2>
       {content.showVerified !== false && <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700"><BadgeCheck className="h-3.5 w-3.5" /> Tampil jika terverifikasi</p>}
@@ -455,7 +460,7 @@ const CatalogBlock = ({ content, styles }: { content: any, styles: any }) => {
           <div className={`grid gap-3 ${Number(content.columns) >= 3 ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2'}`}>
             {list.map((p) => (
               <div key={p.id} className="overflow-hidden rounded-2xl bg-white text-left text-zinc-900 shadow-sm">
-                {p.image_url ? <img src={p.image_url} alt="" className="aspect-square w-full object-cover" /> : <div className="flex aspect-square items-center justify-center bg-zinc-100"><ShoppingBag className="h-8 w-8 text-zinc-300" /></div>}
+                {p.image_url ? <img src={getImageUrl(p.image_url)} alt="" className="aspect-square w-full object-cover" /> : <div className="flex aspect-square items-center justify-center bg-zinc-100"><ShoppingBag className="h-8 w-8 text-zinc-300" /></div>}
                 <div className="space-y-1 p-3">
                   <p className="line-clamp-2 text-sm font-semibold">{p.name}</p>
                   <p className="text-sm font-bold">Rp {p.price.toLocaleString('id-ID')}</p>
@@ -478,7 +483,7 @@ const GalleryBlock = ({ content, styles }: { content: any, styles: any }) => (
         <div className="flex h-32 items-center justify-center rounded-2xl border border-dashed border-current/20 text-sm opacity-60"><ImagePlus className="mr-2 h-5 w-5" /> Tambahkan foto</div>
       ) : (
         <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(4, Math.max(2, Number(content.columns) || 3))}, minmax(0, 1fr))` }}>
-          {(content.images ?? []).map((img: { url?: string }, i: number) => img.url ? <img key={i} src={img.url} alt="" className="aspect-square w-full rounded-xl object-cover" /> : null)}
+          {(content.images ?? []).map((img: { url?: string }, i: number) => img.url ? <img key={i} src={getImageUrl(img.url)} alt="" className="aspect-square w-full rounded-xl object-cover" /> : null)}
         </div>
       )}
     </div>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Check, Copy, Eye, EyeOff, Package, Pencil, Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { deleteSellerProduct, getSellerProducts, toggleSellerProduct } from '@/lib/hellomApi';
+import { deleteSellerProduct, getImageUrl, getSellerProducts, toggleSellerProduct } from '@/lib/hellomApi';
 import type { ProductLimits, SellerProduct } from '@/lib/hellomApi';
 import ProductForm from './ProductForm';
 
@@ -102,7 +102,7 @@ export default function ProductsPanel() {
           return (
             <article key={p.db_id} className="rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm">
               <div className="flex gap-3">
-                {p.image_url ? <img src={p.image_url} alt="" className="h-20 w-20 shrink-0 rounded-xl object-cover" /> : <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-zinc-100"><Package className="h-7 w-7 text-zinc-400" /></div>}
+                {p.image_url ? <img src={getImageUrl(p.image_url)} alt="" className="h-20 w-20 shrink-0 rounded-xl object-cover" /> : <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-zinc-100"><Package className="h-7 w-7 text-zinc-400" /></div>}
                 <div className="min-w-0 flex-1">
                   <span className={cn('inline-block rounded-full px-2 py-0.5 text-xs font-semibold', tone)}>{label}</span>
                   <h3 className="mt-1 truncate font-semibold text-zinc-900">{p.name}</h3>

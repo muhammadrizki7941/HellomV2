@@ -15,6 +15,9 @@ class FileAssetController extends BaseApiController
     /** Max total storage per organization in bytes (100 MB) */
     private const ORG_QUOTA_BYTES = 100 * 1024 * 1024;
 
+    /** Same limit the editor announces ("File maksimal 8 MB"). */
+    public const MAX_UPLOAD_KB = 8192;
+
     public function index(Request $request): JsonResponse
     {
         $organizationId = $this->resolveOrganizationId($request);
@@ -44,8 +47,14 @@ class FileAssetController extends BaseApiController
         }
 
         $validated = $request->validate([
-            // No SVG: it can carry scripts and is served from the dashboard origin.
-            'file' => ['required', 'file', 'max:4096', 'mimes:jpg,jpeg,png,webp,gif,pdf'],
+            // No SVG: it can carry scripts and is served from the dashboard origin. 8 MB = a phone
+            // photo; photos are stored as ≤1600px WebP, so the page stays light.
+            'file' => ['required', 'file', 'max:' . self::MAX_UPLOAD_KB, 'mimes:jpg,jpeg,png,webp,gif,pdf'],
+        ], [
+            'file.required' => 'Pilih file dulu.',
+            'file.uploaded' => 'File gagal diunggah. Coba lagi atau pakai file yang lebih kecil (maks. 8 MB).',
+            'file.max' => 'Ukuran file maksimal 8 MB.',
+            'file.mimes' => 'Format file belum didukung. Pakai JPG, PNG, WebP, GIF, atau PDF.',
         ]);
 
         $file = $validated['file'];

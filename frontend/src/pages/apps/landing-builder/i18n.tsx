@@ -182,8 +182,8 @@ const DICT: Record<string, Entry> = {
     en: 'Paste an image link or upload a file. Max 1 MB per image.',
   },
   'pp.slider.tooLarge': {
-    id: 'Ukuran gambar melebihi 1 MB. Pakai gambar yang lebih kecil.',
-    en: 'Image exceeds 1 MB. Please use a smaller image.',
+    id: 'Ukuran gambar melebihi 8 MB. Pakai gambar yang lebih kecil.',
+    en: 'Image exceeds 8 MB. Please use a smaller image.',
   },
   'pp.countdown.target': { id: 'Tanggal & Waktu Target', en: 'Target Date & Time' },
   'pp.countdown.hint': {

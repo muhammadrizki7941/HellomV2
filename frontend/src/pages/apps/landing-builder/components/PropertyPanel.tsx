@@ -7,7 +7,7 @@ import {
 import { Block, BlockStyles } from '../types';
 import { useLang } from '../i18n';
 import LinkedProductPicker from './LinkedProductPicker';
-import { uploadLandingAsset } from '@/lib/hellomApi';
+import { getImageUrl, uploadLandingAsset } from '@/lib/hellomApi';
 import { useSellerProducts } from '../sellerProducts';
 
 interface PropertyPanelProps {
@@ -44,7 +44,7 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
   const block = selectedBlock;
   const patch = (changes: Record<string, any>) => updateBlockContent(block.id, { ...block.content, ...changes });
 
-  const MAX_SLIDER_IMAGE_BYTES = 1024 * 1024; // 1 MB
+  const MAX_SLIDER_IMAGE_BYTES = 8 * 1024 * 1024; // same as the server (FileAssetController::MAX_UPLOAD_KB)
   // Images go to the server (stored as WebP), never inline base64 in the page.
   const uploadSliderImage = async (idx: number, file: File | undefined) => {
     if (!file) return;
@@ -259,7 +259,7 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
               </label>
             </div>
             {block.content.imageUrl && (
-              <img src={block.content.imageUrl} alt="Preview" className="w-full h-32 object-cover rounded-lg border border-zinc-200 mt-2" />
+              <img src={getImageUrl(block.content.imageUrl)} alt="Preview" className="w-full h-32 object-cover rounded-lg border border-zinc-200 mt-2" />
             )}
           </div>
         )}
@@ -297,7 +297,7 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
                 <input type="file" className="hidden" accept="image/gif,image/*" onChange={(e) => handleFileUpload(e, 'gifUrl')} />
               </label>
             </div>
-            {block.content.gifUrl && <img src={block.content.gifUrl} alt="GIF" className="w-full h-32 object-contain rounded-lg border border-zinc-200 mt-2 bg-zinc-50" />}
+            {block.content.gifUrl && <img src={getImageUrl(block.content.gifUrl)} alt="GIF" className="w-full h-32 object-contain rounded-lg border border-zinc-200 mt-2 bg-zinc-50" />}
           </div>
         )}
 
@@ -770,7 +770,7 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
               <div key={field} className="space-y-2">
                 <label className="text-xs font-bold text-zinc-700">{field === 'avatarUrl' ? 'Foto profil' : 'Foto sampul (opsional)'}</label>
                 <div className="flex items-center gap-2">
-                  {block.content[field] ? <img src={block.content[field]} alt="" className={field === 'avatarUrl' ? 'h-12 w-12 rounded-full object-cover' : 'h-12 w-20 rounded-lg object-cover'} /> : null}
+                  {block.content[field] ? <img src={getImageUrl(block.content[field])} alt="" className={field === 'avatarUrl' ? 'h-12 w-12 rounded-full object-cover' : 'h-12 w-20 rounded-lg object-cover'} /> : null}
                   <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-100 px-3 text-sm hover:bg-zinc-200">
                     <Upload className="h-4 w-4 text-zinc-600" /> Upload
                     <input type="file" className="hidden" accept="image/jpeg,image/png,image/webp" onChange={(e) => handleFileUpload(e, field)} />
@@ -874,7 +874,7 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
                   </button>
                 </div>
                 {img.url && (
-                  <img src={img.url} alt={img.caption || `Slide ${idx + 1}`} className="w-full h-24 object-cover rounded border border-zinc-200" />
+                  <img src={getImageUrl(img.url)} alt={img.caption || `Slide ${idx + 1}`} className="w-full h-24 object-cover rounded border border-zinc-200" />
                 )}
                 <input
                   type="text"
