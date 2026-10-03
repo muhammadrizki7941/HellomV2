@@ -12,6 +12,11 @@ Audit & status: [docs/audit-linkinbio-builder.md](docs/audit-linkinbio-builder.m
 - Editor desktop halaman kosong langsung menampilkan panel blok; editor tidak terkunci lagi saat halaman pertama dibuat bersamaan.
 - **Editor baru gaya link-in-bio (Fase 2)**: daftar blok + pratinjau HP yang merupakan halaman asli (dirender server, aman di iframe terpisah); ketuk bagian di pratinjau untuk mengedit; galeri "+ Tambah" bergambar; tampil/sembunyi, duplikat, hapus, geser urutan (juga keyboard), Urungkan/Ulangi; Lihat halaman & Salin link. Di HP: pratinjau penuh dengan bilah bawah dan bottom sheet. Blok bergaya landing page panjang tidak ditawarkan lagi (halaman lama tetap tampil).
 
+### Hellom Page — Tampilan & background (Fase 5, 2026-10-04)
+- Panel **Tampilan** baru: 12 tema siap pakai sekali ketuk; background polos, gradien, gambar (dengan gelap & blur), pola, atau animasi halus; huruf judul & isi dari 12 pilihan (di-host sendiri, tanpa Google); tombol dengan bentuk, isi (solid/garis/kaca), bayangan (termasuk gaya neo-brutal) dan efek saat disentuh.
+- Setiap tombol bisa punya gaya sendiri, ikon atau gambar kecil di kiri, dan bisa dijadikan **tombol unggulan** yang beranimasi. Warna teks otomatis dijaga agar tetap terbaca; animasi mati sendiri bila HP pengunjung meminta gerak dikurangi.
+- Deploy: tambahkan blok Nginx `location ^~ /fonts/landing/` (lihat `deploy/nginx`).
+
 ### Hellom Page — panel Sosial Media (Fase 4, 2026-10-04)
 - Panel **Sosial media** terpisah dari blok: 18 platform (Instagram, TikTok, YouTube, WhatsApp, Shopee, Tokopedia, dll.), cukup isi username/nomor/link — langsung dicek dan dirapikan otomatis. Ikon tampil satu baris di atas atau di bawah profil, ukuran & warna bisa dipilih (ikuti teks, warna asli, atau warna sendiri).
 - Isi blok "Ikon sosial media" lama bisa dipindahkan ke panel dengan satu ketukan.
