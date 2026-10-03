@@ -5,10 +5,12 @@ namespace App\Http\Controllers\Api\V1\Hellom;
 use App\Jobs\ReconcileLandingOrder;
 use App\Models\LandingPageOrder;
 use App\Services\Landing\OrderAccessService;
+use App\Services\Landing\PaymentStarter;
 use App\Services\SellerFinance\LandingPaymentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
+use SimpleSoftwareIO\QrCode\Facades\QrCode;
 use Symfony\Component\HttpFoundation\Response;
 
 class LandingSaleController extends BaseApiController
@@ -23,6 +25,24 @@ class LandingSaleController extends BaseApiController
         $order = LandingPageOrder::query()->where('reference_id', $reference)->first();
         if (!$order instanceof LandingPageOrder) {
             return $this->fail('Pesanan tidak ditemukan', ['code' => 'ORDER_NOT_FOUND'], 404);
+        }
+
+        $disposition = $request->boolean('download')
+            ? 'attachment; filename="qris-' . $reference . '.svg"'
+            : 'inline';
+
+        // iPaymu usually sends the QRIS code itself (QrString/PaymentNo): draw it here,
+        // no request to iPaymu needed.
+        $qrString = (string) data_get($order->metadata, 'qr_string', '');
+        if ($qrString !== '') {
+            $svg = QrCode::format('svg')->size(560)->margin(1)->errorCorrection('M')->generate($qrString);
+
+            return response((string) $svg, 200, [
+                'Content-Type' => 'image/svg+xml',
+                'Content-Disposition' => $disposition,
+                'Cache-Control' => 'no-store, private',
+                'Content-Security-Policy' => "default-src 'none'; style-src 'unsafe-inline'",
+            ]);
         }
 
         $qrUrl = (string) data_get($order->metadata, 'qr_image_url', '');
@@ -98,6 +118,8 @@ class LandingSaleController extends BaseApiController
             'download_token' => $order->isPaid() ? $order->download_token : null,
             // Paid: the buyer continues on the access page (limits, latest link, status).
             'access_path' => $order->isPaid() && $order->download_token ? '/akses/' . $order->download_token : null,
+            // Still unpaid: the QR / VA number again, so a reload does not lose them.
+            'payment' => $order->status === LandingPageOrder::STATUS_PENDING ? PaymentStarter::instructions($order) : null,
         ], 'Order status');
     }
 

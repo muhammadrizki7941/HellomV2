@@ -171,7 +171,7 @@ class LandingStoreTest extends SellerFinanceTestCase
         $this->checkout($product, ['quantity' => 2])->assertStatus(422)->assertJsonValidationErrors(['buyer_phone', 'shipping.address']);
 
         $this->checkout($product, ['quantity' => 2, 'coupon_code' => 'hemat10', 'buyer_phone' => '081234567890', 'shipping' => $address, 'price' => 1, 'amount' => 1])
-            ->assertCreated()->assertJsonPath('data.mode', 'redirect');
+            ->assertCreated()->assertJsonPath('data.mode', 'qris'); // first channel, paid on our page
         $order = LandingPageOrder::query()->where('product_id', $product->id)->latest('id')->firstOrFail();
         // 2 × 80.000 = 160.000 − 10% (16.000) + 15.000 ongkir; price fields from the client ignored.
         $this->assertSame(160000, (int) $order->subtotal_amount);
@@ -358,29 +358,49 @@ class LandingStoreTest extends SellerFinanceTestCase
     }
 
     /**
-     * Production: QRIS is the default option, but the iPaymu account refuses the direct
-     * API (HTTP 200 with Status 401). The buyer must still get iPaymu's payment page.
+     * Buyers pay on our own page, like Hellom's own product checkout: the channel list
+     * (QRIS, VA per bank, retail) comes from the super admin settings, the QRIS code may
+     * arrive in PaymentNo, and nothing is sent to iPaymu's hosted payment page.
      */
-    public function test_qris_refused_by_ipaymu_falls_back_to_the_payment_page(): void
+    public function test_buyer_pays_on_our_page_with_qris_or_virtual_account(): void
     {
         $seller = $this->seller();
         $product = $this->product($seller);
         Http::swap(new HttpFactory());
         Http::preventStrayRequests();
-        Http::fake([
-            '*/api/v2/payment/direct' => Http::response(['Status' => 401, 'Message' => 'Direct payment is not activated for this merchant']),
-            '*/api/v2/payment' => Http::response(['Status' => 200, 'Data' => ['SessionID' => 'sess-fb', 'Url' => 'https://sandbox.ipaymu.com/pay/sess-fb']]),
-        ]);
+        Http::fake(function ($request) {
+            $channel = $request->data()['paymentChannel'] ?? '';
 
-        $this->postJson("/api/v1/hellom/public/landing-products/{$product->public_id}/checkout", [
-            'buyer_name' => 'Sari Pembeli', 'buyer_email' => 'sari@example.test', 'payment_method' => 'qris',
-        ])->assertCreated()->assertJsonPath('data.mode', 'redirect')->assertJsonPath('data.payment_url', 'https://sandbox.ipaymu.com/pay/sess-fb');
+            return Http::response($channel === 'qris'
+                ? ['Status' => 200, 'Data' => ['SessionId' => 's-q', 'TransactionId' => 't-q', 'PaymentNo' => '00020101021226670016COM.NOBUBANK', 'Expired' => '2026-10-04 12:00:00']]
+                : ['Status' => 200, 'Data' => ['SessionId' => 's-v', 'TransactionId' => 't-v', 'PaymentNo' => '8808123456789012', 'Expired' => '2026-10-04 12:00:00']]);
+        });
 
-        $order = LandingPageOrder::query()->where('product_id', $product->id)->firstOrFail();
-        $this->assertSame(LandingPageOrder::STATUS_PENDING, $order->status);
+        $page = $this->getJson("/api/v1/hellom/public/landing-products/{$product->public_id}")->assertOk();
+        $this->assertContains('qris', $page->json('data.payment_options'));
+        $this->assertContains('bca', $page->json('data.payment_options'));
+        $this->assertContains(['key' => 'bca', 'label' => 'BCA Virtual Account', 'group' => 'va'], $page->json('data.payment_channels'));
 
-        // The redirect request does not carry an empty buyerPhone (iPaymu rejects it).
-        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/api/v2/payment') && !array_key_exists('buyerPhone', $request->data()));
+        $url = "/api/v1/hellom/public/landing-products/{$product->public_id}/checkout";
+        $va = $this->postJson($url, ['buyer_name' => 'Sari Pembeli', 'buyer_email' => 'sari@example.test', 'payment_method' => 'bca'])
+            ->assertCreated()->assertJsonPath('data.mode', 'va')->assertJsonPath('data.va_number', '8808123456789012')
+            ->assertJsonPath('data.channel_label', 'BCA Virtual Account')->assertJsonPath('data.payment_url', null);
+
+        $qris = $this->postJson($url, ['buyer_name' => 'Sari Pembeli', 'buyer_email' => 'sari@example.test', 'payment_method' => 'qris'])
+            ->assertCreated()->assertJsonPath('data.mode', 'qris')->assertJsonPath('data.qr_string', '00020101021226670016COM.NOBUBANK');
+
+        // The status page shows the same instructions after a reload; the QR is drawn by us.
+        $this->getJson('/api/v1/hellom/public/landingpage/orders/' . $va->json('data.reference_id') . '/status')
+            ->assertOk()->assertJsonPath('data.payment.va_number', '8808123456789012');
+        $this->get('/api/v1/hellom/public/landingpage/orders/' . $qris->json('data.reference_id') . '/qr')
+            ->assertOk()->assertHeader('Content-Type', 'image/svg+xml');
+
+        // Same request as Hellom's own checkout: direct API, digits-only phone, never the hosted page.
+        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/api/v2/payment/direct') && $request->data()['paymentMethod'] === 'va'
+            && $request->data()['paymentChannel'] === 'bca' && $request->data()['phone'] === '081234567890');
+        Http::assertNotSent(fn ($request) => str_ends_with($request->url(), '/api/v2/payment'));
+        $this->postJson($url, ['buyer_name' => 'Sari', 'buyer_email' => 'sari@example.test', 'payment_method' => 'paypal'])
+            ->assertStatus(422)->assertJsonValidationErrors('payment_method');
     }
 
     public function test_gateway_refusal_is_kept_on_the_failed_order(): void
@@ -389,17 +409,15 @@ class LandingStoreTest extends SellerFinanceTestCase
         $product = $this->product($seller);
         Http::swap(new HttpFactory());
         Http::preventStrayRequests();
-        Http::fake([
-            '*/api/v2/payment/direct' => Http::response(['Status' => 401, 'Message' => 'Unauthorized']),
-            '*/api/v2/payment' => Http::response(['Status' => 401, 'Message' => 'Unauthorized signature']),
-        ]);
+        Http::fake(['*/api/v2/payment/direct' => Http::response(['Status' => 401, 'Message' => 'Unauthorized signature'])]);
 
         $this->postJson("/api/v1/hellom/public/landing-products/{$product->public_id}/checkout", [
-            'buyer_name' => 'Sari Pembeli', 'buyer_email' => 'sari@example.test',
+            'buyer_name' => 'Sari Pembeli', 'buyer_email' => 'sari@example.test', 'payment_method' => 'qris',
         ])->assertStatus(422)->assertJsonPath('error.code', 'LANDING_CHECKOUT_FAILED');
 
         $order = LandingPageOrder::query()->where('product_id', $product->id)->firstOrFail();
         $this->assertSame(LandingPageOrder::STATUS_FAILED, $order->status);
         $this->assertStringContainsString('Unauthorized signature', (string) data_get($order->metadata, 'payment_error'));
+        Http::assertNotSent(fn ($request) => str_ends_with($request->url(), '/api/v2/payment'));
     }
 }

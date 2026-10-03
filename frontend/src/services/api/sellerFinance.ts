@@ -2,6 +2,7 @@
 // super admin "Keuangan Penjual".
 // Part of the Hellom API client; import from '@/lib/hellomApi' or '@/services/api'.
 import { apiRequest, apiRequestBlob, buildQuery, publicApiRequest } from './client';
+import type { PaymentInstructions } from './landingStore';
 
 export type Paginated<T> = { data: T[]; current_page: number; last_page: number; total: number; per_page: number };
 
@@ -18,6 +19,7 @@ export type LandingOrderStatus = {
   has_file: boolean;
   download_token: string | null;
   access_path: string | null; // "/akses/{token}" once paid
+  payment?: PaymentInstructions | null; // pending: QR / VA again
 };
 
 export function getLandingOrderPublicStatus(reference: string) {

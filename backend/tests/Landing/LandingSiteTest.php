@@ -390,6 +390,6 @@ class LandingSiteTest extends SellerFinanceTestCase
     {
         Http::swap(new HttpFactory());
         Http::preventStrayRequests();
-        Http::fake(['*/api/v2/payment' => Http::response(['Status' => 200, 'Data' => ['SessionID' => 's', 'Url' => 'https://sandbox.ipaymu.com/pay/s']])]);
+        Http::fake(['*/api/v2/payment/direct' => Http::response(['Status' => 200, 'Data' => ['SessionId' => 's', 'TransactionId' => 't', 'PaymentNo' => '00020101021226']])]);
     }
 }

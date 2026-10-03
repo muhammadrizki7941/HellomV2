@@ -52,6 +52,7 @@ class PublicStoreController extends BaseApiController
             'product' => $product->publicPayload(),
             'seller' => $this->trust->publicSeller($organization),
             'payment_options' => $payments->options(),
+            'payment_channels' => $payments->channels(),
             'min_total' => CheckoutService::MIN_TOTAL,
             'tracking' => LandingTrackingSetting::query()->find($organization->id)?->publicIds() ?? [],
         ], 'Produk');

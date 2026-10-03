@@ -70,7 +70,7 @@ export default function AccessPage() {
 
   if (error) {
     return (
-      <main className="flex min-h-[100svh] items-center justify-center bg-zinc-50 px-6 text-center">
+      <main className="flex min-h-[100svh] items-center justify-center bg-zinc-50 px-6 text-center text-zinc-900">
         <div className="max-w-sm">
           <XCircle className="mx-auto h-12 w-12 text-zinc-300" />
           <h1 className="mt-4 text-xl font-bold">Akses tidak ditemukan</h1>
@@ -83,7 +83,7 @@ export default function AccessPage() {
 
   if (!data) {
     return (
-      <main className="min-h-[100svh] bg-zinc-50 px-4 py-8" aria-busy="true">
+      <main className="min-h-[100svh] bg-zinc-50 px-4 py-8 text-zinc-900" aria-busy="true">
         <div className="mx-auto max-w-md space-y-4"><div className="h-48 animate-pulse rounded-3xl bg-zinc-200" /><div className="h-32 animate-pulse rounded-3xl bg-zinc-100" /></div>
       </main>
     );

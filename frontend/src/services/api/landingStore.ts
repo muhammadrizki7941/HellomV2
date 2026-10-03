@@ -5,7 +5,20 @@ import { apiRequest, apiRequestBlob, buildQuery, publicApiRequest } from './clie
 import type { Paginated } from './sellerFinance';
 
 export type ProductType = 'drive' | 'file' | 'link' | 'physical' | 'service';
-export type PaymentOption = 'qris' | 'other';
+/** Channel key: "qris", a bank VA ("bca", "bni"…), retail ("indomaret", "alfamart") or "other" (hosted page). */
+export type PaymentOption = string;
+
+export type PaymentChannel = { key: PaymentOption; label: string; group: 'qris' | 'va' | 'cstore' | 'cc' | 'other' | string };
+
+/** How to pay a pending order on our page (checkout result and order status). */
+export type PaymentInstructions = {
+  mode: 'qris' | 'va' | 'redirect';
+  channel_label: string | null;
+  va_number: string | null;
+  qr_string: string | null;
+  qr_image_url: string | null;
+  payment_url: string | null;
+};
 
 export type CheckoutField = {
   id: string;
@@ -42,6 +55,7 @@ export type PublicProductPage = {
   product: PublicProduct;
   seller: PublicSeller;
   payment_options: PaymentOption[];
+  payment_channels?: PaymentChannel[];
   min_total: number;
   tracking?: Record<string, string>; // seller pixel ids (public)
 };
@@ -69,16 +83,12 @@ export type CheckoutInput = {
   captcha_token?: string;
 };
 
-export type CheckoutResult = {
+export type CheckoutResult = PaymentInstructions & {
   reference_id: string;
-  mode: 'qris' | 'redirect';
   amount: number;
   product_name: string;
   status_url: string;
   expires_at: string | null;
-  payment_url: string | null;
-  qr_image_url?: string;
-  qr_string?: string;
 };
 
 export type AccessPage = {

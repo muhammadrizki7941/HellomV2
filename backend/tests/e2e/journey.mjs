@@ -148,12 +148,14 @@ try {
   await sleep(1500);
   mailBase = (await (await fetch(`${MOCK}/mails`)).json()).length;
   tab = await Tab.open('about:blank');
+  // Shop pages are browser-cached for minutes; a re-run must not see the previous run's pages.
+  await tab.send('Network.clearBrowserCache');
   await tab.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
 
   await step('1. daftar penjual baru', async () => {
     await tab.go(`${APP}/register`);
-    await tab.waitFor(`!!document.querySelector('input[placeholder="Contoh: Toko Kopi Senja"]')`, 'register form');
-    await tab.fill('input[placeholder="Contoh: Toko Kopi Senja"]', seller.org);
+    await tab.waitFor(`!!document.querySelector('input#reg-org')`, 'register form');
+    await tab.fill('input#reg-org', seller.org);
     await tab.fill('input[placeholder="Contoh: Budi Santoso"]', seller.name);
     await tab.fill('input[placeholder="nama@email.com"]', seller.email);
     await tab.fill('input[placeholder="Minimal 8 karakter"]', seller.password);
@@ -239,16 +241,19 @@ try {
     if (await tab.eval(`!!localStorage.getItem('hellom_token')`)) throw new Error('buyer is logged in');
     await tab.fill('input[autocomplete=name]', buyer.name);
     await tab.fill('input[autocomplete=email]', buyer.email);
-    await tab.mustClick('Virtual Account & lainnya', '[role=radio]');
+    // Paid on the shop's own checkout (like Hellom's own products): BCA VA number shown here.
+    await tab.mustClick('BCA', '[role=radio]');
     if (!(await tab.eval(noOverflow))) throw new Error('checkout overflow');
     await tab.shot(`09-checkout-${label}`);
     await tab.mustClick('Bayar sekarang');
-    await tab.waitFor(`location.host === '127.0.0.1:8020'`, 'sandbox payment page', 20000);
-    await tab.shot(`10-sandbox-${label}`);
-    await tab.eval(`document.querySelector('#pay').click(); true`);
-    await tab.waitFor(`location.pathname.startsWith('/pesanan/')`, 'back to order page', 20000);
-    const ref = await tab.eval(`location.pathname.split('/').pop()`);
-    await tab.waitFor(`/berhasil|lunas|sudah dibayar/i.test(document.body.innerText)`, 'paid status', 20000);
+    await tab.waitFor(`/Nomor Virtual Account/.test(document.body.innerText) && location.host === '127.0.0.1:3010'`, 'VA number on our page', 20000);
+    if (!(await tab.eval(noOverflow))) throw new Error('payment screen overflow');
+    await tab.shot(`10-va-${label}`);
+    const ref = await tab.eval(`(document.body.innerText.match(/No\\. pesanan (\\S+)\\./) || [])[1] || ''`);
+    if (!ref) throw new Error('no order reference on the payment screen');
+    // The buyer transfers; iPaymu notifies (mock), the page notices and opens the product.
+    await fetch(`http://127.0.0.1:8020/pay-ref/${ref}`, { method: 'POST' });
+    await tab.waitFor(`location.pathname.startsWith('/akses/') || /berhasil/i.test(document.body.innerText)`, 'paid → access page', 25000);
     await tab.shot(`11-paid-${label}`);
     return ref;
   };

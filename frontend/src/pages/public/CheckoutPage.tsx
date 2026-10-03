@@ -1,22 +1,31 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { BadgeCheck, CheckCircle2, Loader2, Lock, Minus, Plus, QrCode, ShieldCheck, Tag, Wallet, XCircle } from 'lucide-react';
+import { BadgeCheck, Building2, CheckCircle2, Loader2, Lock, Minus, Plus, QrCode, ShieldCheck, Store, Tag, Wallet, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { safeHtml } from '@/lib/safeHtml';
 import { EMAIL_PATTERN, suggestEmail } from '@/lib/emailTypo';
 import { captureAttributionFromUrl, firePurchase, getPixelConsent, loadSellerPixels, readAttribution, setPixelConsent, trackSellerEvent } from '@/lib/sellerPixels';
 import { ApiError, checkoutLandingProduct, getLandingOrderPublicStatus, getPublicLandingProduct, quoteLandingProduct } from '@/lib/hellomApi';
-import type { CheckoutQuote, CheckoutResult, PaymentOption, PublicProductPage } from '@/lib/hellomApi';
+import type { CheckoutQuote, CheckoutResult, PaymentChannel, PaymentOption, PublicProductPage } from '@/lib/hellomApi';
 import TurnstileWidget from '@/components/checkout/TurnstileWidget';
+import OnPagePayment from '@/components/checkout/OnPagePayment';
 
 // Buyer checkout for a Hellom Page product (/beli/:productId), no login. Mobile-first:
 // one page, big sticky pay button. Prices come from the server (quote); the order is
 // only marked paid by the gateway, never by this page.
 const rupiah = (value: number) => `Rp ${Math.round(value || 0).toLocaleString('id-ID')}`;
 const inputClass = 'min-h-12 w-full rounded-xl border border-zinc-300 bg-white px-3 text-base outline-none transition focus:border-zinc-900';
-const PAYMENT_LABELS: Record<PaymentOption, { title: string; hint: string }> = {
-  qris: { title: 'QRIS', hint: 'Scan pakai GoPay, OVO, DANA, ShopeePay, atau m-banking' },
-  other: { title: 'Virtual Account & lainnya', hint: 'Transfer bank (VA), e-wallet, atau gerai retail' },
+// Channels grouped like Hellom's own checkout; the buyer pays on this page (QR / VA / retail code).
+const CHANNEL_GROUPS: Array<{ group: string; title: string; hint: string; icon: typeof QrCode }> = [
+  { group: 'qris', title: 'QRIS', hint: 'GoPay, OVO, DANA, ShopeePay, m-banking', icon: QrCode },
+  { group: 'va', title: 'Virtual Account', hint: 'm-banking, internet banking, ATM', icon: Building2 },
+  { group: 'cstore', title: 'Gerai retail', hint: 'bayar tunai di kasir', icon: Store },
+  { group: 'other', title: 'Metode lain', hint: 'dipilih di halaman pembayaran', icon: Wallet },
+];
+const KNOWN_GROUPS = ['qris', 'va', 'cstore'];
+const FALLBACK_CHANNELS: Record<string, PaymentChannel> = {
+  qris: { key: 'qris', label: 'QRIS', group: 'qris' },
+  other: { key: 'other', label: 'Virtual Account & lainnya', group: 'other' },
 };
 
 type Shipping = { recipient_name: string; phone: string; address: string; city: string; province: string; postal_code: string; notes: string };
@@ -38,8 +47,9 @@ export default function CheckoutPage() {
   const [submitting, setSubmitting] = useState(false);
   // Turnstile, only after the server asks for it (repeated checkouts). `round` remounts it after a failed try.
   const [captcha, setCaptcha] = useState<{ siteKey: string; token: string | null; round: number } | null>(null);
-  const [qr, setQr] = useState<CheckoutResult | null>(null);
-  const [qrPaid, setQrPaid] = useState(false);
+  // Order waiting for payment on this page (QRIS or VA/retail code).
+  const [pending, setPending] = useState<CheckoutResult | null>(null);
+  const [paid, setPaid] = useState(false);
   // Pixel consent (only when the shop uses ad pixels).
   const [consent, setConsent] = useState<'granted' | 'denied' | 'ask' | 'none'>('none');
   const formRef = useRef<HTMLFormElement>(null);
@@ -85,24 +95,33 @@ export default function CheckoutPage() {
     return () => { cancelled = true; window.clearTimeout(timer); };
   }, [page, productId, quantity, couponCode]);
 
-  // QRIS: watch the order until the gateway confirms it.
+  // Watch the order until the gateway confirms the payment, then open the product.
   useEffect(() => {
-    if (!qr || qrPaid) return undefined;
+    if (!pending || paid) return undefined;
     const timer = window.setInterval(async () => {
       try {
-        const status = await getLandingOrderPublicStatus(qr.reference_id);
+        const status = await getLandingOrderPublicStatus(pending.reference_id);
         if (status.status === 'paid' || status.status === 'fulfilled') {
-          setQrPaid(true);
+          setPaid(true);
           window.clearInterval(timer);
-          await firePurchase(qr.reference_id);
+          await firePurchase(pending.reference_id);
           if (status.access_path) window.location.href = status.access_path;
+        } else if (status.status === 'expired' || status.status === 'failed') {
+          window.clearInterval(timer);
+          window.location.href = `/pesanan/${pending.reference_id}`;
         }
       } catch {
         /* keep polling */
       }
     }, 4000);
     return () => window.clearInterval(timer);
-  }, [qr, qrPaid]);
+  }, [pending, paid]);
+
+  const channels: PaymentChannel[] = page
+    ? (page.payment_channels?.length
+      ? page.payment_channels
+      : page.payment_options.map((key: PaymentOption) => FALLBACK_CHANNELS[key] ?? { key, label: key.toUpperCase(), group: 'other' }))
+    : [];
 
   const product = page?.product;
   const emailSuggestion = useMemo(() => suggestEmail(buyer.email), [buyer.email]);
@@ -153,8 +172,8 @@ export default function CheckoutPage() {
         shipping: product.type === 'physical' ? { ...shipping, province: shipping.province || undefined, notes: shipping.notes || undefined } : undefined,
         captcha_token: captcha?.token ?? undefined,
       });
-      if (result.mode === 'qris') {
-        setQr(result);
+      if (result.mode === 'qris' || result.mode === 'va') {
+        setPending(result);
         window.scrollTo({ top: 0 });
       } else if (result.payment_url) {
         window.location.href = result.payment_url;
@@ -175,7 +194,7 @@ export default function CheckoutPage() {
 
   if (loadError) {
     return (
-      <main className="flex min-h-[100svh] items-center justify-center bg-zinc-50 px-6 text-center">
+      <main className="flex min-h-[100svh] items-center justify-center bg-zinc-50 px-6 text-center text-zinc-900">
         <div>
           <XCircle className="mx-auto h-12 w-12 text-zinc-300" />
           <h1 className="mt-4 text-xl font-bold">{loadError.suspended ? 'Toko ini sedang nonaktif' : 'Produk tidak ditemukan'}</h1>
@@ -187,7 +206,7 @@ export default function CheckoutPage() {
 
   if (!page || !product) {
     return (
-      <main className="min-h-[100svh] bg-zinc-50 px-4 py-6" aria-busy="true">
+      <main className="min-h-[100svh] bg-zinc-50 px-4 py-6 text-zinc-900" aria-busy="true">
         <div className="mx-auto max-w-lg space-y-4">
           <div className="h-28 animate-pulse rounded-3xl bg-zinc-200" />
           <div className="h-64 animate-pulse rounded-3xl bg-zinc-100" />
@@ -197,31 +216,25 @@ export default function CheckoutPage() {
     );
   }
 
-  if (qr) {
+  if (pending) {
     return (
-      <main className="min-h-[100svh] bg-zinc-50 px-4 py-8">
-        <div className="mx-auto max-w-md rounded-3xl bg-white p-6 text-center shadow-sm ring-1 ring-zinc-100">
-          {qrPaid ? (
-            <>
+      <main className="min-h-[100svh] bg-zinc-50 px-4 py-8 text-zinc-900">
+        <div className="mx-auto max-w-md rounded-3xl bg-white p-6 shadow-sm ring-1 ring-zinc-100">
+          {paid ? (
+            <div className="text-center">
               <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-500" />
-              <h1 className="mt-3 text-xl font-bold">Pembayaran berhasil 🎉</h1>
+              <h1 className="mt-3 text-xl font-bold text-zinc-900">Pembayaran berhasil 🎉</h1>
               <p className="mt-1 text-sm text-zinc-500">Membuka halaman produk kamu…</p>
-            </>
+            </div>
           ) : (
             <>
-              <h1 className="text-xl font-bold">Scan QRIS untuk bayar</h1>
-              <p className="mt-1 text-sm text-zinc-500">Total <span className="font-semibold text-zinc-900">{rupiah(qr.amount)}</span></p>
-              <div className="mx-auto mt-4 inline-block rounded-2xl border border-zinc-200 bg-white p-3">
-                {qr.qr_image_url ? <img src={qr.qr_image_url} alt="Kode QRIS" className="h-60 w-60 object-contain" /> : <div className="flex h-60 w-60 items-center justify-center text-sm text-zinc-400">QR tidak tersedia</div>}
+              <h1 className="text-center text-xl font-bold text-zinc-900">{pending.mode === 'qris' ? 'Scan QRIS untuk bayar' : 'Selesaikan pembayaran'}</h1>
+              <p className="mt-1 text-center text-sm text-zinc-500">{pending.product_name}</p>
+              <div className="mt-5">
+                <OnPagePayment payment={pending} amount={pending.amount} expiresAt={pending.expires_at} reference={pending.reference_id} />
               </div>
-              <p className="mt-4 flex items-center justify-center gap-2 text-sm text-zinc-500"><Loader2 className="h-4 w-4 animate-spin" /> Menunggu pembayaran…</p>
-              {qr.qr_image_url && (
-                <a href={`${qr.qr_image_url}?download=1`} className="mt-4 flex min-h-12 w-full items-center justify-center rounded-2xl border border-zinc-200 text-sm font-semibold">
-                  Simpan gambar QR
-                </a>
-              )}
-              <Link to={`/pesanan/${qr.reference_id}`} className="mt-3 block text-sm text-zinc-500 underline">Buka halaman status pesanan</Link>
-              <p className="mt-4 text-xs text-zinc-400">No. pesanan {qr.reference_id}. Link produk juga dikirim ke {buyer.email}.</p>
+              <Link to={`/pesanan/${pending.reference_id}`} className="mt-4 block text-center text-sm text-zinc-500 underline">Buka halaman status pesanan</Link>
+              <p className="mt-3 text-center text-xs text-zinc-400">No. pesanan {pending.reference_id}. Link produk juga dikirim ke {buyer.email}.</p>
             </>
           )}
         </div>
@@ -377,25 +390,32 @@ export default function CheckoutPage() {
         {/* Payment method */}
         <section className="space-y-2 rounded-3xl bg-white p-4 ring-1 ring-zinc-100">
           <h2 className="text-sm font-bold">Metode pembayaran</h2>
-          {page.payment_options.length === 0 && <p className="text-sm text-rose-600">Pembayaran sedang tidak tersedia. Coba lagi nanti.</p>}
-          <div role="radiogroup" className="space-y-2">
-            {page.payment_options.map((option) => (
-              <button
-                key={option}
-                type="button"
-                role="radio"
-                aria-checked={method === option}
-                onClick={() => setMethod(option)}
-                className={cn('flex min-h-14 w-full items-center gap-3 rounded-2xl border p-3 text-left transition', method === option ? 'border-zinc-900 bg-zinc-50' : 'border-zinc-200')}
-              >
-                {option === 'qris' ? <QrCode className="h-6 w-6 shrink-0" /> : <Wallet className="h-6 w-6 shrink-0" />}
-                <span className="min-w-0">
-                  <span className="block text-sm font-semibold">{PAYMENT_LABELS[option].title}</span>
-                  <span className="block text-xs text-zinc-500">{PAYMENT_LABELS[option].hint}</span>
-                </span>
-                <span className={cn('ml-auto h-5 w-5 shrink-0 rounded-full border-2', method === option ? 'border-[6px] border-zinc-900' : 'border-zinc-300')} />
-              </button>
-            ))}
+          {channels.length === 0 && <p className="text-sm text-rose-600">Pembayaran sedang tidak tersedia. Coba lagi nanti.</p>}
+          <div role="radiogroup" className="space-y-4">
+            {CHANNEL_GROUPS.map(({ group, title, hint, icon: Icon }) => {
+              const options = channels.filter((channel) => (group === 'other' ? !KNOWN_GROUPS.includes(channel.group) : channel.group === group));
+              if (options.length === 0) return null;
+              return (
+                <div key={group}>
+                  <p className="flex items-center gap-1.5 text-xs font-semibold text-zinc-500"><Icon className="h-4 w-4" /> {title} <span className="font-normal">· {hint}</span></p>
+                  <div className={cn('mt-2 grid gap-2', options.length > 1 && 'grid-cols-2')}>
+                    {options.map((channel) => (
+                      <button
+                        key={channel.key}
+                        type="button"
+                        role="radio"
+                        aria-checked={method === channel.key}
+                        onClick={() => setMethod(channel.key)}
+                        className={cn('flex min-h-12 items-center gap-2 rounded-2xl border px-3 text-left text-sm font-semibold transition', method === channel.key ? 'border-zinc-900 bg-zinc-50' : 'border-zinc-200')}
+                      >
+                        <span className={cn('h-4 w-4 shrink-0 rounded-full border-2', method === channel.key ? 'border-[5px] border-zinc-900' : 'border-zinc-300')} />
+                        <span className="min-w-0 truncate">{channel.label.replace(' Virtual Account', '')}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </section>
 

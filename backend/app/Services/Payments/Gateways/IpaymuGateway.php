@@ -11,8 +11,6 @@ use App\Services\Payments\DisbursementResult;
 use App\Services\Payments\PaymentGateway;
 use App\Services\Payments\PaymentStatus;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 use RuntimeException;
 
 /**
@@ -39,51 +37,41 @@ final class IpaymuGateway implements PaymentGateway
         return $this->settings->isReady();
     }
 
+    /**
+     * Channels the buyer picks on our own checkout page: every enabled direct channel
+     * (QRIS, VA per bank, Indomaret/Alfamart) — the same list Hellom's own product
+     * checkout offers. "other" (iPaymu's hosted page) only when no direct channel is on.
+     */
     public function paymentOptions(): array
     {
-        $methods = $this->settings->enabledPaymentMethods();
-        $options = [];
-        if (in_array('qris', $methods, true)) {
-            $options[] = 'qris';
-        }
-        if (array_diff($methods, ['qris']) !== []) {
-            $options[] = 'other';
+        $direct = array_keys($this->settings->enabledDirectChannels());
+        if ($direct !== []) {
+            return $direct;
         }
 
-        return $options;
+        return $this->settings->enabledPaymentMethods() !== [] ? ['other'] : [];
     }
 
     public function createCharge(ChargeRequest $request): ChargeResult
     {
         $notifyUrl = $this->notifyUrl($request->notifyContext);
-        $methods = $this->settings->enabledPaymentMethods();
-        $qrisOnly = count($methods) === 1 && in_array('qris', $methods, true);
-
-        // QRIS (chosen by the buyer, or the only method): try a direct charge so the buyer
-        // gets a QR on our own page. The direct API has to be enabled on the iPaymu account
-        // separately; when it refuses (or returns no QR) the buyer gets iPaymu's payment
-        // page instead — the same API Hellom's own product checkout uses.
-        if ($qrisOnly || ($request->preferredMethod === 'qris' && in_array('qris', $methods, true))) {
-            try {
-                $charge = $this->directQris($request, $notifyUrl);
-                if ($charge->qrString !== '' || $charge->qrImageUrl !== '') {
-                    return $charge;
-                }
-                $reason = 'respons QRIS tanpa kode QR';
-            } catch (\Throwable $exception) {
-                $reason = $exception->getMessage();
-            }
-            Log::warning('iPaymu QRIS direct gagal, pembeli diarahkan ke halaman pembayaran iPaymu', [
-                'reference' => $request->reference,
-                'reason' => Str::limit((string) $reason, 300),
-            ]);
+        $channels = $this->settings->enabledDirectChannels();
+        $key = (string) ($request->preferredMethod ?? '');
+        if (!isset($channels[$key]) && $key !== 'other') {
+            $key = (string) (array_key_first($channels) ?? 'other');
         }
 
+        // Paid on our own page: QR or VA/retail code, like Hellom's own product checkout.
+        if (isset($channels[$key])) {
+            return $this->directCharge($request, $notifyUrl, $channels[$key]);
+        }
+
+        // Only when no direct channel is enabled: iPaymu's hosted payment page.
         $payload = [
             'product' => [$request->productName],
             'qty' => [1],
             'price' => [$request->amount],
-            'paymentMethod' => $methods,
+            'paymentMethod' => $this->settings->enabledPaymentMethods(),
             'referenceId' => $request->reference,
             'description' => ['Pembelian: ' . $request->productName],
             'buyerName' => $request->buyerName,
@@ -109,31 +97,73 @@ final class IpaymuGateway implements PaymentGateway
         );
     }
 
-    private function directQris(ChargeRequest $request, string $notifyUrl): ChargeResult
+    /**
+     * iPaymu direct charge — same request and response handling as
+     * ProductCheckoutService::createIpaymuDirectCharge (Hellom's own products).
+     *
+     * @param array{0:string,1:string,2:string,3:string} $channel [method, channel, label, group]
+     */
+    private function directCharge(ChargeRequest $request, string $notifyUrl, array $channel): ChargeResult
     {
-        $session = $this->api->createDirectPayment([
+        [$method, $channelCode, $label] = $channel;
+        $phone = preg_replace('/\D/', '', (string) $request->buyerPhone);
+
+        $response = $this->api->createDirectPayment([
             'name' => $request->buyerName !== '' ? $request->buyerName : 'Pembeli',
+            'phone' => is_string($phone) && $phone !== '' ? $phone : '081234567890',
             'email' => $request->buyerEmail,
-            'phone' => $request->buyerPhone ?: '08000000000',
             'amount' => $request->amount,
-            'referenceId' => $request->reference,
-            'paymentMethod' => 'qris',
-            'paymentChannel' => 'qris',
-            'comments' => 'Pembelian: ' . $request->productName,
-            'returnUrl' => $request->returnUrl,
             'notifyUrl' => $notifyUrl,
+            'referenceId' => $request->reference,
+            'paymentMethod' => $method,
+            'paymentChannel' => $channelCode,
+            'comments' => 'Pembelian: ' . $request->productName,
         ]);
-        $this->assertAccepted($session);
+
+        $data = (array) (data_get($response, 'Data') ?: data_get($response, 'data') ?: []);
+        $status = (int) (data_get($response, 'Status') ?? data_get($response, 'status') ?? 0);
+        if ($status !== 200 && $data === []) {
+            throw new RuntimeException('iPaymu menolak permintaan (' . $status . '): ' . (string) (data_get($response, 'Message') ?: data_get($response, 'message') ?: 'tanpa pesan'));
+        }
+
+        $paymentNo = (string) (data_get($data, 'PaymentNo') ?: data_get($data, 'paymentNo') ?: '');
+        $qrString = (string) (data_get($data, 'QrString') ?: data_get($data, 'qrString') ?: '');
+        $qrImage = (string) (data_get($data, 'QrImage') ?: data_get($data, 'qrImage') ?: data_get($data, 'QrTemplate') ?: '');
+        // For QRIS the EMVCo payload often arrives in PaymentNo rather than QrString.
+        if ($method === 'qris') {
+            if ($qrString === '' && $paymentNo !== '') {
+                $qrString = $paymentNo;
+            }
+            $paymentNo = '';
+            if ($qrString === '' && $qrImage === '') {
+                throw new RuntimeException('iPaymu tidak mengirim kode QRIS.');
+            }
+        } elseif ($paymentNo === '') {
+            throw new RuntimeException('iPaymu tidak mengirim nomor pembayaran untuk ' . $label . '.');
+        }
+
+        $expiresAt = null;
+        $expired = (string) (data_get($data, 'Expired') ?: data_get($data, 'expired') ?: '');
+        if ($expired !== '') {
+            try {
+                $expiresAt = \Illuminate\Support\Carbon::parse($expired, 'Asia/Jakarta')->toIso8601String();
+            } catch (\Throwable) {
+                $expiresAt = null;
+            }
+        }
 
         return new ChargeResult(
             provider: 'ipaymu',
-            mode: 'qris',
+            mode: $method === 'qris' ? 'qris' : 'va',
             paymentUrl: null,
-            gatewayRef: (string) (data_get($session, 'Data.SessionId') ?: data_get($session, 'Data.SessionID') ?: ''),
-            transactionId: (string) (data_get($session, 'Data.TransactionId') ?: ''),
-            qrImageUrl: (string) (data_get($session, 'Data.QrImage') ?: data_get($session, 'Data.qr_image') ?: data_get($session, 'Data.Url') ?: ''),
-            qrString: (string) (data_get($session, 'Data.QrString') ?: data_get($session, 'Data.QrContent') ?: data_get($session, 'Data.qr_string') ?: ''),
-            raw: $session,
+            gatewayRef: (string) (data_get($data, 'SessionId') ?: data_get($data, 'SessionID') ?: ''),
+            transactionId: (string) (data_get($data, 'TransactionId') ?: data_get($data, 'transactionId') ?: '') ?: null,
+            qrImageUrl: $qrImage !== '' ? $qrImage : null,
+            qrString: $qrString !== '' ? $qrString : null,
+            raw: $response,
+            vaNumber: $paymentNo !== '' ? $paymentNo : null,
+            channelLabel: $label,
+            expiresAt: $expiresAt,
         );
     }
 

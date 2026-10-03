@@ -774,6 +774,12 @@ export default function PublicPage() {
         return;
       }
 
+      // VA / retail code (QRIS turned off): the order status page shows the number.
+      if (res?.mode === 'va' && res.reference_id) {
+        window.location.href = `/pesanan/${res.reference_id}`;
+        return;
+      }
+
       if (res?.payment_url) {
         window.location.href = res.payment_url;
         return;

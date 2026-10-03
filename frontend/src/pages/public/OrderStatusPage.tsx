@@ -4,6 +4,7 @@ import { ArrowRight, CheckCircle2, Clock3, Loader2, Mail, XCircle } from 'lucide
 import { getLandingOrderPublicStatus, reportLandingOrderReturn } from '@/lib/hellomApi';
 import { firePurchase } from '@/lib/sellerPixels';
 import type { LandingOrderStatus } from '@/lib/hellomApi';
+import OnPagePayment from '@/components/checkout/OnPagePayment';
 
 // Buyer lands here after the payment page. The page only watches the order: it is marked
 // paid by the gateway webhook / server check, never from here.
@@ -61,6 +62,8 @@ export default function OrderStatusPage() {
 
   const paid = order?.status === 'paid' || order?.status === 'fulfilled';
   const closed = order?.status === 'expired' || order?.status === 'failed';
+  // Still unpaid with a QR / VA number from our checkout: show it again here.
+  const onPage = !paid && !closed && order?.payment && (order.payment.mode === 'qris' || order.payment.mode === 'va') ? order.payment : null;
 
   return (
     <main className="min-h-[100svh] bg-zinc-50 px-4 py-10 text-zinc-900">
@@ -94,7 +97,7 @@ export default function OrderStatusPage() {
                     <Clock3 className="relative h-10 w-10 text-amber-500" />
                   </span>
                 )}
-                <h1 className="mt-4 text-xl font-bold">
+                <h1 className="mt-4 text-xl font-bold text-zinc-900">
                   {paid ? 'Pembayaran berhasil 🎉' : closed ? (order.status === 'expired' ? 'Waktu pembayaran habis' : 'Pembayaran gagal') : 'Menunggu pembayaran'}
                 </h1>
                 <p className="mt-2 text-sm leading-6 text-zinc-500">
@@ -102,9 +105,17 @@ export default function OrderStatusPage() {
                     ? `Bukti pembelian dan akses produk sudah dikirim ke ${order.buyer_email_masked ?? 'email kamu'}.`
                     : closed
                       ? 'Pesanan ini tidak bisa dibayar lagi. Silakan pesan ulang dari halaman penjual.'
-                      : 'Selesaikan pembayaran di halaman pembayaran. Halaman ini akan berubah otomatis begitu pembayaran masuk.'}
+                      : onPage
+                        ? 'Selesaikan pembayaran di bawah. Halaman ini berubah otomatis begitu pembayaran masuk.'
+                        : 'Selesaikan pembayaran di halaman pembayaran. Halaman ini akan berubah otomatis begitu pembayaran masuk.'}
                 </p>
               </div>
+
+              {onPage && (
+                <div className="mt-6">
+                  <OnPagePayment payment={onPage} amount={order.amount} expiresAt={order.expires_at} reference={reference} />
+                </div>
+              )}
 
               <dl className="mt-6 space-y-3 rounded-2xl bg-zinc-50 p-4 text-sm">
                 <div className="flex justify-between gap-3"><dt className="text-zinc-500">Produk</dt><dd className="text-right font-medium">{order.product_name}</dd></div>

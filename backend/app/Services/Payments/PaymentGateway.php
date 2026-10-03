@@ -17,10 +17,10 @@ interface PaymentGateway
     public function isReady(): bool;
 
     /**
-     * Choices shown on the checkout page: "qris" (QR on our page) and/or "other" (the
-     * provider's own payment page with VA, e-wallet, retail, …).
+     * Choices shown on the checkout page: channel keys paid on our own page ("qris",
+     * "bca", "indomaret", …) and/or "other" (the provider's own payment page).
      *
-     * @return list<'qris'|'other'>
+     * @return list<string>
      */
     public function paymentOptions(): array;
 

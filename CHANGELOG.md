@@ -4,6 +4,12 @@
 
 Audit lengkap dan status per temuan: [docs/AUDIT.md](docs/AUDIT.md). Langkah deploy khusus rilis ini: [docs/DEPLOY.md §3](docs/DEPLOY.md#3-catatan-khusus-rilis-refactor-branch-refactorcleanup).
 
+### Hellom Page — pembeli bayar langsung di halaman toko (2026-10-03)
+- **Perbaikan: pembayaran produk penjual selalu gagal** ("Pembayaran belum bisa dibuat"), padahal produk milik Hellom berhasil. Penyebab: checkout penjual memakai QRIS direct dengan permintaan & cara membaca jawaban iPaymu yang berbeda dari checkout Hellom (kode QRIS dikirim iPaymu di `PaymentNo` → QR kosong; nomor HP palsu).
+- Sekarang **sama seperti checkout produk Hellom**: pembeli memilih QRIS, Virtual Account (BCA, BNI, BRI, Mandiri, Permata, CIMB) atau Indomaret/Alfamart dan membayar **di halaman toko** — QR tampil langsung, nomor VA dengan tombol Salin, tanpa diarahkan ke halaman iPaymu. Halaman otomatis lanjut ke produk setelah bayar; halaman status pesanan menampilkan QR/VA lagi bila dibuka ulang.
+- Teks judul di halaman checkout/akses yang tidak terlihat (krem di atas putih) diperbaiki.
+- Alasan gagal dari iPaymu disimpan di pesanan; perintah diagnosa `php artisan landing:payments-check`.
+
 ### Dashboard Super Admin — audit & perbaikan (branch `fix/super-admin-overhaul`, 2026-10-02 … 10-03)
 Audit & status per temuan: [docs/audit-super-admin.md](docs/audit-super-admin.md).
 - **Keamanan (penting)**: pemilik toko yang daftar sendiri tidak bisa lagi melihat/masuk ke organisasi lain (dulu bisa membaca tim, saldo, KTP & rekening toko lain). Migration mengembalikan organisasi aktif yang "asing" ke organisasi milik sendiri.

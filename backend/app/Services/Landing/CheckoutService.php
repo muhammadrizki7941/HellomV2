@@ -12,6 +12,7 @@ use App\Services\SellerFinance\FinanceSettings;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -71,7 +72,8 @@ final class CheckoutService
         $rules = [
             'quantity' => ['nullable', 'integer', 'min:1', 'max:20'],
             'coupon_code' => ['nullable', 'string', 'max:40'],
-            'payment_method' => ['nullable', 'in:qris,other'],
+            // A channel offered on the checkout page right now (qris, bca, indomaret, other…).
+            'payment_method' => ['nullable', 'string', Rule::in(app(PaymentStarter::class)->options())],
             'buyer_name' => ['required', 'string', 'min:2', 'max:150'],
             'buyer_email' => ['required', 'email:rfc', 'max:150'],
             'buyer_phone' => [$phoneRequired ? 'required' : 'nullable', 'string', 'max:20', 'regex:/^\+?[0-9\s-]{8,20}$/'],

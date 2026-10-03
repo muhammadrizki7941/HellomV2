@@ -25,7 +25,12 @@ http.createServer(async (req, res) => {
     const s = { sid, trxId, referenceId: p.referenceId, amount, notifyUrl: p.notifyUrl, returnUrl: p.returnUrl, status: 0 };
     sessions.set(sid, s); byTrx.set(trxId, s);
     console.log(`[ipaymu] ${url.pathname} ref=${p.referenceId} amount=${amount}`);
-    return send(res, 200, { Status: 200, Success: true, Message: 'success', Data: { SessionID: sid, TransactionId: trxId, Url: `http://127.0.0.1:8020/pay/${sid}`, QrString: 'MOCKQR' + trxId } });
+    if (url.pathname === '/api/v2/payment/direct') {
+      // Like iPaymu: the QRIS code arrives in PaymentNo, a VA/retail code too.
+      const paymentNo = p.paymentMethod === 'qris' ? '00020101021226MOCKQR' + trxId : '8808' + trxId.padStart(12, '0');
+      return send(res, 200, { Status: 200, Success: true, Message: 'success', Data: { SessionId: sid, TransactionId: trxId, PaymentNo: paymentNo, Expired: '2030-01-01 23:59:59' } });
+    }
+    return send(res, 200, { Status: 200, Success: true, Message: 'success', Data: { SessionID: sid, TransactionId: trxId, Url: `http://127.0.0.1:8020/pay/${sid}` } });
   }
   if (url.pathname === '/api/v2/transaction') {
     const { transactionId } = JSON.parse(raw || '{}');
@@ -34,6 +39,17 @@ http.createServer(async (req, res) => {
     console.log(`[ipaymu] check trx=${transactionId} status=${s.status}`);
     return send(res, 200, { Status: 200, Success: true, Data: { TransactionId: s.trxId, SessionId: s.sid, ReferenceId: s.referenceId, Amount: s.amount, Fee: 4500,
       Status: s.status, StatusDesc: s.status === 1 ? 'Berhasil' : 'Pending', PaymentMethod: 'va', PaymentChannel: 'bca' } });
+  }
+  // Paying a direct charge (no hosted page): POST /pay-ref/{referenceId}.
+  const payRef = url.pathname.match(/^\/pay-ref\/([\w-]+)$/);
+  if (payRef && req.method === 'POST') {
+    const found = [...sessions.values()].reverse().find((x) => x.referenceId === payRef[1]);
+    if (!found) return send(res, 404, { message: 'unknown reference' });
+    found.status = 1;
+    const form = new URLSearchParams({ trx_id: found.trxId, sid: found.sid, reference_id: found.referenceId, status: 'berhasil', status_code: '1', via: 'va', channel: 'bca', amount: String(found.amount) });
+    const hook = await fetch(found.notifyUrl, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' }, body: form });
+    console.log(`[ipaymu] direct paid ref=${found.referenceId} webhook → ${hook.status}`);
+    return send(res, 200, { paid: true, webhook: hook.status });
   }
   const pay = url.pathname.match(/^\/pay\/([\w-]+)$/);
   if (pay) {
