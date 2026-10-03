@@ -52,6 +52,7 @@ class User extends Authenticatable
             'password' => 'hashed',
             'points_balance' => 'integer',
             'pending_guest_credentials' => 'boolean',
+            'builder_tour_done_at' => 'datetime',
         ];
     }
 

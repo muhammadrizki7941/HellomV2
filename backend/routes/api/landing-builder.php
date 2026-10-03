@@ -105,6 +105,8 @@ Route::middleware('canUseApp:landing_builder')->group(function () {
         // Editor (Fase 4): shop username, pages, draft autosave, publish, history, preview.
         Route::get('/site', [LandingSiteController::class, 'show'])->name('site.show');
         Route::get('/onboarding', [LandingSiteController::class, 'onboarding'])->name('onboarding');
+        Route::get('/editor-preference', [LandingSiteController::class, 'preference'])->name('editor_preference.show');
+        Route::put('/editor-preference', [LandingSiteController::class, 'updatePreference'])->name('editor_preference.update');
         Route::put('/site/username', [LandingSiteController::class, 'updateUsername'])->middleware('throttle:10,1')->name('site.username');
         Route::post('/site/pages', [LandingSiteController::class, 'createPage'])->name('site.pages.store');
         Route::patch('/site/pages/{pageId}', [LandingSiteController::class, 'updatePage'])->whereNumber('pageId')->name('site.pages.update');

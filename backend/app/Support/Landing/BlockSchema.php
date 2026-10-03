@@ -11,7 +11,8 @@ use Illuminate\Support\Str;
  * http(s)/mailto/tel/relative (no javascript:/data:), colors are hex, HTML is sanitised.
  * The server stores and renders only what passes here — seller content is data, not markup.
  *
- * Document: { version, theme{...}, settings{...}, blocks: [{ id, type, hidden, content{}, styles{} }] }
+ * Document: { schema_version, theme{...}, settings{...}, blocks: [{ id, type, hidden, content{}, styles{} }] }
+ * Older documents are upgraded first (DocumentMigrator).
  */
 final class BlockSchema
 {
@@ -65,11 +66,11 @@ final class BlockSchema
     /**
      * Clean a whole document. Always returns a valid document (bad parts dropped).
      *
-     * @return array{version:int, theme:array, settings:array, blocks:list<array>}
+     * @return array{schema_version:int, theme:array, settings:array, blocks:list<array>}
      */
     public static function normalize(mixed $document): array
     {
-        $doc = is_array($document) ? $document : [];
+        $doc = DocumentMigrator::upgrade(is_array($document) ? $document : []);
         $blocks = [];
         $seen = [];
         foreach (array_slice(array_values(is_array($doc['blocks'] ?? null) ? $doc['blocks'] : []), 0, self::MAX_BLOCKS) as $block) {
@@ -85,7 +86,7 @@ final class BlockSchema
         }
 
         return [
-            'version' => 1,
+            'schema_version' => DocumentMigrator::CURRENT,
             'theme' => self::fields(is_array($doc['theme'] ?? null) ? $doc['theme'] : [], self::THEME),
             'settings' => self::fields(is_array($doc['settings'] ?? null) ? $doc['settings'] : [], self::SETTINGS),
             'blocks' => $blocks,

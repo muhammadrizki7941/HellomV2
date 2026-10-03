@@ -37,7 +37,8 @@ final class LandingDocumentService
         }
 
         return [
-            'document' => $page->draft_document,
+            // Normalized on read too: a draft saved by an older schema reaches the editor upgraded.
+            'document' => BlockSchema::normalize($page->draft_document),
             'revision' => (int) $page->draft_revision,
             'saved_at' => optional($page->draft_saved_at)->toIso8601String(),
         ];

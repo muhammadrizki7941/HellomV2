@@ -9,6 +9,7 @@ use App\Models\LandingTrackingSetting;
 use App\Models\Organization;
 use App\Models\OrganizationLandingPage;
 use App\Models\OrganizationPayoutProfile;
+use App\Models\User;
 use App\Services\Landing\LandingDocumentService;
 use App\Services\Landing\LandingShop;
 use App\Support\Landing\BlockSchema;
@@ -28,6 +29,9 @@ class LandingSiteController extends BaseApiController
 {
     use ResolvesSellerOrganization;
 
+    /** Editor presets (frontend landing-builder/presets.ts): what the seller used before. */
+    public const BUILDER_PREFERENCES = ['lynk', 'linktree', 'orderhero', 'none'];
+
     public function __construct(
         private readonly LandingShop $shop,
         private readonly LandingDocumentService $documents,
@@ -42,6 +46,49 @@ class LandingSiteController extends BaseApiController
         }
 
         return $this->ok($this->sitePayload($organization), 'Halaman toko');
+    }
+
+    /** Editor preset chosen at onboarding ("Sebelumnya pakai apa?") — per user, not per shop. */
+    public function preference(Request $request): JsonResponse
+    {
+        [, $error] = $this->sellerOrganization($request);
+        if ($error) {
+            return $error;
+        }
+
+        return $this->ok($this->preferencePayload($request->user()), 'Preferensi editor');
+    }
+
+    public function updatePreference(Request $request): JsonResponse
+    {
+        [, $error] = $this->sellerOrganization($request);
+        if ($error) {
+            return $error;
+        }
+        $validated = $request->validate([
+            'preference' => ['sometimes', 'required', 'string', 'in:' . implode(',', self::BUILDER_PREFERENCES)],
+            'tour_done' => ['sometimes', 'boolean'],
+        ], ['preference.in' => 'Pilihan belum dikenal.']);
+
+        $user = $request->user();
+        if (array_key_exists('preference', $validated)) {
+            $user->forceFill(['builder_preference' => $validated['preference']]);
+        }
+        if (array_key_exists('tour_done', $validated)) {
+            $user->forceFill(['builder_tour_done_at' => $validated['tour_done'] ? ($user->builder_tour_done_at ?? now()) : null]);
+        }
+        $user->save();
+
+        return $this->ok($this->preferencePayload($user), 'Preferensi editor disimpan');
+    }
+
+    /** @return array{preference: ?string, tour_done: bool} */
+    private function preferencePayload(User $user): array
+    {
+        return [
+            'preference' => in_array($user->builder_preference, self::BUILDER_PREFERENCES, true) ? $user->builder_preference : null,
+            'tour_done' => $user->builder_tour_done_at !== null,
+        ];
     }
 
     /** Onboarding wizard + progress checklist on the overview, in one request. */
