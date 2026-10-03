@@ -69,11 +69,11 @@ try {
     check(`${width}px: tour finished (${steps} steps) and remembered`, saved.data?.preference === 'linktree' && saved.data?.tour_done === true && !(await ev(`document.body.innerText.includes('Langkah ')`)), JSON.stringify(saved.data));
 
     // "+ Tambah" gallery: links first for a Linktree user.
-    if (mobile) await ev(`document.querySelector('[data-tour="add"]')?.click(); true`);
-    await waitFor(`document.body.innerText.includes('Cari link')`);
-    const first = await ev(`(() => { const input = [...document.querySelectorAll('input')].find((i) => (i.placeholder || '').startsWith('Cari link')); const grid = input?.closest('div.flex.flex-col'); const item = grid?.querySelector('button span.text-sm, div span.text-sm'); return item?.innerText ?? null; })()`);
+    await ev(`[...document.querySelectorAll('[data-tour="add"]')].find((b) => b.getBoundingClientRect().width > 0)?.click(); true`);
+    await waitFor(`!!document.querySelector('[data-block-type]')`);
+    const first = await ev(`document.querySelector('[data-block-type]')?.getAttribute('data-block-type') ?? null`);
     await shot(`gallery-${width}`);
-    check(`${width}px: block gallery starts with links ("${first}")`, first === 'Button' && errors.length === 0, JSON.stringify({ first, errors }));
+    check(`${width}px: block gallery starts with links ("${first}")`, first === 'button' && errors.length === 0, JSON.stringify({ first, errors }));
   }
 } finally {
   chrome.kill();

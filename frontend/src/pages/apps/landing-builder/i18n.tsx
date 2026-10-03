@@ -264,15 +264,17 @@ export const useLang = () => useContext(LangContext);
 
 const STORAGE_KEY = 'hellom_landing_builder_lang';
 
-/** overrides: Indonesian wording from the editor preset (presets.ts presetTerms). */
-export const LanguageProvider: React.FC<{ children: React.ReactNode; overrides?: Record<string, string> }> = ({ children, overrides }) => {
-  const [lang, setLangState] = useState<Lang>(() => {
+/** overrides: Indonesian wording from the editor preset (presets.ts presetTerms); fixedLang ignores the stored choice. */
+export const LanguageProvider: React.FC<{ children: React.ReactNode; overrides?: Record<string, string>; fixedLang?: Lang }> = ({ children, overrides, fixedLang }) => {
+  const [storedLang, setLangState] = useState<Lang>(() => {
     if (typeof window === 'undefined') return 'id';
     const stored = window.localStorage.getItem(STORAGE_KEY);
     return stored === 'en' ? 'en' : 'id';
   });
 
-  const value = useMemo<LangContextValue>(() => ({
+  const value = useMemo<LangContextValue>(() => {
+    const lang = fixedLang ?? storedLang;
+    return {
     lang,
     setLang: (next) => {
       setLangState(next);
@@ -283,7 +285,8 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode; overrides?:
       }
     },
     t: (key) => (lang === 'id' ? overrides?.[key] : undefined) ?? DICT[key]?.[lang] ?? key,
-  }), [lang, overrides]);
+    };
+  }, [storedLang, fixedLang, overrides]);
 
   return <LangContext.Provider value={value}>{children}</LangContext.Provider>;
 };

@@ -2,20 +2,16 @@
 // uploads, the editor preview and the property panel show it, and the published page serves it.
 // Needs Laravel :8010 + Vite :3010 on hellom_pos_test (see README) and tests/e2e/builder-seed.php.
 // Expect "6/6 checks OK".
-import { spawn } from 'node:child_process';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { deflateSync } from 'node:zlib';
+import { checker, openChrome } from './cdp.mjs';
 
 const API_ORIGIN = 'http://127.0.0.1:8010';
 const API = `${API_ORIGIN}/api/v1/hellom`;
 const APP = 'http://127.0.0.1:3010';
 const seed = JSON.parse(readFileSync(new URL('../../storage/app/builder_seed.json', import.meta.url), 'utf8'));
-const SHOTS = new URL('../../storage/app/e2e_shots/', import.meta.url);
-mkdirSync(SHOTS, { recursive: true });
 const auth = { Authorization: `Bearer ${seed.token}`, Accept: 'application/json' };
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const results = [];
-const check = (name, ok, detail = '') => { results.push({ name, ok }); console.log(`${ok ? 'OK  ' : 'FAIL'} ${name}${ok ? '' : ' ' + detail}`); };
+const { check, finish } = checker();
 
 // A real PNG of ~5 MB (random pixels do not compress), like a photo from a phone.
 function photoPng(width = 1500, height = 1100) {
@@ -64,32 +60,32 @@ check('published page image loads', ssrImg?.status === 200 && ssrImg.headers.get
 const viaVite = await fetch(APP + url);
 check('dev server serves /media as an image', viaVite.headers.get('content-type') === 'image/webp', `${viaVite.status} ${viaVite.headers.get('content-type')}`);
 
-const PORT = 9352;
-const chrome = spawn(process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe', ['--headless=new', `--remote-debugging-port=${PORT}`, `--user-data-dir=${process.env.TEMP}\\cdp-builder-images`, '--no-first-run', 'about:blank'], { stdio: 'ignore' });
+
+const browser = await openChrome(9352, 'cdp-builder-images');
+const { send, ev, waitFor, inPreview } = browser;
+let exitCode = 1;
 try {
-  let info; for (let i = 0; i < 40 && !info; i++) { try { info = await (await fetch(`http://127.0.0.1:${PORT}/json/new?about:blank`, { method: 'PUT' })).json(); } catch { await sleep(250); } }
-  const ws = new WebSocket(info.webSocketDebuggerUrl); await new Promise((r) => ws.addEventListener('open', r));
-  let id = 0; const pend = new Map();
-  ws.addEventListener('message', (e) => { const m = JSON.parse(e.data); if (m.id && pend.has(m.id)) { pend.get(m.id)(m); pend.delete(m.id); } });
-  const send = (method, params = {}) => new Promise((r) => { const i = ++id; pend.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
-  const ev = async (x) => (await send('Runtime.evaluate', { expression: x, returnByValue: true, awaitPromise: true })).result?.result?.value;
-  const waitFor = async (x, ms = 20000) => { const t = Date.now(); while (Date.now() - t < ms) { if (await ev(x)) return true; await sleep(250); } return false; };
-  await send('Page.enable');
+  await fetch(`${API}/apps/landing-builder/editor-preference`, { method: 'PUT', headers: { ...auth, 'Content-Type': 'application/json' }, body: JSON.stringify({ preference: 'lynk', tour_done: true }) });
   for (const [width, mobile] of [[1366, false], [360, true]]) {
     await send('Emulation.setDeviceMetricsOverride', { width, height: 800, deviceScaleFactor: 1, mobile });
-    await send('Page.navigate', { url: APP + '/' }); await sleep(1500);
+    await send('Page.navigate', { url: APP + '/' });
+    await waitFor(`document.readyState === 'complete'`);
     await ev(`localStorage.setItem('hellom_token', ${JSON.stringify(seed.token)}); localStorage.setItem('hellom_user', ${JSON.stringify(JSON.stringify(seed.user))}); true`);
-    await send('Page.navigate', { url: APP + '/dashboard/apps/landing-builder' });
-    await waitFor(`[...document.querySelectorAll('button')].some(b => /^\\s*Editor\\s*$/i.test(b.innerText))`);
-    await ev(`[...document.querySelectorAll('button')].find(b => /^\\s*Editor\\s*$/i.test(b.innerText))?.click(); true`);
-    const shown = await waitFor(`(() => { const imgs = [...document.images].filter(i => (i.getAttribute('src') || '').includes('/media/')); return imgs.length > 0 && imgs.every(i => i.complete && i.naturalWidth > 0); })()`);
-    const shot = await send('Page.captureScreenshot', { format: 'png' });
-    writeFileSync(new URL(`builder-images-${width}.png`, SHOTS), Buffer.from(shot.result.data, 'base64'));
-    check(`editor preview shows the photo at ${width}px`, shown, await ev(`JSON.stringify([...document.images].map(i => [i.getAttribute('src'), i.naturalWidth]))`));
+    await send('Page.navigate', { url: APP + '/dashboard/apps/landing-builder?tab=editor' });
+    await waitFor(`!!document.querySelector('iframe[title="Pratinjau halaman"]')`, 20000);
+    // The live phone preview (sandboxed iframe): every uploaded image has loaded.
+    const loaded = await browser.waitPreview(`(() => { const imgs = [...document.images].filter((i) => (i.getAttribute('src') || '').includes('/media/')); return imgs.length >= 2 && imgs.every((i) => i.complete && i.naturalWidth > 0); })()`, 20000);
+    const detail = await inPreview(`JSON.stringify([...document.images].map((i) => [i.getAttribute('src'), i.naturalWidth]))`);
+    // The settings panel shows the photo too (image block selected).
+    if (mobile) await ev(`document.querySelector('nav [data-tour="list"]').click(); true`);
+    await waitFor(`[...document.querySelectorAll('[aria-label^="Urutan"] > li button')].some((b) => b.textContent.includes('Gambar'))`);
+    await ev(`[...document.querySelectorAll('[aria-label^="Urutan"] > li button')].find((b) => b.textContent.includes('Gambar')).click(); true`);
+    const panel = await waitFor(`[...document.querySelectorAll('img[alt="Preview"]')].some((i) => i.complete && i.naturalWidth > 0)`);
+    await browser.shot(`builder-images-${width}`);
+    check(`editor preview and settings show the photo at ${width}px`, loaded && panel, JSON.stringify({ loaded, panel, detail: detail.value }));
   }
 } finally {
-  chrome.kill();
-  const passed = results.filter((r) => r.ok).length;
-  console.log(`\n${passed}/${results.length} checks OK`);
-  process.exit(passed === results.length ? 0 : 1);
+  browser.close();
+  exitCode = finish();
 }
+process.exit(exitCode);

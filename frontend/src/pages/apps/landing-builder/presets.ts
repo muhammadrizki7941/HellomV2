@@ -76,12 +76,6 @@ export function presetFor(preference: BuilderPreference | null | undefined): Edi
   return (preference && EDITOR_PRESETS[preference]) || DEFAULT_PRESET;
 }
 
-/** Sort key for the block gallery: featured blocks first (in the preset's order). */
-export function featuredRank(preset: EditorPreset, type: BlockType): number {
-  const index = preset.featured.indexOf(type);
-  return index === -1 ? preset.featured.length : index;
-}
-
 /** Builder dictionary keys whose wording follows the preset (Bahasa Indonesia only). */
 export function presetTerms(preset: EditorPreset): Record<string, string> {
   return {

@@ -10,6 +10,7 @@ Audit & status: [docs/audit-linkinbio-builder.md](docs/audit-linkinbio-builder.m
 - **Onboarding adaptif**: saat pertama membuka builder, penjual memilih yang biasa dipakai (lynk.id / Linktree / OrderHero / belum pernah); editor menyesuaikan istilah, urutan menu blok, template awal, dan menampilkan tur singkat. Bisa diubah di Pengaturan › Gaya editor.
 - **Halaman berversi** (`schema_version`): halaman lama otomatis di-upgrade saat dibuka, tanpa mengubah tampilannya.
 - Editor desktop halaman kosong langsung menampilkan panel blok; editor tidak terkunci lagi saat halaman pertama dibuat bersamaan.
+- **Editor baru gaya link-in-bio (Fase 2)**: daftar blok + pratinjau HP yang merupakan halaman asli (dirender server, aman di iframe terpisah); ketuk bagian di pratinjau untuk mengedit; galeri "+ Tambah" bergambar; tampil/sembunyi, duplikat, hapus, geser urutan (juga keyboard), Urungkan/Ulangi; Lihat halaman & Salin link. Di HP: pratinjau penuh dengan bilah bawah dan bottom sheet. Blok bergaya landing page panjang tidak ditawarkan lagi (halaman lama tetap tampil).
 
 ### Hellom Page — pembeli bayar langsung di halaman toko (2026-10-03)
 - **Perbaikan: pembayaran produk penjual selalu gagal** ("Pembayaran belum bisa dibuat"), padahal produk milik Hellom berhasil. Penyebab: checkout penjual memakai QRIS direct dengan permintaan & cara membaca jawaban iPaymu yang berbeda dari checkout Hellom (kode QRIS dikirim iPaymu di `PaymentNo` → QR kosong; nomor HP palsu).

@@ -70,160 +70,6 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
 
   return (
     <div className="p-4 md:p-6">
-      <div className="flex items-center justify-between mb-4 md:mb-6">
-        <h3 className="text-sm font-bold text-zinc-900 uppercase tracking-wider">{t('pp.editBlock')}</h3>
-        <span className="text-xs px-2 py-1 bg-zinc-100 rounded text-zinc-500 font-mono">{block.type}</span>
-      </div>
-
-      {/* --- STYLE EDITOR SECTION --- */}
-      <div className="mb-8 p-4 bg-zinc-50 rounded-xl border border-zinc-200 space-y-6">
-        {/* Layout Settings */}
-        <div className="space-y-4">
-          <div className="flex items-center gap-2 mb-2">
-            <LayoutTemplate className="w-4 h-4 text-zinc-500" />
-            <h4 className="text-xs font-bold text-zinc-700 uppercase">{t('pp.layout')}</h4>
-          </div>
-
-          {/* Padding Y */}
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-zinc-600">{t('pp.padding')}</label>
-            <div className="grid grid-cols-3 gap-2">
-              {[
-                { label: t('pp.small'), value: 'py-8' },
-                { label: t('pp.medium'), value: 'py-16' },
-                { label: t('pp.large'), value: 'py-24' }
-              ].map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => updateBlockStyles(block.id, { paddingY: opt.value })}
-                  className={`px-2 py-1.5 text-xs rounded border transition-all ${
-                    (block.styles?.paddingY || 'py-16') === opt.value
-                      ? 'bg-zinc-900 text-white border-zinc-900'
-                      : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-300'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Text Align */}
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-zinc-600">{t('pp.textAlign')}</label>
-            <div className="flex bg-white rounded-lg border border-zinc-200 p-1 w-fit">
-              {[
-                { icon: AlignLeft, value: 'left' },
-                { icon: AlignCenter, value: 'center' },
-                { icon: AlignRight, value: 'right' }
-              ].map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => updateBlockStyles(block.id, { textAlign: opt.value as any })}
-                  className={`p-1.5 rounded transition-all ${
-                    (block.styles?.textAlign || 'center') === opt.value
-                      ? 'bg-zinc-100 text-zinc-900'
-                      : 'text-zinc-400 hover:text-zinc-600'
-                  }`}
-                >
-                  <opt.icon className="w-4 h-4" />
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="h-px bg-zinc-200 w-full"></div>
-
-        {/* Colors & Background */}
-        <div className="space-y-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Palette className="w-4 h-4 text-zinc-500" />
-            <h4 className="text-xs font-bold text-zinc-700 uppercase">{t('pp.colors')}</h4>
-          </div>
-
-          {/* Background Color */}
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-zinc-600">{t('pp.bgColor')}</label>
-            <div className="flex gap-2">
-              <input
-                type="color"
-                value={block.styles?.backgroundColor || activeTheme.colors.backgroundColor}
-                onChange={(e) => updateBlockStyles(block.id, { backgroundColor: e.target.value })}
-                className="w-8 h-8 rounded cursor-pointer border-0 p-0"
-              />
-              <input
-                type="text"
-                value={block.styles?.backgroundColor || activeTheme.colors.backgroundColor}
-                onChange={(e) => updateBlockStyles(block.id, { backgroundColor: e.target.value })}
-                className="flex-1 px-2 py-1 text-xs border border-zinc-300 rounded"
-              />
-            </div>
-          </div>
-
-          {/* Text Color */}
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-zinc-600">{t('pp.textColor')}</label>
-            <div className="flex gap-2">
-              <input
-                type="color"
-                value={block.styles?.textColor || activeTheme.colors.textColor}
-                onChange={(e) => updateBlockStyles(block.id, { textColor: e.target.value })}
-                className="w-8 h-8 rounded cursor-pointer border-0 p-0"
-              />
-              <input
-                type="text"
-                value={block.styles?.textColor || activeTheme.colors.textColor}
-                onChange={(e) => updateBlockStyles(block.id, { textColor: e.target.value })}
-                className="flex-1 px-2 py-1 text-xs border border-zinc-300 rounded"
-              />
-            </div>
-          </div>
-
-          {/* Button Color (if applicable) */}
-          {hasButtonColor && (
-            <div className="space-y-2">
-              <label className="text-xs font-medium text-zinc-600">{t('pp.buttonColor')}</label>
-              <div className="flex gap-2">
-                <input
-                  type="color"
-                  value={block.styles?.buttonColor || activeTheme.colors.buttonColor}
-                  onChange={(e) => updateBlockStyles(block.id, { buttonColor: e.target.value })}
-                  className="w-8 h-8 rounded cursor-pointer border-0 p-0"
-                />
-                <input
-                  type="text"
-                  value={block.styles?.buttonColor || activeTheme.colors.buttonColor}
-                  onChange={(e) => updateBlockStyles(block.id, { buttonColor: e.target.value })}
-                  className="flex-1 px-2 py-1 text-xs border border-zinc-300 rounded"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Background Image Upload */}
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-zinc-600">{t('pp.bgImage')}</label>
-            <div className="flex items-center gap-2">
-              <label className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-white border border-zinc-300 rounded-lg cursor-pointer hover:bg-zinc-50 text-xs text-zinc-600">
-                <Upload className="w-3 h-3" />
-                {block.styles?.backgroundImage ? t('pp.changeImage') : t('pp.uploadImage')}
-                <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, 'backgroundImage', true)} />
-              </label>
-              {block.styles?.backgroundImage && (
-                <button
-                  onClick={() => updateBlockStyles(block.id, { backgroundImage: undefined })}
-                  className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
-                  title={t('pp.removeBgImage')}
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
       <div className="space-y-6">
         {/* Common Fields */}
         {block.content.title !== undefined && (
@@ -893,6 +739,160 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
           </div>
         )}
       </div>
+
+      {/* Look of this block only (the whole page: Tampilan). Content comes first. */}
+      <details className="group mt-8 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+        <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between text-sm font-semibold text-zinc-800">
+          Gaya bagian ini <span className="text-xs font-normal text-zinc-500 group-open:hidden">warna, latar, jarak</span>
+        </summary>
+        <div className="mt-4 space-y-6 border-t border-zinc-200 px-1 pt-4">
+          {/* Layout Settings */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 mb-2">
+              <LayoutTemplate className="w-4 h-4 text-zinc-500" />
+              <h4 className="text-xs font-bold text-zinc-700 uppercase">{t('pp.layout')}</h4>
+            </div>
+  
+            {/* Padding Y */}
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-zinc-600">{t('pp.padding')}</label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { label: t('pp.small'), value: 'py-8' },
+                  { label: t('pp.medium'), value: 'py-16' },
+                  { label: t('pp.large'), value: 'py-24' }
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => updateBlockStyles(block.id, { paddingY: opt.value })}
+                    className={`px-2 py-1.5 text-xs rounded border transition-all ${
+                      (block.styles?.paddingY || 'py-16') === opt.value
+                        ? 'bg-zinc-900 text-white border-zinc-900'
+                        : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-300'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+  
+            {/* Text Align */}
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-zinc-600">{t('pp.textAlign')}</label>
+              <div className="flex bg-white rounded-lg border border-zinc-200 p-1 w-fit">
+                {[
+                  { icon: AlignLeft, value: 'left' },
+                  { icon: AlignCenter, value: 'center' },
+                  { icon: AlignRight, value: 'right' }
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => updateBlockStyles(block.id, { textAlign: opt.value as any })}
+                    className={`p-1.5 rounded transition-all ${
+                      (block.styles?.textAlign || 'center') === opt.value
+                        ? 'bg-zinc-100 text-zinc-900'
+                        : 'text-zinc-400 hover:text-zinc-600'
+                    }`}
+                  >
+                    <opt.icon className="w-4 h-4" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+  
+          <div className="h-px bg-zinc-200 w-full"></div>
+  
+          {/* Colors & Background */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Palette className="w-4 h-4 text-zinc-500" />
+              <h4 className="text-xs font-bold text-zinc-700 uppercase">{t('pp.colors')}</h4>
+            </div>
+  
+            {/* Background Color */}
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-zinc-600">{t('pp.bgColor')}</label>
+              <div className="flex gap-2">
+                <input
+                  type="color"
+                  value={block.styles?.backgroundColor || activeTheme.colors.backgroundColor}
+                  onChange={(e) => updateBlockStyles(block.id, { backgroundColor: e.target.value })}
+                  className="w-8 h-8 rounded cursor-pointer border-0 p-0"
+                />
+                <input
+                  type="text"
+                  value={block.styles?.backgroundColor || activeTheme.colors.backgroundColor}
+                  onChange={(e) => updateBlockStyles(block.id, { backgroundColor: e.target.value })}
+                  className="flex-1 px-2 py-1 text-xs border border-zinc-300 rounded"
+                />
+              </div>
+            </div>
+  
+            {/* Text Color */}
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-zinc-600">{t('pp.textColor')}</label>
+              <div className="flex gap-2">
+                <input
+                  type="color"
+                  value={block.styles?.textColor || activeTheme.colors.textColor}
+                  onChange={(e) => updateBlockStyles(block.id, { textColor: e.target.value })}
+                  className="w-8 h-8 rounded cursor-pointer border-0 p-0"
+                />
+                <input
+                  type="text"
+                  value={block.styles?.textColor || activeTheme.colors.textColor}
+                  onChange={(e) => updateBlockStyles(block.id, { textColor: e.target.value })}
+                  className="flex-1 px-2 py-1 text-xs border border-zinc-300 rounded"
+                />
+              </div>
+            </div>
+  
+            {/* Button Color (if applicable) */}
+            {hasButtonColor && (
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-zinc-600">{t('pp.buttonColor')}</label>
+                <div className="flex gap-2">
+                  <input
+                    type="color"
+                    value={block.styles?.buttonColor || activeTheme.colors.buttonColor}
+                    onChange={(e) => updateBlockStyles(block.id, { buttonColor: e.target.value })}
+                    className="w-8 h-8 rounded cursor-pointer border-0 p-0"
+                  />
+                  <input
+                    type="text"
+                    value={block.styles?.buttonColor || activeTheme.colors.buttonColor}
+                    onChange={(e) => updateBlockStyles(block.id, { buttonColor: e.target.value })}
+                    className="flex-1 px-2 py-1 text-xs border border-zinc-300 rounded"
+                  />
+                </div>
+              </div>
+            )}
+  
+            {/* Background Image Upload */}
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-zinc-600">{t('pp.bgImage')}</label>
+              <div className="flex items-center gap-2">
+                <label className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-white border border-zinc-300 rounded-lg cursor-pointer hover:bg-zinc-50 text-xs text-zinc-600">
+                  <Upload className="w-3 h-3" />
+                  {block.styles?.backgroundImage ? t('pp.changeImage') : t('pp.uploadImage')}
+                  <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, 'backgroundImage', true)} />
+                </label>
+                {block.styles?.backgroundImage && (
+                  <button
+                    onClick={() => updateBlockStyles(block.id, { backgroundImage: undefined })}
+                    className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
+                    title={t('pp.removeBgImage')}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </details>
     </div>
   );
 };

@@ -121,6 +121,11 @@ export function saveLandingDraft(pageId: number, document: LandingDocument, revi
   return apiRequest<LandingDraft>(`${BASE}/site/pages/${pageId}/document`, { method: 'PUT', body: { document, revision } });
 }
 
+/** Editor phone preview: the unsaved document rendered by the public page views (nothing stored). */
+export function renderLandingPreview(pageId: number, document: LandingDocument) {
+  return apiRequest<{ html: string }>(`${BASE}/site/pages/${pageId}/render`, { method: 'POST', body: { document } });
+}
+
 export function publishLandingSitePage(pageId: number) {
   return apiRequest<{ version_no: number; page: LandingSitePage }>(`${BASE}/site/pages/${pageId}/publish`, { method: 'POST' });
 }
