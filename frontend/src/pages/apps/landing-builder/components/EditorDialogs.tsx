@@ -4,8 +4,10 @@ import { cn } from '@/lib/utils';
 import {
   createLandingSitePage,
   deleteLandingSitePage,
+  getImageUrl,
   getLandingHistory,
   updateLandingSitePage,
+  uploadLandingAsset,
 } from '@/lib/hellomApi';
 import type { LandingSite, LandingSitePage, LandingVersion } from '@/lib/hellomApi';
 import { PAGE_TEMPLATES } from '../templates';
@@ -174,12 +176,52 @@ function PageSettingsForm({ page, busy, onSave, onDelete }: {
       <label className="block font-medium">Deskripsi singkat <span className="font-normal text-zinc-500">(opsional)</span>
         <textarea value={form.seo_description} onChange={(e) => setForm({ ...form, seo_description: e.target.value })} rows={2} maxLength={300} className="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 text-base" />
       </label>
+      <ShareImage page={page} busy={busy} onSave={onSave} />
       <div className="flex flex-wrap gap-2 pt-1">
         <button type="button" disabled={busy} onClick={() => onSave({ title: form.title, ...(page.is_home ? {} : { slug: form.slug }), seo_title: form.seo_title || null, seo_description: form.seo_description || null })}
           className="flex min-h-11 items-center gap-1 rounded-xl bg-zinc-900 px-4 font-bold text-white disabled:opacity-40"><Check className="h-4 w-4" /> Simpan</button>
         {!page.is_home && <button type="button" disabled={busy} onClick={() => onSave({ is_home: true })} className="flex min-h-11 items-center gap-1 rounded-xl border px-3 font-semibold"><Home className="h-4 w-4" /> Jadikan halaman utama</button>}
         {onDelete && <button type="button" disabled={busy} onClick={onDelete} className="flex min-h-11 items-center gap-1 rounded-xl border border-rose-200 px-3 font-semibold text-rose-700"><Trash2 className="h-4 w-4" /> Hapus</button>}
       </div>
+    </div>
+  );
+}
+
+/** Picture shown when the link is shared (WhatsApp, Facebook…): automatic card, or the seller's own. */
+function ShareImage({ page, busy, onSave }: { page: LandingSitePage; busy: boolean; onSave: (body: Partial<LandingSitePage>) => void }) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const shown = page.seo_image ?? page.share_card;
+  const upload = async (file: File | undefined) => {
+    if (!file) return;
+    setUploading(true);
+    setError(null);
+    try {
+      const asset = await uploadLandingAsset(file);
+      onSave({ seo_image: asset.url });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Gambar belum bisa diunggah');
+    } finally {
+      setUploading(false);
+    }
+  };
+  return (
+    <div className="space-y-2 pt-1" data-share-image>
+      <p className="font-medium">Gambar saat link dibagikan</p>
+      {shown ? (
+        <img src={getImageUrl(shown)} alt="Pratinjau gambar saat dibagikan" className="aspect-[1200/630] w-full rounded-xl border border-zinc-200 object-cover" />
+      ) : (
+        <p className="rounded-xl bg-zinc-50 p-3 text-xs text-zinc-500">Otomatis dibuat dari foto profil, nama, dan warna halaman setelah halaman terbit.</p>
+      )}
+      <p className="text-xs text-zinc-500">{page.seo_image ? 'Memakai gambar kamu sendiri.' : 'Otomatis: foto profil + nama toko. Ukuran terbaik gambar sendiri 1200 × 630.'}</p>
+      <div className="flex flex-wrap gap-2">
+        <label className={cn('flex min-h-11 cursor-pointer items-center gap-1 rounded-xl border px-3 font-semibold', (busy || uploading) && 'pointer-events-none opacity-50')}>
+          {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} {page.seo_image ? 'Ganti gambar' : 'Pakai gambar sendiri'}
+          <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => void upload(e.target.files?.[0])} />
+        </label>
+        {page.seo_image && <button type="button" disabled={busy} onClick={() => onSave({ seo_image: null })} className="min-h-11 rounded-xl border px-3 font-semibold">Kembali ke otomatis</button>}
+      </div>
+      {error && <p className="text-xs text-rose-700">{error}</p>}
     </div>
   );
 }

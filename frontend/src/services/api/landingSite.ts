@@ -81,6 +81,8 @@ export type LandingSitePage = {
   seo_title: string | null;
   seo_description: string | null;
   seo_image: string | null;
+  /** Generated share card of the published page (Fase 6); null before publishing or without GD. */
+  share_card: string | null;
 };
 
 export type LandingSite = {
@@ -114,6 +116,8 @@ export type LandingTrafficReport = {
   daily: Array<{ date: string; visits: number }>;
   sources: Array<{ source: string; visits: number }>;
   clicks: Array<{ label: string; clicks: number }>;
+  /** Per link (Fase 6): `item` = block id, social:platform or wa-float; ctr = % of visits. */
+  links: Array<{ item: string; label: string; kind: 'block' | 'social' | 'whatsapp'; clicks: number; ctr: number | null; sources: Array<{ source: string; clicks: number }> }>;
   products: Array<{ product_id: number; name: string; views: number; checkout_starts: number; orders: number; revenue: number; conversion: number | null }>;
   sales_by_source: Array<{ source: string; orders: number; revenue: number }>;
 };
