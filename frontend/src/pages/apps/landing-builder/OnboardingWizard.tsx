@@ -17,6 +17,7 @@ import { THEMES } from './constants';
 import { PAGE_TEMPLATES } from './templates';
 import { resetSellerProducts } from './sellerProducts';
 import DriveGuide from './DriveGuide';
+import { useOptionalEditorPreference } from './editorPreference';
 
 /**
  * New seller onboarding (Fase 5): 1 username → 2 template → 3 first product, then the page is
@@ -45,7 +46,11 @@ export default function OnboardingWizard({ data, onClose, onDone }: { data: Land
 
   const [username, setUsername] = useState(data.username);
   const hostPrefix = data.public_url.replace(/^https?:\/\//, '').replace(new RegExp(`${data.username}/?$`), '');
-  const [template, setTemplate] = useState<string>(data.home_page && data.home_page.draft_blocks > 0 ? KEEP_DRAFT : PAGE_TEMPLATES[0].id);
+  // Starting template suggested by the editor preset (what the seller used before).
+  const presetTemplate = useOptionalEditorPreference()?.preset.templateId;
+  const [template, setTemplate] = useState<string>(data.home_page && data.home_page.draft_blocks > 0
+    ? KEEP_DRAFT
+    : (PAGE_TEMPLATES.find((tpl) => tpl.id === presetTemplate) ?? PAGE_TEMPLATES[0]).id);
 
   const [kind, setKind] = useState<ProductKind>('drive');
   const [name, setName] = useState('');
@@ -254,7 +259,7 @@ export default function OnboardingWizard({ data, onClose, onDone }: { data: Land
                 {PAGE_TEMPLATES.map((t) => {
                   const theme = THEMES.find((th) => th.id === t.themeId)?.colors;
                   return (
-                    <TemplateOption key={t.id} selected={template === t.id} onSelect={() => setTemplate(t.id)} name={t.name} description={t.description}
+                    <TemplateOption key={t.id} selected={template === t.id} onSelect={() => setTemplate(t.id)} name={t.name} description={t.description} suggested={t.id === presetTemplate}
                       colors={theme ? [theme.backgroundColor, theme.textColor, theme.buttonColor] : ['#fff', '#000', '#facc15']} />
                   );
                 })}
@@ -351,7 +356,7 @@ export default function OnboardingWizard({ data, onClose, onDone }: { data: Land
   );
 }
 
-function TemplateOption({ selected, onSelect, name, description, colors }: { selected: boolean; onSelect: () => void; name: string; description: string; colors: string[] }) {
+function TemplateOption({ selected, onSelect, name, description, colors, suggested = false }: { selected: boolean; onSelect: () => void; name: string; description: string; colors: string[]; suggested?: boolean }) {
   return (
     <button type="button" role="radio" aria-checked={selected} onClick={onSelect}
       className={cn('flex min-h-16 w-full items-center gap-3 rounded-2xl border p-3 text-left', selected ? 'border-zinc-900 ring-1 ring-zinc-900' : 'border-zinc-200 hover:border-zinc-300')}>
@@ -359,7 +364,10 @@ function TemplateOption({ selected, onSelect, name, description, colors }: { sel
         {colors.map((c, i) => <span key={i} className="h-10 w-4" style={{ background: c }} />)}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-sm font-bold text-zinc-900">{name}</span>
+        <span className="block text-sm font-bold text-zinc-900">
+          {name}
+          {suggested && <span className="ml-2 rounded-full bg-yellow-100 px-2 py-0.5 text-[11px] font-semibold text-yellow-800">Cocok untukmu</span>}
+        </span>
         <span className="block text-xs text-zinc-500">{description}</span>
       </span>
       <span className={cn('flex h-5 w-5 shrink-0 items-center justify-center rounded-full border', selected ? 'border-zinc-900 bg-zinc-900 text-white' : 'border-zinc-300')}>

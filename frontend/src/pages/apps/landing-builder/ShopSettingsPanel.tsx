@@ -1,21 +1,23 @@
 import { useEffect, useState } from 'react';
-import { Check, Copy, Download, ExternalLink, Loader2, Megaphone, Store } from 'lucide-react';
+import { Check, Copy, Download, ExternalLink, Loader2, Megaphone, Store, Wand2 } from 'lucide-react';
 import QRCode from 'qrcode';
 import { ApiError, getLandingSite, getLandingTracking, updateLandingTracking, updateLandingUsername } from '@/lib/hellomApi';
 import type { LandingSite, LandingTracking, LandingTrackingInput } from '@/lib/hellomApi';
+import { useOptionalEditorPreference } from './editorPreference';
 
-// Pengaturan tab: shop address (username), share link + QR, and ad pixels (Fase 4).
+// Pengaturan tab: shop address (username), share link + QR, ad pixels (Fase 4), editor style.
 const inputClass = 'mt-1 min-h-12 w-full rounded-xl border border-zinc-300 bg-white px-3 text-base outline-none focus:border-zinc-900';
 
-export default function ShopSettingsPanel() {
+export default function ShopSettingsPanel({ onOpenEditor }: { onOpenEditor?: () => void }) {
   return (
     <div className="mx-auto max-w-2xl space-y-6 pb-8">
       <div>
         <h1 className="text-2xl font-bold text-zinc-900">Pengaturan toko</h1>
-        <p className="text-sm text-zinc-600">Alamat halaman, link untuk dibagikan, dan pelacakan iklan.</p>
+        <p className="text-sm text-zinc-600">Alamat halaman, link untuk dibagikan, pelacakan iklan, dan gaya editor.</p>
       </div>
       <AddressCard />
       <TrackingCard />
+      <EditorStyleCard onOpenEditor={onOpenEditor} />
     </div>
   );
 }
@@ -170,6 +172,34 @@ function TrackingCard() {
           </div>
         </form>
       )}
+    </section>
+  );
+}
+
+/** Editor preset from the onboarding question: change it or see the tour again. */
+function EditorStyleCard({ onOpenEditor }: { onOpenEditor?: () => void }) {
+  const preference = useOptionalEditorPreference();
+  if (!preference) return null;
+  const { preference: current, preset } = preference;
+
+  return (
+    <section className="space-y-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+      <h2 className="flex items-center gap-2 font-bold"><Wand2 className="h-5 w-5" /> Gaya editor</h2>
+      <p className="text-sm text-zinc-600">
+        {current
+          ? <>Editor disesuaikan untuk yang terbiasa pakai <strong>{preset.label}</strong>: istilah "{preset.terms.item}", urutan menu, dan template awal.</>
+          : 'Kamu belum memilih gaya editor.'}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={preference.askAgain} className="min-h-11 rounded-xl border border-zinc-300 px-4 text-sm font-semibold text-zinc-900 hover:bg-zinc-50">
+          {current ? 'Ubah pilihan' : 'Pilih gaya editor'}
+        </button>
+        {current && (
+          <button type="button" onClick={() => { preference.replayTour(); onOpenEditor?.(); }} className="min-h-11 rounded-xl px-4 text-sm font-semibold text-zinc-700 underline-offset-2 hover:underline">
+            Ulangi tur editor
+          </button>
+        )}
+      </div>
     </section>
   );
 }

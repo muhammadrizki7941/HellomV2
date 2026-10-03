@@ -264,7 +264,8 @@ export const useLang = () => useContext(LangContext);
 
 const STORAGE_KEY = 'hellom_landing_builder_lang';
 
-export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+/** overrides: Indonesian wording from the editor preset (presets.ts presetTerms). */
+export const LanguageProvider: React.FC<{ children: React.ReactNode; overrides?: Record<string, string> }> = ({ children, overrides }) => {
   const [lang, setLangState] = useState<Lang>(() => {
     if (typeof window === 'undefined') return 'id';
     const stored = window.localStorage.getItem(STORAGE_KEY);
@@ -281,8 +282,8 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         /* ignore */
       }
     },
-    t: (key) => DICT[key]?.[lang] ?? key,
-  }), [lang]);
+    t: (key) => (lang === 'id' ? overrides?.[key] : undefined) ?? DICT[key]?.[lang] ?? key,
+  }), [lang, overrides]);
 
   return <LangContext.Provider value={value}>{children}</LangContext.Provider>;
 };

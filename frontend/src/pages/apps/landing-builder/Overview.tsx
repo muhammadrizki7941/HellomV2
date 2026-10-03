@@ -6,6 +6,7 @@ import type { LandingOnboarding } from '@/lib/hellomApi';
 import SalesSummary from './SalesSummary';
 import OnboardingChecklist from './OnboardingChecklist';
 import OnboardingWizard from './OnboardingWizard';
+import { useOptionalEditorPreference } from './editorPreference';
 
 // The wizard opens by itself once per shop (until the first page is published).
 const seenKey = () => `hl_onboarding_seen:${getSessionUser<{ current_organization?: { id?: number } }>()?.current_organization?.id ?? '0'}`;
@@ -16,6 +17,10 @@ export default function Overview({ onEdit, onOpenOrders, onOpenProducts, onOpenS
   const [views, setViews] = useState(0);
   const [onboarding, setOnboarding] = useState<LandingOnboarding | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
+  // Opens by itself only after the "Sebelumnya pakai apa?" question (never two dialogs at once).
+  const [wizardDue, setWizardDue] = useState(false);
+  const preference = useOptionalEditorPreference();
+  const preferenceReady = !preference || (preference.loaded && preference.preference !== null);
   const [toast, setToast] = useState<string | null>(null);
 
   const loadOnboarding = useCallback(async (autoOpen = false) => {
@@ -23,7 +28,7 @@ export default function Overview({ onEdit, onOpenOrders, onOpenProducts, onOpenS
       const data = await getLandingOnboarding();
       setOnboarding(data);
       if (autoOpen && !data.checklist.page_published && !localStorage.getItem(seenKey())) {
-        setWizardOpen(true);
+        setWizardDue(true);
       }
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : 'Ringkasan toko belum bisa dimuat. Coba muat ulang.');
@@ -35,6 +40,13 @@ export default function Overview({ onEdit, onOpenOrders, onOpenProducts, onOpenS
     void loadOnboarding(true);
     getLandingBuilderStats().then((s) => setViews(s.views_count)).catch(() => undefined);
   }, [loadOnboarding]);
+
+  useEffect(() => {
+    if (wizardDue && preferenceReady) {
+      setWizardDue(false);
+      setWizardOpen(true);
+    }
+  }, [wizardDue, preferenceReady]);
 
   useEffect(() => {
     if (!toast) return undefined;

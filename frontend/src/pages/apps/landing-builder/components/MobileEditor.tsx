@@ -259,6 +259,7 @@ export const MobileEditor: React.FC<MobileEditorProps> = ({
       <header className="h-12 bg-white border-b border-zinc-200 flex items-center justify-between gap-2 px-3 shrink-0 z-20">
         {/* Left: AI */}
         <button
+          data-tour="templates"
           onClick={() => setShowAiModal(true)}
           className="flex items-center gap-1.5 px-2.5 py-1.5 text-purple-600 bg-purple-50 rounded-lg text-xs font-semibold shrink-0"
         >
@@ -305,6 +306,7 @@ export const MobileEditor: React.FC<MobileEditorProps> = ({
             <Eye className="w-4 h-4" />
           </button>
           <button
+            data-tour="design"
             onClick={() => setShowSettingsModal(true)}
             title={t('chrome.settings')}
             className="p-2 text-zinc-500 hover:bg-zinc-100 rounded-lg shrink-0"
@@ -312,6 +314,7 @@ export const MobileEditor: React.FC<MobileEditorProps> = ({
             <Settings className="w-4 h-4" />
           </button>
           <button
+            data-tour="publish"
             onClick={onPublish}
             disabled={isSaving}
             title={t('chrome.publish')}
@@ -339,6 +342,7 @@ export const MobileEditor: React.FC<MobileEditorProps> = ({
         <main className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 space-y-5">
           {/* Add new block */}
           <button
+            data-tour="add"
             onClick={() => setActiveSheet('add')}
             className="w-full flex items-center justify-center gap-2 py-3.5 bg-zinc-900 text-white rounded-2xl text-sm font-bold shadow-sm active:scale-[0.99] transition-transform"
           >
@@ -349,7 +353,7 @@ export const MobileEditor: React.FC<MobileEditorProps> = ({
           </button>
 
           {/* Block list */}
-          <section>
+          <section data-tour="list">
             <h3 className="px-1 mb-2 text-xs font-bold uppercase tracking-wide text-zinc-400">
               {t('mobile.blockList')}
             </h3>
@@ -400,7 +404,7 @@ export const MobileEditor: React.FC<MobileEditorProps> = ({
             </div>
             <p className="px-1 mb-3 text-[11px] text-zinc-400">{t('mobile.previewHint')}</p>
 
-            <div className="flex justify-center">
+            <div className="flex justify-center" data-tour="preview">
               {/* Phone frame */}
               <div className="relative w-[260px] rounded-[2rem] bg-zinc-900 p-2 shadow-xl">
                 {/* Notch */}

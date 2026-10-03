@@ -12,7 +12,8 @@ export type LandingDocBlock = {
 };
 
 export type LandingDocument = {
-  version?: number;
+  /** Set by the server (App\Support\Landing\DocumentMigrator); older documents are upgraded on read. */
+  schema_version?: number;
   theme: {
     preset?: string;
     primary?: string;
@@ -79,6 +80,18 @@ export type LandingTrafficReport = {
 };
 
 const BASE = '/apps/landing-builder';
+
+/** What the seller used before (onboarding question); picks the editor preset. Per user. */
+export type BuilderPreference = 'lynk' | 'linktree' | 'orderhero' | 'none';
+export type EditorPreference = { preference: BuilderPreference | null; tour_done: boolean };
+
+export function getEditorPreference() {
+  return apiRequest<EditorPreference>(`${BASE}/editor-preference`);
+}
+
+export function updateEditorPreference(body: { preference?: BuilderPreference; tour_done?: boolean }) {
+  return apiRequest<EditorPreference>(`${BASE}/editor-preference`, { method: 'PUT', body });
+}
 
 export function getLandingSite() {
   return apiRequest<LandingSite>(`${BASE}/site`);

@@ -7,6 +7,7 @@ import OrdersPanel from './landing-builder/OrdersPanel';
 import CouponsPanel from './landing-builder/CouponsPanel';
 import TrafficPanel from './landing-builder/TrafficPanel';
 import ShopSettingsPanel from './landing-builder/ShopSettingsPanel';
+import { EditorPreferenceProvider } from './landing-builder/editorPreference';
 import { useSearchParams } from 'react-router-dom';
 import { Layout, BarChart3, Users, RefreshCw, Wallet, Package, ReceiptText, TicketPercent, LineChart, Settings2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -141,6 +142,8 @@ export default function LandingBuilder() {
   }, [activeTab, setChromeHidden]);
 
   return (
+    // Asks "Sebelumnya pakai apa?" once and gives every tab the editor preset.
+    <EditorPreferenceProvider>
     <div className={cn(chromeHidden ? "space-y-0 lg:space-y-6" : "space-y-6")}>
       {/* App Header & Tabs */}
       <div className={cn(
@@ -193,9 +196,10 @@ export default function LandingBuilder() {
           {activeTab === 'saldo' && <SellerBalance />}
           {activeTab === 'customers' && <CustomersPanel />}
           {activeTab === 'statistik' && <TrafficPanel />}
-          {activeTab === 'pengaturan' && <ShopSettingsPanel />}
+          {activeTab === 'pengaturan' && <ShopSettingsPanel onOpenEditor={() => setActiveTab('editor')} />}
         </div>
       )}
     </div>
+    </EditorPreferenceProvider>
   );
 }

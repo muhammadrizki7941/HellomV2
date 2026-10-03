@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { nanoid } from 'nanoid';
 import { AlertTriangle, Check, CheckCircle2, ChevronDown, Copy, ExternalLink, Eye, FileStack, History, Loader2, RefreshCw } from 'lucide-react';
 import { arrayMove } from '@dnd-kit/sortable';
@@ -6,6 +6,9 @@ import { cn } from '@/lib/utils';
 import { THEMES, defaultContent } from './constants';
 import { Block, BlockType, BlockStyles, BLOCK_TYPES } from './types';
 import { LanguageProvider } from './i18n';
+import { useOptionalEditorPreference } from './editorPreference';
+import { DEFAULT_PRESET, presetTerms } from './presets';
+import EditorTour from './EditorTour';
 import {
   ApiError,
   createLandingSitePage,
@@ -60,6 +63,9 @@ export default function LandingBuilder() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const preference = useOptionalEditorPreference();
+  const preset = preference?.preset ?? DEFAULT_PRESET;
+  const terms = useMemo(() => presetTerms(preset), [preset]);
 
   const revisionRef = useRef<number | null>(null);
   const loadedRef = useRef(false);          // skip the autosave triggered by loading
@@ -121,7 +127,12 @@ export default function LandingBuilder() {
       try {
         let current = await getLandingSite();
         if (current.pages.length === 0) {
-          await createLandingSitePage({ title: 'Halaman Utama' });
+          try {
+            await createLandingSitePage({ title: 'Halaman Utama' });
+          } catch (err) {
+            // Another load (second tab, React dev double effect) created it first: use that page.
+            if (!(err instanceof ApiError && err.code === 'PAGE_QUOTA')) throw err;
+          }
           current = await getLandingSite();
         }
         if (!alive) return;
@@ -369,7 +380,7 @@ export default function LandingBuilder() {
   };
 
   return (
-    <LanguageProvider>
+    <LanguageProvider overrides={terms}>
       {/* Page bar: which page, autosave state, preview, history, publish result */}
       <div className="mb-2 flex flex-wrap items-center gap-2 px-2 lg:px-0">
         <button type="button" onClick={() => setDialog('pages')} className="flex min-h-11 max-w-[60%] items-center gap-1 rounded-xl border border-zinc-200 bg-white px-3 text-sm font-semibold">
@@ -433,6 +444,10 @@ export default function LandingBuilder() {
       {dialog === 'preview' && previewUrl && <PreviewDialog url={previewUrl} onClose={() => setDialog('none')} />}
       {dialog === 'pages' && (
         <PagesDialog site={site} currentPageId={page.id} onClose={() => setDialog('none')} onChanged={async () => { await refreshSite(); }} onOpenPage={(p) => void switchPage(p)} />
+      )}
+      {/* Tour after the onboarding question (or "Ulangi tur" in Pengaturan). */}
+      {preference?.loaded && preference.preference && !preference.tourDone && dialog === 'none' && (
+        <EditorTour key={`${preference.tourRun}-${isMobile ? 'm' : 'd'}`} preset={preset} onFinish={preference.finishTour} />
       )}
     </LanguageProvider>
   );

@@ -5,6 +5,8 @@ import { cn } from '@/lib/utils';
 import { Block, BlockType } from '../types';
 import { BLOCK_CATALOG, CATEGORY_TABS, BLOCK_ICON, BlockCatalogItem } from '../blockCatalog';
 import { useLang } from '../i18n';
+import { useOptionalEditorPreference } from '../editorPreference';
+import { DEFAULT_PRESET, featuredRank } from '../presets';
 
 const paletteClass = 'flex flex-col items-start text-left p-3 rounded-xl border border-zinc-200 hover:border-yellow-400 hover:bg-yellow-50 transition-all gap-1.5 group/item w-full';
 
@@ -76,9 +78,12 @@ export const BlockToolbox: React.FC<BlockToolboxProps> = ({
   const [category, setCategory] = useState<'all' | string>('all');
   const [query, setQuery] = useState('');
 
+  // The editor preset (onboarding answer) decides which blocks come first.
+  const preset = useOptionalEditorPreference()?.preset ?? DEFAULT_PRESET;
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return BLOCK_CATALOG.filter((item) => {
+    const ordered = [...BLOCK_CATALOG].sort((a, b) => featuredRank(preset, a.type) - featuredRank(preset, b.type));
+    return ordered.filter((item) => {
       const inCategory = category === 'all' || item.categories.includes(category as never);
       if (!inCategory) return false;
       if (!q) return true;
@@ -86,7 +91,7 @@ export const BlockToolbox: React.FC<BlockToolboxProps> = ({
       const desc = t(item.descKey).toLowerCase();
       return label.includes(q) || desc.includes(q) || item.type.includes(q);
     });
-  }, [category, query, t]);
+  }, [category, query, t, preset]);
 
   return (
     <div className="flex flex-col h-full">

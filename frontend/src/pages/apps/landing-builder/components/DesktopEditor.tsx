@@ -263,7 +263,8 @@ export const DesktopEditor: React.FC<DesktopEditorProps> = ({
   pageSettings
 }) => {
   const { t, lang, setLang } = useLang();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  // An empty page starts with the block panel open: otherwise nothing shows how to add a block.
+  const [sidebarOpen, setSidebarOpen] = useState(() => blocks.length === 0);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activePaletteType, setActivePaletteType] = useState<BlockType | null>(null);
 
@@ -390,12 +391,14 @@ export const DesktopEditor: React.FC<DesktopEditorProps> = ({
             ))}
           </div>
           <button
+            data-tour="templates"
             onClick={() => setShowAiModal(true)}
             className="flex items-center gap-2 px-3 py-1.5 text-sm font-bold text-purple-600 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition-colors"
           >
             <Sparkles className="w-4 h-4" /> <span className="hidden md:inline">{t('chrome.ai')}</span>
           </button>
           <button
+            data-tour="design"
             onClick={() => setShowSettingsModal(true)}
             className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-zinc-600 hover:bg-zinc-50 rounded-lg transition-colors"
             title={t('chrome.settings')}
@@ -411,7 +414,7 @@ export const DesktopEditor: React.FC<DesktopEditorProps> = ({
           <button onClick={onSave} disabled={isSaving} className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-zinc-600 hover:bg-zinc-50 rounded-lg transition-colors disabled:opacity-60">
             <Save className="w-4 h-4" /> {isSaving ? t('chrome.saving') : t('chrome.save')}
           </button>
-          <button onClick={onPublish} disabled={isSaving} className="flex items-center gap-2 px-3 py-1.5 bg-black text-white text-sm font-bold rounded-lg hover:bg-zinc-800 transition-colors shadow-sm disabled:opacity-60">
+          <button data-tour="publish" onClick={onPublish} disabled={isSaving} className="flex items-center gap-2 px-3 py-1.5 bg-black text-white text-sm font-bold rounded-lg hover:bg-zinc-800 transition-colors shadow-sm disabled:opacity-60">
             <Globe className="w-4 h-4" /> {t('chrome.publish')}
           </button>
         </div>
@@ -427,7 +430,7 @@ export const DesktopEditor: React.FC<DesktopEditorProps> = ({
         <div className="flex-1 flex overflow-hidden relative">
           {/* Left Sidebar: Tools (collapsible, hidden in Preview) */}
           {!isPreview && sidebarOpen && (
-            <aside className="w-72 bg-white border-r border-zinc-200 flex flex-col overflow-hidden z-10">
+            <aside data-tour="add" className="w-72 bg-white border-r border-zinc-200 flex flex-col overflow-hidden z-10">
               <BlockToolbox
                 onAddBlock={addBlock}
                 enableDrag
@@ -441,7 +444,7 @@ export const DesktopEditor: React.FC<DesktopEditorProps> = ({
           )}
 
           {/* Center: Canvas */}
-          <main className="flex-1 overflow-y-auto bg-zinc-100 p-6 lg:p-8 relative">
+          <main data-tour="preview" className="flex-1 overflow-y-auto bg-zinc-100 p-6 lg:p-8 relative">
             <div className={cn(
               "hl-light mx-auto min-h-[800px] shadow-sm transition-all duration-300 bg-white relative",
               isPreview ? "shadow-2xl max-w-5xl" : (sidebarOpen ? "max-w-5xl" : "max-w-7xl")

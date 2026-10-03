@@ -4,6 +4,13 @@
 
 Audit lengkap dan status per temuan: [docs/AUDIT.md](docs/AUDIT.md). Langkah deploy khusus rilis ini: [docs/DEPLOY.md §3](docs/DEPLOY.md#3-catatan-khusus-rilis-refactor-branch-refactorcleanup).
 
+### Hellom Page — editor link-in-bio, Fase 0–1 (branch `feat/linkinbio-builder`, 2026-10-03)
+Audit & status: [docs/audit-linkinbio-builder.md](docs/audit-linkinbio-builder.md).
+- **Perbaikan gambar**: foto HP (sampai 8 MB) bisa diunggah (dulu ditolak di atas 4 MB dengan pesan bahasa Inggris); gambar di editor tampil juga saat dashboard & server beda alamat (dev lokal).
+- **Onboarding adaptif**: saat pertama membuka builder, penjual memilih yang biasa dipakai (lynk.id / Linktree / OrderHero / belum pernah); editor menyesuaikan istilah, urutan menu blok, template awal, dan menampilkan tur singkat. Bisa diubah di Pengaturan › Gaya editor.
+- **Halaman berversi** (`schema_version`): halaman lama otomatis di-upgrade saat dibuka, tanpa mengubah tampilannya.
+- Editor desktop halaman kosong langsung menampilkan panel blok; editor tidak terkunci lagi saat halaman pertama dibuat bersamaan.
+
 ### Hellom Page — pembeli bayar langsung di halaman toko (2026-10-03)
 - **Perbaikan: pembayaran produk penjual selalu gagal** ("Pembayaran belum bisa dibuat"), padahal produk milik Hellom berhasil. Penyebab: checkout penjual memakai QRIS direct dengan permintaan & cara membaca jawaban iPaymu yang berbeda dari checkout Hellom (kode QRIS dikirim iPaymu di `PaymentNo` → QR kosong; nomor HP palsu).
 - Sekarang **sama seperti checkout produk Hellom**: pembeli memilih QRIS, Virtual Account (BCA, BNI, BRI, Mandiri, Permata, CIMB) atau Indomaret/Alfamart dan membayar **di halaman toko** — QR tampil langsung, nomor VA dengan tombol Salin, tanpa diarahkan ke halaman iPaymu. Halaman otomatis lanjut ke produk setelah bayar; halaman status pesanan menampilkan QR/VA lagi bila dibuka ulang.
