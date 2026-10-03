@@ -11,6 +11,7 @@ use App\Models\OrganizationLandingPage;
 use App\Models\OrganizationPayoutProfile;
 use App\Models\User;
 use App\Services\Landing\LandingDocumentService;
+use App\Services\Landing\LandingRenderer;
 use App\Services\Landing\LandingShop;
 use App\Support\Landing\BlockSchema;
 use Illuminate\Http\JsonResponse;
@@ -153,21 +154,30 @@ class LandingSiteController extends BaseApiController
             'slug' => ['nullable', 'string', 'max:60'],
             'document' => ['nullable', 'array'],
         ]);
-        $count = OrganizationLandingPage::query()->where('organization_id', $organization->id)->count();
         $quota = $this->shop->pageQuota($organization);
-        if ($count >= $quota) {
+        // Quota check + insert under a lock on the shop row: two requests at once (two tabs)
+        // cannot both pass the check.
+        $page = DB::transaction(function () use ($organization, $validated, $quota): ?OrganizationLandingPage {
+            Organization::query()->whereKey($organization->id)->lockForUpdate()->first();
+            $count = OrganizationLandingPage::query()->where('organization_id', $organization->id)->count();
+            if ($count >= $quota) {
+                return null;
+            }
+            $page = OrganizationLandingPage::query()->create([
+                'organization_id' => $organization->id,
+                'title' => trim($validated['title']),
+                'slug' => $this->uniquePageSlug($organization, (string) ($validated['slug'] ?? '') ?: (string) $validated['title']),
+                'status' => 'draft',
+                'content' => [],
+                'is_home' => $count === 0,
+            ]);
+            $page->forceFill(['draft_document' => BlockSchema::normalize($validated['document'] ?? []), 'draft_saved_at' => now()])->save();
+
+            return $page;
+        }, 3);
+        if ($page === null) {
             return $this->fail("Paket kamu bisa punya {$quota} halaman. Upgrade paket Hellom Page untuk menambah halaman.", ['code' => 'PAGE_QUOTA', 'quota' => $quota], 422);
         }
-        $slug = $this->uniquePageSlug($organization, (string) ($validated['slug'] ?? '') ?: (string) $validated['title']);
-        $page = OrganizationLandingPage::query()->create([
-            'organization_id' => $organization->id,
-            'title' => trim($validated['title']),
-            'slug' => $slug,
-            'status' => 'draft',
-            'content' => [],
-            'is_home' => $count === 0,
-        ]);
-        $page->forceFill(['draft_document' => BlockSchema::normalize($validated['document'] ?? []), 'draft_saved_at' => now()])->save();
 
         return $this->ok($this->pagePayload($page->fresh(), $organization), 'Halaman dibuat', 201);
     }
@@ -250,6 +260,22 @@ class LandingSiteController extends BaseApiController
         }
 
         return $this->ok($saved, 'Draft tersimpan');
+    }
+
+    /**
+     * Editor phone preview: the page as the public renderer draws it, for the document the
+     * editor holds right now (not saved, nothing stored). Same Blade views as the live page.
+     */
+    public function render(Request $request, int $pageId): JsonResponse
+    {
+        [$page, $organization, $error] = $this->page($request, $pageId);
+        if ($error) {
+            return $error;
+        }
+        $validated = $request->validate(['document' => ['required', 'array']]);
+        $data = app(LandingRenderer::class)->page($organization, $page, BlockSchema::normalize($validated['document']), true);
+
+        return $this->ok(['html' => view('landing.page', $data + ['editor' => true])->render()], 'Pratinjau');
     }
 
     public function publish(Request $request, int $pageId): JsonResponse

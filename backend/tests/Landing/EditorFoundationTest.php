@@ -105,4 +105,40 @@ class EditorFoundationTest extends SellerFinanceTestCase
         ApiToken::query()->create(['user_id' => $cashier->id, 'name' => 't', 'token_hash' => hash('sha256', $token)]);
         $this->putJson(self::BASE . '/editor-preference', ['preference' => 'lynk'], ['Authorization' => 'Bearer ' . $token])->assertForbidden();
     }
+    public function test_editor_preview_renders_the_unsaved_document_with_the_public_views(): void
+    {
+        $seller = $this->seller();
+        $page = $seller['page'];
+        $before = app(LandingDocumentService::class)->draft($page);
+        $auth = ['Authorization' => 'Bearer ' . $seller['token']];
+        $document = ['blocks' => [
+            ['id' => 'p1', 'type' => 'profile', 'content' => ['name' => 'Toko <b>Belum Disimpan</b>', 'bio' => 'Bio baru']],
+            ['id' => 'h1', 'type' => 'text', 'hidden' => true, 'content' => ['body' => 'Tersembunyi']],
+            ['id' => 'b1', 'type' => 'button', 'content' => ['text' => 'Pesan via WA', 'actionType' => 'link', 'linkUrl' => 'javascript:alert(1)']],
+        ]];
+
+        $html = $this->postJson(self::BASE . "/site/pages/{$page->id}/render", ['document' => $document], $auth)->assertOk()->json('data.html');
+
+        $this->assertStringContainsString('data-hl-block="p1"', $html);
+        $this->assertStringContainsString('data-hl-block="b1"', $html);
+        $this->assertStringContainsString('Toko &lt;b&gt;Belum Disimpan&lt;/b&gt;', $html);
+        $this->assertStringNotContainsString('Tersembunyi', $html);
+        $this->assertStringNotContainsString('javascript:alert', $html);
+        $this->assertStringNotContainsString('Pratinjau draft', $html);
+        $this->assertStringContainsString("send({ hl: 'ready' })", $html);
+        // Nothing saved; the public page has no editor markers.
+        $this->assertSame($before['revision'], app(LandingDocumentService::class)->draft($page->fresh())['revision']);
+
+        // Another shop cannot render this page.
+        $other = $this->seller();
+        $this->postJson(self::BASE . "/site/pages/{$page->id}/render", ['document' => $document], ['Authorization' => 'Bearer ' . $other['token']])->assertNotFound();
+    }
+
+    public function test_page_quota_still_applies(): void
+    {
+        $seller = $this->seller();
+        $auth = ['Authorization' => 'Bearer ' . $seller['token']];
+        // The fixture shop already has its one free page.
+        $this->postJson(self::BASE . '/site/pages', ['title' => 'Halaman Dua'], $auth)->assertStatus(422)->assertJsonPath('error.code', 'PAGE_QUOTA');
+    }
 }

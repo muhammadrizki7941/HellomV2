@@ -251,11 +251,14 @@
 
     @case('button')
         @php $btnHref = ($c['actionType'] ?? 'link') === 'whatsapp' ? $wa($c['whatsappNumber'] ?? ($settings['whatsappNumber'] ?? null), $c['whatsappMessage'] ?? null) : $href($c['linkUrl'] ?? null); @endphp
-        @if ($btnHref)
+        {{-- Public page: no dead buttons. Editor preview: shown with a hint so it can be tapped and filled in. --}}
+        @if ($btnHref || !empty($editor))
+            @php $btnHref = $btnHref ?: '#'; @endphp
             <section class="{{ $cls }} {{ $c['align'] ?? 'center' }}" style="{{ trim('padding-top:8px;padding-bottom:8px;' . $style, ';') }}">
                 <div class="wrap">
                     <a class="btn{{ ($c['style'] ?? $theme['buttonStyle']) === 'outline' ? ' outline' : '' }}{{ !empty($c['fullWidth']) ? ' block' : '' }}" href="{{ $btnHref }}"
                        @if (!str_starts_with($btnHref, '/') && !str_starts_with($btnHref, '#')) target="_blank" rel="noopener" @endif data-track="click" data-label="{{ $c['text'] ?? '' }}">{{ $c['text'] ?? 'Klik di sini' }}</a>
+                    @if (!empty($editor) && $btnHref === '#')<p class="small muted" style="margin:6px 0 0">Belum ada link — ketuk untuk mengisi</p>@endif
                 </div>
             </section>
         @endif

@@ -49,7 +49,7 @@
 <style>:root{--bg:{{ $theme['background'] }};--fg:{{ $theme['text'] }};--primary:{{ $theme['primary'] }};--btn-fg:{{ $theme['buttonText'] }};--muted:{{ $theme['muted'] }};--surface:{{ $theme['surface'] }};--radius:{{ $theme['radius'] }};--font:{!! $theme['font'] !!}}{!! $css !!}</style>
 </head>
 <body class="{{ $theme['dark'] ? 'dark' : '' }}">
-@if ($preview)<div class="preview-bar">Pratinjau draft — belum tayang ke publik</div>@endif
+@if ($preview && empty($editor))<div class="preview-bar">Pratinjau draft — belum tayang ke publik</div>@endif
 <main>
 @yield('content')
 </main>
@@ -114,5 +114,10 @@
 <div id="hl-toast" class="toast" role="status"></div>
 <script type="application/json" id="hl-data">{!! json_encode($config, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) !!}</script>
 <script>{!! $js !!}</script>
+@if (!empty($editor))
+{{-- Editor phone preview (sandboxed iframe in the dashboard): tap to select, highlight. --}}
+<style>[data-hl-block]>*{cursor:pointer}[data-hl-block]>*:hover{outline:1px dashed rgba(250,204,21,.9);outline-offset:-1px}.hl-sel{outline:2px solid #facc15!important;outline-offset:-2px}</style>
+<script>{!! file_get_contents(resource_path('views/landing/editor.js')) !!}</script>
+@endif
 </body>
 </html>

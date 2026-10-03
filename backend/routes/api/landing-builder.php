@@ -113,7 +113,8 @@ Route::middleware('canUseApp:landing_builder')->group(function () {
         Route::delete('/site/pages/{pageId}', [LandingSiteController::class, 'deletePage'])->whereNumber('pageId')->name('site.pages.destroy');
         Route::get('/site/pages/{pageId}/document', [LandingSiteController::class, 'document'])->whereNumber('pageId')->name('site.pages.document');
         Route::put('/site/pages/{pageId}/document', [LandingSiteController::class, 'saveDocument'])->whereNumber('pageId')->name('site.pages.document.save');
-        Route::post('/site/pages/{pageId}/publish', [LandingSiteController::class, 'publish'])->whereNumber('pageId')->name('site.pages.publish');
+        Route::post('/site/pages/{pageId}/render', [LandingSiteController::class, 'render'])->whereNumber('pageId')->middleware('throttle:240,1')->name('site.pages.render');
+        Route::post('/site/pages/{pageId}/publish',[LandingSiteController::class, 'publish'])->whereNumber('pageId')->name('site.pages.publish');
         Route::post('/site/pages/{pageId}/unpublish', [LandingSiteController::class, 'unpublish'])->whereNumber('pageId')->name('site.pages.unpublish');
         Route::get('/site/pages/{pageId}/history', [LandingSiteController::class, 'history'])->whereNumber('pageId')->name('site.pages.history');
         Route::post('/site/pages/{pageId}/history/{versionId}/restore', [LandingSiteController::class, 'restore'])->whereNumber('pageId')->whereNumber('versionId')->name('site.pages.restore');

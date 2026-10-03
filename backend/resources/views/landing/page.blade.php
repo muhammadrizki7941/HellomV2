@@ -1,8 +1,32 @@
 @extends('landing.layout')
 
+@php
+    // Editor preview: names for the placeholder of a block that has nothing to show yet.
+    $editorLabels = [
+        'profile' => 'Profil', 'button' => 'Tombol link', 'social' => 'Ikon sosial media', 'text' => 'Teks', 'divider' => 'Pemisah',
+        'product' => 'Produk', 'catalog' => 'Katalog produk', 'pdf' => 'File / PDF', 'form' => 'Formulir', 'countdown' => 'Hitung mundur',
+        'testimonials' => 'Testimoni', 'image' => 'Gambar', 'banner' => 'Banner', 'slider' => 'Carousel gambar', 'gallery' => 'Galeri',
+        'video' => 'Video YouTube', 'faq' => 'Tanya jawab', 'hero' => 'Hero', 'features' => 'Keunggulan', 'cta' => 'Ajakan',
+        'content' => 'Konten', 'list' => 'Daftar', 'gif' => 'GIF', 'html' => 'HTML',
+    ];
+@endphp
+
 @section('content')
     @foreach ($blocks as $b)
-        @include('landing.block', ['b' => $b, 'first' => $loop->first])
+        @if (!empty($editor))
+            {{-- Editor phone preview: a tap selects the block (layout unchanged: display contents). A block
+                 that has nothing to show yet (no image, no link…) gets a placeholder so it can be tapped. --}}
+            @php $blockHtml = trim($__env->make('landing.block', ['b' => $b, 'first' => $loop->first], \Illuminate\Support\Arr::except(get_defined_vars(), ['__data', '__path']))->render()); @endphp
+            <div data-hl-block="{{ $b['id'] }}" style="display:contents">
+                @if ($blockHtml !== '')
+                    {!! $blockHtml !!}
+                @else
+                    <section class="blk center" style="padding-top:10px;padding-bottom:10px"><div class="wrap"><p class="small muted" style="margin:0;padding:14px;border:1px dashed currentColor;border-radius:14px;opacity:.75">{{ $editorLabels[$b['type']] ?? 'Bagian' }} — ketuk untuk melengkapi</p></div></section>
+                @endif
+            </div>
+        @else
+            @include('landing.block', ['b' => $b, 'first' => $loop->first])
+        @endif
     @endforeach
     @if (count($blocks) === 0)
         <section class="blk center"><div class="wrap"><h1>{{ $organization->name }}</h1><p class="muted">Halaman ini sedang disiapkan.</p></div></section>
