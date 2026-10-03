@@ -1,5 +1,4 @@
 import type { BuilderPreference } from '@/lib/hellomApi';
-import type { BlockType } from './types';
 
 /**
  * Editor presets (link-in-bio, Fase 1). The onboarding question "Sebelumnya terbiasa pakai
@@ -14,8 +13,8 @@ export interface EditorPreset {
   description: string;
   /** Words the editor uses for its building pieces. */
   terms: { item: string; items: string; add: string; addNew: string; list: string };
-  /** Blocks offered first in "+ Tambah", most useful first; the rest follow in catalog order. */
-  featured: BlockType[];
+  /** Gallery cards (editor/blockMeta GALLERY_ITEMS keys) offered first in "+ Tambah". */
+  featured: string[];
   /** Starting template (templates.ts) suggested on a new page. */
   templateId: string;
   /** Step-by-step help: longer tour, hints on empty states. */
@@ -30,7 +29,7 @@ export const EDITOR_PRESETS: Record<BuilderPreference, EditorPreset> = {
     label: 'lynk.id',
     description: 'Jualan produk digital & link dari satu halaman',
     terms: { item: 'blok', items: 'blok', add: 'Tambah blok', addNew: 'Tambah blok baru', list: 'Daftar blok' },
-    featured: ['product', 'catalog', 'button', 'profile', 'image', 'video', 'testimonials', 'form'],
+    featured: ['product', 'product_physical', 'catalog', 'button', 'profile', 'whatsapp', 'video', 'testimonials'],
     templateId: 'ebook',
     guided: false,
     lead: 'list',
@@ -40,7 +39,7 @@ export const EDITOR_PRESETS: Record<BuilderPreference, EditorPreset> = {
     label: 'Linktree',
     description: 'Kumpulan link ke semua tempat kamu',
     terms: { item: 'link', items: 'link', add: 'Tambah link', addNew: 'Tambah link baru', list: 'Daftar link' },
-    featured: ['button', 'profile', 'video', 'image', 'text', 'catalog', 'social', 'divider'],
+    featured: ['button', 'profile', 'social', 'video', 'embed', 'image', 'text', 'spacer'],
     templateId: 'creator',
     guided: false,
     lead: 'list',
@@ -50,7 +49,7 @@ export const EDITOR_PRESETS: Record<BuilderPreference, EditorPreset> = {
     label: 'OrderHero',
     description: 'Terima pesanan menu/produk lewat WhatsApp',
     terms: { item: 'bagian', items: 'bagian', add: 'Tambah bagian', addNew: 'Tambah bagian baru', list: 'Isi halaman' },
-    featured: ['catalog', 'product', 'cta', 'button', 'banner', 'slider', 'faq', 'form'],
+    featured: ['catalog', 'product_physical', 'whatsapp', 'banner', 'slider', 'button', 'faq', 'form'],
     templateId: 'physical',
     guided: false,
     lead: 'preview',
@@ -60,7 +59,7 @@ export const EDITOR_PRESETS: Record<BuilderPreference, EditorPreset> = {
     label: 'Belum pernah / lainnya',
     description: 'Kami pandu langkah demi langkah',
     terms: { item: 'bagian', items: 'bagian', add: 'Tambah bagian', addNew: 'Tambah bagian baru', list: 'Isi halaman' },
-    featured: ['profile', 'button', 'product', 'image', 'text', 'video', 'testimonials', 'faq'],
+    featured: ['profile', 'button', 'whatsapp', 'product', 'image', 'text', 'video', 'faq'],
     templateId: 'creator',
     guided: true,
     lead: 'preview',

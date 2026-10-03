@@ -212,5 +212,9 @@ export const defaultContent: Record<BlockType, any> = {
   },
   html: {
     html: "<div style=\"text-align:center;padding:24px;\">\n  <h3>Blok HTML Kustom</h3>\n  <p>Tempel kode HTML Anda di sini.</p>\n</div>"
-  }
+  },
+  spacer: { height: 32 },
+  // Empty number = the page's WhatsApp number (Tampilan › WhatsApp).
+  whatsapp: { style: 'button', title: '', text: 'Chat via WhatsApp', number: '', message: 'Halo, saya mau tanya.' },
+  embed: { url: '', title: '' },
 };

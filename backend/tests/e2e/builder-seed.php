@@ -24,6 +24,10 @@ if ($org = Organization::query()->where('slug', $slug)->first()) {
     DB::table('organization_landing_pages')->where('organization_id', $org->id)->delete();
     DB::table('landing_stats_daily')->where('organization_id', $org->id)->delete();
     DB::table('file_assets')->where('organization_id', $org->id)->delete();
+    $orderIds = DB::table('landing_page_orders')->where('organization_id', $org->id)->pluck('id');
+    DB::table('landing_order_items')->whereIn('order_id', $orderIds)->delete();
+    DB::table('landing_page_orders')->whereIn('id', $orderIds)->delete();
+    DB::table('landing_products')->where('organization_id', $org->id)->delete();
     Storage::disk('public')->deleteDirectory('landing-builder/' . $org->id);
     $userIds = DB::table('organization_user')->where('organization_id', $org->id)->pluck('user_id');
     DB::table('organization_user')->where('organization_id', $org->id)->delete();

@@ -332,9 +332,52 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
         {/* Video Specific Fields */}
         {block.type === 'video' && (
           <div className="space-y-2">
-            <label className="text-xs font-bold text-zinc-700">{t('pp.video.url')}</label>
-            <input type="text" value={block.content.videoUrl} onChange={(e) => patch({ videoUrl: e.target.value })} className={inputClass} placeholder="https://www.youtube.com/embed/..." />
-            <p className="text-xs text-zinc-500">{t('pp.video.hint')}</p>
+            <label className="text-xs font-bold text-zinc-700">Link video YouTube atau TikTok</label>
+            <input type="url" inputMode="url" value={block.content.videoUrl} onChange={(e) => patch({ videoUrl: e.target.value })} className={inputClass} placeholder="https://youtu.be/… atau https://www.tiktok.com/@akun/video/…" />
+            <EmbedHint url={block.content.videoUrl} allowed={['youtube', 'tiktok']} />
+          </div>
+        )}
+
+        {/* Spacer */}
+        {block.type === 'spacer' && (
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-zinc-700" htmlFor="spacer-height">Tinggi spasi: {block.content.height ?? 32} px</label>
+            <input id="spacer-height" type="range" min={8} max={160} step={8} value={block.content.height ?? 32} onChange={(e) => patch({ height: Number(e.target.value) })} className="w-full accent-zinc-900" />
+          </div>
+        )}
+
+        {/* WhatsApp */}
+        {block.type === 'whatsapp' && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Bentuk">
+              {([['button', 'Tombol saja'], ['card', 'Kartu + judul']] as const).map(([value, label]) => (
+                <button key={value} type="button" role="radio" aria-checked={(block.content.style ?? 'button') === value} onClick={() => patch({ style: value })}
+                  className={`min-h-11 rounded-lg border text-sm font-semibold ${(block.content.style ?? 'button') === value ? 'border-zinc-900 bg-zinc-900 text-white' : 'border-zinc-200 text-zinc-700'}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-zinc-700">Teks tombol</label>
+              <input type="text" maxLength={60} value={block.content.text ?? ''} onChange={(e) => patch({ text: e.target.value })} className={inputClass} />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-zinc-700">Nomor WhatsApp <span className="font-normal text-zinc-500">(kosongkan = nomor di Tampilan)</span></label>
+              <input type="tel" inputMode="tel" value={block.content.number ?? ''} onChange={(e) => patch({ number: e.target.value.replace(/[^0-9+]/g, '') })} className={inputClass} placeholder="08123456789" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-zinc-700">Pesan pembuka</label>
+              <textarea rows={2} maxLength={300} value={block.content.message ?? ''} onChange={(e) => patch({ message: e.target.value })} className={`${inputClass} resize-none`} />
+            </div>
+          </div>
+        )}
+
+        {/* Embed */}
+        {block.type === 'embed' && (
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-zinc-700">Link Spotify, TikTok, Instagram, atau YouTube</label>
+            <input type="url" inputMode="url" value={block.content.url ?? ''} onChange={(e) => patch({ url: e.target.value.trim() })} className={inputClass} placeholder="https://open.spotify.com/…" />
+            <EmbedHint url={block.content.url} allowed={['spotify', 'tiktok', 'instagram', 'youtube']} />
           </div>
         )}
 
@@ -904,4 +947,22 @@ function toLocalInput(iso: string | undefined): string {
   if (Number.isNaN(d.getTime())) return '';
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// Same link patterns as the server (App\Support\Landing\Embed): tells the seller right away
+// whether the link will show, in plain words.
+const EMBED_PATTERNS: Array<[string, string, RegExp]> = [
+  ['spotify', 'Spotify', /^https?:\/\/open\.spotify\.com\/(?:intl-[a-z]{2}(?:-[a-z]{2})?\/)?(track|album|playlist|episode|show|artist)\/[A-Za-z0-9]{10,40}/i],
+  ['tiktok', 'TikTok', /^https?:\/\/(?:www\.|m\.)?tiktok\.com\/@[\w.-]+\/video\/\d{8,25}/i],
+  ['instagram', 'Instagram', /^https?:\/\/(?:www\.)?instagram\.com\/(?:[\w.]+\/)?(p|reel|tv)\/[A-Za-z0-9_-]{5,40}/i],
+  ['youtube', 'YouTube', /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/)|youtu\.be\/)[A-Za-z0-9_-]{11}/],
+];
+
+function EmbedHint({ url, allowed }: { url?: string; allowed: string[] }) {
+  const value = (url ?? '').trim();
+  if (!value) return <p className="text-xs text-zinc-500">Tempel link dari tombol "Bagikan / Salin link" di aplikasinya.</p>;
+  const found = EMBED_PATTERNS.find(([key, , re]) => allowed.includes(key) && re.test(value));
+  if (found) return <p className="text-xs font-medium text-green-700">✓ Link {found[1]} dikenali.</p>;
+  const names = EMBED_PATTERNS.filter(([key]) => allowed.includes(key)).map(([, name]) => name).join(', ');
+  return <p className="text-xs font-medium text-red-600">Link belum dikenali. Pakai link video/lagu/postingan dari {names} (contoh tiktok.com/@akun/video/123…). Link pendek seperti vt.tiktok.com perlu dibuka dulu lalu salin link lengkapnya.</p>;
 }

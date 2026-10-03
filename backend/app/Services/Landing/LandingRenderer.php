@@ -8,6 +8,7 @@ use App\Models\Organization;
 use App\Models\OrganizationLandingPage;
 use App\Support\FrontendUrl;
 use App\Support\Landing\BlockSchema;
+use App\Support\Landing\Embed;
 use Illuminate\Support\Collection;
 
 /**
@@ -175,6 +176,12 @@ final class LandingRenderer
         }
         if ($block['type'] === 'video') {
             $block['youtube_id'] = $this->youtubeId((string) ($block['content']['videoUrl'] ?? ''));
+            // TikTok links in the video block play as the official TikTok embed.
+            $embed = $block['youtube_id'] ? null : Embed::resolve((string) ($block['content']['videoUrl'] ?? ''));
+            $block['embed'] = $embed && $embed['provider'] === 'tiktok' ? $embed : null;
+        }
+        if ($block['type'] === 'embed') {
+            $block['embed'] = Embed::resolve((string) ($block['content']['url'] ?? ''));
         }
 
         return $block;

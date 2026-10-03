@@ -112,3 +112,10 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 .consent{position:fixed;left:12px;right:12px;bottom:12px;z-index:50;max-width:480px;margin:0 auto;background:var(--bg);color:var(--fg);border:1px solid rgba(127,127,127,.3);border-radius:18px;padding:14px 16px;box-shadow:0 8px 32px rgba(0,0,0,.18);font-size:.9rem}
 .consent p{margin:0 0 10px}.consent-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px}.consent a{color:var(--muted)}
 .preview-bar{position:sticky;top:0;z-index:40;background:#facc15;color:#000;text-align:center;font-size:.85rem;font-weight:700;padding:6px}
+.embed{position:relative;width:100%;border-radius:16px;overflow:hidden;background:var(--surface)}
+.embed iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.embed.vertical{aspect-ratio:9/16;max-width:340px;margin:0 auto;background:#000}
+.yt.vertical{aspect-ratio:9/16;max-width:340px;margin:0 auto}
+.wa-btn{background:#25d366;border-color:#25d366;color:#fff}
+.wa-btn svg{width:22px;height:22px;flex:none}
+.wa-card{border-radius:18px;padding:18px;background:var(--surface);box-shadow:0 1px 0 rgba(0,0,0,.04),0 0 0 1px rgba(127,127,127,.15)}

@@ -22,7 +22,11 @@ export type BlockType =
   | 'slider'
   | 'countdown'
   | 'gif'
-  | 'html';
+  | 'html'
+  // Link-in-bio blocks (Fase 3)
+  | 'spacer'
+  | 'whatsapp'
+  | 'embed';
 
 export interface BlockStyles {
   backgroundColor?: string;
@@ -70,4 +74,7 @@ export const BLOCK_TYPES: BlockType[] = [
   'countdown',
   'gif',
   'html',
+  'spacer',
+  'whatsapp',
+  'embed',
 ];

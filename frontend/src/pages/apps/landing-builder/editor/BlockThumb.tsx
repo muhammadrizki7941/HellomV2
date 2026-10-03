@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react';
-import type { BlockType } from '../types';
 
 /**
  * Small drawings of each block for the "+ Tambah" gallery (Hellom's own, no outside assets).
@@ -20,7 +19,8 @@ const photo = (x: number, y: number, w: number, h: number, r = 6) => (
   </g>
 );
 
-const DRAWINGS: Partial<Record<BlockType, ReactNode>> = {
+/** Keyed by gallery card (editor/blockMeta GALLERY_ITEMS key). */
+const DRAWINGS: Record<string, ReactNode> = {
   profile: (
     <g>
       <circle cx="60" cy="26" r="13" fill={SOFT} />
@@ -95,6 +95,36 @@ const DRAWINGS: Partial<Record<BlockType, ReactNode>> = {
       <rect x="49" y="28" width="22" height="20" rx="5" fill="#dc2626" /><path d="M57 33l8 5-8 5z" fill="#fff" />
     </g>
   ),
+  product_physical: (
+    <g>
+      <path d="M40 30l20-10 20 10v26l-20 10-20-10z" fill="#d6a76c" stroke="#92673a" strokeWidth="2" strokeLinejoin="round" />
+      <path d="M40 30l20 10 20-10M60 40v26" fill="none" stroke="#92673a" strokeWidth="2" strokeLinejoin="round" />
+      <path d="M50 25l20 10" stroke="#f5deb3" strokeWidth="3" />
+      {pill(30, 68, 60, 9, ACCENT)}
+    </g>
+  ),
+  spacer: (
+    <g>
+      {line(16, 14, 88, INK, 6)}
+      <path d="M60 26v28M54 32l6-6 6 6M54 48l6 6 6-6" fill="none" stroke="#a1a1aa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      {line(16, 62, 88, INK, 6)}
+    </g>
+  ),
+  whatsapp: (
+    <g>
+      <rect x="18" y="28" width="84" height="22" rx="11" fill="#25d366" />
+      <circle cx="34" cy="39" r="6" fill="none" stroke="#fff" strokeWidth="2" />
+      {line(46, 37, 44, '#fff')}
+    </g>
+  ),
+  embed: (
+    <g>
+      <rect x="14" y="14" width="92" height="52" rx="8" fill={INK} />
+      <circle cx="34" cy="40" r="11" fill="#1db954" />
+      <path d="M28 37c5-2 10-1 13 1M29 41c4-1 8-1 11 1M30 45c3-1 6-1 8 0" stroke={INK} strokeWidth="1.6" fill="none" strokeLinecap="round" />
+      {line(52, 32, 44, '#fff')}{line(52, 42, 32, '#a1a1aa')}{line(52, 52, 38, '#52525b')}
+    </g>
+  ),
   faq: (
     <g>
       {[12, 34, 56].map((y, i) => (
@@ -107,11 +137,11 @@ const DRAWINGS: Partial<Record<BlockType, ReactNode>> = {
   ),
 };
 
-export default function BlockThumb({ type }: { type: BlockType }) {
+export default function BlockThumb({ kind }: { kind: string }) {
   return (
     <svg viewBox="0 0 120 80" className="h-full w-full" aria-hidden="true" focusable="false">
       <rect width="120" height="80" fill="#fafafa" />
-      {DRAWINGS[type] ?? line(30, 38, 60)}
+      {DRAWINGS[kind] ?? line(30, 38, 60)}
     </svg>
   );
 }

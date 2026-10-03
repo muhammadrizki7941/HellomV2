@@ -30,7 +30,8 @@ final class BlockSchema
         'image' => ['imageUrl' => 'img', 'caption' => 'str:200', 'linkUrl' => 'url', 'alt' => 'str:160'],
         'gif' => ['gifUrl' => 'img', 'caption' => 'str:200'],
         'video' => ['videoUrl' => 'url', 'title' => 'str:160'],
-        'product' => ['productId' => 'pid', 'buttonText' => 'str:40', 'layout' => 'enum:card|wide',
+        // kind: which products the editor's picker offers (digital / physical gallery cards).
+        'product' => ['productId' => 'pid', 'buttonText' => 'str:40', 'layout' => 'enum:card|wide', 'kind' => 'enum:digital|physical',
             // Legacy inline product (before Fase 3); only for blocks not linked to a product.
             'name' => 'str:200', 'price' => 'str:40', 'description' => 'text:1000', 'imageUrl' => 'img'],
         'catalog' => ['title' => 'str:160', 'productIds' => 'pids', 'showAll' => 'bool', 'columns' => 'int:1:3', 'buttonText' => 'str:40'],
@@ -49,6 +50,10 @@ final class BlockSchema
         'gallery' => ['title' => 'str:160', 'columns' => 'int:2:4', 'images' => ['list', 24, ['url' => 'img', 'caption' => 'str:160']]],
         'countdown' => ['title' => 'str:160', 'subtitle' => 'text:300', 'targetDate' => 'date', 'expiredText' => 'str:160'],
         'html' => ['html' => 'html'],
+        // Link-in-bio blocks (Fase 3).
+        'spacer' => ['height' => 'int:8:160'],
+        'whatsapp' => ['title' => 'str:160', 'text' => 'str:60', 'number' => 'str:20', 'message' => 'text:300', 'style' => 'enum:button|card'],
+        'embed' => ['url' => 'url', 'title' => 'str:160'],
     ];
 
     public const STYLES = [

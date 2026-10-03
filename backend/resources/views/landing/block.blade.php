@@ -122,6 +122,13 @@
                     </button>
                 </div>
             </section>
+        @elseif (!empty($b['embed']))
+            <section class="{{ $cls }}" @if($style) style="{{ $style }}" @endif>
+                <div class="wrap">
+                    @if (!empty($c['title']))<h2 class="center">{{ $c['title'] }}</h2>@endif
+                    <div class="embed vertical"><iframe src="{{ $b['embed']['src'] }}" title="{{ $c['title'] ?? 'Video TikTok' }}" loading="lazy" allow="encrypted-media; fullscreen; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div>
+                </div>
+            </section>
         @endif
         @break
 
@@ -259,6 +266,48 @@
                     <a class="btn{{ ($c['style'] ?? $theme['buttonStyle']) === 'outline' ? ' outline' : '' }}{{ !empty($c['fullWidth']) ? ' block' : '' }}" href="{{ $btnHref }}"
                        @if (!str_starts_with($btnHref, '/') && !str_starts_with($btnHref, '#')) target="_blank" rel="noopener" @endif data-track="click" data-label="{{ $c['text'] ?? '' }}">{{ $c['text'] ?? 'Klik di sini' }}</a>
                     @if (!empty($editor) && $btnHref === '#')<p class="small muted" style="margin:6px 0 0">Belum ada link — ketuk untuk mengisi</p>@endif
+                </div>
+            </section>
+        @endif
+        @break
+
+    @case('spacer')
+        <div aria-hidden="true" style="height:{{ (int) ($c['height'] ?? 32) }}px"></div>
+        @break
+
+    @case('whatsapp')
+        @php $waHref = $wa(($c['number'] ?? '') !== '' ? $c['number'] : ($settings['whatsappNumber'] ?? null), $c['message'] ?? null); @endphp
+        @if ($waHref)
+            <section class="{{ $cls }} center" style="{{ trim('padding-top:8px;padding-bottom:8px;' . $style, ';') }}">
+                <div class="wrap">
+                    @if (($c['style'] ?? 'button') === 'card')
+                        <div class="wa-card">
+                            @if (!empty($c['title']))<h2 style="margin-top:0">{{ $c['title'] }}</h2>@endif
+                            <a class="btn block wa-btn" href="{{ $waHref }}" target="_blank" rel="noopener" data-track="click" data-label="{{ $c['text'] ?? 'WhatsApp' }}"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.5 3.5A11 11 0 0 0 3.3 17.2L2 22l4.9-1.3A11 11 0 0 0 20.5 3.5zM12 20a8.9 8.9 0 0 1-4.6-1.3l-.3-.2-2.9.8.8-2.8-.2-.3A9 9 0 1 1 12 20zm4.9-6.7c-.3-.1-1.6-.8-1.8-.9-.3-.1-.4-.1-.6.1l-.8 1c-.2.2-.3.2-.6.1a7.4 7.4 0 0 1-3.6-3.2c-.3-.5.3-.4.8-1.4.1-.2 0-.3 0-.4l-.8-2c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.8 11.9 11.9 0 0 0 4.6 4c1.7.7 2.4.8 3.2.7.5-.1 1.6-.7 1.8-1.3.2-.6.2-1.2.2-1.3-.1-.2-.3-.2-.6-.3z"/></svg> {{ $c['text'] ?? 'Chat via WhatsApp' }}</a>
+                        </div>
+                    @else
+                        <a class="btn block wa-btn" href="{{ $waHref }}" target="_blank" rel="noopener" data-track="click" data-label="{{ $c['text'] ?? 'WhatsApp' }}"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.5 3.5A11 11 0 0 0 3.3 17.2L2 22l4.9-1.3A11 11 0 0 0 20.5 3.5zM12 20a8.9 8.9 0 0 1-4.6-1.3l-.3-.2-2.9.8.8-2.8-.2-.3A9 9 0 1 1 12 20zm4.9-6.7c-.3-.1-1.6-.8-1.8-.9-.3-.1-.4-.1-.6.1l-.8 1c-.2.2-.3.2-.6.1a7.4 7.4 0 0 1-3.6-3.2c-.3-.5.3-.4.8-1.4.1-.2 0-.3 0-.4l-.8-2c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.8 11.9 11.9 0 0 0 4.6 4c1.7.7 2.4.8 3.2.7.5-.1 1.6-.7 1.8-1.3.2-.6.2-1.2.2-1.3-.1-.2-.3-.2-.6-.3z"/></svg> {{ $c['text'] ?? 'Chat via WhatsApp' }}</a>
+                    @endif
+                </div>
+            </section>
+        @endif
+        @break
+
+    @case('embed')
+        @php $e = $b['embed'] ?? null; @endphp
+        @if ($e)
+            <section class="{{ $cls }}" @if($style) style="{{ $style }}" @endif>
+                <div class="wrap">
+                    @if (!empty($c['title']))<h2 class="center">{{ $c['title'] }}</h2>@endif
+                    @if ($e['provider'] === 'youtube')
+                        <button type="button" class="yt{{ $e['vertical'] ? ' vertical' : '' }}" data-yt="{{ $e['id'] }}" aria-label="Putar video {{ $c['title'] ?? '' }}">
+                            <img src="https://i.ytimg.com/vi/{{ $e['id'] }}/hqdefault.jpg" alt="" loading="lazy" decoding="async"><span></span>
+                        </button>
+                    @else
+                        <div class="embed{{ $e['vertical'] && !$e['height'] ? ' vertical' : '' }}" @if($e['height']) style="height:{{ $e['height'] }}px" @endif>
+                            <iframe src="{{ $e['src'] }}" title="{{ $c['title'] ?? $e['label'] }}" loading="lazy" allow="encrypted-media; clipboard-write; fullscreen; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+                        </div>
+                    @endif
                 </div>
             </section>
         @endif

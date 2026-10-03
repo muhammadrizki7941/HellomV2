@@ -90,8 +90,8 @@ function toEditorDoc(doc: LandingDocument): EditorDoc {
   };
 }
 
-export function newBlock(type: BlockType): Block {
-  return { id: nanoid(10), type, content: structuredClone(defaultContent[type] ?? {}) };
+export function newBlock(type: BlockType, content: Record<string, unknown> = {}): Block {
+  return { id: nanoid(10), type, content: { ...structuredClone(defaultContent[type] ?? {}), ...content } };
 }
 
 export function useEditorDocument() {
@@ -247,8 +247,8 @@ export function useEditorDocument() {
     redo: () => dispatch({ type: 'redo' }),
     setTheme: (patch: Partial<EditorTheme>) => change((d) => ({ ...d, theme: { ...d.theme, ...patch } }), 'theme'),
     setSettings: (patch: Partial<EditorSettings>) => change((d) => ({ ...d, settings: { ...d.settings, ...patch } }), 'settings'),
-    addBlock: (type: BlockType, index?: number) => {
-      const block = newBlock(type);
+    addBlock: (type: BlockType, index?: number, content?: Record<string, unknown>) => {
+      const block = newBlock(type, content);
       setBlocks((blocks) => {
         const next = [...blocks];
         next.splice(index === undefined ? next.length : Math.max(0, Math.min(index, next.length)), 0, block);

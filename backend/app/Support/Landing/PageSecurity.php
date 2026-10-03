@@ -41,7 +41,8 @@ final class PageSecurity
             "media-src 'self' https:",
             // Pixels send events to many hosts (facebook.com, google-analytics, doubleclick…).
             "connect-src 'self' {$origins} https:",
-            'frame-src https://www.youtube-nocookie.com https://www.youtube.com',
+            // Official embeds only (Embed::FRAME_HOSTS): YouTube, Spotify, TikTok, Instagram.
+            'frame-src https://www.youtube-nocookie.com https://www.youtube.com ' . implode(' ', Embed::FRAME_HOSTS),
             "frame-ancestors 'self' {$origins}",
             "form-action 'self' {$origins}",
             "base-uri 'none'",

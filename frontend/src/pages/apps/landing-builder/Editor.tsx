@@ -16,7 +16,7 @@ import { SettingsModal } from './components/SettingsModal';
 import type { ThemeOptions } from './components/SettingsModal';
 import { HistoryDialog, PagesDialog, TemplatesDialog } from './components/EditorDialogs';
 import type { PageTemplate } from './templates';
-import type { Block, BlockType } from './types';
+import type { Block } from './types';
 import { useEditorDocument } from './editor/useEditorDocument';
 import type { EditorApi } from './editor/useEditorDocument';
 import PhonePreview from './editor/PhonePreview';
@@ -24,6 +24,7 @@ import BlockList from './editor/BlockList';
 import AddBlockGallery from './editor/AddBlockGallery';
 import Sheet from './editor/Sheet';
 import { BLOCK_META } from './editor/blockMeta';
+import type { GalleryItem } from './editor/blockMeta';
 
 /**
  * Hellom Page editor, link-in-bio style (Fase 2). Desktop: block list (or the selected block's
@@ -78,8 +79,8 @@ export default function Editor() {
     if (id) { setPanel('list'); setSheet('block'); }
   }, [setSelectedId]);
 
-  const add = (type: BlockType) => {
-    actions.addBlock(type);
+  const add = (item: GalleryItem) => {
+    actions.addBlock(item.type, undefined, item.content);
     setPanel('list');
     setSheet('block');
   };

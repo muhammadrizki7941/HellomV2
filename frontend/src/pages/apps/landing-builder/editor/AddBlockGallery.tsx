@@ -1,25 +1,24 @@
 import { useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
-import type { BlockType } from '../types';
 import type { EditorPreset } from '../presets';
 import BlockThumb from './BlockThumb';
-import { BLOCK_META, GALLERY_TYPES, GROUP_LABELS } from './blockMeta';
-import type { BlockGroup } from './blockMeta';
+import { GALLERY_ITEMS, GROUP_LABELS } from './blockMeta';
+import type { BlockGroup, GalleryItem } from './blockMeta';
 
 /** "+ Tambah": illustrated block gallery. The preset's blocks come first ("Disarankan"). */
-export default function AddBlockGallery({ preset, onPick }: { preset: EditorPreset; onPick: (type: BlockType) => void }) {
+export default function AddBlockGallery({ preset, onPick }: { preset: EditorPreset; onPick: (item: GalleryItem) => void }) {
   const [query, setQuery] = useState('');
 
   const sections = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const match = (type: BlockType) => !q || `${BLOCK_META[type].label} ${BLOCK_META[type].description}`.toLowerCase().includes(q);
-    if (q) return [{ title: 'Hasil pencarian', types: GALLERY_TYPES.filter(match) }];
-    const featured = preset.featured.filter((type) => GALLERY_TYPES.includes(type));
+    const match = (item: GalleryItem) => !q || `${item.label} ${item.description}`.toLowerCase().includes(q);
+    if (q) return [{ title: 'Hasil pencarian', items: GALLERY_ITEMS.filter(match) }];
+    const featured = preset.featured.map((key) => GALLERY_ITEMS.find((item) => item.key === key)).filter((item): item is GalleryItem => !!item);
     const groups = (Object.keys(GROUP_LABELS) as BlockGroup[]).map((group) => ({
       title: GROUP_LABELS[group],
-      types: GALLERY_TYPES.filter((type) => BLOCK_META[type].group === group && !featured.includes(type)),
+      items: GALLERY_ITEMS.filter((item) => item.group === group && !featured.includes(item)),
     }));
-    return [{ title: 'Disarankan untukmu', types: featured }, ...groups].filter((s) => s.types.length > 0);
+    return [{ title: 'Disarankan untukmu', items: featured }, ...groups].filter((s) => s.items.length > 0);
   }, [preset, query]);
 
   return (
@@ -39,17 +38,16 @@ export default function AddBlockGallery({ preset, onPick }: { preset: EditorPres
         <section key={section.title}>
           <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">{section.title}</h3>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {section.types.map((type) => {
-              const meta = BLOCK_META[type];
+            {section.items.map((meta) => {
               return (
                 <button
-                  key={type}
+                  key={meta.key}
                   type="button"
-                  onClick={() => onPick(type)}
-                  data-block-type={type}
+                  onClick={() => onPick(meta)}
+                  data-block-type={meta.key}
                   className="group overflow-hidden rounded-2xl border border-zinc-200 bg-white text-left transition hover:border-zinc-900 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-zinc-900"
                 >
-                  <span className="block aspect-[3/2] border-b border-zinc-100"><BlockThumb type={type} /></span>
+                  <span className="block aspect-[3/2] border-b border-zinc-100"><BlockThumb kind={meta.key} /></span>
                   <span className="block p-2.5">
                     <span className="block text-sm font-semibold text-zinc-900">{meta.label}</span>
                     <span className="block text-xs leading-snug text-zinc-500">{meta.description}</span>
