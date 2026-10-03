@@ -45,7 +45,8 @@ class EditorFoundationTest extends SellerFinanceTestCase
 
         $this->assertSame(DocumentMigrator::CURRENT, $doc['schema_version']);
         $this->assertArrayNotHasKey('version', $doc);
-        $this->assertSame(['preset' => 'ocean', 'font' => 'serif', 'buttonShape' => 'pill'], $doc['theme']);
+        // v3 (Fase 5): one font → heading + body font, button shape → theme.button.
+        $this->assertSame(['preset' => 'ocean', 'headingFont' => 'serif', 'bodyFont' => 'serif', 'button' => ['shape' => 'pill']], $doc['theme']);
         $this->assertSame('Toko Lama', $doc['blocks'][0]['content']['name']);
         $this->assertSame('Pesan sekarang', $doc['blocks'][1]['content']['text']);
         $this->assertSame(['backgroundColor' => '#123456'], $doc['blocks'][1]['styles']);

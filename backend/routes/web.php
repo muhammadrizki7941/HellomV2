@@ -35,6 +35,27 @@ Route::get('/media/{path}', function (string $path) {
 	return response()->file($disk->path($path), $headers);
 })->where('path', '.*')->name('media.public');
 
+// Hellom Page fonts (App\Support\Landing\Fonts). Production: Nginx serves them from the SPA build
+// before Laravel (`location ^~ /fonts/landing/` with CORS, deploy/nginx); this route covers
+// `php artisan serve` (dev, e2e; Vite proxies to it). Built copy first, then source.
+Route::get('/fonts/landing/{file}', function (string $file) {
+	foreach ([public_path('hellom/fonts/landing/' . $file), base_path('../frontend/public/fonts/landing/' . $file)] as $path) {
+		if (is_file($path)) {
+			return response()->file($path, ['Content-Type' => 'font/woff2', 'Cache-Control' => 'public, max-age=31536000, immutable', 'Access-Control-Allow-Origin' => '*']);
+		}
+	}
+	abort(404);
+})->where('file', '[a-z0-9-]+\.woff2')
+	// Static files: no session/cookies, so browsers and CDNs can cache them.
+	->withoutMiddleware([
+		\Illuminate\Session\Middleware\StartSession::class,
+		\Illuminate\Cookie\Middleware\EncryptCookies::class,
+		\Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse::class,
+		\Illuminate\View\Middleware\ShareErrorsFromSession::class,
+		\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class,
+	])
+	->name('landing.fonts');
+
 // Hellom Page (Fase 4): server-rendered shop pages. /{username} and /{username}/{slug};
 // reserved words and unknown usernames fall through to the SPA shell. The editor
 // preview of a draft uses a signed link.

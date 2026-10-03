@@ -18,7 +18,7 @@ final class BlockSchema
 {
     public const MAX_BLOCKS = 60;
 
-    /** field => spec. Specs: str:N, text:N, url, img, bool, int:min:max, num:min:max, enum:a|b, color, date, html, pid, pids, list:{...}:N */
+    /** field => spec. Specs: str:N, text:N, url, img, bool, int:min:max, num:min:max, enum:a|b, color, date, html, pid, pids, font, icon, ['list', N, spec], ['obj', spec] */
     public const TYPES = [
         'profile' => ['name' => 'str:80', 'bio' => 'text:300', 'avatarUrl' => 'img', 'coverUrl' => 'img', 'showVerified' => 'bool'],
         'hero' => ['title' => 'str:160', 'subtitle' => 'text:400', 'buttonText' => 'str:40', 'showButton' => 'bool', 'linkUrl' => 'url', 'imageUrl' => 'img'],
@@ -41,7 +41,10 @@ final class BlockSchema
         'form' => ['title' => 'str:160', 'subtitle' => 'text:400', 'buttonText' => 'str:40', 'successMessage' => 'str:200', 'sendToWhatsapp' => 'bool', 'whatsappNumber' => 'str:20',
             'fields' => ['list', 10, ['id' => 'str:40', 'label' => 'str:80', 'type' => 'enum:text|tel|email|textarea|number', 'required' => 'bool', 'system' => 'bool']]],
         'button' => ['text' => 'str:60', 'actionType' => 'enum:link|whatsapp', 'linkUrl' => 'url', 'whatsappNumber' => 'str:20', 'whatsappMessage' => 'text:300',
-            'align' => 'enum:left|center|right', 'style' => 'enum:solid|outline', 'fullWidth' => 'bool'],
+            'align' => 'enum:left|center|right', 'style' => 'enum:solid|outline', 'fullWidth' => 'bool',
+            // Fase 5: this button's own look (empty = theme), left icon or thumbnail, featured animation.
+            'shape' => 'enum:square|rounded|pill', 'fill' => 'enum:solid|outline|glass', 'shadow' => 'enum:none|soft|hard',
+            'icon' => 'icon', 'thumbUrl' => 'img', 'featured' => 'bool'],
         'divider' => ['style' => 'enum:solid|dashed|dotted', 'thickness' => 'int:1:8', 'width' => 'int:10:100'],
         'testimonials' => ['title' => 'str:160', 'items' => ['list', 20, ['name' => 'str:80', 'role' => 'str:80', 'text' => 'text:600', 'rating' => 'int:1:5', 'avatarUrl' => 'img']]],
         'faq' => ['title' => 'str:160', 'items' => ['list', 30, ['q' => 'str:200', 'a' => 'text:1500']]],
@@ -61,9 +64,20 @@ final class BlockSchema
         'backgroundImage' => 'img', 'paddingY' => 'enum:py-0|py-4|py-8|py-12|py-16|py-20|py-24|py-32', 'textAlign' => 'enum:left|center|right',
     ];
 
+    /** Page look (schema v3, Fase 5). Rendered by ThemeStyle::resolve. */
     public const THEME = [
         'preset' => 'str:30', 'primary' => 'color', 'background' => 'color', 'text' => 'color', 'buttonText' => 'color',
-        'font' => 'enum:sans|serif|rounded|mono', 'buttonShape' => 'enum:rounded|pill|square', 'buttonStyle' => 'enum:solid|outline',
+        'headingFont' => 'font', 'bodyFont' => 'font',
+        'bg' => ['obj', [
+            'type' => 'enum:solid|gradient|image|pattern|animated', 'color' => 'color', 'from' => 'color', 'via' => 'color', 'to' => 'color', 'angle' => 'int:0:360',
+            'image' => 'img', 'overlay' => 'num:0:0.9', 'blur' => 'int:0:20', 'position' => 'enum:center|top|bottom',
+            'pattern' => 'enum:dots|grid|diagonal|checks|waves|plus', 'patternColor' => 'color', 'patternOpacity' => 'num:0.03:0.5',
+            'animation' => 'enum:aurora|blobs|particles',
+        ]],
+        'button' => ['obj', [
+            'shape' => 'enum:square|rounded|pill', 'fill' => 'enum:solid|outline|glass', 'borderWidth' => 'int:1:4',
+            'shadow' => 'enum:none|soft|hard', 'hover' => 'enum:none|lift|grow|shine',
+        ]],
     ];
 
     public const SETTINGS = ['whatsappNumber' => 'str:20', 'whatsappMessage' => 'text:300', 'showFloatingWhatsapp' => 'bool'];
@@ -140,6 +154,9 @@ final class BlockSchema
 
     private static function value(mixed $value, string|array $rule): mixed
     {
+        if (is_array($rule) && $rule[0] === 'obj') { // ['obj', spec]: nested object
+            return is_array($value) ? self::fields($value, $rule[1]) : null;
+        }
         if (is_array($rule)) { // ['list', max, itemSpec]
             if (!is_array($value)) {
                 return [];
@@ -171,6 +188,8 @@ final class BlockSchema
             'img' => self::url($value, true),
             'html' => is_string($value) ? SafeHtml::clean(Str::limit($value, 20000, '')) : null,
             'pid' => is_string($value) && preg_match('/^[a-z0-9]{6,24}$/', $value) ? $value : null,
+            'font' => is_string($value) && Fonts::valid($value) ? $value : null,
+            'icon' => is_string($value) && ButtonIcons::valid($value) ? $value : null,
             'pids' => is_array($value) ? array_values(array_slice(array_filter($value, fn ($v) => is_string($v) && preg_match('/^[a-z0-9]{6,24}$/', $v)), 0, 50)) : null,
             default => null,
         };

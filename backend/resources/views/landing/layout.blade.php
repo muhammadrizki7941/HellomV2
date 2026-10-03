@@ -18,7 +18,7 @@
     $waNumber = $waNumber !== '' && str_starts_with($waNumber, '0') ? '62' . substr($waNumber, 1) : $waNumber;
 @endphp
 <!doctype html>
-<html lang="id">
+<html lang="id" style="{{ $theme['bgCss'] }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -43,12 +43,14 @@
 <meta property="product:price:amount" content="{{ $meta['price'] }}">
 <meta property="product:price:currency" content="IDR">
 @endif
-<meta name="theme-color" content="{{ $theme['background'] }}">
+<meta name="theme-color" content="{{ $theme['effectiveBackground'] }}">
+@if (!empty($theme['fontPreload']))<link rel="preload" href="{{ $theme['fontPreload'] }}" as="font" type="font/woff2" crossorigin>@endif
 <link rel="icon" href="/favicon.ico">
 @if (!empty($tracking['meta_pixel_id']))<link rel="preconnect" href="https://connect.facebook.net" crossorigin>@endif
-<style>:root{--bg:{{ $theme['background'] }};--fg:{{ $theme['text'] }};--primary:{{ $theme['primary'] }};--btn-fg:{{ $theme['buttonText'] }};--muted:{{ $theme['muted'] }};--surface:{{ $theme['surface'] }};--radius:{{ $theme['radius'] }};--font:{!! $theme['font'] !!}}{!! $css !!}</style>
+<style>{!! $theme['fontFaces'] !!}:root{--bg:{{ $theme['effectiveBackground'] }};--fg:{{ $theme['text'] }};--primary:{{ $theme['primary'] }};--btn-text:{{ $theme['buttonText'] }};--muted:{{ $theme['muted'] }};--surface:{{ $theme['surface'] }};--font:{!! $theme['font'] !!};--font-h:{!! $theme['headingFont'] !!};{{ $theme['buttonVars'] }}}{!! $css !!}</style>
 </head>
-<body class="{{ $theme['dark'] ? 'dark' : '' }}">
+<body class="{{ trim((($theme['dark'] ?? false) ? 'dark ' : '') . ($theme['bgClass'] ?? '') . ' hv-' . ($theme['hover'] ?? 'none')) }}">
+{!! $theme['bgLayers'] ?? '' !!}
 @if ($preview && empty($editor))<div class="preview-bar">Pratinjau draft — belum tayang ke publik</div>@endif
 <main>
 @yield('content')

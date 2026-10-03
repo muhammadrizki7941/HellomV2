@@ -84,6 +84,17 @@ server {
         proxy_read_timeout 60s;
     }
 
+    # Hellom Page fonts (self-hosted): the editor preview is a sandboxed iframe (origin "null"),
+    # so the files need CORS. Must come before the generic static block below.
+    location ^~ /fonts/landing/ {
+        expires max;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        add_header Access-Control-Allow-Origin "*";
+        add_header X-Content-Type-Options "nosniff";
+        access_log off;
+        try_files $uri =404;
+    }
+
     location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot|webp)$ {
         expires max;
         add_header Cache-Control "public, immutable";

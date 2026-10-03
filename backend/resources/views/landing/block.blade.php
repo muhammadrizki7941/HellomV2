@@ -21,7 +21,8 @@
     // Smaller WebP copies (480w/960w) when the upload has them (PF-04).
     $srcset = fn (?string $url, string $sizes) => ($set = \App\Support\ImageOptimizer::srcset($url)) ? 'srcset="' . e($set) . '" sizes="' . e($sizes) . '"' : '';
     $full = '(max-width: 720px) 100vw, 680px';
-    $btnClass = 'btn' . (($theme['buttonStyle'] ?? 'solid') === 'outline' ? ' outline' : '');
+    // Theme button look comes from CSS variables (ThemeStyle::buttonVars on :root).
+    $btnClass = 'btn';
 @endphp
 @switch($b['type'])
     @case('profile')
@@ -263,8 +264,14 @@
             @php $btnHref = $btnHref ?: '#'; @endphp
             <section class="{{ $cls }} {{ $c['align'] ?? 'center' }}" style="{{ trim('padding-top:8px;padding-bottom:8px;' . $style, ';') }}">
                 <div class="wrap">
-                    <a class="btn{{ ($c['style'] ?? $theme['buttonStyle']) === 'outline' ? ' outline' : '' }}{{ !empty($c['fullWidth']) ? ' block' : '' }}" href="{{ $btnHref }}"
-                       @if (!str_starts_with($btnHref, '/') && !str_starts_with($btnHref, '#')) target="_blank" rel="noopener" @endif data-track="click" data-label="{{ $c['text'] ?? '' }}">{{ $c['text'] ?? 'Klik di sini' }}</a>
+                    @php
+                        // This button's own look (Fase 5), else the theme's; left icon or thumbnail; featured animation.
+                        $ownLook = !empty($c['fill']) || !empty($c['shape']) || !empty($c['shadow']);
+                        $btnVars = $ownLook ? \App\Support\Landing\ThemeStyle::buttonVars($theme, $c['fill'] ?? null, $c['shape'] ?? null, $c['shadow'] ?? null) : '';
+                        $btnIco = !empty($c['thumbUrl']) ? '<img src="' . e($c['thumbUrl']) . '" alt="" loading="lazy" decoding="async">' : (!empty($c['icon']) ? \App\Support\Landing\ButtonIcons::svg($c['icon']) : '');
+                    @endphp
+                    <a class="btn{{ !empty($c['fullWidth']) ? ' block' : '' }}{{ !empty($c['featured']) ? ' featured' : '' }}{{ $btnIco ? ' has-ico' : '' }}" @if($btnVars) style="{{ $btnVars }}" @endif href="{{ $btnHref }}"
+                       @if (!str_starts_with($btnHref, '/') && !str_starts_with($btnHref, '#')) target="_blank" rel="noopener" @endif data-track="click" data-label="{{ $c['text'] ?? '' }}">@if ($btnIco)<span class="btn-ico">{!! $btnIco !!}</span>@endif{{ $c['text'] ?? 'Klik di sini' }}</a>
                     @if (!empty($editor) && $btnHref === '#')<p class="small muted" style="margin:6px 0 0">Belum ada link — ketuk untuk mengisi</p>@endif
                 </div>
             </section>

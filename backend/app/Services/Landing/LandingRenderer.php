@@ -10,6 +10,7 @@ use App\Support\FrontendUrl;
 use App\Support\Landing\BlockSchema;
 use App\Support\Landing\Embed;
 use App\Support\Landing\SocialLinks;
+use App\Support\Landing\ThemeStyle;
 use Illuminate\Support\Collection;
 
 /**
@@ -18,24 +19,6 @@ use Illuminate\Support\Collection;
  */
 final class LandingRenderer
 {
-    /** Theme presets (same ids as the editor's THEMES); a document's own colors override them. */
-    public const PRESETS = [
-        'industrial' => ['background' => '#ffffff', 'text' => '#18181b', 'primary' => '#facc15', 'buttonText' => '#000000'],
-        'ocean' => ['background' => '#f0f9ff', 'text' => '#0c4a6e', 'primary' => '#0369a1', 'buttonText' => '#ffffff'],
-        'forest' => ['background' => '#fcfdf5', 'text' => '#1a2e05', 'primary' => '#4d7c0f', 'buttonText' => '#ffffff'],
-        'luxury' => ['background' => '#09090b', 'text' => '#fafafa', 'primary' => '#d4af37', 'buttonText' => '#000000'],
-        'minimal' => ['background' => '#fafafa', 'text' => '#18181b', 'primary' => '#18181b', 'buttonText' => '#ffffff'],
-        'blush' => ['background' => '#fff7f5', 'text' => '#3f1d24', 'primary' => '#e11d48', 'buttonText' => '#ffffff'],
-        'sunset' => ['background' => '#fffbeb', 'text' => '#422006', 'primary' => '#c2410c', 'buttonText' => '#ffffff'],
-    ];
-
-    public const FONTS = [
-        'sans' => 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-        'serif' => 'Georgia, Cambria, "Times New Roman", Times, serif',
-        'rounded' => 'ui-rounded, "SF Pro Rounded", "Nunito", system-ui, sans-serif',
-        'mono' => 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-    ];
-
     public function __construct(
         private readonly LandingShop $shop,
         private readonly SellerTrust $trust,
@@ -110,30 +93,10 @@ final class LandingRenderer
         ];
     }
 
-    /** @return array{background:string,text:string,primary:string,buttonText:string,font:string,radius:string,buttonStyle:string,muted:string,surface:string,dark:bool} */
+    /** Page look for the views (colors, background, fonts, button variables): ThemeStyle (Fase 5). */
     public function theme(array $theme): array
     {
-        $preset = self::PRESETS[$theme['preset'] ?? 'industrial'] ?? self::PRESETS['industrial'];
-        $colors = [
-            'background' => $theme['background'] ?? $preset['background'],
-            'text' => $theme['text'] ?? $preset['text'],
-            'primary' => $theme['primary'] ?? $preset['primary'],
-            'buttonText' => $theme['buttonText'] ?? $preset['buttonText'],
-        ];
-        // Unreadable button (custom colors, contrast < 3:1): switch to black or white text.
-        if ($this->contrast($colors['primary'], $colors['buttonText']) < 3) {
-            $colors['buttonText'] = $this->contrast($colors['primary'], '#000000') >= $this->contrast($colors['primary'], '#ffffff') ? '#000000' : '#ffffff';
-        }
-        $dark = $this->luminance($colors['background']) < 0.35;
-
-        return $colors + [
-            'font' => self::FONTS[$theme['font'] ?? 'sans'] ?? self::FONTS['sans'],
-            'radius' => match ($theme['buttonShape'] ?? 'rounded') { 'pill' => '999px', 'square' => '4px', default => '14px' },
-            'buttonStyle' => $theme['buttonStyle'] ?? 'solid',
-            'muted' => $dark ? 'rgba(255,255,255,.68)' : 'rgba(0,0,0,.6)',
-            'surface' => $dark ? 'rgba(255,255,255,.06)' : '#ffffff',
-            'dark' => $dark,
-        ];
+        return ThemeStyle::resolve($theme);
     }
 
     /** @return Collection<string, LandingProduct> products referenced by product/catalog blocks, keyed by public id */
@@ -224,37 +187,5 @@ final class LandingRenderer
         }
 
         return str_starts_with($url, '/') ? FrontendUrl::to($url) : $url;
-    }
-
-    /** WCAG contrast ratio between two hex colors (1–21). */
-    private function contrast(string $a, string $b): float
-    {
-        $rel = function (string $hex): float {
-            $hex = ltrim($hex, '#');
-            if (strlen($hex) === 3) {
-                $hex = $hex[0] . $hex[0] . $hex[1] . $hex[1] . $hex[2] . $hex[2];
-            }
-            [$r, $g, $b] = array_map(function ($c) {
-                $v = hexdec($c) / 255;
-
-                return $v <= 0.03928 ? $v / 12.92 : (($v + 0.055) / 1.055) ** 2.4;
-            }, str_split(substr($hex . '000000', 0, 6), 2));
-
-            return 0.2126 * $r + 0.7152 * $g + 0.0722 * $b;
-        };
-        [$x, $y] = [$rel($a), $rel($b)];
-
-        return (max($x, $y) + 0.05) / (min($x, $y) + 0.05);
-    }
-
-    private function luminance(string $hex): float
-    {
-        $hex = ltrim($hex, '#');
-        if (strlen($hex) === 3) {
-            $hex = $hex[0] . $hex[0] . $hex[1] . $hex[1] . $hex[2] . $hex[2];
-        }
-        [$r, $g, $b] = array_map(fn ($c) => hexdec($c) / 255, str_split(substr($hex . '000000', 0, 6), 2));
-
-        return 0.2126 * $r + 0.7152 * $g + 0.0722 * $b;
     }
 }
