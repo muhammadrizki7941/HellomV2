@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\DB;
 
 class PlatformFinanceLedger extends Model
 {
@@ -39,49 +40,53 @@ class PlatformFinanceLedger extends Model
         return $this->belongsTo(Organization::class);
     }
 
-    // Helper methods for different transaction types
     public static function recordRevenue(string $category, int $amount, ?int $organizationId = null, ?string $referenceType = null, ?int $referenceId = null, ?string $description = null): self
     {
-        $currentBalance = self::getCurrentBalance();
-        $newBalance = $currentBalance + $amount;
-
-        return self::create([
-            'type' => 'revenue',
-            'category' => $category,
-            'reference_type' => $referenceType,
-            'reference_id' => $referenceId,
-            'organization_id' => $organizationId,
-            'currency' => 'IDR',
-            'amount' => $amount,
-            'balance_before' => $currentBalance,
-            'balance_after' => $newBalance,
-            'description' => $description,
-            'effective_at' => now(),
-        ]);
+        return self::appendRow('revenue', $category, $amount, $organizationId, $referenceType, $referenceId, $description);
     }
 
     public static function recordExpense(string $category, int $amount, ?string $referenceType = null, ?int $referenceId = null, ?string $description = null): self
     {
-        $currentBalance = self::getCurrentBalance();
-        $newBalance = $currentBalance - $amount;
+        return self::appendRow('expense', $category, -$amount, null, $referenceType, $referenceId, $description); // negative for expense
+    }
 
-        return self::create([
-            'type' => 'expense',
-            'category' => $category,
-            'reference_type' => $referenceType,
-            'reference_id' => $referenceId,
-            'currency' => 'IDR',
-            'amount' => -$amount, // negative for expense
-            'balance_before' => $currentBalance,
-            'balance_after' => $newBalance,
-            'description' => $description,
-            'effective_at' => now(),
-        ]);
+    /**
+     * Append one row. The latest row is locked so concurrent writers cannot read the same
+     * running balance, and a row for the same (type, category, reference) is returned
+     * instead of being written twice (webhook + return URL + reconcile).
+     */
+    private static function appendRow(string $type, string $category, int $amount, ?int $organizationId, ?string $referenceType, ?int $referenceId, ?string $description): self
+    {
+        return DB::transaction(function () use ($type, $category, $amount, $organizationId, $referenceType, $referenceId, $description): self {
+            $latest = self::query()->orderByDesc('effective_at')->orderByDesc('id')->lockForUpdate()->first();
+            if ($referenceType !== null && $referenceId !== null) {
+                $existing = self::query()->where('type', $type)->where('category', $category)
+                    ->where('reference_type', $referenceType)->where('reference_id', $referenceId)->first();
+                if ($existing) {
+                    return $existing;
+                }
+            }
+            $currentBalance = (int) ($latest?->balance_after ?? 0);
+
+            return self::create([
+                'type' => $type,
+                'category' => $category,
+                'reference_type' => $referenceType,
+                'reference_id' => $referenceId,
+                'organization_id' => $organizationId,
+                'currency' => 'IDR',
+                'amount' => $amount,
+                'balance_before' => $currentBalance,
+                'balance_after' => $currentBalance + $amount,
+                'description' => $description,
+                'effective_at' => now(),
+            ]);
+        }, 3);
     }
 
     public static function getCurrentBalance(): int
     {
-        return (int) self::latest('effective_at')->value('balance_after') ?? 0;
+        return (int) (self::query()->orderByDesc('effective_at')->orderByDesc('id')->value('balance_after') ?? 0);
     }
 
     public static function getRevenueSummary(int $days = 30): array

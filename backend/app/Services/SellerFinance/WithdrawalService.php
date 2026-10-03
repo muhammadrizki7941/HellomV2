@@ -8,6 +8,7 @@ use App\Models\OrganizationPayoutProfile;
 use App\Models\SellerLedgerEntry;
 use App\Models\SellerWithdrawal;
 use App\Models\User;
+use App\Services\Finance\JournalRecorder;
 use App\Services\Payments\DisbursementRequest;
 use App\Services\Payments\GatewayRegistry;
 use App\Support\FrontendUrl;
@@ -169,6 +170,7 @@ final class WithdrawalService
                 'provider_ref' => $providerRef ?: $locked->provider_ref,
                 'proof_path' => $proof ? $proof->store('seller-withdrawals/' . $locked->organization_id, 'local') : $locked->proof_path,
             ])->save();
+            JournalRecorder::safely(fn (JournalRecorder $journal) => $journal->withdrawalPaid($locked));
 
             return $locked;
         }, 3);

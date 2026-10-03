@@ -7,6 +7,7 @@ use App\Models\Organization;
 use App\Models\SellerBalance;
 use App\Models\SellerLedgerEntry;
 use App\Models\SellerWithdrawal;
+use App\Services\Finance\JournalRecorder;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -67,7 +68,7 @@ final class SellerLedger
         }
         $balance->save();
 
-        return SellerLedgerEntry::query()->create(array_merge($attributes, [
+        $entry = SellerLedgerEntry::query()->create(array_merge($attributes, [
             'organization_id' => (int) $balance->organization_id,
             'type' => $type,
             'bucket' => $bucket,
@@ -75,6 +76,10 @@ final class SellerLedger
             'pending_after' => (int) $balance->pending,
             'available_after' => (int) $balance->available,
         ]));
+        // Mirror into the double-entry journal; never breaks the seller's money flow.
+        JournalRecorder::safely(fn (JournalRecorder $journal) => $journal->sellerLedger($entry));
+
+        return $entry;
     }
 
     /** Days a sale stays TERTAHAN for this seller. */

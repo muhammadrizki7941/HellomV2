@@ -8,6 +8,7 @@ use App\Models\LandingRefund;
 use App\Models\Organization;
 use App\Models\SellerLedgerEntry;
 use App\Models\User;
+use App\Services\Finance\JournalRecorder;
 use App\Services\SellerFinance\FinanceException;
 use App\Services\SellerFinance\SellerLedger;
 use App\Support\FrontendUrl;
@@ -96,6 +97,7 @@ final class RefundService
                 'reviewed_by_user_id' => $admin->id,
                 'proof_path' => $proof ? $proof->store('landing-refunds/' . $locked->organization_id, 'local') : $locked->proof_path,
             ])->save();
+            JournalRecorder::safely(fn (JournalRecorder $journal) => $journal->refundPaid($locked));
 
             return $locked;
         }, 3);

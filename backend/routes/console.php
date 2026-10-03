@@ -390,6 +390,10 @@ Schedule::command('landing:orders release')->everyTenMinutes()->withoutOverlappi
 Schedule::command('landing:orders sla')->everyThirtyMinutes()->withoutOverlapping();
 Schedule::command('balance:reconcile')->dailyAt('03:10')->withoutOverlapping();
 
+// Finance journal: safety net for entries a live hook missed, then a consistency check.
+Schedule::command('finance:journal-backfill --force --days=3')->hourlyAt(20)->withoutOverlapping();
+Schedule::command('finance:journal-reconcile')->dailyAt('03:20')->withoutOverlapping();
+
 // Heartbeat for GET /api/health: proves cron schedule:run is installed and running.
 Schedule::call(fn () => Cache::forever(HealthController::HEARTBEAT_KEY, time()))
     ->everyMinute()

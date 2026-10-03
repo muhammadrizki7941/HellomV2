@@ -4,11 +4,13 @@ namespace App\Observers;
 
 use App\Models\ProductPurchase;
 use App\Services\DigitalProducts\ProductAccessMailer;
+use App\Services\Finance\JournalRecorder;
 
 /**
  * Every "paid" transition (iPaymu/Xendit/DOKU webhooks, iPaymu status sync, manual
  * approval by the super admin) passes through here, so guest buyers always get
- * their access email. Runs after the surrounding transaction commits.
+ * their access email, and paid/refunded purchases reach the finance journal. Runs after
+ * the surrounding transaction commits.
  */
 class ProductPurchaseObserver
 {
@@ -18,6 +20,10 @@ class ProductPurchaseObserver
     {
         if (!$purchase->wasChanged('payment_status') && !$purchase->wasRecentlyCreated) {
             return;
+        }
+
+        if (in_array($purchase->payment_status, ['paid', 'refunded'], true)) {
+            JournalRecorder::safely(fn (JournalRecorder $journal) => $journal->productPurchase($purchase));
         }
 
         if ($purchase->payment_status !== 'paid' || !$purchase->isGuestCheckout()) {
