@@ -11,6 +11,8 @@ use App\Services\Payments\DisbursementResult;
 use App\Services\Payments\PaymentGateway;
 use App\Services\Payments\PaymentStatus;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use RuntimeException;
 
 /**
@@ -57,35 +59,27 @@ final class IpaymuGateway implements PaymentGateway
         $methods = $this->settings->enabledPaymentMethods();
         $qrisOnly = count($methods) === 1 && in_array('qris', $methods, true);
 
-        // QRIS (chosen by the buyer, or the only method): a direct charge so the buyer
-        // gets a QR on our own page.
+        // QRIS (chosen by the buyer, or the only method): try a direct charge so the buyer
+        // gets a QR on our own page. The direct API has to be enabled on the iPaymu account
+        // separately; when it refuses (or returns no QR) the buyer gets iPaymu's payment
+        // page instead — the same API Hellom's own product checkout uses.
         if ($qrisOnly || ($request->preferredMethod === 'qris' && in_array('qris', $methods, true))) {
-            $session = $this->api->createDirectPayment([
-                'name' => $request->buyerName !== '' ? $request->buyerName : 'Pembeli',
-                'email' => $request->buyerEmail,
-                'phone' => $request->buyerPhone ?: '08000000000',
-                'amount' => $request->amount,
-                'referenceId' => $request->reference,
-                'paymentMethod' => 'qris',
-                'paymentChannel' => 'qris',
-                'comments' => 'Pembelian: ' . $request->productName,
-                'returnUrl' => $request->returnUrl,
-                'notifyUrl' => $notifyUrl,
+            try {
+                $charge = $this->directQris($request, $notifyUrl);
+                if ($charge->qrString !== '' || $charge->qrImageUrl !== '') {
+                    return $charge;
+                }
+                $reason = 'respons QRIS tanpa kode QR';
+            } catch (\Throwable $exception) {
+                $reason = $exception->getMessage();
+            }
+            Log::warning('iPaymu QRIS direct gagal, pembeli diarahkan ke halaman pembayaran iPaymu', [
+                'reference' => $request->reference,
+                'reason' => Str::limit((string) $reason, 300),
             ]);
-
-            return new ChargeResult(
-                provider: 'ipaymu',
-                mode: 'qris',
-                paymentUrl: null,
-                gatewayRef: (string) (data_get($session, 'Data.SessionId') ?: data_get($session, 'Data.SessionID') ?: ''),
-                transactionId: (string) (data_get($session, 'Data.TransactionId') ?: ''),
-                qrImageUrl: (string) (data_get($session, 'Data.QrImage') ?: data_get($session, 'Data.qr_image') ?: data_get($session, 'Data.Url') ?: ''),
-                qrString: (string) (data_get($session, 'Data.QrString') ?: data_get($session, 'Data.QrContent') ?: data_get($session, 'Data.qr_string') ?: ''),
-                raw: $session,
-            );
         }
 
-        $session = $this->api->createRedirectPayment([
+        $payload = [
             'product' => [$request->productName],
             'qty' => [1],
             'price' => [$request->amount],
@@ -94,11 +88,16 @@ final class IpaymuGateway implements PaymentGateway
             'description' => ['Pembelian: ' . $request->productName],
             'buyerName' => $request->buyerName,
             'buyerEmail' => $request->buyerEmail,
-            'buyerPhone' => (string) ($request->buyerPhone ?? ''),
             'returnUrl' => $request->returnUrl,
             'cancelUrl' => $request->returnUrl,
             'notifyUrl' => $notifyUrl,
-        ]);
+        ];
+        // An empty buyerPhone is rejected by iPaymu; omit it like the subscription checkout does.
+        if (trim((string) $request->buyerPhone) !== '') {
+            $payload['buyerPhone'] = (string) $request->buyerPhone;
+        }
+        $session = $this->api->createRedirectPayment($payload);
+        $this->assertAccepted($session);
 
         return new ChargeResult(
             provider: 'ipaymu',
@@ -108,6 +107,49 @@ final class IpaymuGateway implements PaymentGateway
             transactionId: (string) (data_get($session, 'Data.TransactionId') ?: '') ?: null,
             raw: $session,
         );
+    }
+
+    private function directQris(ChargeRequest $request, string $notifyUrl): ChargeResult
+    {
+        $session = $this->api->createDirectPayment([
+            'name' => $request->buyerName !== '' ? $request->buyerName : 'Pembeli',
+            'email' => $request->buyerEmail,
+            'phone' => $request->buyerPhone ?: '08000000000',
+            'amount' => $request->amount,
+            'referenceId' => $request->reference,
+            'paymentMethod' => 'qris',
+            'paymentChannel' => 'qris',
+            'comments' => 'Pembelian: ' . $request->productName,
+            'returnUrl' => $request->returnUrl,
+            'notifyUrl' => $notifyUrl,
+        ]);
+        $this->assertAccepted($session);
+
+        return new ChargeResult(
+            provider: 'ipaymu',
+            mode: 'qris',
+            paymentUrl: null,
+            gatewayRef: (string) (data_get($session, 'Data.SessionId') ?: data_get($session, 'Data.SessionID') ?: ''),
+            transactionId: (string) (data_get($session, 'Data.TransactionId') ?: ''),
+            qrImageUrl: (string) (data_get($session, 'Data.QrImage') ?: data_get($session, 'Data.qr_image') ?: data_get($session, 'Data.Url') ?: ''),
+            qrString: (string) (data_get($session, 'Data.QrString') ?: data_get($session, 'Data.QrContent') ?: data_get($session, 'Data.qr_string') ?: ''),
+            raw: $session,
+        );
+    }
+
+    /**
+     * iPaymu often answers HTTP 200 with the real result in the body
+     * ({"Status":401,"Message":"..."}): treat a non-200 Status as an error so the
+     * reason is logged instead of surfacing later as an empty payment link.
+     *
+     * @param array<string, mixed> $response
+     */
+    private function assertAccepted(array $response): void
+    {
+        $status = data_get($response, 'Status');
+        if ($status !== null && (int) $status !== 200) {
+            throw new RuntimeException('iPaymu menolak permintaan (' . (int) $status . '): ' . (string) (data_get($response, 'Message') ?: 'tanpa pesan'));
+        }
     }
 
     public function verifyWebhook(Request $request): bool

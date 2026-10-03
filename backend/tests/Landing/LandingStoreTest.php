@@ -356,4 +356,50 @@ class LandingStoreTest extends SellerFinanceTestCase
         $order = LandingPageOrder::query()->where('product_id', $product->id)->firstOrFail();
         $this->assertSame([['label' => 'Ceritakan kebutuhan kamu', 'value' => 'Bikin logo toko kue']], $order->custom_fields);
     }
+
+    /**
+     * Production: QRIS is the default option, but the iPaymu account refuses the direct
+     * API (HTTP 200 with Status 401). The buyer must still get iPaymu's payment page.
+     */
+    public function test_qris_refused_by_ipaymu_falls_back_to_the_payment_page(): void
+    {
+        $seller = $this->seller();
+        $product = $this->product($seller);
+        Http::swap(new HttpFactory());
+        Http::preventStrayRequests();
+        Http::fake([
+            '*/api/v2/payment/direct' => Http::response(['Status' => 401, 'Message' => 'Direct payment is not activated for this merchant']),
+            '*/api/v2/payment' => Http::response(['Status' => 200, 'Data' => ['SessionID' => 'sess-fb', 'Url' => 'https://sandbox.ipaymu.com/pay/sess-fb']]),
+        ]);
+
+        $this->postJson("/api/v1/hellom/public/landing-products/{$product->public_id}/checkout", [
+            'buyer_name' => 'Sari Pembeli', 'buyer_email' => 'sari@example.test', 'payment_method' => 'qris',
+        ])->assertCreated()->assertJsonPath('data.mode', 'redirect')->assertJsonPath('data.payment_url', 'https://sandbox.ipaymu.com/pay/sess-fb');
+
+        $order = LandingPageOrder::query()->where('product_id', $product->id)->firstOrFail();
+        $this->assertSame(LandingPageOrder::STATUS_PENDING, $order->status);
+
+        // The redirect request does not carry an empty buyerPhone (iPaymu rejects it).
+        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/api/v2/payment') && !array_key_exists('buyerPhone', $request->data()));
+    }
+
+    public function test_gateway_refusal_is_kept_on_the_failed_order(): void
+    {
+        $seller = $this->seller();
+        $product = $this->product($seller);
+        Http::swap(new HttpFactory());
+        Http::preventStrayRequests();
+        Http::fake([
+            '*/api/v2/payment/direct' => Http::response(['Status' => 401, 'Message' => 'Unauthorized']),
+            '*/api/v2/payment' => Http::response(['Status' => 401, 'Message' => 'Unauthorized signature']),
+        ]);
+
+        $this->postJson("/api/v1/hellom/public/landing-products/{$product->public_id}/checkout", [
+            'buyer_name' => 'Sari Pembeli', 'buyer_email' => 'sari@example.test',
+        ])->assertStatus(422)->assertJsonPath('error.code', 'LANDING_CHECKOUT_FAILED');
+
+        $order = LandingPageOrder::query()->where('product_id', $product->id)->firstOrFail();
+        $this->assertSame(LandingPageOrder::STATUS_FAILED, $order->status);
+        $this->assertStringContainsString('Unauthorized signature', (string) data_get($order->metadata, 'payment_error'));
+    }
 }

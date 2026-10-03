@@ -60,6 +60,11 @@ final class PaymentStarter
             ));
         } catch (\Throwable $exception) {
             report($exception);
+            // Kept on the order (no secrets in gateway messages) so `landing:payments-check`
+            // and support can see why no payment could be opened.
+            $meta = is_array($order->metadata) ? $order->metadata : [];
+            $meta['payment_error'] = mb_substr($exception->getMessage(), 0, 300);
+            $order->forceFill(['metadata' => $meta])->save();
             $this->fail($order);
 
             throw new RuntimeException('Pembayaran belum bisa dibuat. Coba lagi sebentar lagi.', 0, $exception);
