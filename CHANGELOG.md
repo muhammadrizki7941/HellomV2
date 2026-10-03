@@ -12,6 +12,11 @@ Audit & status: [docs/audit-linkinbio-builder.md](docs/audit-linkinbio-builder.m
 - Editor desktop halaman kosong langsung menampilkan panel blok; editor tidak terkunci lagi saat halaman pertama dibuat bersamaan.
 - **Editor baru gaya link-in-bio (Fase 2)**: daftar blok + pratinjau HP yang merupakan halaman asli (dirender server, aman di iframe terpisah); ketuk bagian di pratinjau untuk mengedit; galeri "+ Tambah" bergambar; tampil/sembunyi, duplikat, hapus, geser urutan (juga keyboard), Urungkan/Ulangi; Lihat halaman & Salin link. Di HP: pratinjau penuh dengan bilah bawah dan bottom sheet. Blok bergaya landing page panjang tidak ditawarkan lagi (halaman lama tetap tampil).
 
+### Hellom Page — statistik per link & gambar saat dibagikan (Fase 6, 2026-10-04)
+- Tab **Statistik** kini menampilkan **klik per link**: berapa kali tiap tombol/ikon sosial/WhatsApp diklik, persentasenya dari kunjungan, dan dari mana pengunjungnya datang (Instagram, TikTok, langsung, …).
+- Saat link halaman dibagikan di WhatsApp/Facebook, tampil **kartu otomatis** berisi foto profil, nama toko, bio, dan warna halaman. Bisa diganti dengan gambar sendiri di Halaman › Atur.
+- Deploy: jalankan `php artisan migrate` (kolom baru di statistik, aman untuk data lama).
+
 ### Hellom Page — Tampilan & background (Fase 5, 2026-10-04)
 - Panel **Tampilan** baru: 12 tema siap pakai sekali ketuk; background polos, gradien, gambar (dengan gelap & blur), pola, atau animasi halus; huruf judul & isi dari 12 pilihan (di-host sendiri, tanpa Google); tombol dengan bentuk, isi (solid/garis/kaca), bayangan (termasuk gaya neo-brutal) dan efek saat disentuh.
 - Setiap tombol bisa punya gaya sendiri, ikon atau gambar kecil di kiri, dan bisa dijadikan **tombol unggulan** yang beranimasi. Warna teks otomatis dijaga agar tetap terbaca; animasi mati sendiri bila HP pengunjung meminta gerak dikurangi.
