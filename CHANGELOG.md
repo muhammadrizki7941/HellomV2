@@ -12,6 +12,11 @@ Audit & status: [docs/audit-linkinbio-builder.md](docs/audit-linkinbio-builder.m
 - Editor desktop halaman kosong langsung menampilkan panel blok; editor tidak terkunci lagi saat halaman pertama dibuat bersamaan.
 - **Editor baru gaya link-in-bio (Fase 2)**: daftar blok + pratinjau HP yang merupakan halaman asli (dirender server, aman di iframe terpisah); ketuk bagian di pratinjau untuk mengedit; galeri "+ Tambah" bergambar; tampil/sembunyi, duplikat, hapus, geser urutan (juga keyboard), Urungkan/Ulangi; Lihat halaman & Salin link. Di HP: pratinjau penuh dengan bilah bawah dan bottom sheet. Blok bergaya landing page panjang tidak ditawarkan lagi (halaman lama tetap tampil).
 
+### Hellom Page — ongkir kurir asli & blok baru (Fase 3, 2026-10-04)
+- **Ongkir otomatis untuk produk fisik** (RajaOngkir): pembeli mencari kecamatan, memilih kurir (JNE, J&T, SiCepat, AnterAja, POS, dll.) dengan estimasi hari dan harga asli; total langsung ikut. Penjual mengatur alamat asal & kurir di Pengaturan › Pengiriman; super admin mengisi API key di Pengaturan › Ongkir.
+- **Biaya layanan Hellom kini hanya dihitung dari harga produk** — ongkir sepenuhnya untuk penjual.
+- **Blok baru**: Spasi, Tombol WhatsApp, Embed (Spotify, TikTok, Instagram, YouTube); blok Video menerima link TikTok; galeri memisahkan Produk digital dan Produk fisik.
+
 ### Hellom Page — pembeli bayar langsung di halaman toko (2026-10-03)
 - **Perbaikan: pembayaran produk penjual selalu gagal** ("Pembayaran belum bisa dibuat"), padahal produk milik Hellom berhasil. Penyebab: checkout penjual memakai QRIS direct dengan permintaan & cara membaca jawaban iPaymu yang berbeda dari checkout Hellom (kode QRIS dikirim iPaymu di `PaymentNo` → QR kosong; nomor HP palsu).
 - Sekarang **sama seperti checkout produk Hellom**: pembeli memilih QRIS, Virtual Account (BCA, BNI, BRI, Mandiri, Permata, CIMB) atau Indomaret/Alfamart dan membayar **di halaman toko** — QR tampil langsung, nomor VA dengan tombol Salin, tanpa diarahkan ke halaman iPaymu. Halaman otomatis lanjut ke produk setelah bayar; halaman status pesanan menampilkan QR/VA lagi bila dibuka ulang.
