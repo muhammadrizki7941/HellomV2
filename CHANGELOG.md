@@ -4,6 +4,14 @@
 
 Audit lengkap dan status per temuan: [docs/AUDIT.md](docs/AUDIT.md). Langkah deploy khusus rilis ini: [docs/DEPLOY.md §3](docs/DEPLOY.md#3-catatan-khusus-rilis-refactor-branch-refactorcleanup).
 
+### Keuangan multi-gateway — jurnal & dashboard super admin (branch `feat/finance-multigateway`, 2026-10-03)
+Audit & status: [docs/audit-keuangan-gateway.md](docs/audit-keuangan-gateway.md).
+- **Satu jalur iPaymu**: langganan, top-up, produk Hellom dan Hellom Page dibuat & dibaca lewat adapter yang sama (notify URL bertanda tangan); saldo akun iPaymu dibaca dari API resmi.
+- **Jurnal keuangan double-entry** (append-only, idempotent): semua uang masuk/keluar — penjualan penjual, biaya layanan, saldo cair, penarikan & refund, produk Hellom, langganan, top-up — dengan uang milik penjual terpisah dari pendapatan Hellom. Riwayat lama diisi dengan `finance:journal-backfill` (laporan dulu, lalu `--force`); `finance:journal-reconcile` mencocokkan dengan saldo penjual.
+- **Ledger platform**: pencatatan pendapatan tidak lagi bisa dobel atau salah saldo berjalan saat pembayaran bersamaan.
+- **Menu baru Ringkasan Keuangan** (`/admin/keuangan`): uang masuk, pendapatan & bersih Hellom, biaya gateway, uang penjual yang dipegang, per gateway (dengan saldo live), grafik harian, perbandingan gateway, penjual teratas, tabel transaksi dengan filter & rincian debit/kredit; diperbarui otomatis.
+- **Tes**: suite `tests/Finance` (113 tes total), smoke admin 25/25.
+
 ### Hellom Page — pembeli bayar langsung di halaman toko (2026-10-03)
 - **Perbaikan: pembayaran produk penjual selalu gagal** ("Pembayaran belum bisa dibuat"), padahal produk milik Hellom berhasil. Penyebab: checkout penjual memakai QRIS direct dengan permintaan & cara membaca jawaban iPaymu yang berbeda dari checkout Hellom (kode QRIS dikirim iPaymu di `PaymentNo` → QR kosong; nomor HP palsu).
 - Sekarang **sama seperti checkout produk Hellom**: pembeli memilih QRIS, Virtual Account (BCA, BNI, BRI, Mandiri, Permata, CIMB) atau Indomaret/Alfamart dan membayar **di halaman toko** — QR tampil langsung, nomor VA dengan tombol Salin, tanpa diarahkan ke halaman iPaymu. Halaman otomatis lanjut ke produk setelah bayar; halaman status pesanan menampilkan QR/VA lagi bila dibuka ulang.

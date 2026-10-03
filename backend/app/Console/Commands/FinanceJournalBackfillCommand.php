@@ -9,6 +9,7 @@ use App\Models\OrganizationWalletTransaction;
 use App\Models\ProductPurchase;
 use App\Models\SellerLedgerEntry;
 use App\Models\SellerWithdrawal;
+use App\Services\Finance\FinanceJournal;
 use App\Services\Finance\JournalRecorder;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
@@ -47,6 +48,7 @@ class FinanceJournalBackfillCommand extends Command
         $table = [];
         $failed = 0;
 
+        FinanceJournal::$broadcast = false;
         DB::beginTransaction();
         try {
             foreach ($sources as $label => [$query, $column, $record]) {

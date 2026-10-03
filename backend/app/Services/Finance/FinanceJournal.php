@@ -4,6 +4,7 @@ namespace App\Services\Finance;
 
 use App\Models\FinanceJournalEntry;
 use App\Models\FinanceJournalLine;
+use App\Services\Realtime\RealtimeClient;
 use Carbon\CarbonInterface;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -27,6 +28,9 @@ use InvalidArgumentException;
 final class FinanceJournal
 {
     public const GATEWAYS = ['ipaymu', 'xendit', 'doku'];
+
+    /** Live push to the super admin dashboard; off during finance:journal-backfill. */
+    public static bool $broadcast = true;
 
     /** Account where money paid through $provider lands (manual/unknown = Hellom's bank). */
     public static function cashAccount(?string $provider): string
@@ -110,6 +114,11 @@ final class FinanceJournal
                         'amount' => $amount,
                         'occurred_at' => $occurredAt,
                     ]);
+                }
+
+                if (self::$broadcast) {
+                    $payload = ['id' => (int) $row->id, 'source' => $row->source, 'provider' => $row->provider, 'event_type' => $row->event_type, 'amount' => (int) $row->amount];
+                    DB::afterCommit(fn () => app(RealtimeClient::class)->emitToRoom(RealtimeClient::ROOM_ADMINS, 'admin.finance.journal', $payload));
                 }
 
                 return $row;

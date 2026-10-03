@@ -95,3 +95,26 @@ Tidak tercampur secara tabel, tetapi **tidak ada satu "jurnal" bersama**: lapora
 2. **Cakupan Fase 2**: memindahkan checkout **langganan** dan **produk digital owner** ke adapter gateway (memengaruhi alur yang sekarang berhasil di produksi; akan diuji penuh) — setuju, atau hanya Hellom Page + produk owner dulu?
 3. **Penarikan seller**: tetap manual (super admin transfer) bila iPaymu tidak punya API transfer, atau aktifkan Xendit hanya untuk payout?
 4. **Backfill**: isi jurnal dari data historis (`landing_page_orders`, `product_purchases`, `checkout_intents` lunas) agar grafik punya riwayat — setuju (dengan mode laporan dulu, `--force` setelah dicek)?
+
+## 8. Status (2026-10-03) — keputusan 1–4 disetujui, Fase 2–4 selesai
+| ID | Status | Catatan |
+|---|---|---|
+| R1 | **Selesai** | `PlatformFinanceLedger` menulis dalam transaksi dengan lock baris terakhir; satu baris per (type, category, reference). |
+| R2 | **Selesai** | Produk Hellom lunas/refund masuk jurnal (`ProductPurchaseObserver` → `revenue:digital_product`). |
+| R3 | **Selesai (estimasi)** | Fee gateway langganan & produk Hellom = estimasi `FeeCalculator` (penjualan penjual tetap pakai fee asli dari iPaymu). |
+| R4 | **Selesai (iPaymu)** | Langganan, top-up, produk Hellom & Hellom Page lewat `IpaymuGateway` (commit 2e7feaf). Xendit/DOKU tetap jalur lama + adapter. |
+| R5 | Terbuka | Xendit tidak aktif; ditangani bila Xendit diaktifkan. |
+| R6 | Terbuka | Produk Hellom masuk jurnal tanpa organisasi (`metadata.user_id`). |
+| R7 | **Selesai** | `getBalance()`: iPaymu (`/api/v2/balance`), Xendit; DOKU tidak punya API saldo publik (null). |
+
+**Jurnal (Fase 3):** `finance_journal_entries` / `finance_journal_lines` (append-only, `event_key` unik, baris berjumlah nol). Penulis: `App\Services\Finance\FinanceJournal` (akun & tipe akun), pemetaan: `JournalRecorder`.
+- Sumber: setiap baris `seller_balance_ledger` (hook di `SellerLedger::post`, key `seller_ledger:{id}`), penarikan dibayar & refund dibayar (hook di `WithdrawalService::markPaid` / `RefundService::markPaid`), produk Hellom, `checkout_intents` confirmed via gateway/manual, transaksi dompet (top-up, langganan dari saldo, pindah ke Saldo Penjualan) lewat observer `afterCommit`.
+- Hook tidak pernah menggagalkan alur uang (`JournalRecorder::safely` + `report()`); yang terlewat diambil `finance:journal-backfill --force --days=3` (tiap jam, menit 20).
+- `finance:journal-backfill` = mode laporan (transaksi di-rollback) → `--force` menulis. `finance:journal-reconcile` (harian 03:20): semua entri seimbang + saldo penjual di jurnal = `SellerLedger::computed`.
+- Tidak dicatat: perpindahan internal dompet (settle release) dan penarikan dompet lama (top-up tidak bisa ditarik).
+
+**Dashboard (Fase 4):** `/admin/keuangan` (Ringkasan Keuangan) — `GET admin/finance-journal/summary?days=` & `transactions` (filter gateway/sumber/jenis/toko/tanggal/cari, detail debit-kredit). Polling 30 dtk saat tab terlihat + event Socket.IO `admin.finance.journal` di room `admins`. Grafik Recharts: uang masuk & pendapatan per hari, perbandingan gateway, penjual teratas. Saldo live gateway di-cache 60 dtk (tombol Perbarui memaksa).
+
+**Tes:** `tests/Finance` (8 tes) di `phpunit.pos.xml` — total 113 tes OK; journey 16/16; admin smoke 25/25.
+
+**Deploy:** `php artisan migrate` → `php artisan finance:journal-backfill` (cek laporan) → `php artisan finance:journal-backfill --force` → `php artisan finance:journal-reconcile` → `php artisan optimize:clear`.

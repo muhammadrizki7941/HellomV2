@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\V1\Hellom\PromoCampaignController;
 use App\Http\Controllers\Api\V1\Hellom\ShowcaseController;
 use App\Http\Controllers\Api\V1\Hellom\SuperAdminController;
 use App\Http\Controllers\Api\V1\Hellom\AdminLandingModerationController;
+use App\Http\Controllers\Api\V1\Hellom\AdminFinanceJournalController;
 use App\Http\Controllers\Api\V1\Hellom\AdminSellerFinanceController;
 use Illuminate\Support\Facades\Route;
 
@@ -127,6 +128,9 @@ Route::prefix('admin')->name('admin.')->middleware('superAdmin')->group(function
     Route::get('product-purchases/{id}', [ProductPurchaseController::class, 'show']);
     Route::post('product-purchases/{id}/approve', [ProductPurchaseController::class, 'approve']);
     Route::post('product-purchases/{id}/refund', [ProductPurchaseController::class, 'refund']);
+    // ─── Keuangan multi-gateway (jurnal double-entry) ───
+    Route::get('finance-journal/summary', [AdminFinanceJournalController::class, 'summary'])->name('finance_journal.summary');
+    Route::get('finance-journal/transactions', [AdminFinanceJournalController::class, 'transactions'])->name('finance_journal.transactions');
     // ─── Keuangan penjual (landing page sales, Fase 2) ───
     Route::prefix('seller-finance')->name('seller_finance.')->group(function () {
         Route::get('/summary', [AdminSellerFinanceController::class, 'summary'])->name('summary');

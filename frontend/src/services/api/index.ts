@@ -441,6 +441,9 @@ export type {
   SellerWithdrawalRow,
 } from './sellerFinance';
 
+// Super admin › Keuangan: finance journal across every gateway.
+export * from './financeJournal';
+
 // Hellom Page selling (Fase 3): products, checkout, access page, orders, moderation.
 export * from './landingStore';
 

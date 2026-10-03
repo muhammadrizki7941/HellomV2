@@ -81,7 +81,7 @@ class Tab {
 const LOADING = /Memuat|Memeriksa server|Loading/;
 const PAGES = [
   ['/admin', 'Ringkasan'], ['/admin/users', 'Pengguna'], ['/admin/organizations', 'Organisasi'], ['/admin/apps', 'Aplikasi & Paket'],
-  ['/admin/invoices', 'Invoice'], ['/admin/finance', 'Keuangan Platform'], ['/admin/keuangan-penjual', 'Keuangan Penjual'],
+  ['/admin/invoices', 'Invoice'], ['/admin/keuangan', 'Ringkasan Keuangan'], ['/admin/finance', 'Keuangan Platform'], ['/admin/keuangan-penjual', 'Keuangan Penjual'],
   ['/admin/moderasi-toko', 'Moderasi Toko'], ['/admin/showcase', 'Showcase'], ['/admin/landing-content', 'Konten Situs'],
   ['/admin/brand', 'Branding'], ['/admin/audit-log', 'Log Audit'], ['/admin/system', 'Kesehatan Sistem'], ['/admin/settings', 'Pengaturan'],
   ['/admin/settings/email', 'Pengaturan Email'], ['/admin/notifications', 'Notifikasi'], ['/admin/products', 'Produk'],
@@ -125,6 +125,7 @@ try {
 
   tab.logs = []; tab.failed = [];
   await tab.go('/admin/audit-log');
+  await tab.waitFor(`!!document.querySelector('main select')`);
   await tab.eval(`(() => { const s = document.querySelector('main select'); s.value = 'organization.'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
   await sleep(1200);
   const auditOk = tab.logs.length === 0 && tab.failed.length === 0;
@@ -137,6 +138,20 @@ try {
   results.push({ path: 'action: manual transfer queue shows the seeded request', ok: manualQueue, console: tab.logs, failed: tab.failed });
   console.log(`${manualQueue ? 'OK  ' : 'FAIL'} action: manual transfer queue`);
 
+  // Finance journal: a transaction row opens its double-entry detail; the gateway filter answers.
+  tab.logs = []; tab.failed = [];
+  await tab.go('/admin/keuangan');
+  const hasRow = await tab.waitFor(`document.querySelectorAll('main tbody tr.cursor-pointer').length > 0`);
+  await tab.eval(`document.querySelector('main tbody tr.cursor-pointer')?.click(); true`);
+  const drawer = await tab.waitFor(`!!document.querySelector('aside[aria-label="Rincian transaksi"]') && document.body.innerText.includes('Debit')`);
+  await tab.shot('admin-keuangan-detail');
+  await tab.eval(`document.querySelector('aside[aria-label="Rincian transaksi"] button[aria-label="Tutup"]').click(); true`);
+  await tab.eval(`(() => { const s = document.querySelector('main select[aria-label="Gateway"]'); s.value = 'ipaymu'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+  await sleep(1200);
+  const financeOk = hasRow && drawer && tab.logs.length === 0 && tab.failed.length === 0;
+  results.push({ path: 'action: finance journal detail + filter', ok: financeOk, hasRow, drawer, console: tab.logs, failed: tab.failed });
+  console.log(`${financeOk ? 'OK  ' : 'FAIL'} action: finance journal detail + filter`);
+
   // Narrow (tablet) layout: no horizontal scroll on the overview.
   await tab.send('Emulation.setDeviceMetricsOverride', { width: 820, height: 1100, deviceScaleFactor: 1, mobile: false });
   await tab.go('/admin');
@@ -146,6 +161,10 @@ try {
   await tab.shot('admin-overview-tablet');
   results.push({ path: 'tablet 820px: overview without horizontal scroll', ok: !overflow });
   console.log(`${!overflow ? 'OK  ' : 'FAIL'} tablet 820px overview`);
+} catch (error) {
+  // Without this the exit in finally hides the error and reports only the checks done so far.
+  console.error('ABORTED', error);
+  results.push({ path: 'script aborted', ok: false, error: String(error) });
 } finally {
   writeFileSync(new URL('../../storage/app/admin_smoke_result.json', import.meta.url), JSON.stringify(results, null, 2));
   const passed = results.filter((r) => r.ok).length;

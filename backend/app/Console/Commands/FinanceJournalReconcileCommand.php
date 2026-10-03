@@ -35,9 +35,14 @@ class FinanceJournalReconcileCommand extends Command
             $this->error("Entri #{$entryId} tidak seimbang ({$total}).");
         }
 
+        // Sellers known to the ledger cache or to the journal (a journal-only seller is a mismatch too).
         $organizations = SellerBalance::query()
             ->when($this->option('organization'), fn ($q, $org) => $q->whereKey((int) $org))
-            ->pluck('organization_id');
+            ->pluck('organization_id')
+            ->merge(FinanceJournalLine::query()->where('account', 'like', 'seller:%')
+                ->when($this->option('organization'), fn ($q, $org) => $q->where('organization_id', (int) $org))
+                ->distinct()->pluck('organization_id'))
+            ->filter()->map(fn ($id): int => (int) $id)->unique()->values();
         $rows = [];
         foreach ($organizations as $orgId) {
             $orgId = (int) $orgId;

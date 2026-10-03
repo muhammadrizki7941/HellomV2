@@ -54,6 +54,7 @@ const SystemHealth = lazy(() => import('@/pages/admin/SystemHealth'));
 const AdminAuditLog = lazy(() => import('@/pages/admin/AuditLog'));
 const AdminInvoices = lazy(() => import('@/pages/admin/Invoices'));
 const FinanceManagement = lazy(() => import('@/pages/admin/FinanceManagement'));
+const FinanceOverview = lazy(() => import('@/pages/admin/FinanceOverview'));
 const AdminSellerFinance = lazy(() => import('@/pages/admin/SellerFinance'));
 const AdminLandingModeration = lazy(() => import('@/pages/admin/LandingModeration'));
 const ShowcaseManagement = lazy(() => import('@/pages/admin/ShowcaseManagement'));
@@ -202,6 +203,7 @@ export default function App() {
           <Route path="products/new" element={<AdminProductEdit />} />
           <Route path="products/:id/edit" element={<AdminProductEdit />} />
           <Route path="products/purchases" element={<AdminProductPurchases />} />
+          <Route path="keuangan" element={<FinanceOverview />} />
           <Route path="finance" element={<FinanceManagement />} />
           <Route path="keuangan-penjual" element={<AdminSellerFinance />} />
           <Route path="moderasi-toko" element={<AdminLandingModeration />} />

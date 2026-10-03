@@ -26,6 +26,7 @@ $sellerIds = User::query()->whereIn('email', [$sellerEmail, $adminEmail])->pluck
 $orgIds = DB::table('organization_user')->whereIn('user_id', $sellerIds)->pluck('organization_id')->unique();
 foreach ($orgIds as $orgId) {
     $orderIds = DB::table('landing_page_orders')->where('organization_id', $orgId)->pluck('id');
+    DB::table('finance_journal_entries')->where('organization_id', $orgId)->delete(); // lines cascade
     DB::table('seller_balance_ledger')->where('organization_id', $orgId)->delete();
     DB::table('seller_balances')->where('organization_id', $orgId)->delete();
     DB::table('seller_withdrawals')->where('organization_id', $orgId)->delete();

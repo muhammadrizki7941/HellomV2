@@ -57,6 +57,7 @@ class ConcurrentWithdrawalTest extends SellerFinanceTestCase
             $orderIds = DB::table('landing_page_orders')->where('organization_id', $orgId)->pluck('id');
             // Ledger rows are append-only in the app; test cleanup removes them directly.
             DB::table('seller_balance_ledger')->where('organization_id', $orgId)->delete();
+            DB::table('finance_journal_entries')->where('organization_id', $orgId)->delete(); // lines cascade
             DB::table('seller_withdrawals')->where('organization_id', $orgId)->delete();
             DB::table('seller_balances')->where('organization_id', $orgId)->delete();
             DB::table('landing_order_items')->whereIn('order_id', $orderIds)->delete();
