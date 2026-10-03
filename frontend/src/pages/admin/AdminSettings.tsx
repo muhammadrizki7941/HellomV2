@@ -9,6 +9,7 @@ import {
   Shield,
   Trash2,
   Truck,
+  LayoutTemplate,
   Users,
   Wallet,
 } from 'lucide-react';
@@ -27,6 +28,7 @@ import {
   updateCheckoutRuntimeConfig,
 } from '@/lib/hellomApi';
 import ShippingSettingsCard from './settings/ShippingSettings';
+import LandingTemplatesSettingsCard from './settings/LandingTemplatesSettings';
 
 type TeamMember = {
   id: number;
@@ -55,7 +57,7 @@ type ProviderCard = {
 };
 
 export default function AdminSettings() {
-  const [activeTab, setActiveTab] = useState<'payment' | 'shipping' | 'landing' | 'team'>('payment');
+  const [activeTab, setActiveTab] = useState<'payment' | 'shipping' | 'templates' | 'landing' | 'team'>('payment');
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [loadingTeam, setLoadingTeam] = useState(false);
@@ -852,6 +854,7 @@ export default function AdminSettings() {
         {[
           { key: 'payment', label: 'Payment Gateways', icon: CreditCard },
           { key: 'shipping', label: 'Ongkir', icon: Truck },
+          { key: 'templates', label: 'Template Halaman', icon: LayoutTemplate },
           { key: 'landing', label: 'Landing Page', icon: Globe },
           { key: 'team', label: 'Team & Account', icon: Users },
         ].map((tab) => (
@@ -1163,6 +1166,7 @@ export default function AdminSettings() {
       )}
 
       {activeTab === 'shipping' && <ShippingSettingsCard />}
+      {activeTab === 'templates' && <LandingTemplatesSettingsCard />}
 
       {activeTab === 'landing' && (
         <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">

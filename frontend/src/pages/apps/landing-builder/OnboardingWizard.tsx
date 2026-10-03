@@ -12,9 +12,8 @@ import {
   updateLandingUsername,
   uploadSellerProductFile,
 } from '@/lib/hellomApi';
-import type { LandingDocBlock, LandingDocument, LandingOnboarding, SellerProduct } from '@/lib/hellomApi';
-import { THEMES } from './constants';
-import { PAGE_TEMPLATES } from './templates';
+import type { LandingDocument, LandingOnboarding, PageTemplate, SellerProduct } from '@/lib/hellomApi';
+import { loadPageTemplates, templateBlocks } from './editor/pageTemplates';
 import { resetSellerProducts } from './sellerProducts';
 import DriveGuide from './DriveGuide';
 import { useOptionalEditorPreference } from './editorPreference';
@@ -48,9 +47,15 @@ export default function OnboardingWizard({ data, onClose, onDone }: { data: Land
   const hostPrefix = data.public_url.replace(/^https?:\/\//, '').replace(new RegExp(`${data.username}/?$`), '');
   // Starting template suggested by the editor preset (what the seller used before).
   const presetTemplate = useOptionalEditorPreference()?.preset.templateId;
-  const [template, setTemplate] = useState<string>(data.home_page && data.home_page.draft_blocks > 0
-    ? KEEP_DRAFT
-    : (PAGE_TEMPLATES.find((tpl) => tpl.id === presetTemplate) ?? PAGE_TEMPLATES[0]).id);
+  const [templates, setTemplates] = useState<PageTemplate[] | null>(null);
+  const [template, setTemplate] = useState<string>(data.home_page && data.home_page.draft_blocks > 0 ? KEEP_DRAFT : '');
+  useEffect(() => {
+    loadPageTemplates().then((list) => {
+      setTemplates(list.templates);
+      // Suggested template for what the seller used before (hidden by super admin → the first one).
+      setTemplate((current) => current || (list.templates.find((t) => t.id === presetTemplate) ?? list.templates[0])?.id || '');
+    }).catch(() => setTemplates([]));
+  }, [presetTemplate]);
 
   const [kind, setKind] = useState<ProductKind>('drive');
   const [name, setName] = useState('');
@@ -106,18 +111,10 @@ export default function OnboardingWizard({ data, onClose, onDone }: { data: Land
     } else {
       doc = { theme: {}, settings: {}, blocks: [] };
     }
-    const chosen = PAGE_TEMPLATES.find((t) => t.id === template);
+    const chosen = templates?.find((t) => t.id === template);
     if (chosen) {
       const shopName = getSessionUser<{ current_organization?: { name?: string } }>()?.current_organization?.name ?? '';
-      doc = {
-        ...doc,
-        theme: { preset: chosen.themeId, ...chosen.theme },
-        blocks: chosen.blocks().map((b): LandingDocBlock => {
-          const { styles: _legacy, ...content } = (b.content || {}) as Record<string, unknown>;
-          if (b.type === 'profile' && !content.name) content.name = shopName;
-          return { id: b.id, type: b.type, hidden: false, content, styles: (b.styles || {}) as Record<string, unknown> };
-        }),
-      };
+      doc = { ...doc, theme: { ...chosen.document.theme }, blocks: templateBlocks(chosen, doc.blocks, shopName) };
     }
     if (product) {
       const blocks = [...doc.blocks];
@@ -256,11 +253,12 @@ export default function OnboardingWizard({ data, onClose, onDone }: { data: Land
                 {data.home_page && data.home_page.draft_blocks > 0 && (
                   <TemplateOption selected={template === KEEP_DRAFT} onSelect={() => setTemplate(KEEP_DRAFT)} name="Pakai isi halaman sekarang" description={`Draft kamu (${data.home_page.draft_blocks} blok) tetap dipakai, produk baru ditambahkan.`} colors={['#ffffff', '#18181b', '#facc15']} />
                 )}
-                {PAGE_TEMPLATES.map((t) => {
-                  const theme = THEMES.find((th) => th.id === t.themeId)?.colors;
+                {templates === null && <div className="h-40 animate-pulse rounded-2xl bg-zinc-100" aria-busy="true" />}
+                {(templates ?? []).map((t) => {
+                  const theme = t.document.theme;
                   return (
                     <TemplateOption key={t.id} selected={template === t.id} onSelect={() => setTemplate(t.id)} name={t.name} description={t.description} suggested={t.id === presetTemplate}
-                      colors={theme ? [theme.backgroundColor, theme.textColor, theme.buttonColor] : ['#fff', '#000', '#facc15']} />
+                      colors={[theme.bg?.color ?? theme.bg?.from ?? theme.background ?? '#ffffff', theme.text ?? '#000000', theme.primary ?? '#facc15']} />
                   );
                 })}
               </div>

@@ -10,8 +10,6 @@ import {
   uploadLandingAsset,
 } from '@/lib/hellomApi';
 import type { LandingSite, LandingSitePage, LandingVersion } from '@/lib/hellomApi';
-import { PAGE_TEMPLATES } from '../templates';
-import type { PageTemplate } from '../templates';
 
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '-');
 
@@ -26,22 +24,6 @@ function Sheet({ title, onClose, children, wide }: { title: string; onClose: () 
         <div className="flex-1 overflow-y-auto p-4" style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}>{children}</div>
       </div>
     </div>
-  );
-}
-
-export function TemplatesDialog({ onClose, onApply }: { onClose: () => void; onApply: (template: PageTemplate) => void }) {
-  return (
-    <Sheet title="Pilih template" onClose={onClose}>
-      <p className="mb-3 text-sm text-zinc-500">Template mengganti isi draft halaman ini (halaman yang sudah terbit tidak berubah sampai kamu menerbitkan lagi).</p>
-      <div className="space-y-2">
-        {PAGE_TEMPLATES.map((t) => (
-          <button key={t.id} type="button" onClick={() => onApply(t)} className="block w-full rounded-2xl border border-zinc-200 p-4 text-left hover:border-zinc-900">
-            <p className="font-semibold">{t.name}</p>
-            <p className="text-sm text-zinc-500">{t.description}</p>
-          </button>
-        ))}
-      </div>
-    </Sheet>
   );
 }
 

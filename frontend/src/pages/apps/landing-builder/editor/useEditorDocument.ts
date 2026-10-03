@@ -16,7 +16,8 @@ import type { LandingDocument, LandingSite, LandingSitePage, LandingSocial } fro
 import { defaultContent } from '../constants';
 import { BLOCK_TYPES } from '../types';
 import type { Block, BlockStyles, BlockType } from '../types';
-import type { PageTemplate } from '../templates';
+import type { PageTemplate } from '@/lib/hellomApi';
+import { templateBlocks } from './pageTemplates';
 
 /**
  * State of the Hellom Page editor: one document (theme, settings, blocks) with undo/redo,
@@ -289,11 +290,14 @@ export function useEditorDocument() {
       setSelectedId(copyId);
     },
     toggleHidden: (id: string) => setBlocks((blocks) => blocks.map((b) => (b.id === id ? { ...b, hidden: !b.hidden } : b))),
-    applyTemplate: (template: PageTemplate, mode: 'all' | 'style' = 'all') => {
+    /** "Pakai gaya saja" = theme only; "Pakai semuanya" = theme + blocks (own name/photo/bio kept). */
+    applyTemplate: (template: PageTemplate, mode: 'all' | 'style' = 'all', shopName = '') => {
       change((d) => ({
         ...d,
-        theme: { ...d.theme, preset: template.themeId, ...template.theme },
-        blocks: mode === 'all' ? template.blocks() : d.blocks,
+        theme: { ...template.document.theme },
+        blocks: mode === 'all'
+          ? toEditorDoc({ ...template.document, blocks: templateBlocks(template, d.blocks, shopName) }).blocks
+          : d.blocks,
       }));
       setSelectedId(null);
     },

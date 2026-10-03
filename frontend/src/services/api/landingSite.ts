@@ -32,6 +32,15 @@ export type LandingTheme = {
   bodyFont?: string;
   bg?: LandingBackground;
   button?: LandingButtonStyle;
+  /** Fase 7.2: entrance animation on load; off = every animation stops. */
+  motion?: LandingMotion;
+};
+
+export type LandingMotion = {
+  entrance?: 'none' | 'fade' | 'slide' | 'zoom';
+  speed?: 'slow' | 'normal' | 'fast';
+  stagger?: boolean;
+  off?: boolean;
 };
 
 export type LandingBackground = {
@@ -48,7 +57,7 @@ export type LandingBackground = {
   pattern?: 'dots' | 'grid' | 'diagonal' | 'checks' | 'waves' | 'plus';
   patternColor?: string;
   patternOpacity?: number;
-  animation?: 'aurora' | 'blobs' | 'particles';
+  animation?: 'aurora' | 'blobs' | 'particles' | 'waves';
 };
 
 export type LandingButtonStyle = {
@@ -190,6 +199,43 @@ export function getLandingPreviewLink(pageId: number) {
 }
 
 /** Upload an image/PDF for the page (photos are stored as WebP). Returns its public URL. */
+/** What a pasted video link will show (Fase 7.3); 422 with a clear message when not recognised. */
+export interface VideoPreview {
+  provider: 'youtube' | 'tiktok' | 'instagram';
+  label: string;
+  id: string;
+  vertical: boolean;
+  start: number;
+  title: string | null;
+  author: string | null;
+  thumbnail: string | null;
+}
+
+export function getVideoPreview(url: string) {
+  return apiRequest<VideoPreview>(`${BASE}/video-preview?url=${encodeURIComponent(url)}`);
+}
+
+/** Template gallery (Fase 7.4): data from the server, images set by super admin. */
+export type PageTemplate = {
+  id: string;
+  name: string;
+  category: string;
+  category_label: string;
+  badge: 'populer' | 'baru' | null;
+  description: string;
+  document: LandingDocument;
+};
+export type PageTemplateList = { categories: Array<{ key: string; label: string }>; templates: PageTemplate[] };
+
+export function getPageTemplates() {
+  return apiRequest<PageTemplateList>(`${BASE}/page-templates`);
+}
+
+/** The template rendered with the shop's own data (catalog = the shop's products), for the gallery preview. */
+export function previewPageTemplate(id: string) {
+  return apiRequest<{ html: string }>(`${BASE}/page-templates/${encodeURIComponent(id)}/preview`, { method: 'POST' });
+}
+
 export function uploadLandingAsset(file: File) {
   const form = new FormData();
   form.append('file', file);

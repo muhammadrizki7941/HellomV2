@@ -9,6 +9,8 @@ import { useLang } from '../i18n';
 import LinkedProductPicker from './LinkedProductPicker';
 import { getImageUrl, uploadLandingAsset } from '@/lib/hellomApi';
 import { BUTTON_ICONS, ICON_LABELS } from '../editor/buttonIcons';
+import VideoField from '../editor/VideoField';
+import BannerField from '../editor/BannerField';
 import { useSellerProducts } from '../sellerProducts';
 
 interface PropertyPanelProps {
@@ -333,11 +335,7 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
 
         {/* Video Specific Fields */}
         {block.type === 'video' && (
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-zinc-700">Link video YouTube atau TikTok</label>
-            <input type="url" inputMode="url" value={block.content.videoUrl} onChange={(e) => patch({ videoUrl: e.target.value })} className={inputClass} placeholder="https://youtu.be/… atau https://www.tiktok.com/@akun/video/…" />
-            <EmbedHint url={block.content.videoUrl} allowed={['youtube', 'tiktok']} />
-          </div>
+          <VideoField content={block.content} patch={patch} />
         )}
 
         {/* Spacer */}
@@ -657,11 +655,11 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
               <label className="text-xs font-bold text-zinc-700">Bio</label>
               <textarea value={block.content.bio || ''} onChange={(e) => patch({ bio: e.target.value })} rows={3} maxLength={300} className={`${inputClass} resize-none`} />
             </div>
-            {(['avatarUrl', 'coverUrl'] as const).map((field) => (
+            {(['avatarUrl'] as const).map((field) => (
               <div key={field} className="space-y-2">
-                <label className="text-xs font-bold text-zinc-700">{field === 'avatarUrl' ? 'Foto profil' : 'Foto sampul (opsional)'}</label>
+                <label className="text-xs font-bold text-zinc-700">Foto profil</label>
                 <div className="flex items-center gap-2">
-                  {block.content[field] ? <img src={getImageUrl(block.content[field])} alt="" className={field === 'avatarUrl' ? 'h-12 w-12 rounded-full object-cover' : 'h-12 w-20 rounded-lg object-cover'} /> : null}
+                  {block.content[field] ? <img src={getImageUrl(block.content[field])} alt="" className="h-12 w-12 rounded-full object-cover" /> : null}
                   <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-100 px-3 text-sm hover:bg-zinc-200">
                     <Upload className="h-4 w-4 text-zinc-600" /> Upload
                     <input type="file" className="hidden" accept="image/jpeg,image/png,image/webp" onChange={(e) => handleFileUpload(e, field)} />
@@ -674,6 +672,7 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
               <input type="checkbox" checked={block.content.showVerified !== false} onChange={(e) => patch({ showVerified: e.target.checked })} />
               Tampilkan lencana Penjual Terverifikasi (jika sudah terverifikasi)
             </label>
+            <BannerField content={block.content} patch={patch} onUpload={(e) => handleFileUpload(e, 'coverUrl')} />
           </div>
         )}
 
@@ -847,8 +846,22 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
             </div>
           </div>
   
+          {/* Fase 7.2: this block's entrance animation */}
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-zinc-600">Animasi masuk bagian ini</label>
+            <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Animasi masuk bagian ini">
+              {([['', 'Ikut halaman'], ['none', 'Tanpa'], ['fade', 'Muncul'], ['slide', 'Naik'], ['zoom', 'Membesar']] as Array<[string, string]>).map(([value, text]) => (
+                <button key={value || 'page'} type="button" role="radio" aria-checked={(block.styles?.entrance ?? '') === value}
+                  onClick={() => updateBlockStyles(block.id, { entrance: (value || undefined) as BlockStyles['entrance'] })}
+                  className={`min-h-10 flex-1 rounded-lg border px-2 text-xs font-semibold ${(block.styles?.entrance ?? '') === value ? 'border-zinc-900 bg-zinc-900 text-white' : 'border-zinc-200 text-zinc-700'}`}>
+                  {text}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="h-px bg-zinc-200 w-full"></div>
-  
+
           {/* Colors & Background */}
           <div className="space-y-4">
             <div className="flex items-center gap-2 mb-2">
@@ -995,8 +1008,18 @@ function ButtonLook({ content, patch, onThumb }: {
       <p className="text-sm font-bold text-zinc-900">Tampilan tombol ini</p>
       <label className="flex min-h-11 items-center gap-2 text-sm text-zinc-800">
         <input type="checkbox" className="h-5 w-5" checked={!!content.featured} onChange={(e) => patch({ featured: e.target.checked || undefined })} />
-        <span><strong>Tombol unggulan</strong> — berdenyut & berkilau halus supaya menarik perhatian</span>
+        <span><strong>Tombol unggulan</strong> — beranimasi supaya menarik perhatian</span>
       </label>
+      {!!content.featured && (
+        <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Animasi tombol unggulan">
+          {([['', 'Denyut + kilau'], ['pulse', 'Denyut'], ['shake', 'Goyang halus'], ['glow', 'Berpendar'], ['shimmer', 'Kilau']] as Array<[string, string]>).map(([value, text]) => (
+            <button key={value || 'default'} type="button" role="radio" aria-checked={(content.featuredStyle ?? '') === value} onClick={() => patch({ featuredStyle: value || undefined })}
+              className={`min-h-10 rounded-lg border px-2.5 text-xs font-semibold ${(content.featuredStyle ?? '') === value ? 'border-zinc-900 bg-zinc-900 text-white' : 'border-zinc-200 text-zinc-700'}`}>
+              {text}
+            </button>
+          ))}
+        </div>
+      )}
       {choice('shape', 'Bentuk', [['square', 'Kotak'], ['rounded', 'Rounded'], ['pill', 'Pill']])}
       {choice('fill', 'Isi', [['solid', 'Solid'], ['outline', 'Garis'], ['glass', 'Kaca']])}
       {choice('shadow', 'Bayangan', [['none', 'Tanpa'], ['soft', 'Lembut'], ['hard', 'Tegas']])}

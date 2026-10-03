@@ -618,3 +618,33 @@ export function updateAdminShippingSettings(body: { provider: 'none' | 'rajaongk
 export function testAdminShipping() {
   return apiRequest<{ ok: boolean; sample: string | null }>('/admin/shipping-settings/test', { method: 'POST' });
 }
+
+/** Super admin › Template Hellom Page (Fase 7.4): slot images, show/hide, order. */
+export type AdminLandingTemplate = {
+  id: string;
+  name: string;
+  category: string;
+  category_label: string;
+  badge: 'populer' | 'baru' | null;
+  description: string;
+  hidden: boolean;
+  slots: Array<{ key: string; label: string; url: string | null }>;
+};
+
+export function getAdminLandingTemplates() {
+  return apiRequest<{ templates: AdminLandingTemplate[] }>('/admin/landing-templates');
+}
+
+export function updateAdminLandingTemplateLayout(body: { order: string[]; hidden: string[] }) {
+  return apiRequest<{ templates: AdminLandingTemplate[] }>('/admin/landing-templates', { method: 'PUT', body });
+}
+
+export function uploadAdminLandingTemplateImage(templateId: string, slot: string, file: File) {
+  const form = new FormData();
+  form.append('file', file);
+  return apiRequest<{ templates: AdminLandingTemplate[] }>(`/admin/landing-templates/${encodeURIComponent(templateId)}/images/${encodeURIComponent(slot)}`, { method: 'POST', body: form });
+}
+
+export function deleteAdminLandingTemplateImage(templateId: string, slot: string) {
+  return apiRequest<{ templates: AdminLandingTemplate[] }>(`/admin/landing-templates/${encodeURIComponent(templateId)}/images/${encodeURIComponent(slot)}`, { method: 'DELETE' });
+}

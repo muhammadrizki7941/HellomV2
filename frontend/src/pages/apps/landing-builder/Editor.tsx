@@ -11,8 +11,10 @@ import { DEFAULT_PRESET, presetTerms } from './presets';
 import type { EditorPreset } from './presets';
 import EditorTour from './EditorTour';
 import { PropertyPanel } from './components/PropertyPanel';
-import { HistoryDialog, PagesDialog, TemplatesDialog } from './components/EditorDialogs';
-import type { PageTemplate } from './templates';
+import { HistoryDialog, PagesDialog } from './components/EditorDialogs';
+import TemplateGallery from './editor/TemplateGallery';
+import { getSessionUser } from '@/lib/hellomApi';
+import type { PageTemplate } from '@/lib/hellomApi';
 import type { Block } from './types';
 import { useEditorDocument } from './editor/useEditorDocument';
 import type { EditorApi } from './editor/useEditorDocument';
@@ -107,9 +109,10 @@ export default function Editor() {
     else tab?.close();
   };
 
-  const applyTemplate = (template: PageTemplate) => {
-    if (ed.doc.blocks.length > 0 && !window.confirm(`Ganti isi halaman dengan template "${template.name}"? Bisa dibatalkan dengan Urungkan.`)) return;
-    actions.applyTemplate(template);
+  const applyTemplate = (template: PageTemplate, mode: 'all' | 'style') => {
+    if (mode === 'all' && ed.doc.blocks.length > 0 && !window.confirm(`Ganti susunan halaman dengan template "${template.name}"? Bisa dibatalkan dengan Urungkan.`)) return;
+    const shopName = getSessionUser<{ current_organization?: { name?: string } }>()?.current_organization?.name ?? '';
+    actions.applyTemplate(template, mode, shopName);
     setDialog('none');
   };
 
@@ -269,7 +272,7 @@ export default function Editor() {
         )}
       </div>
 
-      {dialog === 'templates' && <TemplatesDialog onClose={() => setDialog('none')} onApply={applyTemplate} />}
+      {dialog === 'templates' && <TemplateGallery onClose={() => setDialog('none')} onApply={applyTemplate} />}
       {dialog === 'history' && <HistoryDialog pageId={page.id} onClose={() => setDialog('none')} onRestore={async (id, no) => { await ed.restore(id, no); setDialog('none'); }} />}
       {dialog === 'pages' && (
         <PagesDialog site={ed.site} currentPageId={page.id} onClose={() => setDialog('none')} onChanged={async () => { await ed.refreshSite(); }} onOpenPage={(p) => { void ed.switchPage(p); setDialog('none'); }} />

@@ -16,6 +16,7 @@ export interface EditorPreset {
   /** Gallery cards (editor/blockMeta GALLERY_ITEMS keys) offered first in "+ Tambah". */
   featured: string[];
   /** Starting template (templates.ts) suggested on a new page. */
+  /** Suggested starting template (server template id, resources/landing/templates). */
   templateId: string;
   /** Step-by-step help: longer tour, hints on empty states. */
   guided: boolean;
@@ -30,7 +31,7 @@ export const EDITOR_PRESETS: Record<BuilderPreference, EditorPreset> = {
     description: 'Jualan produk digital & link dari satu halaman',
     terms: { item: 'blok', items: 'blok', add: 'Tambah blok', addNew: 'Tambah blok baru', list: 'Daftar blok' },
     featured: ['product', 'product_physical', 'catalog', 'button', 'profile', 'whatsapp', 'video', 'testimonials'],
-    templateId: 'ebook',
+    templateId: 'kelas-online',
     guided: false,
     lead: 'list',
   },
@@ -40,7 +41,7 @@ export const EDITOR_PRESETS: Record<BuilderPreference, EditorPreset> = {
     description: 'Kumpulan link ke semua tempat kamu',
     terms: { item: 'link', items: 'link', add: 'Tambah link', addNew: 'Tambah link baru', list: 'Daftar link' },
     featured: ['button', 'profile', 'video', 'embed', 'whatsapp', 'image', 'text', 'spacer'],
-    templateId: 'creator',
+    templateId: 'neon-glass',
     guided: false,
     lead: 'list',
   },
@@ -50,7 +51,7 @@ export const EDITOR_PRESETS: Record<BuilderPreference, EditorPreset> = {
     description: 'Terima pesanan menu/produk lewat WhatsApp',
     terms: { item: 'bagian', items: 'bagian', add: 'Tambah bagian', addNew: 'Tambah bagian baru', list: 'Isi halaman' },
     featured: ['catalog', 'product_physical', 'whatsapp', 'banner', 'slider', 'button', 'faq', 'form'],
-    templateId: 'physical',
+    templateId: 'dapur-hangat',
     guided: false,
     lead: 'preview',
   },
@@ -60,7 +61,7 @@ export const EDITOR_PRESETS: Record<BuilderPreference, EditorPreset> = {
     description: 'Kami pandu langkah demi langkah',
     terms: { item: 'bagian', items: 'bagian', add: 'Tambah bagian', addNew: 'Tambah bagian baru', list: 'Isi halaman' },
     featured: ['profile', 'button', 'whatsapp', 'product', 'image', 'text', 'video', 'faq'],
-    templateId: 'creator',
+    templateId: 'pastel-glow',
     guided: true,
     lead: 'preview',
   },

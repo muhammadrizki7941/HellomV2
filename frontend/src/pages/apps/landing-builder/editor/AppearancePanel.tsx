@@ -12,14 +12,14 @@ import type { EditorSettings } from './useEditorDocument';
  * Tampilan (Fase 5): ready-made looks, background, fonts, buttons, colors and the floating
  * WhatsApp button. Changes show at once in the phone preview (the real page).
  */
-type Section = 'tema' | 'background' | 'huruf' | 'tombol' | 'warna' | 'whatsapp';
+type Section = 'tema' | 'background' | 'huruf' | 'tombol' | 'animasi' | 'warna' | 'whatsapp';
 
 const GRADIENTS: Array<[string, string, string?]> = [
   ['#fce7f3', '#e0e7ff'], ['#fde68a', '#fca5a5'], ['#a5f3fc', '#f0abfc', '#fde68a'], ['#0f172a', '#7c3aed', '#db2777'],
   ['#064e3b', '#10b981'], ['#1e3a8a', '#06b6d4'], ['#fff7ed', '#fed7aa'], ['#111827', '#374151'],
 ];
 const PATTERNS: Array<[NonNullable<LandingBackground['pattern']>, string]> = [['dots', 'Titik'], ['grid', 'Kotak'], ['diagonal', 'Garis miring'], ['checks', 'Catur'], ['waves', 'Ombak'], ['plus', 'Plus']];
-const ANIMATIONS: Array<[NonNullable<LandingBackground['animation']>, string]> = [['aurora', 'Gradien bergerak'], ['blobs', 'Gelembung warna'], ['particles', 'Partikel ringan']];
+const ANIMATIONS: Array<[NonNullable<LandingBackground['animation']>, string]> = [['aurora', 'Gradien bergerak'], ['blobs', 'Gelembung warna'], ['particles', 'Partikel ringan'], ['waves', 'Gelombang']];
 
 export default function AppearancePanel({ theme, settings, onTheme, onReplace, onSettings }: {
   theme: LandingTheme;
@@ -34,6 +34,8 @@ export default function AppearancePanel({ theme, settings, onTheme, onReplace, o
   const setBg = (patch: Partial<LandingBackground>, key = 'theme:bg') => onTheme({ bg: { ...bg, ...patch } }, key);
   const setButton = (patch: Partial<LandingButtonStyle>) => onTheme({ button: { ...button, ...patch } }, 'theme:button');
   const page = theme.background ?? '#ffffff';
+  const motion = theme.motion ?? {};
+  const setMotion = (patch: Partial<NonNullable<LandingTheme['motion']>>) => onTheme({ motion: { ...motion, ...patch } }, 'theme:motion');
 
   return (
     <div className="space-y-3">
@@ -126,6 +128,22 @@ export default function AppearancePanel({ theme, settings, onTheme, onReplace, o
         <Labeled label="Bayangan"><Segmented value={button.shadow ?? 'none'} onChange={(shadow) => setButton({ shadow })} options={[['none', 'Tanpa'], ['soft', 'Lembut'], ['hard', 'Tegas']]} /></Labeled>
         <Labeled label="Efek saat disentuh"><Segmented value={button.hover ?? 'none'} onChange={(hover) => setButton({ hover })} options={[['none', 'Tanpa'], ['lift', 'Naik'], ['grow', 'Besar'], ['shine', 'Kilau']]} /></Labeled>
         <p className="text-xs text-zinc-500">Satu tombol bisa punya gaya sendiri, ikon, atau jadi tombol unggulan — atur di pengaturan tombolnya.</p>
+      </Group>
+
+      <Group id="animasi" open={open} onOpen={setOpen} title="Animasi" hint={motion.off ? 'Semua animasi mati' : ({ none: 'Tanpa animasi masuk', fade: 'Muncul perlahan', slide: 'Naik', zoom: 'Membesar' }[motion.entrance ?? 'none'])}>
+        <label className="flex min-h-11 items-center gap-3 text-sm font-medium text-zinc-800">
+          <input type="checkbox" className="h-5 w-5" checked={!!motion.off} onChange={(e) => setMotion({ off: e.target.checked || undefined })} />
+          Matikan semua animasi
+        </label>
+        <div className={cn('space-y-4', motion.off && 'pointer-events-none opacity-40')} aria-disabled={motion.off || undefined}>
+          <Labeled label="Animasi masuk tiap bagian"><Segmented value={motion.entrance ?? 'none'} onChange={(entrance) => setMotion({ entrance })} options={[['none', 'Tanpa'], ['fade', 'Muncul'], ['slide', 'Naik'], ['zoom', 'Membesar']]} /></Labeled>
+          <Labeled label="Kecepatan"><Segmented value={motion.speed ?? 'normal'} onChange={(speed) => setMotion({ speed })} options={[['slow', 'Pelan'], ['normal', 'Sedang'], ['fast', 'Cepat']]} /></Labeled>
+          <label className="flex min-h-11 items-center gap-3 text-sm font-medium text-zinc-800">
+            <input type="checkbox" className="h-5 w-5" checked={!!motion.stagger} onChange={(e) => setMotion({ stagger: e.target.checked || undefined })} />
+            Berurutan (satu per satu dari atas)
+          </label>
+        </div>
+        <p className="text-xs text-zinc-500">Animasi otomatis dimatikan untuk pengunjung yang memilih "kurangi gerakan" di HP-nya. Di pratinjau editor animasi masuk tidak diputar.</p>
       </Group>
 
       <Group id="warna" open={open} onOpen={setOpen} title="Warna" hint="Warna utama, teks tombol, teks">

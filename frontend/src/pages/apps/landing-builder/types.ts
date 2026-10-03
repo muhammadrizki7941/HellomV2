@@ -36,6 +36,8 @@ export interface BlockStyles {
   buttonTextColor?: string;
   paddingY?: string; // 'py-8', 'py-16', 'py-24', etc.
   textAlign?: 'left' | 'center' | 'right';
+  /** Fase 7.2: this block's entrance (empty = page setting). */
+  entrance?: 'none' | 'fade' | 'slide' | 'zoom';
 }
 
 export interface Block {
