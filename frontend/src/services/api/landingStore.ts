@@ -4,7 +4,30 @@
 import { apiRequest, apiRequestBlob, buildQuery, publicApiRequest } from './client';
 import type { Paginated } from './sellerFinance';
 
-export type ProductType = 'drive' | 'file' | 'link' | 'physical' | 'service';
+export type ProductType = 'drive' | 'file' | 'link' | 'physical' | 'service' | 'rental';
+
+/** Sewa / booking jadwal: how a rental product is booked (App\Services\Landing\BookingService). */
+export type BookingMode = 'daily' | 'slot';
+export type BookingSettings = {
+  mode: BookingMode;
+  /** Units that can be out at the same time (e.g. 3 cameras). */
+  units: number;
+  unit_label: 'hari' | 'malam';
+  min_days: number;
+  max_days: number;
+  slot_minutes: number;
+  max_slots: number;
+  /** ISO weekday "1" (Senin) … "7" (Minggu) → [open, close] "HH:MM", or null = closed. */
+  hours: Record<string, [string, string] | null>;
+  lead_hours: number;
+  max_days_ahead: number;
+  blocked_dates: string[];
+};
+export type PublicBooking = Pick<BookingSettings, 'mode' | 'units' | 'unit_label' | 'min_days' | 'max_days' | 'slot_minutes' | 'max_slots' | 'hours' | 'max_days_ahead'>;
+/** The buyer's choice: daily = start_date + days; slot = date + start_time + slots. */
+export type BookingChoice = { start_date?: string; days?: number; date?: string; start_time?: string; slots?: number };
+export type BookingMonth = { mode: BookingMode; month: string; units: number; days: Record<string, number> };
+export type BookingDay = { mode: 'slot'; date: string; closed: boolean; slots: Array<{ start: string; end: string; free: number }> };
 /** Channel key: "qris", a bank VA ("bca", "bni"…), retail ("indomaret", "alfamart") or "other" (hosted page). */
 export type PaymentOption = string;
 
@@ -48,6 +71,8 @@ export type PublicProduct = {
   shipping: { mode: ShippingMode; fee: number } | null;
   max_quantity: number;
   file: { extension: string; size: number } | null;
+  /** Rental only: what the buyer can pick. */
+  booking?: PublicBooking | null;
 };
 
 export type PublicSeller = { name: string | null; slug: string | null; username?: string; verified: boolean; suspended: boolean };
@@ -71,6 +96,9 @@ export type CheckoutQuote = {
   /** Courier shipping once a destination + courier are chosen (priced by the server). */
   shipping_rate?: ShippingRate | null;
   shipping_error?: string | null;
+  /** Rental: the chosen time ("12 Okt 2026 – 15 Okt 2026 (3 hari)") or why it can't be booked. */
+  booking?: { label: string; duration: number; unit: string } | null;
+  booking_error?: string | null;
 };
 
 export type ShippingMode = 'free' | 'flat' | 'manual' | 'courier';
@@ -111,6 +139,7 @@ export type CheckoutInput = {
   buyer_phone?: string;
   fields?: Record<string, string>;
   shipping?: CheckoutShipping;
+  booking?: BookingChoice;
   attribution?: Record<string, string>;
   /** Cloudflare Turnstile token, only when the server answered CAPTCHA_REQUIRED. */
   captcha_token?: string;
@@ -171,8 +200,17 @@ export function getPublicLandingProduct(publicId: string) {
   return publicApiRequest<PublicProductPage>(`/public/landing-products/${encodeURIComponent(publicId)}`);
 }
 
-export function quoteLandingProduct(publicId: string, body: { quantity?: number; coupon_code?: string; destination_id?: string; courier?: string }) {
+export function quoteLandingProduct(publicId: string, body: { quantity?: number; coupon_code?: string; destination_id?: string; courier?: string; booking?: BookingChoice }) {
   return publicApiRequest<CheckoutQuote>(`/public/landing-products/${encodeURIComponent(publicId)}/quote`, { method: 'POST', body });
+}
+
+/** Rental: free units per day of a month, or per session of one day (slot mode). */
+export function getBookingMonth(publicId: string, month: string) {
+  return publicApiRequest<BookingMonth>(`/public/landing-products/${encodeURIComponent(publicId)}/availability?month=${month}`);
+}
+
+export function getBookingDay(publicId: string, date: string) {
+  return publicApiRequest<BookingDay>(`/public/landing-products/${encodeURIComponent(publicId)}/availability?date=${date}`);
 }
 
 /** Buyer's place (sub-district / city / postcode) for courier rates. */
@@ -235,6 +273,7 @@ export type SellerProduct = PublicProduct & {
   shipping_fee: number;
   weight_grams: number | null;
   raw_checkout_fields: CheckoutField[];
+  booking_settings: BookingSettings | null;
   deliverable: boolean;
   admin_disabled: boolean;
   admin_disabled_reason: string | null;
@@ -261,6 +300,7 @@ export type ProductInput = {
   shipping_fee?: number | null;
   weight_grams?: number | null;
   checkout_fields?: Array<Pick<CheckoutField, 'label' | 'type' | 'required' | 'options'>>;
+  booking?: BookingSettings | null;
 };
 
 export type ProductLimits = { max_file_mb: number; file_extensions: string[] };
@@ -380,6 +420,8 @@ export type SellerOrderRow = {
   needs_action: boolean;
   product_name: string;
   product_type: string;
+  /** Rental: booked time; conflict = paid after the time was taken (contact the buyer). */
+  booking: { label: string; units: number; starts_at: string; conflict: boolean } | null;
   quantity: number;
   amount: number;
   net_amount: number;
@@ -647,4 +689,23 @@ export function uploadAdminLandingTemplateImage(templateId: string, slot: string
 
 export function deleteAdminLandingTemplateImage(templateId: string, slot: string) {
   return apiRequest<{ templates: AdminLandingTemplate[] }>(`/admin/landing-templates/${encodeURIComponent(templateId)}/images/${encodeURIComponent(slot)}`, { method: 'DELETE' });
+}
+
+// ─── Seller: rental schedule (Jadwal tab) ───
+
+export type SellerBooking = {
+  id: number;
+  status: 'held' | 'confirmed';
+  product: string | null;
+  starts_at: string;
+  ends_at: string;
+  label: string;
+  units: number;
+  buyer_name: string | null;
+  buyer_phone: string | null;
+  order_reference: string | null;
+};
+
+export function getSellerBookings(from: string, to: string) {
+  return apiRequest<{ items: SellerBooking[] }>(`/apps/landing-builder/bookings?from=${from}&to=${to}`);
 }

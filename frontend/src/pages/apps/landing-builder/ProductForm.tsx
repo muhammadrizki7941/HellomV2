@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, CheckCircle2, FileUp, HardDrive, ImagePlus, Link2, Loader2, Package, Plus, Trash2, Wrench, X } from 'lucide-react';
+import { ArrowLeft, CalendarDays, CheckCircle2, FileUp, HardDrive, ImagePlus, Link2, Loader2, Package, Plus, Trash2, Wrench, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   ApiError,
@@ -14,6 +14,8 @@ import {
 import type { CheckoutField, ProductInput, ProductLimits, ProductType, SellerProduct, ShippingMode, ShopShipping } from '@/lib/hellomApi';
 import DriveGuide from './DriveGuide';
 import RichTextField from './RichTextField';
+import RentalSettings, { DEFAULT_BOOKING } from './RentalSettings';
+import type { BookingSettings } from '@/lib/hellomApi';
 
 // Create / edit a Hellom Page product. Full screen on phones, save button sticks to the bottom.
 const TYPES: Array<{ type: ProductType; title: string; hint: string; icon: typeof Package }> = [
@@ -22,6 +24,7 @@ const TYPES: Array<{ type: ProductType; title: string; hint: string; icon: typeo
   { type: 'link', title: 'Link / akses', hint: 'Kelas online, grup Telegram/WA, Notion', icon: Link2 },
   { type: 'physical', title: 'Produk fisik', hint: 'Dikirim ke alamat pembeli', icon: Package },
   { type: 'service', title: 'Jasa / booking', hint: 'Pembeli isi kebutuhan saat checkout', icon: Wrench },
+  { type: 'rental', title: 'Sewa / booking jadwal', hint: 'Pembeli pilih tanggal/jam yang kosong, bayar penuh', icon: CalendarDays },
 ];
 
 const inputClass = 'mt-1 min-h-12 w-full rounded-xl border border-zinc-300 bg-white px-3 text-base outline-none focus:border-zinc-900';
@@ -46,6 +49,7 @@ type Draft = {
   shipping_fee: string;
   weight_grams: string;
   checkout_fields: Array<Pick<CheckoutField, 'label' | 'type' | 'required' | 'options'>>;
+  booking: BookingSettings;
 };
 
 function toDraft(p: SellerProduct | null): Draft {
@@ -67,6 +71,7 @@ function toDraft(p: SellerProduct | null): Draft {
     shipping_fee: money(p?.shipping_fee || null),
     weight_grams: p?.weight_grams ? String(p.weight_grams) : '',
     checkout_fields: p?.raw_checkout_fields?.map(({ label, type, required, options }) => ({ label, type, required, options })) ?? [],
+    booking: p?.booking_settings ?? DEFAULT_BOOKING,
   };
 }
 
@@ -136,7 +141,7 @@ export default function ProductForm({ product, limits, onClose, onSaved }: {
     description: draft.description || null,
     price: num(draft.price) ?? 0,
     compare_at_price: num(draft.compare_at_price),
-    stock: num(draft.stock),
+    stock: draft.type === 'rental' ? null : num(draft.stock),
     is_active: draft.is_active,
     require_phone: draft.require_phone,
     delivery_url: draft.delivery_url.trim() || null,
@@ -148,6 +153,7 @@ export default function ProductForm({ product, limits, onClose, onSaved }: {
     shipping_fee: draft.type === 'physical' && draft.shipping_mode === 'flat' ? num(draft.shipping_fee) : null,
     weight_grams: num(draft.weight_grams),
     checkout_fields: draft.checkout_fields.filter((f) => f.label.trim() !== ''),
+    booking: draft.type === 'rental' ? draft.booking : null,
   });
 
   const save = async (event: React.FormEvent) => {
@@ -319,9 +325,13 @@ export default function ProductForm({ product, limits, onClose, onSaved }: {
           </section>
         )}
 
-        {(digital || draft.type === 'service') && (
+        {draft.type === 'rental' && (
+          <RentalSettings value={draft.booking} onChange={(booking) => set('booking', booking)} error={errors['booking.hours'] || errors.booking || null} />
+        )}
+
+        {(digital || draft.type === 'service' || draft.type === 'rental') && (
           <label className="block text-sm font-medium">
-            Catatan untuk pembeli <span className="font-normal text-zinc-500">(tampil setelah bayar)</span>
+            {draft.type === 'rental' ? 'Instruksi untuk penyewa' : 'Catatan untuk pembeli'} <span className="font-normal text-zinc-500">(tampil setelah bayar)</span>
             <textarea rows={3} value={draft.delivery_note} onChange={(e) => set('delivery_note', e.target.value)} maxLength={2000} className={cn(inputClass, 'py-3')} placeholder="Contoh: password file: JUALAN2026. Gabung grup dalam 7 hari." />
           </label>
         )}
@@ -347,12 +357,12 @@ export default function ProductForm({ product, limits, onClose, onSaved }: {
           </section>
         )}
 
-        <div className="grid grid-cols-2 gap-3">
+        {draft.type !== 'rental' && <div className="grid grid-cols-2 gap-3">
           <label className="block text-sm font-medium">
             Stok/kuota <span className="font-normal text-zinc-500">(opsional)</span>
             <input inputMode="numeric" value={draft.stock} onChange={(e) => set('stock', e.target.value.replace(/\D/g, ''))} className={inputClass} placeholder="Tak terbatas" />
           </label>
-        </div>
+        </div>}
 
         {/* Extra checkout questions */}
         <section className="space-y-3">

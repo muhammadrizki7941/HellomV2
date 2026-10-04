@@ -5,6 +5,8 @@ import { cn } from '@/lib/utils';
 import { safeHtml } from '@/lib/safeHtml';
 import { EMAIL_PATTERN, suggestEmail } from '@/lib/emailTypo';
 import { captureAttributionFromUrl, firePurchase, getPixelConsent, loadSellerPixels, readAttribution, setPixelConsent, trackSellerEvent } from '@/lib/sellerPixels';
+import BookingPicker from './BookingPicker';
+import type { BookingChoice } from '@/lib/hellomApi';
 import { ApiError, checkoutLandingProduct, getLandingOrderPublicStatus, getPublicLandingProduct, getShippingRates, quoteLandingProduct } from '@/lib/hellomApi';
 import type { ShippingDestination, ShippingRate } from '@/lib/hellomApi';
 import DestinationSearch from '@/components/checkout/DestinationSearch';
@@ -44,6 +46,10 @@ export default function CheckoutPage() {
   const [page, setPage] = useState<PublicProductPage | null>(null);
   const [loadError, setLoadError] = useState<{ message: string; suspended: boolean } | null>(null);
   const [quantity, setQuantity] = useState(1);
+  // Rental: the chosen dates/time (BookingPicker); complete = ready to price and pay.
+  const [bookingChoice, setBookingChoice] = useState<BookingChoice | null>(null);
+  const isRental = page?.product.type === 'rental' && !!page.product.booking;
+  const bookingReady = !!bookingChoice && (page?.product.booking?.mode === 'daily' ? !!bookingChoice.start_date && !!bookingChoice.days : !!bookingChoice.date && !!bookingChoice.start_time && !!bookingChoice.slots);
   const [buyer, setBuyer] = useState({ name: '', email: '', phone: '' });
   const [fields, setFields] = useState<Record<string, string>>({});
   const [shipping, setShipping] = useState<Shipping>({ recipient_name: '', phone: '', address: '', city: '', province: '', postal_code: '', notes: '' });
@@ -103,12 +109,12 @@ export default function CheckoutPage() {
     if (!page) return undefined;
     let cancelled = false;
     const timer = window.setTimeout(() => {
-      quoteLandingProduct(productId, { quantity, coupon_code: couponCode || undefined, destination_id: destination?.id, courier: courier ?? undefined })
+      quoteLandingProduct(productId, { quantity, coupon_code: couponCode || undefined, destination_id: destination?.id, courier: courier ?? undefined, booking: isRental && bookingReady ? bookingChoice ?? undefined : undefined })
         .then((data) => { if (!cancelled) setQuote(data); })
         .catch(() => undefined);
     }, 150);
     return () => { cancelled = true; window.clearTimeout(timer); };
-  }, [page, productId, quantity, couponCode, destination, courier]);
+  }, [page, productId, quantity, couponCode, destination, courier, isRental, bookingReady, bookingChoice]);
 
   // Real courier rates for the buyer's place (again when the quantity changes the weight).
   const courierMode = page?.product.type === 'physical' && page.product.shipping?.mode === 'courier';
@@ -177,6 +183,7 @@ export default function CheckoutPage() {
 
   const validate = (): Record<string, string> => {
     const e: Record<string, string> = {};
+    if (isRental && !bookingReady) e.booking = 'Pilih jadwal dulu.';
     if (buyer.name.trim().length < 2) e.buyer_name = 'Isi nama kamu.';
     if (!EMAIL_PATTERN.test(buyer.email.trim())) e.buyer_email = 'Email belum benar. Link produk dikirim ke email ini.';
     if (phoneRequired && buyer.phone.replace(/\D/g, '').length < 8) e.buyer_phone = 'Isi nomor WhatsApp aktif.';
@@ -215,6 +222,7 @@ export default function CheckoutPage() {
       const result = await checkoutLandingProduct(productId, {
         attribution: { ...(readAttribution() ?? {}), consent: consent === 'granted' ? 'granted' : 'denied' },
         quantity,
+        booking: isRental && bookingReady ? bookingChoice ?? undefined : undefined,
         coupon_code: couponCode || undefined,
         payment_method: method,
         buyer_name: buyer.name.trim(),
@@ -335,6 +343,7 @@ export default function CheckoutPage() {
             <h1 className="text-base font-bold leading-snug">{product.name}</h1>
             <p className="mt-1 text-lg font-bold">
               {rupiah(product.price)}
+              {product.type === 'rental' && product.booking && <span className="text-sm font-normal text-zinc-500"> / {product.booking.mode === 'daily' ? product.booking.unit_label : 'sesi'}</span>}
               {product.compare_at_price && <span className="ml-2 text-sm font-normal text-zinc-400 line-through">{rupiah(product.compare_at_price)}</span>}
             </p>
             {product.stock_left !== null && product.stock_left > 0 && <p className="text-xs text-amber-700">Sisa {product.stock_left}</p>}
@@ -350,9 +359,15 @@ export default function CheckoutPage() {
           <p className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">{product.in_stock ? 'Produk ini sedang tidak dijual.' : 'Stok habis.'}</p>
         )}
 
-        {product.type === 'physical' && product.max_quantity > 1 && (
+        {isRental && product.booking && (
+          <BookingPicker productId={productId} booking={product.booking} units={quantity} value={bookingChoice}
+            onChange={(choice) => { setBookingChoice(choice); setErrors((e) => ({ ...e, booking: '' })); }}
+            error={errors.booking || (bookingReady ? quote?.booking_error : null) || null} />
+        )}
+
+        {(product.type === 'physical' || product.type === 'rental') && product.max_quantity > 1 && (
           <section className="flex items-center justify-between rounded-3xl bg-white p-4 ring-1 ring-zinc-100">
-            <span className="text-sm font-semibold">Jumlah</span>
+            <span className="text-sm font-semibold">{product.type === 'rental' ? 'Jumlah unit' : 'Jumlah'}</span>
             <div className="flex items-center gap-2">
               <button type="button" aria-label="Kurangi" onClick={() => setQuantity((q) => Math.max(1, q - 1))} className="flex h-11 w-11 items-center justify-center rounded-full border border-zinc-200"><Minus className="h-4 w-4" /></button>
               <span className="w-8 text-center text-base font-semibold">{quantity}</span>
@@ -370,7 +385,7 @@ export default function CheckoutPage() {
             {fieldError('buyer_name')}
           </label>
           <label className="block text-sm font-medium">
-            Email <span className="font-normal text-zinc-500">(link produk dikirim ke sini)</span>
+            Email <span className="font-normal text-zinc-500">{product.type === 'rental' ? '(konfirmasi jadwal dikirim ke sini)' : product.type === 'physical' || product.type === 'service' ? '(bukti pembayaran dikirim ke sini)' : '(link produk dikirim ke sini)'}</span>
             <input type="email" inputMode="email" autoComplete="email" value={buyer.email} onChange={(e) => setBuyer((b) => ({ ...b, email: e.target.value }))} {...input('buyer_email')} />
             {emailSuggestion && (
               <button type="button" onClick={() => setBuyer((b) => ({ ...b, email: emailSuggestion }))} className="mt-1 min-h-11 text-left text-sm text-amber-700">
@@ -520,7 +535,8 @@ export default function CheckoutPage() {
         {/* Summary */}
         <section className="rounded-3xl bg-white p-4 text-sm ring-1 ring-zinc-100">
           <dl className="space-y-2">
-            <div className="flex justify-between"><dt className="text-zinc-500">Harga{quantity > 1 ? ` × ${quantity}` : ''}</dt><dd>{rupiah(quote?.subtotal ?? product.price * quantity)}</dd></div>
+            {isRental && quote?.booking && <div className="flex justify-between gap-3" data-booking-summary><dt className="text-zinc-500">Jadwal</dt><dd className="text-right font-medium">{quote.booking.label}</dd></div>}
+            <div className="flex justify-between"><dt className="text-zinc-500">Harga{isRental && quote?.booking ? ` ${rupiah(product.price)} × ${quote.booking.duration} ${quote.booking.unit}${quantity > 1 ? ` × ${quantity} unit` : ''}` : quantity > 1 ? ` × ${quantity}` : ''}</dt><dd>{rupiah(quote?.subtotal ?? product.price * quantity)}</dd></div>
             {(quote?.discount ?? 0) > 0 && <div className="flex justify-between text-emerald-700"><dt>Diskon</dt><dd>−{rupiah(quote?.discount ?? 0)}</dd></div>}
             {product.type === 'physical' && (
               <div className="flex justify-between"><dt className="text-zinc-500">Ongkir</dt><dd>{product.shipping?.mode === 'free' ? 'Gratis' : product.shipping?.mode === 'manual' ? 'Dikonfirmasi penjual'

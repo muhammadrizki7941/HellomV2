@@ -25,8 +25,15 @@ if ($org = Organization::query()->where('slug', $slug)->first()) {
     DB::table('landing_stats_daily')->where('organization_id', $org->id)->delete();
     DB::table('file_assets')->where('organization_id', $org->id)->delete();
     $orderIds = DB::table('landing_page_orders')->where('organization_id', $org->id)->pluck('id');
+    // Paid test orders (shipping/rental e2e) have Saldo Penjualan rows that block deleting the orders.
+    foreach (['seller_balance_ledger', 'seller_withdrawals', 'landing_refunds', 'seller_balances'] as $table) {
+        if (Illuminate\Support\Facades\Schema::hasTable($table) && Illuminate\Support\Facades\Schema::hasColumn($table, 'organization_id')) {
+            DB::table($table)->where('organization_id', $org->id)->delete();
+        }
+    }
     DB::table('landing_order_items')->whereIn('order_id', $orderIds)->delete();
     DB::table('landing_page_orders')->whereIn('id', $orderIds)->delete();
+    DB::table('landing_bookings')->where('organization_id', $org->id)->delete();
     DB::table('landing_products')->where('organization_id', $org->id)->delete();
     Storage::disk('public')->deleteDirectory('landing-builder/' . $org->id);
     $userIds = DB::table('organization_user')->where('organization_id', $org->id)->pluck('user_id');

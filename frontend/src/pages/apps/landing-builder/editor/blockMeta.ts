@@ -1,5 +1,5 @@
 import {
-  ArrowRight, Box, CalendarClock, Code, MessageCircle, MoveVertical, ClipboardList, Code2, FileText, GalleryHorizontal, HelpCircle, Image as ImageIcon,
+  ArrowRight, Box, CalendarClock, CalendarDays, Code, MessageCircle, MoveVertical, ClipboardList, Code2, FileText, GalleryHorizontal, HelpCircle, Image as ImageIcon,
   Images, LayoutGrid, Layout, List, Megaphone, Minus, MousePointer2, Quote, Share2, ShoppingBag, Store, Type, UserCircle, Video, Wand2,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -68,6 +68,7 @@ export const GALLERY_ITEMS: GalleryItem[] = [
       ? [
         { ...BLOCK_META.product, key: 'product', type, content: { kind: 'digital' } },
         { ...BLOCK_META.product, key: 'product_physical', type, label: 'Produk fisik', description: 'Barang dikirim, ongkir otomatis', icon: Box, content: { kind: 'physical' } },
+        { ...BLOCK_META.product, key: 'product_rental', type, label: 'Sewa / booking', description: 'Pembeli pilih tanggal/jam yang kosong', icon: CalendarDays, content: { kind: 'rental', buttonText: 'Pilih jadwal' } },
       ]
       : [{ ...BLOCK_META[type], key: type, type }]
   )),

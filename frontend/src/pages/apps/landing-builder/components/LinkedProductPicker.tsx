@@ -14,8 +14,8 @@ const plainText = (html: string | null) => {
 export default function LinkedProductPicker({ content, onPatch }: { content: Record<string, any>; onPatch: (changes: Record<string, unknown>) => void }) {
   const { products: all, error } = useSellerProducts();
   // "Produk fisik" / "Produk digital" cards offer only that kind (old blocks: everything).
-  const kind = content.kind as 'digital' | 'physical' | undefined;
-  const products = all?.filter((p) => !kind || (kind === 'physical' ? p.type === 'physical' : p.type !== 'physical'));
+  const kind = content.kind as 'digital' | 'physical' | 'rental' | undefined;
+  const products = all?.filter((p) => !kind || (kind === 'physical' || kind === 'rental' ? p.type === kind : p.type !== 'physical' && p.type !== 'rental'));
   const linked = all?.find((p) => p.id === content.productId);
 
   const choose = (publicId: string) => {
@@ -46,7 +46,7 @@ export default function LinkedProductPicker({ content, onPatch }: { content: Rec
           <option key={p.id} value={p.id}>{p.name} · Rp {p.price.toLocaleString('id-ID')}{!p.is_active ? ' (disembunyikan)' : ''}</option>
         ))}
       </select>
-      {products && products.length === 0 && <p className="text-xs text-zinc-600">Belum ada {kind === 'physical' ? 'produk fisik' : kind === 'digital' ? 'produk digital' : 'produk'}. Tambahkan dulu di tab <span className="font-semibold">Produk</span>.</p>}
+      {products && products.length === 0 && <p className="text-xs text-zinc-600">Belum ada {kind === 'physical' ? 'produk fisik' : kind === 'rental' ? 'produk sewa / booking' : kind === 'digital' ? 'produk digital' : 'produk'}. Tambahkan dulu di tab <span className="font-semibold">Produk</span>.</p>}
       {content.productId && !linked && products && <p className="text-xs text-amber-700">Produk ini sudah dihapus. Pilih produk lain.</p>}
       {linked ? (
         <p className="text-xs text-zinc-600">Harga, gambar, dan stok di halaman publik selalu mengikuti produk ini. Ubah produknya di tab <span className="font-semibold">Produk</span>.</p>
