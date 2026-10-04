@@ -12,6 +12,12 @@ Audit & status: [docs/audit-linkinbio-builder.md](docs/audit-linkinbio-builder.m
 - Editor desktop halaman kosong langsung menampilkan panel blok; editor tidak terkunci lagi saat halaman pertama dibuat bersamaan.
 - **Editor baru gaya link-in-bio (Fase 2)**: daftar blok + pratinjau HP yang merupakan halaman asli (dirender server, aman di iframe terpisah); ketuk bagian di pratinjau untuk mengedit; galeri "+ Tambah" bergambar; tampil/sembunyi, duplikat, hapus, geser urutan (juga keyboard), Urungkan/Ulangi; Lihat halaman & Salin link. Di HP: pratinjau penuh dengan bilah bawah dan bottom sheet. Blok bergaya landing page panjang tidak ditawarkan lagi (halaman lama tetap tampil).
 
+### Hellom Page — sewa / booking jadwal (2026-10-04)
+- Jenis produk baru **Sewa / booking jadwal** untuk usaha rental & jasa terjadwal: per hari/malam (rental mobil, kamera, villa) atau per jam/sesi (studio, lapangan, salon). Penjual mengatur jumlah unit, lama sewa / jam buka, dan tanggal tutup.
+- Pembeli memilih tanggal/jam yang masih kosong di kalender, harga dihitung otomatis (harga × hari/sesi × unit), lalu bayar penuh. Jadwal ditahan selama membayar dan terkunci setelah lunas — tidak bisa dibooking dobel.
+- Tab **Jadwal** untuk penjual, jadwal tampil di Pesanan & email, dan **pengingat H-1** ke pembeli dan penjual.
+- Deploy: Could not open input file: artisan (tabel booking baru).
+
 ### Hellom Page — banner, animasi, video, template premium (Fase 7, 2026-10-04)
 - **Banner di atas profil**: gambar, GIF, atau video YouTube yang diputar tanpa suara; pilih bentuk 16:9 / 3:1 / 1:1, titik fokus, efek memudar, dan posisi foto profil.
 - **Animasi**: bagian halaman muncul dengan animasi (muncul, naik, membesar, berurutan), tombol unggulan bisa berdenyut, bergoyang halus, berpendar, atau berkilau, background gelombang baru — dan satu tombol **Matikan semua animasi**.
