@@ -39,7 +39,7 @@ p{margin:0 0 1em}
 .profile.has-cover .avatar{position:relative}
 .profile.av-below .cover{margin-bottom:20px}
 .avatar{width:104px;height:104px;border-radius:50%;object-fit:cover;margin:0 auto 12px;border:4px solid var(--bg);background:var(--surface)}
-.avatar.initial{display:flex;align-items:center;justify-content:center;font-size:2.4rem;font-weight:800;background:var(--primary);color:var(--btn-fg)}
+.avatar.initial{display:flex;align-items:center;justify-content:center;font-size:2.4rem;font-weight:800;background:var(--primary);color:var(--btn-text)}
 .badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:999px;background:rgba(16,185,129,.12);color:#047857;font-size:.8rem;font-weight:700}
 .dark .badge{color:#6ee7b7}
 /* grids */

@@ -144,6 +144,7 @@
 
     @case('product')
         @php $p = $b['product'] ?? null; @endphp
+        @if ($p || !empty($c['name']))
         <section id="produk" class="{{ $cls }}" @if($style) style="{{ $style }}" @endif>
             <div class="wrap wide">
                 @if ($p)
@@ -177,6 +178,7 @@
                 @endif
             </div>
         </section>
+        @endif
         @break
 
     @case('catalog')
@@ -382,7 +384,8 @@
         @break
 
     @case('gallery')
-        @if (!empty($c['images']))
+        @php $galleryImages = array_values(array_filter($c['images'] ?? [], fn ($img) => !empty($img['url']))); @endphp
+        @if ($galleryImages !== [])
             <section class="{{ $cls }}" @if($style) style="{{ $style }}" @endif>
                 <div class="wrap wide">
                     @if (!empty($c['title']))<h2 class="center">{{ $c['title'] }}</h2>@endif
