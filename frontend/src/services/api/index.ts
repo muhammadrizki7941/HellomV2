@@ -92,6 +92,13 @@ export {
   getAdminApps,
   getAdminDashboardStats,
   getAdminMailSettings,
+  getAdminTeam,
+  inviteAdmin,
+  resendAdminInvitation,
+  revokeAdminInvitation,
+  removeAdmin,
+  getAdminInvitation,
+  acceptAdminInvitation,
   getAdminManualCheckouts,
   getAdminManualPaymentConfig,
   getAdminNotifications,
@@ -293,6 +300,8 @@ export type {
   AdminInvoiceItem,
   SystemHealth,
   SystemHealthCheck,
+  AdminTeam,
+  AdminInvitation,
 } from './admin';
 export type { EmailDelivery, OrganizationRef, TeamInvitation, TeamMember } from './organizations';
 export type { PayoutPolicy, WalletBalance, WalletOverview, WalletTransaction, WalletWithdrawal } from './billing';

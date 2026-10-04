@@ -3,7 +3,6 @@ import {
   AlertCircle,
   CreditCard,
   Globe,
-  Plus,
   RefreshCw,
   Save,
   Shield,
@@ -17,11 +16,7 @@ import {
   getAdminManualPaymentConfig,
   getAdminPaymentGatewayConfig,
   HELLOM_API_BASE,
-  getAuthMe,
   getImageUrl,
-  getOrganizationTeam,
-  inviteOrganizationMember,
-  removeOrganizationMember,
   resetIpaymuGatewayConfig,
   updateAdminManualPaymentConfig,
   updateAdminPaymentGatewayConfig,
@@ -29,14 +24,7 @@ import {
 } from '@/lib/hellomApi';
 import ShippingSettingsCard from './settings/ShippingSettings';
 import LandingTemplatesSettingsCard from './settings/LandingTemplatesSettings';
-
-type TeamMember = {
-  id: number;
-  name: string;
-  email: string;
-  role: string;
-  joined_at?: string | null;
-};
+import AdminTeamSettings from './settings/AdminTeamSettings';
 
 type CheckoutMode = 'manual_confirmation' | 'gateway_automatic';
 type ProviderKey = 'xendit' | 'ipaymu' | 'doku';
@@ -60,10 +48,8 @@ export default function AdminSettings() {
   const [activeTab, setActiveTab] = useState<'payment' | 'shipping' | 'templates' | 'landing' | 'team'>('payment');
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [loadingTeam, setLoadingTeam] = useState(false);
   const [loadingPayment, setLoadingPayment] = useState(false);
   const [savingPayment, setSavingPayment] = useState(false);
-  const [adminEmail, setAdminEmail] = useState('admin@hellom.id');
 
   const [paymentConfig, setPaymentConfig] = useState<{
     active_provider: ProviderKey;
@@ -217,38 +203,6 @@ export default function AdminSettings() {
     showTestimonials: true,
   });
 
-  const [team, setTeam] = useState<TeamMember[]>([]);
-  const [showAddMember, setShowAddMember] = useState(false);
-  const [newMember, setNewMember] = useState({ email: '', role: 'member' as 'admin' | 'member' });
-
-  useEffect(() => {
-    const loadAuth = async () => {
-      try {
-        const me = await getAuthMe();
-        if (me.email) {
-          setAdminEmail(me.email);
-        }
-      } catch {
-        // Only pre-fills the test-email address; the field stays editable.
-      }
-    };
-
-    void loadAuth();
-  }, []);
-
-  const loadTeam = async () => {
-    setLoadingTeam(true);
-    setErrorMessage(null);
-    try {
-      const result = await getOrganizationTeam();
-      setTeam(result.items || []);
-    } catch (loadError) {
-      const message = loadError instanceof Error ? loadError.message : 'Gagal memuat data team';
-      setErrorMessage(message);
-    } finally {
-      setLoadingTeam(false);
-    }
-  };
 
   const loadPayment = async () => {
     setLoadingPayment(true);
@@ -330,9 +284,6 @@ export default function AdminSettings() {
   };
 
   useEffect(() => {
-    if (activeTab === 'team') {
-      void loadTeam();
-    }
     if (activeTab === 'payment') {
       void loadPayment();
     }
@@ -494,38 +445,6 @@ export default function AdminSettings() {
   const handleSaveLanding = () => {
     setErrorMessage(null);
     setStatusMessage('Konfigurasi landing masih UI-only. Gunakan Landing Builder untuk publish konten.');
-  };
-
-  const handleAddMember = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMessage(null);
-    try {
-      await inviteOrganizationMember({
-        email: newMember.email,
-        role: newMember.role,
-      });
-      setStatusMessage('Member berhasil diundang/ditambahkan ke organisasi.');
-      setNewMember({ email: '', role: 'member' });
-      setShowAddMember(false);
-      await loadTeam();
-    } catch (submitError) {
-      const message = submitError instanceof Error ? submitError.message : 'Gagal menambah member';
-      setErrorMessage(message);
-    }
-  };
-
-  const handleDeleteMember = async (id: number) => {
-    if (confirm('Remove this team member?')) {
-      setErrorMessage(null);
-      try {
-        await removeOrganizationMember(id);
-        setStatusMessage('Member berhasil dihapus dari organisasi.');
-        await loadTeam();
-      } catch (deleteError) {
-        const message = deleteError instanceof Error ? deleteError.message : 'Gagal menghapus member';
-        setErrorMessage(message);
-      }
-    }
   };
 
   const renderProviderCard = (provider: ProviderKey) => {
@@ -856,7 +775,7 @@ export default function AdminSettings() {
           { key: 'shipping', label: 'Ongkir', icon: Truck },
           { key: 'templates', label: 'Template Halaman', icon: LayoutTemplate },
           { key: 'landing', label: 'Landing Page', icon: Globe },
-          { key: 'team', label: 'Team & Account', icon: Users },
+          { key: 'team', label: 'Tim admin', icon: Users },
         ].map((tab) => (
           <button
             key={tab.key}
@@ -1219,81 +1138,7 @@ export default function AdminSettings() {
         </div>
       )}
 
-      {activeTab === 'team' && (
-        <div className="space-y-6">
-          <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h2 className="text-lg font-bold text-zinc-900">Tim & Akun</h2>
-                <p className="text-sm text-zinc-500">Owner utama saat ini: {adminEmail}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowAddMember((current) => !current)}
-                className="inline-flex items-center gap-2 rounded-2xl bg-zinc-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-zinc-800"
-              >
-                <Plus className="h-4 w-4" />
-                Tambah Member
-              </button>
-            </div>
-
-            {showAddMember && (
-              <form onSubmit={handleAddMember} className="mt-6 grid gap-4 md:grid-cols-[1fr_180px_auto]">
-                <input
-                  type="email"
-                  required
-                  value={newMember.email}
-                  onChange={(event) => setNewMember((current) => ({ ...current, email: event.target.value }))}
-                  placeholder="email@contoh.com"
-                  className="rounded-2xl border border-zinc-300 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-zinc-900"
-                />
-                <select
-                  value={newMember.role}
-                  onChange={(event) => setNewMember((current) => ({ ...current, role: event.target.value as 'admin' | 'member' }))}
-                  className="rounded-2xl border border-zinc-300 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-zinc-900"
-                >
-                  <option value="member">Member</option>
-                  <option value="admin">Admin</option>
-                </select>
-                <button type="submit" className="rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700">
-                  Simpan
-                </button>
-              </form>
-            )}
-          </div>
-
-          <div className="rounded-3xl border border-zinc-200 bg-white shadow-sm">
-            <div className="border-b border-zinc-200 px-6 py-4">
-              <h3 className="font-bold text-zinc-900">Daftar Team</h3>
-            </div>
-            <div className="divide-y divide-zinc-100">
-              {loadingTeam && (
-                <div className="px-6 py-8 text-sm text-zinc-500">Memuat data team...</div>
-              )}
-              {!loadingTeam && team.length === 0 && (
-                <div className="px-6 py-8 text-sm text-zinc-500">Belum ada member di organisasi ini.</div>
-              )}
-              {!loadingTeam && team.map((member) => (
-                <div key={member.id} className="flex items-center justify-between gap-4 px-6 py-4">
-                  <div>
-                    <p className="font-semibold text-zinc-900">{member.name || 'Tanpa nama'}</p>
-                    <p className="text-sm text-zinc-500">{member.email}</p>
-                    <p className="text-xs uppercase tracking-[0.14em] text-zinc-400">{member.role}</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => void handleDeleteMember(member.id)}
-                    className="inline-flex items-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Hapus
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+      {activeTab === 'team' && <AdminTeamSettings />}
     </div>
   );
 }

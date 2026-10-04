@@ -21,6 +21,7 @@ use App\Http\Controllers\Api\V1\Hellom\AdminLandingModerationController;
 use App\Http\Controllers\Api\V1\Hellom\AdminSellerFinanceController;
 use App\Http\Controllers\Api\V1\Hellom\AdminShippingController;
 use App\Http\Controllers\Api\V1\Hellom\AdminLandingTemplateController;
+use App\Http\Controllers\Api\V1\Hellom\AdminTeamController;
 use Illuminate\Support\Facades\Route;
 
 // ─── AUTH + superAdmin ───
@@ -134,6 +135,12 @@ Route::prefix('admin')->name('admin.')->middleware('superAdmin')->group(function
     Route::get('shipping-settings', [AdminShippingController::class, 'show'])->name('shipping_settings.show');
     Route::put('shipping-settings', [AdminShippingController::class, 'update'])->name('shipping_settings.update');
     Route::post('shipping-settings/test', [AdminShippingController::class, 'test'])->middleware('throttle:10,1')->name('shipping_settings.test');
+    // Platform admin team: invite by email (password confirm), resend/revoke, remove.
+    Route::get('team', [AdminTeamController::class, 'index'])->name('team.index');
+    Route::post('team/invitations', [AdminTeamController::class, 'invite'])->middleware('throttle:10,1')->name('team.invite');
+    Route::post('team/invitations/{invitationId}/resend', [AdminTeamController::class, 'resend'])->whereNumber('invitationId')->middleware('throttle:10,1')->name('team.invitations.resend');
+    Route::delete('team/invitations/{invitationId}', [AdminTeamController::class, 'revoke'])->whereNumber('invitationId')->name('team.invitations.revoke');
+    Route::post('team/{userId}/remove', [AdminTeamController::class, 'remove'])->whereNumber('userId')->middleware('throttle:10,1')->name('team.remove');
     // Hellom Page templates (Fase 7.4): slot images, show/hide, order.
     Route::get('landing-templates', [AdminLandingTemplateController::class, 'index'])->name('landing_templates.index');
     Route::put('landing-templates', [AdminLandingTemplateController::class, 'updateLayout'])->name('landing_templates.layout');

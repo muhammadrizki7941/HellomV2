@@ -113,6 +113,8 @@ Route::post('/auth/register', [AuthController::class, 'register'])->middleware('
 Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:hellom-auth')->name('auth.login');
 // Staff / cashier login: straight into the store where the account is POS staff.
 // Invitation page (email link): who invited you, and whether the email already has an account.
+Route::get('/public/admin-invitations/{token}', [\App\Http\Controllers\Api\V1\Hellom\AdminTeamController::class, 'publicShow'])->middleware('throttle:hellom-public-lookup')->name('public.admin_invitations.show');
+Route::post('/public/admin-invitations/{token}/accept', [\App\Http\Controllers\Api\V1\Hellom\AdminTeamController::class, 'accept'])->middleware('throttle:10,1')->name('public.admin_invitations.accept');
 Route::get('/public/invitations/{token}', [OrganizationTeamController::class, 'publicInvitation'])->middleware('throttle:hellom-public-lookup')->name('public.invitations.show');
 Route::post('/auth/staff-login', [AuthController::class, 'staffLogin'])->middleware('throttle:hellom-auth')->name('auth.staff_login');
 Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:hellom-auth')->name('auth.forgot_password');

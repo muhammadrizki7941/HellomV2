@@ -18,7 +18,7 @@ return [
         // words that look official
         'hellomspace', 'official', 'support', 'bantuan', 'cs', 'billing', 'payment', 'pembayaran', 'bayar', 'invoice', 'status',
         'security', 'keamanan', 'verify', 'verifikasi', 'root', 'system', 'superadmin', 'super-admin', 'webmaster', 'www', 'mail',
-        'email', 'toko', 'shop', 'store', 'akun', 'account', 'profile', 'profil', 'user', 'users', 'null', 'undefined',
+        'email', 'undangan-admin', 'undangan', 'toko', 'shop', 'store', 'akun', 'account', 'profile', 'profil', 'user', 'users', 'null', 'undefined',
     ],
 
     /* Username rules: 3–30 chars, lowercase letters/digits/dash, not starting/ending with a dash. */

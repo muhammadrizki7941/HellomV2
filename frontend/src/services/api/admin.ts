@@ -632,3 +632,40 @@ export async function getSystemHealth(): Promise<SystemHealth> {
   }
   return payload;
 }
+
+/** Super admin › Tim admin: platform admins + pending invitations. */
+export type AdminTeam = {
+  admins: Array<{ id: number; name: string; email: string; is_self: boolean; since: string | null }>;
+  invitations: Array<{ id: number; email: string; status: 'pending' | 'expired'; expires_at: string; invited_by: string | null }>;
+};
+
+export function getAdminTeam() {
+  return apiRequest<AdminTeam>('/admin/team');
+}
+
+/** password = the signed-in admin's own password (confirmation). */
+export function inviteAdmin(email: string, password: string) {
+  return apiRequest<AdminTeam>('/admin/team/invitations', { method: 'POST', body: { email, password } });
+}
+
+export function resendAdminInvitation(id: number) {
+  return apiRequest<AdminTeam>(`/admin/team/invitations/${id}/resend`, { method: 'POST' });
+}
+
+export function revokeAdminInvitation(id: number) {
+  return apiRequest<AdminTeam>(`/admin/team/invitations/${id}`, { method: 'DELETE' });
+}
+
+export function removeAdmin(userId: number, password: string) {
+  return apiRequest<AdminTeam>(`/admin/team/${userId}/remove`, { method: 'POST', body: { password } });
+}
+
+export type AdminInvitation = { email: string; status: 'pending' | 'expired' | 'accepted' | 'revoked'; has_account: boolean; invited_by: string | null; expires_at: string };
+
+export function getAdminInvitation(token: string) {
+  return apiRequest<AdminInvitation>(`/public/admin-invitations/${encodeURIComponent(token)}`, { token: null });
+}
+
+export function acceptAdminInvitation(token: string, body: { password: string; name?: string; password_confirmation?: string }) {
+  return apiRequest<{ email: string; role: string }>(`/public/admin-invitations/${encodeURIComponent(token)}/accept`, { method: 'POST', body, token: null });
+}

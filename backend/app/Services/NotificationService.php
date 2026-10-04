@@ -438,6 +438,23 @@ class NotificationService
         ]));
     }
 
+    /** General platform event for the super admin inbox (+ owner email), e.g. admin team changes. */
+    public function createPlatformNotice(string $title, string $message, ?string $actionUrl = null): OwnerNotification
+    {
+        $notification = OwnerNotification::create([
+            'type' => 'new_user',
+            'title' => $title,
+            'message' => $message,
+            'data' => ['notice' => true],
+            'action_type' => $actionUrl ? 'open_page' : null,
+            'action_url' => $actionUrl,
+        ]);
+
+        $this->emitCreated($notification);
+
+        return $notification;
+    }
+
     /** A seller asked to withdraw: waits for super admin approval (Keuangan Penjual). */
     public function createSellerWithdrawalNotif(SellerWithdrawal $withdrawal): OwnerNotification
     {
