@@ -2,7 +2,7 @@
 // server-rendered phone preview, tap the preview to select, hide / duplicate / delete, keyboard
 // reorder, undo / redo, autosave, publish — at 1366 px, then the phone layout at 360 px.
 // Needs Laravel :8010 + Vite :3010 on hellom_pos_test (README). Reseeds tests/e2e/builder-seed.php.
-// Expect "16/16 checks OK". Screenshots: storage/app/e2e_shots/editor-*.png
+// Expect "17/17 checks OK". Screenshots: storage/app/e2e_shots/editor-*.png
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { checker, openChrome, sleep } from './cdp.mjs';
@@ -160,6 +160,20 @@ try {
   if (btn.value && btn.box) await tap(btn.box.x + btn.value.x, btn.box.y + btn.value.y);
   const phoneTap = await waitFor(`[...document.querySelectorAll('[role="dialog"] h2')].some((h) => h.textContent === 'Tombol link')`);
   check('phone: tapping the preview opens the settings sheet', !!btn.value && phoneTap, JSON.stringify(btn));
+
+  // Typing then the keyboard's delete key: focus stays in the field, text is deleted, sheet stays
+  // open (regression: every edit re-ran the sheet's focus effect and pulled focus to the panel).
+  await ev(`(() => { const i = document.querySelector('[role="dialog"] input[type="text"]'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); return true; })()`);
+  for (const ch of ' baru') { await send('Input.insertText', { text: ch }); await sleep(120); }
+  await sleep(600);
+  for (let i = 0; i < 3; i++) {
+    await send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Backspace', code: 'Backspace', windowsVirtualKeyCode: 8 });
+    await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Backspace', code: 'Backspace', windowsVirtualKeyCode: 8 });
+    await sleep(250);
+  }
+  const typing = await ev(`(() => { const a = document.activeElement; const sheet = [...document.querySelectorAll('[role="dialog"] h2')].some((h) => h.textContent === 'Tombol link');
+    return { focused: a?.tagName === 'INPUT' && !!a.closest('[role="dialog"]'), value: a?.value ?? null, sheet }; })()`);
+  check('phone: typing + keyboard delete edits the text and keeps the sheet open', typing?.focused && typing.sheet && (typing.value ?? '').endsWith(' b'), JSON.stringify(typing));
 
   check('no script errors', errors.length === 0, JSON.stringify(errors));
 } finally {

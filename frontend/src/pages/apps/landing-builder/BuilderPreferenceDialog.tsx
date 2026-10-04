@@ -16,15 +16,18 @@ export default function BuilderPreferenceDialog({ current, onChoose, onClose }: 
 }) {
   const [selected, setSelected] = useState<BuilderPreference | null>(current);
   const firstRef = useRef<HTMLButtonElement>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
 
+  // Focus once when opened (a new onClose from the parent must not move focus again).
   useEffect(() => {
     firstRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && onClose) onClose(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeRef.current?.(); };
     document.addEventListener('keydown', onKey);
     const overflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = overflow; };
-  }, [onClose]);
+  }, []);
 
   return (
     <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-labelledby="builder-pref-title">

@@ -13,15 +13,20 @@ export default function Sheet({ title, onClose, children, actions, tall = false 
   tall?: boolean;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
 
+  // Once per opening. Parents pass a new onClose on every render (every keystroke in a field), so
+  // depending on it re-ran this effect and pulled focus from the field being edited — on phones
+  // the keyboard's delete key then closed the sheet instead of deleting text.
   useEffect(() => {
     panelRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeRef.current(); };
     document.addEventListener('keydown', onKey);
     const overflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = overflow; };
-  }, [onClose]);
+  }, []);
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col justify-end" role="dialog" aria-modal="true" aria-label={typeof title === 'string' ? title : undefined}>
