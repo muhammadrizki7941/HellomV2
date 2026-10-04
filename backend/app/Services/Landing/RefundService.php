@@ -89,6 +89,7 @@ final class RefundService
             $order = LandingPageOrder::query()->lockForUpdate()->findOrFail($locked->order_id);
             if ($order->canTransitionTo(LandingPageOrder::STATUS_REFUNDED)) {
                 $order->forceFill(['status' => LandingPageOrder::STATUS_REFUNDED, 'refunded_at' => now()])->save();
+                app(BookingService::class)->cancelForOrder($order); // rental: the time is free again
             }
             $locked->forceFill([
                 'status' => LandingRefund::STATUS_PAID,

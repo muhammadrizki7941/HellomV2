@@ -388,6 +388,7 @@ Schedule::command('landing:orders reconcile')->everyFiveMinutes()->withoutOverla
 Schedule::command('landing:orders expire')->everyTenMinutes()->withoutOverlapping();
 Schedule::command('landing:orders release')->everyTenMinutes()->withoutOverlapping();
 Schedule::command('landing:orders sla')->everyThirtyMinutes()->withoutOverlapping();
+Schedule::command('landing:bookings-remind')->hourly()->withoutOverlapping();
 Schedule::command('balance:reconcile')->dailyAt('03:10')->withoutOverlapping();
 
 // Heartbeat for GET /api/health: proves cron schedule:run is installed and running.

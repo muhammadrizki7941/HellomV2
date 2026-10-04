@@ -101,6 +101,9 @@ class LandingSaleService
         if ($order->buyer_email) {
             $details = ['No. pesanan' => (string) $order->reference_id, 'Tanggal' => $paidAt, 'Penjual' => (string) ($organization?->name ?? '-')];
             $details['Produk'] = (string) $order->product_name . ((int) $order->quantity > 1 ? ' × ' . (int) $order->quantity : '');
+            if ($bookingLabel = data_get($order->metadata, 'booking.label')) {
+                $details['Jadwal'] = (string) $bookingLabel;
+            }
             if ($order->subtotal_amount !== null && ((int) $order->discount_amount > 0 || (int) $order->shipping_amount > 0)) {
                 $details['Subtotal'] = $fmt((int) $order->subtotal_amount);
                 if ((int) $order->discount_amount > 0) {
@@ -168,6 +171,7 @@ class LandingSaleService
             'No. pesanan' => (string) $order->reference_id,
             'Produk' => (string) $order->product_name . ((int) $order->quantity > 1 ? ' × ' . (int) $order->quantity : ''),
             'Pembeli' => (string) ($order->buyer_name ?? '-'),
+            'Jadwal' => (string) data_get($order->metadata, 'booking.label', ''),
             'Email pembeli' => (string) ($order->buyer_email ?? '-'),
         ];
         if ($order->buyer_phone) {
@@ -189,11 +193,13 @@ class LandingSaleService
                 : 'Tertahan sampai ' . $order->settlement_eta->timezone('Asia/Jakarta')->format('d M Y H:i'),
             'Tanggal' => $paidAt,
         ];
-        $needsAction = in_array((string) $order->product_kind, [LandingProduct::TYPE_PHYSICAL, LandingProduct::TYPE_SERVICE], true);
+        $details = array_filter($details, fn ($value) => $value !== '');
+        $needsAction = in_array((string) $order->product_kind, [LandingProduct::TYPE_PHYSICAL, LandingProduct::TYPE_SERVICE, LandingProduct::TYPE_RENTAL], true);
         $sellerPayload = [
             'headline' => 'Ada penjualan baru 💰',
             'intro' => 'Produk "' . (string) $order->product_name . '" baru saja terjual di halaman Hellom kamu.'
-                . ($needsAction ? ' Pesanan ini perlu kamu proses (kirim barang / hubungi pembeli).' : ' Akses produk sudah otomatis dikirim ke pembeli.'),
+                . ((string) $order->product_kind === LandingProduct::TYPE_RENTAL ? ' Jadwalnya sudah terkunci — siapkan unitnya dan cek tab Jadwal.'
+                    : ($needsAction ? ' Pesanan ini perlu kamu proses (kirim barang / hubungi pembeli).' : ' Akses produk sudah otomatis dikirim ke pembeli.')),
             'details' => $details,
             'cta_url' => FrontendUrl::to('/dashboard/apps/landing-builder?tab=pesanan'),
             'cta_label' => 'Buka Pesanan',

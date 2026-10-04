@@ -66,7 +66,7 @@ class SellerOrderController extends BaseApiController
                 'net' => (int) $paid()->where('paid_at', '>=', $month->utc())->sum('net_amount')],
             'balance_available' => (int) (SellerBalance::query()->whereKey($organization->id)->value('available') ?? 0),
             'to_process' => LandingPageOrder::query()->where('organization_id', $organization->id)->where('status', LandingPageOrder::STATUS_PAID)
-                ->whereIn('product_kind', [LandingProduct::TYPE_PHYSICAL, LandingProduct::TYPE_SERVICE])->count(),
+                ->whereIn('product_kind', [LandingProduct::TYPE_PHYSICAL, LandingProduct::TYPE_SERVICE, LandingProduct::TYPE_RENTAL])->count(),
             'products' => LandingProduct::query()->where('organization_id', $organization->id)->count(),
             'chart' => $chart,
             'recent' => $recent,
@@ -270,7 +270,7 @@ class SellerOrderController extends BaseApiController
         $query = LandingPageOrder::query()->where('organization_id', $organization->id);
         match ($filters['status'] ?? 'all') {
             'paid' => $query->whereIn('status', self::PAID),
-            'to_process' => $query->where('status', LandingPageOrder::STATUS_PAID)->whereIn('product_kind', [LandingProduct::TYPE_PHYSICAL, LandingProduct::TYPE_SERVICE]),
+            'to_process' => $query->where('status', LandingPageOrder::STATUS_PAID)->whereIn('product_kind', [LandingProduct::TYPE_PHYSICAL, LandingProduct::TYPE_SERVICE, LandingProduct::TYPE_RENTAL]),
             'all' => null,
             default => $query->where('status', $filters['status']),
         };
@@ -343,9 +343,14 @@ class SellerOrderController extends BaseApiController
             'reference' => $o->reference_id,
             'status' => $o->status,
             'status_label' => LandingPageOrder::LABELS[$o->status] ?? $o->status,
-            'needs_action' => $o->status === LandingPageOrder::STATUS_PAID && in_array((string) $o->product_kind, [LandingProduct::TYPE_PHYSICAL, LandingProduct::TYPE_SERVICE], true),
+            'needs_action' => $o->status === LandingPageOrder::STATUS_PAID && in_array((string) $o->product_kind, [LandingProduct::TYPE_PHYSICAL, LandingProduct::TYPE_SERVICE, LandingProduct::TYPE_RENTAL], true),
             'product_name' => $o->product_name,
             'product_type' => $o->product_kind,
+            // Rental: the booked time ("12 Okt 2026 – 15 Okt 2026 (3 hari)"), conflict if paid after it was taken.
+            'booking' => is_array($o->metadata) && isset($o->metadata['booking']) ? [
+                'label' => (string) ($o->metadata['booking']['label'] ?? ''), 'units' => (int) ($o->metadata['booking']['units'] ?? 1),
+                'starts_at' => (string) ($o->metadata['booking']['starts_at'] ?? ''), 'conflict' => !empty($o->metadata['booking_conflict']),
+            ] : null,
             'quantity' => (int) $o->quantity,
             'amount' => (int) $o->amount,
             'net_amount' => (int) $o->net_amount,

@@ -36,7 +36,7 @@ final class BlockSchema
         // Fase 7.3: YouTube (incl. Shorts), TikTok, Instagram Reels; autoplay = muted, starts when visible.
         'video' => ['videoUrl' => 'url', 'title' => 'str:160', 'autoplay' => 'bool', 'hideTitle' => 'bool', 'corners' => 'enum:rounded|square'],
         // kind: which products the editor's picker offers (digital / physical gallery cards).
-        'product' => ['productId' => 'pid', 'buttonText' => 'str:40', 'layout' => 'enum:card|wide', 'kind' => 'enum:digital|physical',
+        'product' => ['productId' => 'pid', 'buttonText' => 'str:40', 'layout' => 'enum:card|wide', 'kind' => 'enum:digital|physical|rental',
             // Legacy inline product (before Fase 3); only for blocks not linked to a product.
             'name' => 'str:200', 'price' => 'str:40', 'description' => 'text:1000', 'imageUrl' => 'img'],
         'catalog' => ['title' => 'str:160', 'productIds' => 'pids', 'showAll' => 'bool', 'columns' => 'int:1:3', 'buttonText' => 'str:40'],

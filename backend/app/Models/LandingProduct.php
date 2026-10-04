@@ -24,8 +24,10 @@ class LandingProduct extends Model
     public const TYPE_LINK = 'link';
     public const TYPE_PHYSICAL = 'physical';
     public const TYPE_SERVICE = 'service';
+    /** Sewa / booking jadwal: per day or per session, units, opening hours (App\Services\Landing\BookingService). */
+    public const TYPE_RENTAL = 'rental';
 
-    public const TYPES = [self::TYPE_DRIVE, self::TYPE_FILE, self::TYPE_LINK, self::TYPE_PHYSICAL, self::TYPE_SERVICE];
+    public const TYPES = [self::TYPE_DRIVE, self::TYPE_FILE, self::TYPE_LINK, self::TYPE_PHYSICAL, self::TYPE_SERVICE, self::TYPE_RENTAL];
     public const DIGITAL_TYPES = [self::TYPE_DRIVE, self::TYPE_FILE, self::TYPE_LINK];
 
     public const TYPE_LABELS = [
@@ -34,12 +36,13 @@ class LandingProduct extends Model
         self::TYPE_LINK => 'Link / akses',
         self::TYPE_PHYSICAL => 'Produk fisik',
         self::TYPE_SERVICE => 'Jasa / booking',
+        self::TYPE_RENTAL => 'Sewa / booking jadwal',
     ];
 
     protected $fillable = [
         'organization_id', 'public_id', 'slug', 'type', 'name', 'description', 'image_path', 'price', 'compare_at_price',
         'stock', 'is_active', 'require_phone', 'checkout_fields', 'delivery_mode', 'delivery_url', 'delivery_note',
-        'access_max_opens', 'access_days', 'download_limit', 'shipping_mode', 'shipping_fee', 'weight_grams', 'sort_order',
+        'access_max_opens', 'access_days', 'download_limit', 'shipping_mode', 'shipping_fee', 'weight_grams', 'sort_order', 'booking_settings',
     ];
 
     protected $hidden = ['delivery_url', 'delivery_note', 'file_path'];
@@ -64,6 +67,7 @@ class LandingProduct extends Model
             'weight_grams' => 'integer',
             'sort_order' => 'integer',
             'admin_disabled_at' => 'datetime',
+            'booking_settings' => 'array',
         ];
     }
 
@@ -166,7 +170,13 @@ class LandingProduct extends Model
                 'mode' => $this->shipping_mode ?: 'free',
                 'fee' => $this->shipping_mode === 'flat' ? (int) $this->shipping_fee : 0,
             ] : null,
-            'max_quantity' => $this->type === self::TYPE_PHYSICAL ? max(1, min(20, $this->stock ?? 20)) : 1,
+            'max_quantity' => match ($this->type) {
+                self::TYPE_PHYSICAL => max(1, min(20, $this->stock ?? 20)),
+                self::TYPE_RENTAL => min(20, \App\Services\Landing\BookingService::normalize($this->booking_settings)['units']),
+                default => 1,
+            },
+            // Rental: what the buyer can pick (mode, units, days/sessions, opening hours). Bookings come from /availability.
+            'booking' => $this->type === self::TYPE_RENTAL ? app(\App\Services\Landing\BookingService::class)->publicSettings($this) : null,
             'file' => $this->type === self::TYPE_FILE && $this->file_name ? [
                 'extension' => strtolower(pathinfo((string) $this->file_name, PATHINFO_EXTENSION)),
                 'size' => (int) $this->file_size,

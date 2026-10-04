@@ -70,10 +70,29 @@ class PublicStoreController extends BaseApiController
             // Courier shipping: the buyer's place + chosen courier (the server prices it).
             'destination_id' => ['nullable', 'string', 'max:40'],
             'courier' => ['nullable', 'string', 'max:60'],
+            // Rental: the chosen dates/time (BookingService::resolve).
+            'booking' => ['nullable', 'array'],
         ]);
 
         return $this->ok($this->checkout->quote($product, (int) ($validated['quantity'] ?? 1), $validated['coupon_code'] ?? null,
-            $validated['destination_id'] ?? null, $validated['courier'] ?? null), 'Rincian harga');
+            $validated['destination_id'] ?? null, $validated['courier'] ?? null, $validated['booking'] ?? null), 'Rincian harga');
+    }
+
+    /** Rental: free units per day of a month (?month=2026-10), or per session of a day (?date=2026-10-12). */
+    public function availability(Request $request, string $publicId, \App\Services\Landing\BookingService $bookings): JsonResponse
+    {
+        [$product] = $this->findProduct($publicId);
+        if (!$product || $product->type !== \App\Models\LandingProduct::TYPE_RENTAL) {
+            return $this->fail('Produk tidak ditemukan', ['code' => 'PRODUCT_NOT_FOUND'], 404);
+        }
+        $validated = $request->validate(['month' => ['nullable', 'date_format:Y-m'], 'date' => ['nullable', 'date_format:Y-m-d']]);
+        try {
+            $data = $bookings->availability($product, (string) ($validated['month'] ?? ''), $validated['date'] ?? null);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return $this->fail($e->validator->errors()->first(), ['code' => 'BOOKING_DATE_INVALID'], 422);
+        }
+
+        return $this->ok($data, 'Ketersediaan');
     }
 
     public function checkout(Request $request, string $publicId, PaymentStarter $payments, CheckoutCaptcha $captcha): JsonResponse

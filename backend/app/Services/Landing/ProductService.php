@@ -58,6 +58,20 @@ final class ProductService
             'checkout_fields.*.options' => ['nullable', 'array', 'max:20'],
             'checkout_fields.*.options.*' => ['string', 'max:80'],
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:100000'],
+            // Sewa / booking jadwal (BookingService::normalize clamps every value).
+            'booking' => ['nullable', 'array'],
+            'booking.mode' => ['nullable', 'in:daily,slot'],
+            'booking.units' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'booking.unit_label' => ['nullable', 'in:hari,malam'],
+            'booking.min_days' => ['nullable', 'integer', 'min:1', 'max:60'],
+            'booking.max_days' => ['nullable', 'integer', 'min:1', 'max:90'],
+            'booking.slot_minutes' => ['nullable', 'integer', 'min:15', 'max:480'],
+            'booking.max_slots' => ['nullable', 'integer', 'min:1', 'max:12'],
+            'booking.hours' => ['nullable', 'array'],
+            'booking.lead_hours' => ['nullable', 'integer', 'min:0', 'max:168'],
+            'booking.max_days_ahead' => ['nullable', 'integer', 'min:1', 'max:365'],
+            'booking.blocked_dates' => ['nullable', 'array', 'max:400'],
+            'booking.blocked_dates.*' => ['date_format:Y-m-d'],
         ];
     }
 
@@ -98,6 +112,13 @@ final class ProductService
                 $errors['shipping_mode'] = 'Atur alamat asal pengiriman dulu di Pengaturan › Pengiriman.';
             }
         }
+        $booking = null;
+        if ($type === LandingProduct::TYPE_RENTAL) {
+            $booking = BookingService::normalize($data['booking'] ?? []);
+            if ($booking['mode'] === 'slot' && array_filter($booking['hours']) === []) {
+                $errors['booking.hours'] = 'Atur jam buka minimal satu hari.';
+            }
+        }
         if ($errors !== []) {
             throw ValidationException::withMessages($errors);
         }
@@ -108,11 +129,12 @@ final class ProductService
             'description' => $data['description'] ?? null,
             'price' => (int) $data['price'],
             'compare_at_price' => isset($data['compare_at_price']) ? (int) $data['compare_at_price'] ?: null : null,
-            'stock' => array_key_exists('stock', $data) && $data['stock'] !== null ? (int) $data['stock'] : null,
+            // Rental: availability comes from the schedule (units), not from stock.
+            'stock' => $type !== LandingProduct::TYPE_RENTAL && array_key_exists('stock', $data) && $data['stock'] !== null ? (int) $data['stock'] : null,
             'is_active' => (bool) ($data['is_active'] ?? $product->is_active ?? true),
             'require_phone' => (bool) ($data['require_phone'] ?? false),
             'delivery_url' => $deliveryUrl !== '' ? $deliveryUrl : null,
-            'delivery_note' => in_array($type, LandingProduct::DIGITAL_TYPES, true) || $type === LandingProduct::TYPE_SERVICE
+            'delivery_note' => in_array($type, LandingProduct::DIGITAL_TYPES, true) || in_array($type, [LandingProduct::TYPE_SERVICE, LandingProduct::TYPE_RENTAL], true)
                 ? (trim((string) ($data['delivery_note'] ?? '')) ?: null) : null,
             'access_max_opens' => in_array($type, [LandingProduct::TYPE_DRIVE, LandingProduct::TYPE_LINK], true) ? ($data['access_max_opens'] ?? null) : null,
             'access_days' => in_array($type, LandingProduct::DIGITAL_TYPES, true) ? ($data['access_days'] ?? null) : null,
@@ -122,6 +144,7 @@ final class ProductService
             'weight_grams' => $type === LandingProduct::TYPE_PHYSICAL ? ($data['weight_grams'] ?? null) : null,
             'checkout_fields' => $this->normalizeFields($data['checkout_fields'] ?? []),
             'sort_order' => (int) ($data['sort_order'] ?? $product->sort_order ?? 0),
+            'booking_settings' => $booking,
         ]);
         $product->organization_id = $organization->id;
         if ($type !== LandingProduct::TYPE_FILE && $product->file_path) {
@@ -199,6 +222,7 @@ final class ProductService
             'shipping_fee' => (int) $product->shipping_fee,
             'weight_grams' => $product->weight_grams,
             'raw_checkout_fields' => is_array($product->checkout_fields) ? $product->checkout_fields : [],
+            'booking_settings' => $product->type === LandingProduct::TYPE_RENTAL ? BookingService::normalize($product->booking_settings) : null,
             'deliverable' => $product->isDeliverable(),
             'admin_disabled' => $product->admin_disabled_at !== null,
             'admin_disabled_reason' => $product->admin_disabled_reason,

@@ -32,6 +32,7 @@ final class CheckoutService
         private readonly FeeCalculator $fees,
         private readonly FinanceSettings $settings,
         private readonly ShippingService $shipping,
+        private readonly BookingService $bookings,
     ) {
     }
 
@@ -42,10 +43,23 @@ final class CheckoutService
      *
      * @return array{subtotal:int, discount:int, shipping:int, total:int, coupon: ?array, coupon_error: ?string, shipping_rate: ?array, shipping_error: ?string}
      */
-    public function quote(LandingProduct $product, int $quantity, ?string $couponCode, ?string $destinationId = null, ?string $courier = null): array
+    public function quote(LandingProduct $product, int $quantity, ?string $couponCode, ?string $destinationId = null, ?string $courier = null, ?array $booking = null): array
     {
         $quantity = $this->clampQuantity($product, $quantity);
-        $subtotal = (int) $product->price * $quantity;
+        // Rental: price per day/session × units × duration (the chosen dates/time).
+        $duration = 1;
+        $bookingQuote = null;
+        $bookingError = null;
+        if ($product->type === LandingProduct::TYPE_RENTAL && $booking !== null) {
+            try {
+                $selection = $this->bookings->resolve($product, $booking);
+                $duration = $selection['duration'];
+                $bookingQuote = ['label' => $selection['label'], 'duration' => $duration, 'unit' => $selection['unit']];
+            } catch (ValidationException $e) {
+                $bookingError = $e->validator->errors()->first();
+            }
+        }
+        $subtotal = (int) $product->price * $quantity * $duration;
         $shipping = $this->shippingFor($product);
         $shippingRate = null;
         $shippingError = null;
@@ -81,6 +95,8 @@ final class CheckoutService
             'coupon_error' => $couponError,
             'shipping_rate' => $shippingRate,
             'shipping_error' => $shippingError,
+            'booking' => $bookingQuote,
+            'booking_error' => $bookingError,
         ];
     }
 
@@ -102,6 +118,16 @@ final class CheckoutService
             'attribution' => ['nullable', 'array'],
             'attribution.*' => ['nullable', 'max:200'],
         ];
+        if ($product->type === LandingProduct::TYPE_RENTAL) {
+            $rules += [
+                'booking' => ['required', 'array'],
+                'booking.start_date' => ['nullable', 'date_format:Y-m-d'],
+                'booking.days' => ['nullable', 'integer', 'min:1', 'max:90'],
+                'booking.date' => ['nullable', 'date_format:Y-m-d'],
+                'booking.start_time' => ['nullable', 'date_format:H:i'],
+                'booking.slots' => ['nullable', 'integer', 'min:1', 'max:12'],
+            ];
+        }
         if ($product->type === LandingProduct::TYPE_PHYSICAL) {
             $courier = $this->usesCourier($product);
             $rules += [
@@ -145,7 +171,8 @@ final class CheckoutService
                     : 'Produk ini sedang tidak dijual.']);
             }
 
-            $subtotal = (int) $locked->price * $quantity;
+            $selection = $locked->type === LandingProduct::TYPE_RENTAL ? $this->bookings->resolve($locked, $input['booking'] ?? null) : null;
+            $subtotal = (int) $locked->price * $quantity * ($selection['duration'] ?? 1);
             $discount = 0;
             $coupon = null;
             $code = LandingCoupon::normalizeCode((string) ($input['coupon_code'] ?? ''));
@@ -212,6 +239,15 @@ final class CheckoutService
                 'source' => LandingStats::sourceLabel($attribution['utm_source'] ?? $attribution['referrer'] ?? ''),
             ]);
             $order->forceFill(['inventory_reserved_at' => now()])->save();
+            if ($selection !== null) {
+                // Two buyers can't take the last unit: the product row is locked in this transaction.
+                $this->bookings->hold($locked, $order, $selection, $quantity);
+                $meta = is_array($order->metadata) ? $order->metadata : [];
+                $meta['booking'] = ['mode' => $this->bookings->settings($locked)['mode'], 'label' => $selection['label'],
+                    'starts_at' => $selection['starts_at']->format('Y-m-d H:i'), 'ends_at' => $selection['ends_at']->format('Y-m-d H:i'),
+                    'duration' => $selection['duration'], 'unit' => $selection['unit'], 'units' => $quantity];
+                $order->forceFill(['metadata' => $meta])->save();
+            }
 
             LandingOrderItem::query()->create([
                 'order_id' => $order->id,
@@ -241,6 +277,7 @@ final class CheckoutService
         if ($order->coupon_id) {
             LandingCoupon::withTrashed()->whereKey($order->coupon_id)->where('used_count', '>', 0)->decrement('used_count');
         }
+        $this->bookings->releaseForOrder($order);
         $order->forceFill(['inventory_released_at' => now()])->save();
     }
 
@@ -250,6 +287,7 @@ final class CheckoutService
         if (!$order->product_id) {
             return;
         }
+        $this->bookings->confirmForOrder($order);
         $product = LandingProduct::withTrashed()->lockForUpdate()->find($order->product_id);
         if (!$product) {
             return;
@@ -294,7 +332,11 @@ final class CheckoutService
 
     private function clampQuantity(LandingProduct $product, int $quantity): int
     {
-        return $product->type === LandingProduct::TYPE_PHYSICAL ? max(1, min(20, $quantity)) : 1;
+        return match ($product->type) {
+            LandingProduct::TYPE_PHYSICAL => max(1, min(20, $quantity)),
+            LandingProduct::TYPE_RENTAL => max(1, min(20, $this->bookings->settings($product)['units'], $quantity)),
+            default => 1,
+        };
     }
 
     private function usesCourier(LandingProduct $product): bool

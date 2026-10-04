@@ -58,6 +58,8 @@ Route::post('/public/landing-products/{publicId}/shipping-rates', [ShippingContr
     ->name('public.landing.products.shipping_rates');
 Route::post('/public/landing-products/{publicId}/quote', [PublicStoreController::class, 'quote'])->middleware('throttle:hellom-public-lookup')
     ->name('public.landing.products.quote');
+Route::get('/public/landing-products/{publicId}/availability', [PublicStoreController::class, 'availability'])->middleware('throttle:hellom-public-lookup')
+    ->name('public.landing_products.availability');
 Route::post('/public/landing-products/{publicId}/checkout', [PublicStoreController::class, 'checkout'])->middleware('throttle:hellom-landing-checkout')
     ->name('public.landing.products.checkout');
 Route::get('/public/landing-access/{token}', [PublicStoreController::class, 'access'])->middleware('throttle:hellom-public-lookup')

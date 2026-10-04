@@ -153,11 +153,11 @@
                         <div class="prod-body">
                             <p class="muted small" style="margin:0">{{ $p['type_label'] }}</p>
                             <h2 style="margin:0"><a href="{{ $p['url'] }}" style="text-decoration:none">{{ $p['name'] }}</a></h2>
-                            <p class="price" style="margin:0">{{ $rp($p['price']) }}@if ($p['compare_at_price'])<span class="strike">{{ $rp($p['compare_at_price']) }}</span>@endif</p>
+                            <p class="price" style="margin:0">{{ $rp($p['price']) }}@if (!empty($p['booking']))<small class="muted" style="font-weight:500"> / {{ $p['booking']['mode'] === 'daily' ? $p['booking']['unit_label'] : 'sesi' }}</small>@endif @if ($p['compare_at_price'])<span class="strike">{{ $rp($p['compare_at_price']) }}</span>@endif</p>
                             @if ($p['stock_left'])<p class="stock" style="margin:0">Sisa {{ $p['stock_left'] }}</p>@endif
                             @if ($p['description'])<p class="muted">{{ \Illuminate\Support\Str::limit(trim(html_entity_decode(strip_tags(str_replace(['</p>', '<br>', '</li>'], ' ', $p['description'])))), 220) }}</p>@endif
                             @if ($p['available'])
-                                <a class="{{ $btnClass }} block" href="{{ $p['checkout_url'] }}" data-track="buy" data-product="{{ $p['id'] }}" data-value="{{ $p['price'] }}" data-label="{{ $p['name'] }}">{{ $c['buttonText'] ?? 'Beli Sekarang' }}</a>
+                                <a class="{{ $btnClass }} block" href="{{ $p['checkout_url'] }}" data-track="buy" data-product="{{ $p['id'] }}" data-value="{{ $p['price'] }}" data-label="{{ $p['name'] }}">{{ $c['buttonText'] ?? (!empty($p['booking']) ? 'Pilih jadwal' : 'Beli Sekarang') }}</a>
                             @else
                                 <span class="btn block" aria-disabled="true">{{ $p['in_stock'] ? 'Belum tersedia' : 'Stok habis' }}</span>
                             @endif
@@ -194,9 +194,9 @@
                                 </a>
                                 <div class="prod-body">
                                     <a href="{{ $p['url'] }}" class="prod-name" style="text-decoration:none">{{ $p['name'] }}</a>
-                                    <span class="price">{{ $rp($p['price']) }}@if ($p['compare_at_price'])<span class="strike">{{ $rp($p['compare_at_price']) }}</span>@endif</span>
+                                    <span class="price">{{ $rp($p['price']) }}@if (!empty($p['booking']))<small class="muted" style="font-weight:500"> / {{ $p['booking']['mode'] === 'daily' ? $p['booking']['unit_label'] : 'sesi' }}</small>@endif @if ($p['compare_at_price'])<span class="strike">{{ $rp($p['compare_at_price']) }}</span>@endif</span>
                                     @if ($p['available'])
-                                        <a class="{{ $btnClass }} block" style="margin-top:auto;min-height:44px;padding:8px 12px" href="{{ $p['checkout_url'] }}" data-track="buy" data-product="{{ $p['id'] }}" data-value="{{ $p['price'] }}" data-label="{{ $p['name'] }}">{{ $c['buttonText'] ?? 'Beli' }}</a>
+                                        <a class="{{ $btnClass }} block" style="margin-top:auto;min-height:44px;padding:8px 12px" href="{{ $p['checkout_url'] }}" data-track="buy" data-product="{{ $p['id'] }}" data-value="{{ $p['price'] }}" data-label="{{ $p['name'] }}">{{ $c['buttonText'] ?? (!empty($p['booking']) ? 'Pilih jadwal' : 'Beli') }}</a>
                                     @else
                                         <span class="btn block" aria-disabled="true" style="margin-top:auto;min-height:44px;padding:8px 12px">{{ $p['in_stock'] ? 'Belum tersedia' : 'Stok habis' }}</span>
                                     @endif
