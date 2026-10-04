@@ -185,7 +185,7 @@ export default function LandingBuilder() {
               : "h-[calc(100svh-164px)]"
           )}
         >
-          <Editor />
+          <Editor onExit={() => setActiveTab('overview')} />
         </div>
       ) : (
         <div className="min-h-[600px]">

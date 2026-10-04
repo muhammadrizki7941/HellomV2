@@ -381,6 +381,8 @@ export function useEditorDocument() {
     saveState, savedAt, notice, setNotice, publishing,
     canUndo: history.past.length > 0, canRedo: history.future.length > 0,
     actions, uploadFile, publish, viewUrl, switchPage, restore, refreshSite,
+    /** Save pending edits now (before leaving the editor). */
+    flush,
   };
 }
 

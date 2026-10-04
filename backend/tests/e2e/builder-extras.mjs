@@ -88,9 +88,13 @@ try {
   await ev(`(() => { const l = [...document.querySelectorAll('[data-section="animasi"] label')].find((x) => x.textContent.includes('Matikan semua animasi')); l.querySelector('input').click(); return true; })()`);
   await waitFor(`document.querySelector('header [aria-live]')?.textContent.includes('Tersimpan')`, 10000);
   await clickText('Terbitkan');
-  await sleep(1500);
-  html = await (await fetch(`${SHOP}/${s.username}`)).text();
-  const off = /<body class="[^"]*no-anim/.test(html) && !html.includes('class="ent ');
+  // The second publish can take a moment: poll the live page instead of a fixed wait.
+  let off = false;
+  for (let i = 0; i < 20 && !off; i++) {
+    await sleep(500);
+    html = await (await fetch(`${SHOP}/${s.username}`)).text();
+    off = /<body class="[^"]*no-anim/.test(html) && !html.includes('class="ent ');
+  }
   check('animations: entrance + featured shake published; "Matikan semua animasi" turns them off', animated && off, JSON.stringify({ animated, off }));
 
   // 7.4 Template gallery.

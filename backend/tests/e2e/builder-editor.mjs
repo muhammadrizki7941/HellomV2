@@ -2,7 +2,7 @@
 // server-rendered phone preview, tap the preview to select, hide / duplicate / delete, keyboard
 // reorder, undo / redo, autosave, publish — at 1366 px, then the phone layout at 360 px.
 // Needs Laravel :8010 + Vite :3010 on hellom_pos_test (README). Reseeds tests/e2e/builder-seed.php.
-// Expect "17/17 checks OK". Screenshots: storage/app/e2e_shots/editor-*.png
+// Expect "20/20 checks OK". Screenshots: storage/app/e2e_shots/editor-*.png
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { checker, openChrome, sleep } from './cdp.mjs';
@@ -174,6 +174,49 @@ try {
   const typing = await ev(`(() => { const a = document.activeElement; const sheet = [...document.querySelectorAll('[role="dialog"] h2')].some((h) => h.textContent === 'Tombol link');
     return { focused: a?.tagName === 'INPUT' && !!a.closest('[role="dialog"]'), value: a?.value ?? null, sheet }; })()`);
   check('phone: typing + keyboard delete edits the text and keeps the sheet open', typing?.focused && typing.sheet && (typing.value ?? '').endsWith(' b'), JSON.stringify(typing));
+
+  // Bottom bar: Keluar · Blok · Tambah · Produk · Template · Tampilan · Sosial — all reachable at 360 px.
+  await ev(`[...document.querySelectorAll('[role="dialog"] button[aria-label="Tutup"]')].pop()?.click(); true`);
+  await sleep(400);
+  const bar = await ev(`(() => { const items = [...document.querySelectorAll('nav[aria-label="Alat editor"] > button')];
+    return { labels: items.map((b) => b.textContent.trim()), small: items.filter((b) => { const r = b.getBoundingClientRect(); return r.width < 43.5 || r.height < 43.5; }).length,
+      overflow: document.documentElement.scrollWidth > innerWidth + 1 }; })()`);
+  await shot('phone-bottom-bar');
+  await ev(`document.querySelector('nav[aria-label="Alat editor"] [data-tour="templates-bar"]').click(); true`);
+  const barTemplates = await waitFor(`document.querySelectorAll('[data-template]').length >= 12`, 15000);
+  await ev(`document.querySelector('[aria-label="Pilih template"] button[aria-label="Tutup"]').click(); true`);
+  await ev(`document.querySelector('nav[aria-label="Alat editor"] [data-tour="product"]').click(); true`);
+  const barProduct = await waitFor(`[...document.querySelectorAll('[role="dialog"]')].some((d) => /produk/i.test(d.getAttribute('aria-label') || d.textContent.slice(0, 80)))`, 10000);
+  await shot('phone-product-form');
+  await ev(`[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.getAttribute('aria-label') === 'Tutup' || b.textContent.trim() === 'Batal')?.click(); true`);
+  check('phone: bottom bar has Keluar, Produk, Template (+ Tambah, Tampilan, Sosial), tappable, opens gallery & product form',
+    bar.labels.join('|') === 'Keluar|Link|Tambah|Produk|Template|Tampilan|Sosial' && bar.small === 0 && !bar.overflow && barTemplates && barProduct, JSON.stringify({ bar, barTemplates, barProduct }));
+
+  // Produk from the bar: create a "Link / akses" product → it is placed on the page.
+  await sleep(400);
+  await ev(`document.querySelector('nav[aria-label="Alat editor"] [data-tour="product"]').click(); true`);
+  await waitFor(`[...document.querySelectorAll('button')].some((b) => b.textContent.includes('Link / akses'))`, 10000);
+  await ev(`[...document.querySelectorAll('button')].find((b) => b.textContent.includes('Link / akses')).click(); true`);
+  await waitFor(`!!document.querySelector('input[placeholder^="Contoh: E-book"]')`);
+  const setVal = (sel, v) => ev(`(() => { const el = document.querySelector(${JSON.stringify(sel)}); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, ${JSON.stringify(v)}); el.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
+  await setVal('input[placeholder^="Contoh: E-book"]', 'Kelas Bikin Kue');
+  await setVal('input[placeholder="49.000"]', '49000');
+  await setVal('input[placeholder^="https://t.me"]', 'https://t.me/+kelaskue');
+  await ev(`[...document.querySelectorAll('button[type="submit"]')].find((b) => b.textContent.includes('Simpan produk')).click(); true`);
+  const productNotice = await waitFor(`document.body.textContent.includes('Produk "Kelas Bikin Kue" dibuat dan ditambahkan ke halaman')`, 15000);
+  const productInPreview = await browser.waitPreview(`document.body.textContent.includes('Kelas Bikin Kue')`, 15000);
+  await shot('phone-product-added');
+  check('phone: Produk in the bar creates a product and places it on the page', productNotice && productInPreview, JSON.stringify({ productNotice, productInPreview }));
+
+  // Keluar: saves pending edits, back to the Landing Page Builder dashboard (tabs visible again).
+  await ev(`document.querySelector('nav[aria-label="Alat editor"] [data-tour="list"]').click(); true`);
+  await sleep(300);
+  await ev(`[...document.querySelectorAll('[role="dialog"] button[aria-label="Tutup"]')].pop()?.click(); true`);
+  await ev(`document.querySelector('nav[aria-label="Alat editor"] [data-tour="exit"]').click(); true`);
+  const exited = await waitFor(`!document.querySelector('nav[aria-label="Alat editor"]') && !location.search.includes('tab=editor') && [...document.querySelectorAll('button')].some((b) => b.textContent.trim() === 'Editor')`, 15000);
+  const phonePage = (await api(s, '/apps/landing-builder/site')).data.pages[0].id;
+  const savedTitle = (await api(s, `/apps/landing-builder/site/pages/${phonePage}/document`)).data.document.blocks.some((b) => String(b.content?.text ?? '').endsWith(' b'));
+  check('phone: Keluar saves the draft and returns to the dashboard', exited && savedTitle, JSON.stringify({ exited, savedTitle }));
 
   check('no script errors', errors.length === 0, JSON.stringify(errors));
 } finally {

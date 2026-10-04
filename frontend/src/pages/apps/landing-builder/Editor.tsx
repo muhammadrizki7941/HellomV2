@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
   AlertTriangle, ArrowLeft, Check, CheckCircle2, ChevronDown, Copy, ExternalLink, Eye, EyeOff, FileStack, History, LayoutList,
-  Link2, Loader2, MoreHorizontal, Palette, Plus, Redo2, RefreshCw, Share2, Sparkles, Trash2, Undo2,
+  Link2, Loader2, LogOut, MoreHorizontal, Package, Palette, Plus, Redo2, RefreshCw, Share2, Sparkles, Trash2, Undo2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { LanguageProvider } from './i18n';
@@ -13,6 +13,10 @@ import EditorTour from './EditorTour';
 import { PropertyPanel } from './components/PropertyPanel';
 import { HistoryDialog, PagesDialog } from './components/EditorDialogs';
 import TemplateGallery from './editor/TemplateGallery';
+import ProductForm from './ProductForm';
+import { resetSellerProducts } from './sellerProducts';
+import { getSellerProducts } from '@/lib/hellomApi';
+import type { ProductLimits, SellerProduct } from '@/lib/hellomApi';
 import { getSessionUser } from '@/lib/hellomApi';
 import type { PageTemplate } from '@/lib/hellomApi';
 import type { Block } from './types';
@@ -43,7 +47,8 @@ const SOCIAL_ID = '__social';
 const isTyping = (target: EventTarget | null) =>
   target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
 
-export default function Editor() {
+/** onExit: back to the Landing Page Builder dashboard (the phone layout hides the dashboard tabs). */
+export default function Editor({ onExit }: { onExit?: () => void } = {}) {
   const ed = useEditorDocument();
   const preference = useOptionalEditorPreference();
   const preset = preference?.preset ?? DEFAULT_PRESET;
@@ -107,6 +112,35 @@ export default function Editor() {
     const url = await ed.viewUrl();
     if (url && tab) tab.location.href = url;
     else tab?.close();
+  };
+
+  // Phone bottom bar: new product without leaving the editor; it is placed on the page right away.
+  const [productForm, setProductForm] = useState<{ limits: ProductLimits | null } | null>(null);
+  const openProductForm = () => {
+    setSheet('none');
+    setProductForm({ limits: null });
+    getSellerProducts().then((r) => setProductForm((f) => (f ? { limits: r.limits } : f))).catch(() => undefined);
+  };
+  const productSaved = (saved: SellerProduct, message: string) => {
+    if (message === 'File dihapus') return; // still editing the same product
+    setProductForm(null);
+    resetSellerProducts();
+    actions.addBlock('product', undefined, { productId: saved.id, kind: saved.type === 'physical' ? 'physical' : 'digital', buttonText: 'Beli sekarang' });
+    ed.setNotice({ kind: 'ok', text: `Produk "${saved.name}" dibuat dan ditambahkan ke halaman. Tidak jadi? Tekan Urungkan.` });
+  };
+
+  // Leave the editor: save pending edits first so nothing typed is lost.
+  const [leaving, setLeaving] = useState(false);
+  const exit = async () => {
+    if (!onExit) return;
+    setLeaving(true);
+    try {
+      await ed.flush();
+    } catch {
+      setLeaving(false);
+      if (!window.confirm('Perubahan terakhir belum tersimpan. Tetap keluar dari editor?')) return;
+    }
+    onExit();
   };
 
   const applyTemplate = (template: PageTemplate, mode: 'all' | 'style') => {
@@ -186,13 +220,17 @@ export default function Editor() {
         {isMobile ? (
           <>
             <div className="relative min-h-0 flex-1">{preview(false)}</div>
-            <nav className="grid grid-cols-4 gap-1 border-t border-zinc-200 bg-white px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2" aria-label="Alat editor">
-              <BarButton tour="list" icon={<LayoutList className="h-5 w-5" />} label={preset.terms.list} onClick={() => setSheet('list')} />
-              <button type="button" data-tour="add" onClick={() => setSheet('add')} className="flex min-h-12 items-center justify-center gap-1.5 rounded-2xl bg-zinc-900 px-2 text-sm font-semibold text-white">
+            <nav className={cn('grid gap-0.5 border-t border-zinc-200 bg-white px-1 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1.5', onExit ? 'grid-cols-7' : 'grid-cols-6')} aria-label="Alat editor">
+              {onExit && <BarButton tour="exit" icon={leaving ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogOut className="h-5 w-5 -scale-x-100" />} label="Keluar" onClick={() => void exit()} />}
+              <BarButton tour="list" icon={<LayoutList className="h-5 w-5" />} label={preset.terms.items.charAt(0).toUpperCase() + preset.terms.items.slice(1)} onClick={() => setSheet('list')} />
+              <button type="button" data-tour="add" onClick={() => setSheet('add')} aria-label={preset.terms.add}
+                className="flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-2xl bg-zinc-900 text-[11px] font-semibold text-white">
                 <Plus className="h-5 w-5 rounded-full bg-yellow-400 p-0.5 text-black" strokeWidth={3} /> Tambah
               </button>
-              <BarButton tour="social" icon={<Share2 className="h-5 w-5" />} label="Sosial" onClick={() => setSheet('social')} />
+              <BarButton tour="product" icon={<Package className="h-5 w-5" />} label="Produk" onClick={openProductForm} />
+              <BarButton tour="templates-bar" icon={<Sparkles className="h-5 w-5" />} label="Template" onClick={() => { setSheet('none'); setDialog('templates'); }} />
               <BarButton tour="design" icon={<Palette className="h-5 w-5" />} label="Tampilan" onClick={openDesign} />
+              <BarButton tour="social" icon={<Share2 className="h-5 w-5" />} label="Sosial" onClick={() => setSheet('social')} />
             </nav>
             {sheet === 'list' && (
               <Sheet title={preset.terms.list} onClose={() => setSheet('none')}>
@@ -273,6 +311,7 @@ export default function Editor() {
       </div>
 
       {dialog === 'templates' && <TemplateGallery onClose={() => setDialog('none')} onApply={applyTemplate} />}
+      {productForm && <ProductForm product={null} limits={productForm.limits} onClose={() => setProductForm(null)} onSaved={productSaved} />}
       {dialog === 'history' && <HistoryDialog pageId={page.id} onClose={() => setDialog('none')} onRestore={async (id, no) => { await ed.restore(id, no); setDialog('none'); }} />}
       {dialog === 'pages' && (
         <PagesDialog site={ed.site} currentPageId={page.id} onClose={() => setDialog('none')} onChanged={async () => { await ed.refreshSite(); }} onOpenPage={(p) => { void ed.switchPage(p); setDialog('none'); }} />
@@ -412,8 +451,8 @@ function BlockActions({ block, onToggleHidden, onDuplicate, onDelete }: { block:
 
 function BarButton({ tour, icon, label, onClick }: { tour: string; icon: ReactNode; label: string; onClick: () => void }) {
   return (
-    <button type="button" data-tour={tour} onClick={onClick} className="flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-2xl text-xs font-semibold text-zinc-700 hover:bg-zinc-100">
-      {icon}<span className="max-w-full truncate px-1">{label}</span>
+    <button type="button" data-tour={tour} onClick={onClick} aria-label={label} className="flex min-h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-2xl text-[11px] font-semibold text-zinc-700 hover:bg-zinc-100">
+      {icon}<span className="max-w-full truncate">{label}</span>
     </button>
   );
 }
