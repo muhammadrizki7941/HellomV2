@@ -12,6 +12,8 @@ use Throwable;
 
 class PlatformMailService
 {
+    public const OWNER_EMAIL_SETTING = 'hellom_owner_notification_email';
+
     public function getSettings(): array
     {
         $brand = HellomBrandSetting::getSettings();
@@ -55,6 +57,9 @@ class PlatformMailService
             'reply_to_address' => $settings['reply_to_address'],
             'reply_to_name' => $settings['reply_to_name'],
             'is_ready' => $this->isReady(),
+            // The owner's own address(es): every super admin notification is copied there.
+            'owner_email' => (string) SystemSetting::get(self::OWNER_EMAIL_SETTING, ''),
+            'owner_email_effective' => $this->ownerEmails(),
         ];
     }
 
@@ -71,6 +76,9 @@ class PlatformMailService
         SystemSetting::set('hellom_mail_from_name', trim((string) ($settings['from_name'] ?? '')));
         SystemSetting::set('hellom_mail_reply_to_address', trim((string) ($settings['reply_to_address'] ?? '')));
         SystemSetting::set('hellom_mail_reply_to_name', trim((string) ($settings['reply_to_name'] ?? '')));
+        if (array_key_exists('owner_email', $settings)) {
+            SystemSetting::set(self::OWNER_EMAIL_SETTING, implode(', ', self::parseEmails((string) $settings['owner_email'])));
+        }
 
         $password = trim((string) ($settings['password'] ?? ''));
         if ($password !== '') {
@@ -98,6 +106,31 @@ class PlatformMailService
         }
 
         return (bool) preg_match('/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))+$/i', $host);
+    }
+
+    /**
+     * Where super admin notifications go (withdrawal requests, new users, payments, SLA warnings):
+     * the owner's address(es) from Pengaturan › Email, else every super admin account's email.
+     *
+     * @return list<string>
+     */
+    public function ownerEmails(): array
+    {
+        $configured = self::parseEmails((string) SystemSetting::get(self::OWNER_EMAIL_SETTING, ''));
+        if ($configured !== []) {
+            return $configured;
+        }
+
+        return \App\Models\User::query()->where('role', 'super_admin')->pluck('email')
+            ->map(fn ($email) => strtolower(trim((string) $email)))->filter(fn ($email) => filter_var($email, FILTER_VALIDATE_EMAIL))->unique()->values()->all();
+    }
+
+    /** "a@x.id, b@y.id" → valid, unique, lower-case addresses (max 5). @return list<string> */
+    public static function parseEmails(string $value): array
+    {
+        $parts = preg_split('/[\s,;]+/', strtolower(trim($value))) ?: [];
+
+        return array_slice(array_values(array_unique(array_filter($parts, fn ($email) => filter_var($email, FILTER_VALIDATE_EMAIL) !== false))), 0, 5);
     }
 
     public function isReady(): bool

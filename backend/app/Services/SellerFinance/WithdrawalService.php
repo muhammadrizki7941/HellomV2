@@ -24,7 +24,8 @@ use Illuminate\Support\Str;
  *
  * The amount leaves TERSEDIA the moment the request is made (ledger row under a row
  * lock), so two requests at the same time can never overdraw. Modes (super admin):
- * manual = admin transfers and uploads proof; auto = disbursement API of the gateway.
+ * manual = admin transfers and uploads proof; auto = disbursement API of the gateway, started
+ * only when a super admin approves (never at request time).
  */
 final class WithdrawalService
 {
@@ -114,10 +115,13 @@ final class WithdrawalService
             return $withdrawal;
         }, 3);
 
-        $this->notifySeller($withdrawal, 'Penarikan dana diajukan', 'Permintaan penarikan kamu sudah kami terima dan akan diproses paling lambat 1×24 jam.');
-
-        if ($withdrawal->mode === 'auto') {
-            $this->tryAutoDisburse($withdrawal);
+        $this->notifySeller($withdrawal, 'Penarikan dana diajukan', 'Permintaan penarikan kamu sudah kami terima dan akan diproses paling lambat 1×24 jam setelah disetujui tim Hellom.');
+        // Every withdrawal waits for super admin approval (also in "auto" mode: the gateway transfer
+        // only starts in approve()). The owner is told right away (inbox + email).
+        try {
+            app(\App\Services\NotificationService::class)->createSellerWithdrawalNotif($withdrawal);
+        } catch (\Throwable $e) {
+            report($e); // the request itself is already safe in the ledger
         }
 
         return $withdrawal->fresh();
@@ -128,7 +132,7 @@ final class WithdrawalService
         return $this->close($withdrawal, SellerWithdrawal::STATUS_CANCELLED, [SellerWithdrawal::STATUS_REQUESTED], $user, 'Dibatalkan oleh penjual');
     }
 
-    /** Admin takes it (manual transfer), or it is sent through the gateway in auto mode. */
+    /** Super admin approves: manual transfer by the admin, or (auto mode) the gateway sends it now. */
     public function approve(SellerWithdrawal $withdrawal, User $admin): SellerWithdrawal
     {
         $updated = DB::transaction(function () use ($withdrawal, $admin): SellerWithdrawal {
@@ -196,7 +200,7 @@ final class WithdrawalService
             return 0;
         }
 
-        $admins = User::query()->where('role', 'super_admin')->pluck('email')->filter()->values()->all();
+        $admins = app(\App\Services\Hellom\PlatformMailService::class)->ownerEmails();
         $details = [];
         foreach ($late as $withdrawal) {
             $details[$withdrawal->reference] = ($withdrawal->organization?->name ?? '#' . $withdrawal->organization_id) . ' · ' . $this->rupiah((int) $withdrawal->amount)

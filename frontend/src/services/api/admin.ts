@@ -540,6 +540,10 @@ export type AdminMailSettings = {
   reply_to_address: string;
   reply_to_name: string;
   is_ready: boolean;
+  /** Owner's own address(es) for every super admin notification ("" = super admin accounts). */
+  owner_email: string;
+  /** Where notifications go right now. */
+  owner_email_effective: string[];
 };
 
 export function getAdminMailSettings() {

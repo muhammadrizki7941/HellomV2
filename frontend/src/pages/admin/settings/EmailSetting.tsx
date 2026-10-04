@@ -21,6 +21,8 @@ type MailSettings = {
   reply_to_address: string;
   reply_to_name: string;
   is_ready: boolean;
+  owner_email: string;
+  owner_email_effective: string[];
 };
 
 type EncryptionOption = 'tls' | 'ssl' | 'none';
@@ -38,6 +40,8 @@ export default function EmailSetting() {
     reply_to_address: '',
     reply_to_name: '',
     is_ready: false,
+    owner_email: '',
+    owner_email_effective: [],
   });
 
   const [form, setForm] = useState<{
@@ -51,6 +55,7 @@ export default function EmailSetting() {
     from_name: string;
     reply_to_address: string;
     reply_to_name: string;
+    owner_email: string;
   }>({
     enabled: false,
     host: '',
@@ -62,6 +67,7 @@ export default function EmailSetting() {
     from_name: '',
     reply_to_address: '',
     reply_to_name: '',
+    owner_email: '',
   });
 
   const [loading, setLoading] = useState(true);
@@ -89,6 +95,7 @@ export default function EmailSetting() {
         from_name: data.mail.from_name,
         reply_to_address: data.mail.reply_to_address,
         reply_to_name: data.mail.reply_to_name,
+        owner_email: data.mail.owner_email ?? '',
       });
     } catch (loadError) {
       const message = loadError instanceof Error ? loadError.message : 'Gagal memuat email settings';
@@ -118,6 +125,7 @@ export default function EmailSetting() {
         from_name: form.from_name,
         reply_to_address: form.reply_to_address,
         reply_to_name: form.reply_to_name,
+        owner_email: form.owner_email,
       });
       setStatusMessage('Email settings berhasil disimpan.');
       setSettings(result.mail);
@@ -178,7 +186,7 @@ export default function EmailSetting() {
     <div className="space-y-6 max-w-4xl mx-auto">
       <div>
         <h1 className="text-2xl font-bold text-zinc-900">Pengaturan Email</h1>
-        <p className="text-zinc-500">Konfigurasi SMTP untuk notifikasi email owner.</p>
+        <p className="text-zinc-500">Dua email berbeda: <strong>email resmi</strong> mengirim semua email platform ke pengguna (verifikasi & login, reset password, penjualan, pembayaran, penarikan dana), dan <strong>email owner</strong> menerima salinan setiap aktivitas penting untuk super admin.</p>
       </div>
 
       {errorMessage && (
@@ -201,8 +209,8 @@ export default function EmailSetting() {
               <Mail className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-bold text-zinc-900">SMTP Configuration</h3>
-              <p className="text-sm text-zinc-500">Pengaturan koneksi email untuk notifikasi.</p>
+              <h3 className="font-bold text-zinc-900">Email resmi (pengirim)</h3>
+              <p className="text-sm text-zinc-500">Akun SMTP yang mengirim semua email Hellom ke penjual & pembeli.</p>
             </div>
           </div>
           <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${
@@ -299,7 +307,7 @@ export default function EmailSetting() {
 
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-2">From Address</label>
+              <label className="block text-sm font-medium text-zinc-700 mb-2">Email resmi pengirim (From)</label>
               <input
                 type="email"
                 value={form.from_address}
@@ -342,6 +350,25 @@ export default function EmailSetting() {
               />
             </div>
           </div>
+        </div>
+
+        <div className="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50 p-4" data-owner-email>
+          <label className="block text-sm font-bold text-zinc-900" htmlFor="owner-email">Email owner (notifikasi aktivitas)</label>
+          <p className="text-sm text-zinc-600">Email pribadi owner. Setiap aktivitas yang masuk ke notifikasi super admin — <strong>penarikan dana yang menunggu persetujuan</strong>, pendaftar baru, pembayaran & konfirmasi manual, pembelian produk, peringatan batas waktu penarikan — juga dikirim ke sini. Beberapa email pisahkan dengan koma.</p>
+          <input
+            id="owner-email"
+            type="text"
+            inputMode="email"
+            value={form.owner_email}
+            onChange={(e) => setForm({ ...form, owner_email: e.target.value })}
+            placeholder="emailpribadi@gmail.com"
+            className="w-full min-h-11 px-3 py-2 border border-zinc-300 rounded-lg text-base outline-none focus:ring-2 focus:ring-zinc-900"
+          />
+          <p className="text-xs text-zinc-500">
+            Saat ini dikirim ke: {settings.owner_email_effective.length > 0 ? settings.owner_email_effective.join(', ') : 'belum ada'}
+            {!settings.owner_email && settings.owner_email_effective.length > 0 ? ' (email akun super admin, karena kolom ini masih kosong)' : ''}.
+            {!settings.is_ready ? ' Email baru benar-benar terkirim setelah email resmi di atas siap (Ready).' : ''}
+          </p>
         </div>
 
         <div className="flex justify-end gap-3">

@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Mail\NewTransactionNotifMail;
-use App\Mail\NewUserNotifMail;
 use App\Models\CheckoutIntent;
 use App\Models\DigitalProduct;
 use App\Models\ProductPurchase;
@@ -12,6 +11,9 @@ use App\Models\OwnerNotification;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Services\Hellom\PlatformMailService;
+use App\Jobs\SendPlatformMail;
+use App\Models\SellerWithdrawal;
+use App\Support\FrontendUrl;
 use App\Services\Realtime\RealtimeClient;
 
 class NotificationService
@@ -42,13 +44,6 @@ class NotificationService
             'notifiable_id' => $user->id,
             'notifiable_type' => User::class,
         ]);
-
-        // Send email if mail service is ready
-        $mailService = app(PlatformMailService::class);
-        if ($mailService->isReady()) {
-            $ownerEmail = config('app.owner_email', 'admin@hellom.id'); // fallback
-            $mailService->sendTo($ownerEmail, new NewUserNotifMail($user, $product));
-        }
 
         $this->emitCreated($notification);
 
@@ -423,6 +418,56 @@ class NotificationService
         ];
 
         $this->realtimeClient->emitToRoom(RealtimeClient::ROOM_ADMINS, 'admin.notification.created', $payload);
+        $this->emailOwner($notification);
+    }
+
+    /** Copy of every super admin notification to the owner's email (Pengaturan › Email), queued. */
+    private function emailOwner(OwnerNotification $notification): void
+    {
+        $to = app(PlatformMailService::class)->ownerEmails();
+        if ($to === []) {
+            return;
+        }
+        $url = (string) $notification->action_url;
+        SendPlatformMail::dispatch($to, '[Hellom] ' . $notification->title, array_filter([
+            'headline' => (string) $notification->title,
+            'intro' => (string) $notification->message,
+            'cta_url' => str_starts_with($url, '/') ? FrontendUrl::to($url) : null,
+            'cta_label' => str_starts_with($url, '/') ? 'Buka di dashboard super admin' : null,
+            'closing' => 'Email ini dikirim ke email owner yang diatur di Pengaturan › Email.',
+        ]));
+    }
+
+    /** A seller asked to withdraw: waits for super admin approval (Keuangan Penjual). */
+    public function createSellerWithdrawalNotif(SellerWithdrawal $withdrawal): OwnerNotification
+    {
+        $organization = $withdrawal->organization;
+        $amount = 'Rp ' . number_format((int) $withdrawal->amount, 0, ',', '.');
+        $notification = OwnerNotification::create([
+            'type' => 'new_transaction',
+            'title' => 'Penarikan dana menunggu persetujuan',
+            'message' => ($organization?->name ?? 'Toko #' . $withdrawal->organization_id) . " mengajukan penarikan {$amount} ke " . ($withdrawal->bank_name ?: $withdrawal->bank_code)
+                . ' a.n. ' . $withdrawal->account_name . ' (' . $withdrawal->reference . '). Setujui atau tolak di Keuangan Penjual.',
+            'data' => [
+                'withdrawal_id' => $withdrawal->id,
+                'reference' => $withdrawal->reference,
+                'organization_id' => $withdrawal->organization_id,
+                'organization_name' => $organization?->name,
+                'amount' => (int) $withdrawal->amount,
+                'net_amount' => (int) $withdrawal->net_amount,
+            ],
+            'action_type' => 'review_withdrawal',
+            'action_url' => '/admin/keuangan-penjual',
+            'action_status' => 'pending',
+            'reference_id' => $withdrawal->id,
+            'reference_type' => 'seller_withdrawal',
+            'notifiable_id' => $withdrawal->id,
+            'notifiable_type' => SellerWithdrawal::class,
+        ]);
+
+        $this->emitCreated($notification);
+
+        return $notification;
     }
 
     private function resolveAmount(mixed $record): int

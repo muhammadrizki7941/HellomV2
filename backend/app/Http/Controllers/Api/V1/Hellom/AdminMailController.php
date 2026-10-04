@@ -35,9 +35,20 @@ class AdminMailController extends BaseApiController
             'from_name' => ['nullable', 'string', 'max:255'],
             'reply_to_address' => ['nullable', 'email', 'max:255'],
             'reply_to_name' => ['nullable', 'string', 'max:255'],
+            'owner_email' => ['nullable', 'string', 'max:500'],
         ]);
+        $ownerInput = trim((string) ($validated['owner_email'] ?? ''));
+        $invalid = array_filter(preg_split('/[\s,;]+/', $ownerInput) ?: [], fn ($email) => $email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) === false);
+        if ($invalid !== []) {
+            throw ValidationException::withMessages(['owner_email' => 'Alamat email owner tidak valid: ' . implode(', ', $invalid) . '. Pisahkan beberapa email dengan koma.']);
+        }
 
+        $ownerEmail = $validated['owner_email'] ?? null;
+        $hasOwnerEmail = array_key_exists('owner_email', $validated);
         $validated = $this->mailService->normalizeSettings($validated);
+        if ($hasOwnerEmail) {
+            $validated['owner_email'] = (string) $ownerEmail;
+        }
 
         if (!empty($validated['enabled']) && $validated['host'] !== '' && !$this->mailService->isValidSmtpHost($validated['host'])) {
             throw ValidationException::withMessages([
@@ -50,6 +61,7 @@ class AdminMailController extends BaseApiController
             'host' => $validated['host'] ?? null,
             'port' => $validated['port'] ?? null,
             'from_address' => $validated['from_address'] ?? null,
+            'owner_email_changed' => array_key_exists('owner_email', $validated),
             'password_changed' => trim((string) ($validated['password'] ?? '')) !== '',
         ]);
 
