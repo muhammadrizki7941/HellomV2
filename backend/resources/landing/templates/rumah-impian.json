@@ -1,0 +1,184 @@
+{
+  "id": "rumah-impian",
+  "order": 23,
+  "name": "Rumah Impian",
+  "category": "bisnis",
+  "badge": "baru",
+  "description": "Biru langit yang cerah dan terpercaya: info unit, simulasi KPR, siteplan, jadwal survei, dan form brosur. Untuk marketing perumahan & cluster.",
+  "slots": {
+    "banner": "Banner 16:9 — fasad rumah contoh / gerbang perumahan",
+    "avatar": "Foto profil marketing",
+    "unit1": "Foto unit 1 — tampak depan (persegi)",
+    "unit2": "Foto unit 2 — ruang tamu (persegi)",
+    "unit3": "Foto unit 3 — kamar (persegi)",
+    "unit4": "Foto unit 4 — fasilitas / taman (persegi)",
+    "siteplan": "Siteplan / denah (potret atau persegi)"
+  },
+  "document": {
+    "theme": {
+      "preset": "rumah",
+      "primary": "#1e3a8a",
+      "buttonText": "#ffffff",
+      "text": "#0f172a",
+      "background": "#f0f9ff",
+      "headingFont": "jakarta",
+      "bodyFont": "jakarta",
+      "bg": {
+        "type": "gradient",
+        "from": "#e0f2fe",
+        "to": "#ffffff",
+        "angle": 180
+      },
+      "button": {
+        "shape": "rounded",
+        "fill": "solid",
+        "shadow": "soft",
+        "hover": "lift"
+      },
+      "motion": {
+        "entrance": "slide",
+        "speed": "normal",
+        "stagger": true
+      }
+    },
+    "blocks": [
+      {
+        "type": "profile",
+        "content": {
+          "name": "Rina — Marketing Griya Asri Residence",
+          "bio": "Cluster 2 lantai di Cileungsi, 10 menit ke tol 🏡\nDP mulai 10% · KPR dibantu sampai akad",
+          "avatarUrl": "{{slot:avatar}}",
+          "coverUrl": "{{slot:banner}}",
+          "showVerified": true,
+          "coverRatio": "wide",
+          "coverFade": true
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Tanya unit & harga terbaru",
+          "actionType": "whatsapp",
+          "whatsappMessage": "Halo Kak Rina, saya mau tanya unit dan harga terbaru Griya Asri Residence",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "whatsapp",
+          "featured": true,
+          "featuredStyle": "pulse"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Jadwalkan survei lokasi",
+          "actionType": "whatsapp",
+          "whatsappMessage": "Halo Kak Rina, saya mau jadwalkan survei lokasi. Bisa hari apa?",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "calendar"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Simulasi cicilan KPR",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "info",
+          "fill": "outline"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Lokasi di Google Maps",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "map",
+          "fill": "outline"
+        }
+      },
+      {
+        "type": "video",
+        "content": {
+          "videoUrl": "",
+          "title": "Tour rumah contoh"
+        }
+      },
+      {
+        "type": "gallery",
+        "content": {
+          "title": "Unit & lingkungan",
+          "columns": 2,
+          "images": [
+            { "url": "{{slot:unit1}}", "caption": "" },
+            { "url": "{{slot:unit2}}", "caption": "" },
+            { "url": "{{slot:unit3}}", "caption": "" },
+            { "url": "{{slot:unit4}}", "caption": "" }
+          ]
+        }
+      },
+      {
+        "type": "image",
+        "content": {
+          "imageUrl": "{{slot:siteplan}}",
+          "caption": "Siteplan & tipe unit tersedia",
+          "alt": "Siteplan perumahan"
+        }
+      },
+      {
+        "type": "list",
+        "content": {
+          "title": "Fasilitas & keunggulan",
+          "items": [
+            { "text": "Sertifikat SHM, IMB/PBG sudah terbit" },
+            { "text": "One gate system & keamanan 24 jam" },
+            { "text": "Taman bermain, jogging track, dan masjid" },
+            { "text": "Dekat sekolah, pasar, dan rumah sakit" },
+            { "text": "Bebas banjir, air tanah jernih" }
+          ]
+        }
+      },
+      {
+        "type": "testimonials",
+        "content": {
+          "title": "Kata pembeli",
+          "items": [
+            { "name": "Keluarga Pak Andi", "role": "Contoh — ganti dengan ulasan pembeli asli", "text": "Dibantu urus KPR dari awal sampai akad, prosesnya jelas dan cepat.", "rating": 5 },
+            { "name": "Bu Sari, guru", "role": "Contoh — ganti dengan ulasan pembeli asli", "text": "Cicilannya pas dengan gaji, rumahnya rapi dan lingkungannya nyaman.", "rating": 5 }
+          ]
+        }
+      },
+      {
+        "type": "faq",
+        "content": {
+          "title": "Pertanyaan yang sering ditanya",
+          "items": [
+            { "q": "Berapa DP minimal?", "a": "Mulai 10% dari harga rumah, bisa dicicil sampai 6 kali." },
+            { "q": "Bisa KPR untuk karyawan kontrak atau usaha sendiri?", "a": "Bisa, kami bantu pilihkan bank yang sesuai dan siapkan berkasnya." },
+            { "q": "Sertifikatnya apa?", "a": "SHM per unit, dipecah atas nama pembeli setelah akad." },
+            { "q": "Kapan rumah siap huni?", "a": "Unit ready stock bisa langsung huni; unit inden sekitar 6–8 bulan." }
+          ]
+        }
+      },
+      {
+        "type": "form",
+        "content": {
+          "title": "Minta brosur & pricelist",
+          "subtitle": "Isi data di bawah, brosur dan daftar harga dikirim ke WhatsApp kamu.",
+          "buttonText": "Kirim brosurnya",
+          "successMessage": "Terima kasih! Brosur & pricelist segera kami kirim ke WhatsApp kamu.",
+          "fields": [
+            { "id": "name", "label": "Nama", "type": "text", "required": true, "system": true },
+            { "id": "phone", "label": "Nomor WhatsApp", "type": "tel", "required": true, "system": true },
+            { "id": "budget", "label": "Kisaran budget / cicilan per bulan", "type": "text", "required": false }
+          ]
+        }
+      }
+    ]
+  }
+}
