@@ -1,0 +1,142 @@
+{
+  "id": "cyber-grid",
+  "order": 13,
+  "name": "Cyber Grid",
+  "category": "bisnis",
+  "badge": "baru",
+  "description": "Hitam pekat dengan grid neon hijau limau dan tombol bersudut tegas. Untuk developer, freelancer IT, dan studio digital.",
+  "slots": {
+    "banner": "Banner 16:9 — layar kode / setup kerja",
+    "avatar": "Foto profil / logo studio",
+    "work1": "Proyek 1 (16:9)",
+    "work2": "Proyek 2 (16:9)"
+  },
+  "document": {
+    "theme": {
+      "preset": "cyber",
+      "primary": "#a3e635",
+      "buttonText": "#0a0a0a",
+      "text": "#ecfccb",
+      "background": "#0a0a0a",
+      "headingFont": "spacegrotesk",
+      "bodyFont": "inter",
+      "bg": {
+        "type": "pattern",
+        "pattern": "grid",
+        "color": "#0a0a0a",
+        "patternColor": "#a3e635",
+        "patternOpacity": 0.12
+      },
+      "button": {
+        "shape": "square",
+        "fill": "outline",
+        "borderWidth": 2,
+        "shadow": "none",
+        "hover": "shine"
+      },
+      "motion": {
+        "entrance": "slide",
+        "speed": "fast",
+        "stagger": true
+      }
+    },
+    "blocks": [
+      {
+        "type": "profile",
+        "content": {
+          "name": "Bima Arkana",
+          "bio": "Full-stack developer · website & aplikasi untuk UMKM\n> 40 proyek selesai sejak 2019",
+          "avatarUrl": "{{slot:avatar}}",
+          "coverUrl": "{{slot:banner}}",
+          "showVerified": true,
+          "coverRatio": "wide",
+          "coverFade": true
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Konsultasi proyek gratis",
+          "actionType": "whatsapp",
+          "whatsappMessage": "Halo Bima, saya mau konsultasi bikin website/aplikasi",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "whatsapp",
+          "featured": true,
+          "featuredStyle": "glow",
+          "fill": "solid"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Lihat portofolio",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "star"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Paket harga & estimasi",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "info"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "GitHub",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "link"
+        }
+      },
+      {
+        "type": "gallery",
+        "content": {
+          "title": "Proyek terbaru",
+          "columns": 2,
+          "images": [
+            {
+              "url": "{{slot:work1}}",
+              "caption": ""
+            },
+            {
+              "url": "{{slot:work2}}",
+              "caption": ""
+            }
+          ]
+        }
+      },
+      {
+        "type": "list",
+        "content": {
+          "title": "Yang bisa saya bantu",
+          "items": [
+            {
+              "text": "Landing page & toko online"
+            },
+            {
+              "text": "Aplikasi kasir & stok"
+            },
+            {
+              "text": "Integrasi pembayaran & WhatsApp"
+            },
+            {
+              "text": "Perawatan & keamanan website"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,125 @@
+{
+  "id": "lavender",
+  "order": 20,
+  "name": "Lavender",
+  "category": "bisnis",
+  "badge": null,
+  "description": "Ungu lavender lembut dengan gelembung warna yang bergerak pelan. Untuk florist, hampers, dan kue ulang tahun.",
+  "slots": {
+    "banner": "Banner 3:1 — buket bunga / hampers",
+    "avatar": "Logo",
+    "bouquet1": "Produk 1 (potret)",
+    "bouquet2": "Produk 2 (potret)"
+  },
+  "document": {
+    "theme": {
+      "preset": "lavender",
+      "primary": "#6d28d9",
+      "buttonText": "#ffffff",
+      "text": "#2e1065",
+      "background": "#f5f3ff",
+      "headingFont": "playfair",
+      "bodyFont": "dmsans",
+      "bg": {
+        "type": "animated",
+        "animation": "blobs",
+        "color": "#f5f3ff",
+        "from": "#ddd6fe",
+        "via": "#fbcfe8",
+        "to": "#e0e7ff"
+      },
+      "button": {
+        "shape": "pill",
+        "fill": "solid",
+        "shadow": "soft",
+        "hover": "lift"
+      },
+      "motion": {
+        "entrance": "fade",
+        "speed": "normal",
+        "stagger": true
+      }
+    },
+    "blocks": [
+      {
+        "type": "profile",
+        "content": {
+          "name": "Bloom & Co.",
+          "bio": "Buket bunga segar & hampers untuk momen spesial 💐\nAntar hari ini · Surabaya",
+          "avatarUrl": "{{slot:avatar}}",
+          "coverUrl": "{{slot:banner}}",
+          "showVerified": true,
+          "coverFade": true
+        }
+      },
+      {
+        "type": "catalog",
+        "content": {
+          "title": "Buket & hampers favorit",
+          "showAll": true,
+          "productIds": [],
+          "columns": 2,
+          "buttonText": "Pesan"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Pesan custom",
+          "actionType": "whatsapp",
+          "whatsappMessage": "Halo Bloom & Co., saya mau pesan buket custom",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "whatsapp",
+          "featured": true,
+          "featuredStyle": "pulse"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Kartu ucapan gratis",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "gift",
+          "fill": "outline"
+        }
+      },
+      {
+        "type": "gallery",
+        "content": {
+          "title": "Pesanan terbaru",
+          "columns": 2,
+          "images": [
+            {
+              "url": "{{slot:bouquet1}}",
+              "caption": ""
+            },
+            {
+              "url": "{{slot:bouquet2}}",
+              "caption": ""
+            }
+          ]
+        }
+      },
+      {
+        "type": "faq",
+        "content": {
+          "title": "Sebelum pesan",
+          "items": [
+            {
+              "q": "Bisa antar di hari yang sama?",
+              "a": "Bisa untuk pesanan sebelum jam 12.00, area Surabaya."
+            },
+            {
+              "q": "Bunganya tahan berapa lama?",
+              "a": "4–7 hari bila air vas diganti setiap hari."
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

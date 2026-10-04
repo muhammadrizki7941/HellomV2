@@ -17,7 +17,7 @@ final class TemplateLibrary
 {
     public const SETTING = 'landing_templates';
 
-    public const CATEGORIES = ['kreator' => 'Kreator', 'bisnis' => 'Bisnis & jasa', 'kuliner' => 'Kuliner & UMKM', 'fashion' => 'Fashion & beauty', 'edukasi' => 'Edukasi', 'musik' => 'Musik'];
+    public const CATEGORIES = ['kreator' => 'Kreator', 'bisnis' => 'Bisnis & jasa', 'kuliner' => 'Kuliner & UMKM', 'fashion' => 'Fashion & beauty', 'edukasi' => 'Edukasi', 'musik' => 'Musik', 'acara' => 'Acara & komunitas'];
 
     /** @var array<string, array>|null */
     private ?array $templates = null;

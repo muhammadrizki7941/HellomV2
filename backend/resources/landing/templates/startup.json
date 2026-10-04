@@ -1,0 +1,137 @@
+{
+  "id": "startup",
+  "order": 21,
+  "name": "Startup",
+  "category": "bisnis",
+  "badge": "baru",
+  "description": "Biru navy gelap dengan aurora indigo dan huruf modern. Untuk aplikasi, SaaS, dan produk teknologi.",
+  "slots": {
+    "banner": "Banner 16:9 — tampilan aplikasi",
+    "avatar": "Logo produk",
+    "screen": "Screenshot aplikasi (potret)"
+  },
+  "document": {
+    "theme": {
+      "preset": "startup",
+      "primary": "#818cf8",
+      "buttonText": "#0b1020",
+      "text": "#e0e7ff",
+      "background": "#0b1020",
+      "headingFont": "jakarta",
+      "bodyFont": "inter",
+      "bg": {
+        "type": "animated",
+        "animation": "aurora",
+        "color": "#0b1020",
+        "from": "#0b1020",
+        "via": "#312e81",
+        "to": "#0e7490",
+        "angle": 150
+      },
+      "button": {
+        "shape": "rounded",
+        "fill": "solid",
+        "shadow": "soft",
+        "hover": "shine"
+      },
+      "motion": {
+        "entrance": "zoom",
+        "speed": "normal",
+        "stagger": true
+      }
+    },
+    "blocks": [
+      {
+        "type": "profile",
+        "content": {
+          "name": "Kasirku",
+          "bio": "Aplikasi kasir & stok untuk warung dan toko kecil\nGratis 14 hari, tanpa kartu kredit",
+          "avatarUrl": "{{slot:avatar}}",
+          "coverUrl": "{{slot:banner}}",
+          "showVerified": true,
+          "coverRatio": "wide",
+          "coverFade": true
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Coba gratis sekarang",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "download",
+          "featured": true,
+          "featuredStyle": "glow"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Tonton demo 2 menit",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "play",
+          "fill": "glass"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Lihat harga",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "info",
+          "fill": "glass"
+        }
+      },
+      {
+        "type": "image",
+        "content": {
+          "imageUrl": "{{slot:screen}}",
+          "caption": "Laporan penjualan langsung dari HP",
+          "alt": "Laporan penjualan langsung dari HP"
+        }
+      },
+      {
+        "type": "list",
+        "content": {
+          "title": "Kenapa Kasirku",
+          "items": [
+            {
+              "text": "Jalan offline, sinkron saat online"
+            },
+            {
+              "text": "Laporan untung-rugi otomatis"
+            },
+            {
+              "text": "Bisa dipakai banyak kasir"
+            },
+            {
+              "text": "Dukungan via WhatsApp 7 hari"
+            }
+          ]
+        }
+      },
+      {
+        "type": "testimonials",
+        "content": {
+          "title": "Dipakai 3.000+ toko",
+          "items": [
+            {
+              "name": "Pak Joko, warung kelontong",
+              "role": "Contoh — ganti dengan ulasan pembeli asli",
+              "text": "Stok jadi rapi, nggak ada lagi barang hilang tanpa jejak.",
+              "rating": 5
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

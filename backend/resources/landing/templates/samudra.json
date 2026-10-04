@@ -1,0 +1,146 @@
+{
+  "id": "samudra",
+  "order": 19,
+  "name": "Samudra",
+  "category": "bisnis",
+  "badge": "populer",
+  "description": "Foto laut sebagai background dengan lapisan gelap dan tombol kaca. Untuk tour, diving, villa, dan wisata.",
+  "slots": {
+    "background": "Background halaman — foto laut (potret, gelap/terang bebas)",
+    "avatar": "Logo",
+    "banner": "Banner 16:9 (opsional)",
+    "spot1": "Spot 1 (persegi)",
+    "spot2": "Spot 2 (persegi)"
+  },
+  "document": {
+    "theme": {
+      "preset": "samudra",
+      "primary": "#22d3ee",
+      "buttonText": "#082f49",
+      "text": "#f0f9ff",
+      "background": "#082f49",
+      "headingFont": "montserrat",
+      "bodyFont": "dmsans",
+      "bg": {
+        "type": "image",
+        "image": "{{slot:background}}",
+        "color": "#082f49",
+        "overlay": 0.55,
+        "blur": 0,
+        "position": "center"
+      },
+      "button": {
+        "shape": "rounded",
+        "fill": "glass",
+        "shadow": "none",
+        "hover": "lift"
+      },
+      "motion": {
+        "entrance": "slide",
+        "speed": "slow",
+        "stagger": true
+      }
+    },
+    "blocks": [
+      {
+        "type": "profile",
+        "content": {
+          "name": "Biru Raja Ampat Trip",
+          "bio": "Open trip & private trip Raja Ampat 🐠\nSnorkeling · diving · homestay lokal",
+          "avatarUrl": "{{slot:avatar}}",
+          "coverUrl": "{{slot:banner}}",
+          "showVerified": true,
+          "coverRatio": "wide",
+          "coverFade": true
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Cek jadwal open trip",
+          "actionType": "whatsapp",
+          "whatsappMessage": "Halo, saya mau cek jadwal open trip Raja Ampat",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "whatsapp",
+          "featured": true,
+          "featuredStyle": "glow",
+          "fill": "solid"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Paket & harga 2026",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "book"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Lihat video perjalanan",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "play"
+        }
+      },
+      {
+        "type": "gallery",
+        "content": {
+          "title": "Spot favorit",
+          "columns": 2,
+          "images": [
+            {
+              "url": "{{slot:spot1}}",
+              "caption": ""
+            },
+            {
+              "url": "{{slot:spot2}}",
+              "caption": ""
+            }
+          ]
+        }
+      },
+      {
+        "type": "list",
+        "content": {
+          "title": "Sudah termasuk",
+          "items": [
+            {
+              "text": "Penjemputan bandara Sorong"
+            },
+            {
+              "text": "Speedboat & alat snorkeling"
+            },
+            {
+              "text": "Makan 3x sehari"
+            },
+            {
+              "text": "Dokumentasi underwater"
+            }
+          ]
+        }
+      },
+      {
+        "type": "testimonials",
+        "content": {
+          "title": "Kata peserta",
+          "items": [
+            {
+              "name": "Mira, Jakarta",
+              "role": "Contoh — ganti dengan ulasan pembeli asli",
+              "text": "Guide-nya ramah dan paham spot terbaik, airnya jernih banget.",
+              "rating": 5
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

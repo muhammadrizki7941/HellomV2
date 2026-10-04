@@ -1,0 +1,132 @@
+{
+  "id": "senja-tropis",
+  "order": 14,
+  "name": "Senja Tropis",
+  "category": "kreator",
+  "badge": "populer",
+  "description": "Gradien senja oranye–merah muda–ungu dengan tombol kaca. Untuk travel vlogger dan kreator gaya hidup.",
+  "slots": {
+    "banner": "Banner 16:9 — pantai / matahari terbenam",
+    "avatar": "Foto profil",
+    "trip1": "Foto perjalanan 1 (potret)",
+    "trip2": "Foto perjalanan 2 (potret)",
+    "trip3": "Foto perjalanan 3 (potret)"
+  },
+  "document": {
+    "theme": {
+      "preset": "senja",
+      "primary": "#ffffff",
+      "buttonText": "#7c2d12",
+      "text": "#ffffff",
+      "background": "#9d174d",
+      "headingFont": "poppins",
+      "bodyFont": "poppins",
+      "bg": {
+        "type": "gradient",
+        "from": "#c2410c",
+        "via": "#be185d",
+        "to": "#5b21b6",
+        "angle": 165
+      },
+      "button": {
+        "shape": "pill",
+        "fill": "glass",
+        "shadow": "none",
+        "hover": "lift"
+      },
+      "motion": {
+        "entrance": "slide",
+        "speed": "normal",
+        "stagger": true
+      }
+    },
+    "blocks": [
+      {
+        "type": "profile",
+        "content": {
+          "name": "Kirana Jelajah",
+          "bio": "Jalan-jalan hemat keliling Indonesia 🌴\n27 provinsi · tips, itinerary, dan spot tersembunyi",
+          "avatarUrl": "{{slot:avatar}}",
+          "coverUrl": "{{slot:banner}}",
+          "showVerified": true,
+          "coverRatio": "wide",
+          "coverFade": true
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Itinerary Labuan Bajo 4H3M",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "map",
+          "featured": true,
+          "featuredStyle": "shimmer"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "E-book: Liburan Hemat 2 Juta",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "book"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Vlog terbaru di YouTube",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "youtube"
+        }
+      },
+      {
+        "type": "video",
+        "content": {
+          "videoUrl": "",
+          "title": "Perjalanan minggu ini",
+          "autoplay": true
+        }
+      },
+      {
+        "type": "gallery",
+        "content": {
+          "title": "Dari perjalanan terakhir",
+          "columns": 3,
+          "images": [
+            {
+              "url": "{{slot:trip1}}",
+              "caption": ""
+            },
+            {
+              "url": "{{slot:trip2}}",
+              "caption": ""
+            },
+            {
+              "url": "{{slot:trip3}}",
+              "caption": ""
+            }
+          ]
+        }
+      },
+      {
+        "type": "catalog",
+        "content": {
+          "title": "Panduan & preset foto",
+          "showAll": true,
+          "productIds": [],
+          "columns": 2,
+          "buttonText": "Beli"
+        }
+      }
+    ]
+  }
+}

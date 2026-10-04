@@ -145,7 +145,7 @@ try {
   await browser.shot('extras-admin');
   const seen = (await (await fetch(`${API}/apps/landing-builder/page-templates`, { headers })).json()).data.templates.map((t) => t.id);
   const order = (await (await fetch(`${API}/admin/landing-templates`, { headers: { ...headers, Authorization: `Bearer ${s.admin_token}` } })).json()).data.templates.map((t) => t.id);
-  check('super admin: hide + reorder are saved and sellers no longer see the hidden template', !seen.includes('neo-brutal') && order.indexOf('kelas-online') === 8 && seen.length === 11, JSON.stringify({ seen, order }));
+  check('super admin: hide + reorder are saved and sellers no longer see the hidden template', !seen.includes('neo-brutal') && order.indexOf('kelas-online') === 8 && seen.length === order.length - 1, JSON.stringify({ seen, order }));
   check('no script errors', errors.length === 0, JSON.stringify(errors));
 } finally {
   browser.close();

@@ -1,0 +1,127 @@
+{
+  "id": "power-fit",
+  "order": 15,
+  "name": "Power Fit",
+  "category": "kreator",
+  "badge": "baru",
+  "description": "Arang gelap, garis diagonal merah, huruf tebal, tombol neo-brutal. Untuk pelatih kebugaran dan gym.",
+  "slots": {
+    "banner": "Banner 16:9 — latihan / gym",
+    "avatar": "Foto pelatih",
+    "before": "Foto progres klien (persegi)"
+  },
+  "document": {
+    "theme": {
+      "preset": "fit",
+      "primary": "#dc2626",
+      "buttonText": "#ffffff",
+      "text": "#fafafa",
+      "background": "#18181b",
+      "headingFont": "bebas",
+      "bodyFont": "inter",
+      "bg": {
+        "type": "pattern",
+        "pattern": "diagonal",
+        "color": "#18181b",
+        "patternColor": "#ef4444",
+        "patternOpacity": 0.12
+      },
+      "button": {
+        "shape": "square",
+        "fill": "solid",
+        "shadow": "hard",
+        "borderWidth": 2,
+        "hover": "grow"
+      },
+      "motion": {
+        "entrance": "zoom",
+        "speed": "fast",
+        "stagger": true
+      }
+    },
+    "blocks": [
+      {
+        "type": "profile",
+        "content": {
+          "name": "Coach Dimas",
+          "bio": "Personal trainer bersertifikat · turun 5–10 kg dalam 8 minggu 💪\nLatihan di rumah, tanpa alat mahal",
+          "avatarUrl": "{{slot:avatar}}",
+          "coverUrl": "{{slot:banner}}",
+          "showVerified": true,
+          "coverRatio": "wide"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Konsultasi program gratis",
+          "actionType": "whatsapp",
+          "whatsappMessage": "Halo Coach Dimas, saya mau konsultasi program latihan",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "whatsapp",
+          "featured": true,
+          "featuredStyle": "shake"
+        }
+      },
+      {
+        "type": "product",
+        "content": {
+          "kind": "digital",
+          "layout": "card",
+          "buttonText": "Mulai program"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Kalkulator kalori harian",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "info"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Latihan gratis di TikTok",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "tiktok"
+        }
+      },
+      {
+        "type": "image",
+        "content": {
+          "imageUrl": "{{slot:before}}",
+          "caption": "Progres klien setelah 8 minggu",
+          "alt": "Progres klien setelah 8 minggu"
+        }
+      },
+      {
+        "type": "testimonials",
+        "content": {
+          "title": "Hasil klien",
+          "items": [
+            {
+              "name": "Andi, 31",
+              "role": "Contoh — ganti dengan ulasan pembeli asli",
+              "text": "Turun 7 kg dalam 2 bulan, latihannya cuma 30 menit sehari.",
+              "rating": 5
+            },
+            {
+              "name": "Rara, 26",
+              "role": "Contoh — ganti dengan ulasan pembeli asli",
+              "text": "Program makannya realistis, nggak menyiksa.",
+              "rating": 5
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

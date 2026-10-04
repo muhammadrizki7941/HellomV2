@@ -1,0 +1,132 @@
+{
+  "id": "monokrom",
+  "order": 17,
+  "name": "Monokrom",
+  "category": "kreator",
+  "badge": null,
+  "description": "Hitam-putih murni, tipografi besar, galeri lebar. Untuk fotografer, videografer, dan seniman visual.",
+  "slots": {
+    "banner": "Banner 3:1 — karya terbaik (hitam-putih)",
+    "avatar": "Foto profil",
+    "shot1": "Karya 1 (persegi)",
+    "shot2": "Karya 2 (persegi)",
+    "shot3": "Karya 3 (persegi)",
+    "shot4": "Karya 4 (persegi)"
+  },
+  "document": {
+    "theme": {
+      "preset": "mono",
+      "primary": "#111111",
+      "buttonText": "#ffffff",
+      "text": "#111111",
+      "background": "#ffffff",
+      "headingFont": "montserrat",
+      "bodyFont": "inter",
+      "bg": {
+        "type": "solid",
+        "color": "#ffffff"
+      },
+      "button": {
+        "shape": "square",
+        "fill": "solid",
+        "shadow": "none",
+        "hover": "shine"
+      },
+      "motion": {
+        "entrance": "fade",
+        "speed": "normal",
+        "stagger": false
+      }
+    },
+    "blocks": [
+      {
+        "type": "profile",
+        "content": {
+          "name": "ARGA LENSA",
+          "bio": "Fotografer pernikahan & produk · Jakarta\nTersedia untuk 2026",
+          "avatarUrl": "{{slot:avatar}}",
+          "coverUrl": "{{slot:banner}}",
+          "showVerified": true,
+          "avatarPosition": "below"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Cek tanggal & paket",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "calendar",
+          "featured": true,
+          "featuredStyle": "pulse"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Portofolio lengkap",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "fill": "outline"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Instagram",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "instagram",
+          "fill": "outline"
+        }
+      },
+      {
+        "type": "gallery",
+        "content": {
+          "title": "Karya pilihan",
+          "columns": 2,
+          "images": [
+            {
+              "url": "{{slot:shot1}}",
+              "caption": ""
+            },
+            {
+              "url": "{{slot:shot2}}",
+              "caption": ""
+            },
+            {
+              "url": "{{slot:shot3}}",
+              "caption": ""
+            },
+            {
+              "url": "{{slot:shot4}}",
+              "caption": ""
+            }
+          ]
+        }
+      },
+      {
+        "type": "faq",
+        "content": {
+          "title": "Sebelum booking",
+          "items": [
+            {
+              "q": "Berapa lama file foto jadi?",
+              "a": "Preview 3 hari, file lengkap 14 hari kerja."
+            },
+            {
+              "q": "Bisa ke luar kota?",
+              "a": "Bisa, biaya perjalanan dihitung terpisah."
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

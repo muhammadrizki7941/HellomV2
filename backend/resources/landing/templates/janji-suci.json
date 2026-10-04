@@ -1,0 +1,155 @@
+{
+  "id": "janji-suci",
+  "order": 16,
+  "name": "Janji Suci",
+  "category": "acara",
+  "badge": "baru",
+  "description": "Gading lembut dan hijau sage dengan huruf serif anggun. Untuk undangan pernikahan, lamaran, dan acara keluarga.",
+  "slots": {
+    "banner": "Banner 1:1 — foto pasangan",
+    "avatar": "Monogram / inisial pasangan",
+    "moment1": "Foto prewedding 1 (potret)",
+    "moment2": "Foto prewedding 2 (potret)"
+  },
+  "document": {
+    "theme": {
+      "preset": "janji",
+      "primary": "#4d5d4f",
+      "buttonText": "#ffffff",
+      "text": "#3a342c",
+      "background": "#faf7f2",
+      "headingFont": "dmserif",
+      "bodyFont": "lora",
+      "bg": {
+        "type": "solid",
+        "color": "#faf7f2"
+      },
+      "button": {
+        "shape": "pill",
+        "fill": "outline",
+        "borderWidth": 1,
+        "shadow": "none",
+        "hover": "none"
+      },
+      "motion": {
+        "entrance": "fade",
+        "speed": "slow",
+        "stagger": true
+      }
+    },
+    "blocks": [
+      {
+        "type": "profile",
+        "content": {
+          "name": "Nadia & Raka",
+          "bio": "Dengan memohon rahmat Allah SWT, kami mengundang Bapak/Ibu/Saudara/i\nSabtu, 14 Februari 2026 · Bandung",
+          "avatarUrl": "{{slot:avatar}}",
+          "coverUrl": "{{slot:banner}}",
+          "showVerified": false,
+          "coverRatio": "square",
+          "coverFade": true,
+          "avatarPosition": "below"
+        }
+      },
+      {
+        "type": "countdown",
+        "content": {
+          "title": "Menuju hari bahagia",
+          "subtitle": "Atur tanggal acara di pengaturan blok ini.",
+          "targetDate": "",
+          "expiredText": "Acara sudah dimulai — terima kasih!"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Lokasi akad & resepsi",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "map",
+          "fill": "solid",
+          "featured": true,
+          "featuredStyle": "shimmer"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Simpan ke kalender",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "calendar"
+        }
+      },
+      {
+        "type": "form",
+        "content": {
+          "title": "Konfirmasi kehadiran",
+          "subtitle": "Mohon isi sebelum 7 Februari 2026.",
+          "buttonText": "Kirim",
+          "successMessage": "Terima kasih! Kami akan segera menghubungi kamu.",
+          "fields": [
+            {
+              "id": "name",
+              "label": "Nama",
+              "type": "text",
+              "required": true,
+              "system": true
+            },
+            {
+              "id": "phone",
+              "label": "Nomor WhatsApp",
+              "type": "tel",
+              "required": true,
+              "system": true
+            },
+            {
+              "id": "jumlah",
+              "label": "Jumlah tamu yang hadir",
+              "type": "number",
+              "required": true
+            },
+            {
+              "id": "ucapan",
+              "label": "Ucapan & doa",
+              "type": "textarea",
+              "required": false
+            }
+          ]
+        }
+      },
+      {
+        "type": "gallery",
+        "content": {
+          "title": "Momen kami",
+          "columns": 2,
+          "images": [
+            {
+              "url": "{{slot:moment1}}",
+              "caption": ""
+            },
+            {
+              "url": "{{slot:moment2}}",
+              "caption": ""
+            }
+          ]
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Kirim hadiah (amplop digital)",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "gift"
+        }
+      }
+    ]
+  }
+}

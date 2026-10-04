@@ -1,0 +1,124 @@
+{
+  "id": "ceria-anak",
+  "order": 18,
+  "name": "Ceria Anak",
+  "category": "bisnis",
+  "badge": null,
+  "description": "Kotak-kotak warna-warni, huruf tulisan tangan, tombol membulat berbayang. Untuk toko mainan, kelas anak, dan daycare.",
+  "slots": {
+    "banner": "Banner 3:1 — anak bermain / produk mainan",
+    "avatar": "Logo",
+    "fun1": "Foto kegiatan 1 (persegi)",
+    "fun2": "Foto kegiatan 2 (persegi)"
+  },
+  "document": {
+    "theme": {
+      "preset": "ceria",
+      "primary": "#1d4ed8",
+      "buttonText": "#ffffff",
+      "text": "#1e293b",
+      "background": "#fef9c3",
+      "headingFont": "caveat",
+      "bodyFont": "poppins",
+      "bg": {
+        "type": "pattern",
+        "pattern": "checks",
+        "color": "#fef9c3",
+        "patternColor": "#38bdf8",
+        "patternOpacity": 0.12
+      },
+      "button": {
+        "shape": "pill",
+        "fill": "solid",
+        "shadow": "hard",
+        "borderWidth": 2,
+        "hover": "grow"
+      },
+      "motion": {
+        "entrance": "zoom",
+        "speed": "normal",
+        "stagger": true
+      }
+    },
+    "blocks": [
+      {
+        "type": "profile",
+        "content": {
+          "name": "Rumah Main Pelangi",
+          "bio": "Kelas kreatif & mainan edukatif untuk anak 2–8 tahun 🎨\nCibubur · Senin–Sabtu",
+          "avatarUrl": "{{slot:avatar}}",
+          "coverUrl": "{{slot:banner}}",
+          "showVerified": true,
+          "coverRatio": "banner"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Daftar kelas uji coba",
+          "actionType": "whatsapp",
+          "whatsappMessage": "Halo Rumah Main Pelangi, saya mau daftar kelas uji coba untuk anak saya",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "whatsapp",
+          "featured": true,
+          "featuredStyle": "shake"
+        }
+      },
+      {
+        "type": "catalog",
+        "content": {
+          "title": "Mainan edukatif",
+          "showAll": true,
+          "productIds": [],
+          "columns": 2,
+          "buttonText": "Pesan"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Jadwal kelas bulan ini",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "calendar"
+        }
+      },
+      {
+        "type": "gallery",
+        "content": {
+          "title": "Keseruan minggu ini",
+          "columns": 2,
+          "images": [
+            {
+              "url": "{{slot:fun1}}",
+              "caption": ""
+            },
+            {
+              "url": "{{slot:fun2}}",
+              "caption": ""
+            }
+          ]
+        }
+      },
+      {
+        "type": "faq",
+        "content": {
+          "title": "Info orang tua",
+          "items": [
+            {
+              "q": "Umur berapa bisa ikut?",
+              "a": "Mulai 2 tahun, dikelompokkan sesuai umur."
+            },
+            {
+              "q": "Apakah orang tua boleh menemani?",
+              "a": "Boleh, untuk kelas usia 2–3 tahun justru dianjurkan."
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

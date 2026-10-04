@@ -1,0 +1,123 @@
+{
+  "id": "wastra-nusantara",
+  "order": 22,
+  "name": "Wastra Nusantara",
+  "category": "fashion",
+  "badge": "baru",
+  "description": "Cokelat sogan dan emas dengan motif kotak halus dan huruf serif klasik. Untuk batik, tenun, dan kerajinan lokal.",
+  "slots": {
+    "banner": "Banner 3:1 — kain batik / tenun",
+    "avatar": "Logo",
+    "kain1": "Koleksi 1 (potret)",
+    "kain2": "Koleksi 2 (potret)",
+    "maker": "Foto pengrajin (16:9)"
+  },
+  "document": {
+    "theme": {
+      "preset": "wastra",
+      "primary": "#d4a017",
+      "buttonText": "#2b1a0e",
+      "text": "#fdf6e3",
+      "background": "#3b2416",
+      "headingFont": "playfair",
+      "bodyFont": "lora",
+      "bg": {
+        "type": "pattern",
+        "pattern": "checks",
+        "color": "#3b2416",
+        "patternColor": "#d4a017",
+        "patternOpacity": 0.07
+      },
+      "button": {
+        "shape": "rounded",
+        "fill": "solid",
+        "shadow": "soft",
+        "hover": "grow"
+      },
+      "motion": {
+        "entrance": "fade",
+        "speed": "slow",
+        "stagger": true
+      }
+    },
+    "blocks": [
+      {
+        "type": "profile",
+        "content": {
+          "name": "Sogan Laras",
+          "bio": "Batik tulis Solo & tenun ikat NTT, langsung dari pengrajin 🪡\nSetiap kain dibuat 2–6 minggu",
+          "avatarUrl": "{{slot:avatar}}",
+          "coverUrl": "{{slot:banner}}",
+          "showVerified": true,
+          "coverFade": true
+        }
+      },
+      {
+        "type": "catalog",
+        "content": {
+          "title": "Koleksi kain",
+          "showAll": true,
+          "productIds": [],
+          "columns": 2,
+          "buttonText": "Pesan"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Cerita pengrajin kami",
+          "actionType": "link",
+          "linkUrl": "",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "heart",
+          "fill": "outline",
+          "featured": true,
+          "featuredStyle": "shimmer"
+        }
+      },
+      {
+        "type": "button",
+        "content": {
+          "text": "Tanya motif & ukuran",
+          "actionType": "whatsapp",
+          "whatsappMessage": "Halo Sogan Laras, saya mau tanya motif dan ukuran kain",
+          "align": "center",
+          "fullWidth": true,
+          "icon": "whatsapp"
+        }
+      },
+      {
+        "type": "image",
+        "content": {
+          "imageUrl": "{{slot:maker}}",
+          "caption": "Ibu Sulastri, pembatik di Laweyan",
+          "alt": "Ibu Sulastri, pembatik di Laweyan"
+        }
+      },
+      {
+        "type": "gallery",
+        "content": {
+          "title": "Lookbook",
+          "columns": 2,
+          "images": [
+            {
+              "url": "{{slot:kain1}}",
+              "caption": ""
+            },
+            {
+              "url": "{{slot:kain2}}",
+              "caption": ""
+            }
+          ]
+        }
+      },
+      {
+        "type": "text",
+        "content": {
+          "body": "Setiap pembelian ikut membiayai pelatihan membatik untuk generasi muda di Laweyan."
+        }
+      }
+    ]
+  }
+}
