@@ -8,6 +8,7 @@
 
 use App\Http\Controllers\Api\V1\Hellom\Hpp\HppCostController;
 use App\Http\Controllers\Api\V1\Hellom\Hpp\HppIngredientController;
+use App\Http\Controllers\Api\V1\Hellom\Hpp\HppProController;
 use App\Http\Controllers\Api\V1\Hellom\Hpp\HppPurchaseController;
 use App\Http\Controllers\Api\V1\Hellom\Hpp\HppReportController;
 use App\Http\Controllers\Api\V1\Hellom\Hpp\HppProductController;
@@ -49,4 +50,13 @@ Route::prefix('hpp')->name('hpp.')->group(function () {
 
     // Tahap 3: peringatan margin.
     Route::get('/alerts', [HppReportController::class, 'alerts'])->name('alerts');
+
+    // Tahap 4 — Pro (POS subscribers, or an hpp_* plan): opname & variance, simulation, outlet prices, export.
+    Route::get('/pro/stock-counts', [HppProController::class, 'stockCounts'])->name('pro.stock_counts');
+    Route::post('/pro/stock-counts', [HppProController::class, 'storeStockCount'])->name('pro.stock_counts.store');
+    Route::get('/pro/variance', [HppProController::class, 'variance'])->name('pro.variance');
+    Route::post('/pro/simulate', [HppProController::class, 'simulate'])->name('pro.simulate');
+    Route::get('/pro/outlet-prices', [HppProController::class, 'outletPrices'])->name('pro.outlet_prices');
+    Route::put('/pro/outlet-prices', [HppProController::class, 'updateOutletPrice'])->name('pro.outlet_prices.update');
+    Route::get('/pro/export', [HppProController::class, 'export'])->name('pro.export');
 });

@@ -27,10 +27,15 @@ final class PurchaseService
      */
     public function record(int $organizationId, ?int $userId, array $data): array
     {
-        $method = (string) HppSetting::for($organizationId)->price_method;
+        $settings = HppSetting::for($organizationId);
+        $method = (string) $settings->price_method;
+        if ($method === 'fifo' && !HppAccess::isPro($organizationId)) {
+            $method = 'last'; // Pro lapsed: back to the free method
+        }
+        $perOutlet = (bool) $settings->per_outlet_prices && HppAccess::isPro($organizationId);
         $outletId = (int) ($data['outlet_id'] ?? 0);
 
-        $result = DB::transaction(function () use ($organizationId, $userId, $data, $method, $outletId) {
+        $result = DB::transaction(function () use ($organizationId, $userId, $data, $method, $outletId, $perOutlet) {
             $ids = array_map(fn ($i) => (int) $i['ingredient_id'], $data['items']);
             $ingredients = HppIngredient::query()->where('organization_id', $organizationId)->whereIn('id', $ids)->lockForUpdate()->get()->keyBy('id');
             foreach ($data['items'] as $i => $item) {
@@ -70,6 +75,9 @@ final class PurchaseService
                     'cost_per_unit' => round($newCost, 4),
                     'last_buy_price' => $qty > 0 ? (int) round((int) $item['total_price'] / $qty) : (int) $ingredient->last_buy_price,
                 ])->save();
+                if ($perOutlet && $outletId > 0) {
+                    OutletPrices::set((int) $ingredient->id, $outletId, $unitCost);
+                }
                 $changes[] = [
                     'ingredient_id' => (int) $ingredient->id, 'name' => (string) $ingredient->name, 'unit' => (string) $ingredient->use_unit,
                     'previous_cost' => round($previous, 4), 'new_cost' => round($newCost, 4),

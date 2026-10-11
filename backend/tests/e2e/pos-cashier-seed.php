@@ -22,6 +22,8 @@ if ($org = Organization::query()->where('slug', $slug)->first()) {
     DB::table('order_items')->whereIn('order_id', DB::table('orders')->whereIn('tenant_id', $tenants)->pluck('id'))->delete();
     DB::table('orders')->whereIn('tenant_id', $tenants)->delete();
     DB::table('products')->whereIn('tenant_id', $tenants)->delete();
+    DB::table('table_bills')->whereIn('tenant_id', $tenants)->delete();
+    DB::table('dining_tables')->whereIn('tenant_id', $tenants)->delete();
     DB::table('categories')->whereIn('tenant_id', $tenants)->delete();
     DB::table('pos_staff')->where('organization_id', $org->id)->delete();
     DB::table('outlets')->where('organization_id', $org->id)->delete();

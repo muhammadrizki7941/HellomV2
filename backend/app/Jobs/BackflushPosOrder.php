@@ -11,6 +11,7 @@ use App\Models\OrderItemOption;
 use App\Models\Outlet;
 use App\Services\Hpp\CostEngine;
 use App\Services\Hpp\FifoCosting;
+use App\Services\Hpp\HppAccess;
 use App\Services\Hpp\StockLedger;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -76,7 +77,8 @@ class BackflushPosOrder implements ShouldQueue
             return;
         }
 
-        DB::transaction(function () use ($order, $organizationId, $usage, $engine, $settings, $stock, $fifo) {
+        $fifoOn = $settings->price_method === 'fifo' && HppAccess::isPro($organizationId);
+        DB::transaction(function () use ($order, $organizationId, $usage, $engine, $fifoOn, $stock, $fifo) {
             // Once per order, even if the job runs twice.
             Order::withoutGlobalScope('tenant')->whereKey($order->id)->lockForUpdate()->first();
             if (HppStockMovement::query()->where('ref_type', 'pos_order')->where('ref_id', $order->id)->exists()) {
@@ -84,7 +86,7 @@ class BackflushPosOrder implements ShouldQueue
             }
             foreach ($usage as $ingredientId => $qty) {
                 $unitCost = $engine->ingredientUnitCost((int) $ingredientId);
-                if ($settings->price_method === 'fifo') {
+                if ($fifoOn) {
                     $taken = $fifo->consume((int) $ingredientId, $qty);
                     $unitCost = $qty > 0 && $taken > 0 ? $taken / $qty : $unitCost;
                 }

@@ -53,8 +53,12 @@ final class CostEngine
     private array $channels = [];
 
     /** @param array<int, float> $overrides */
-    public function __construct(public readonly int $organizationId, private readonly array $overrides = [], private readonly ?int $outletId = null, private readonly float $overheadFactor = 1.0)
+    /** @var array<int, float> explicit overrides, then this outlet's prices (Pro) */
+    private array $costOverrides = [];
+
+    public function __construct(public readonly int $organizationId, array $overrides = [], private readonly ?int $outletId = null, private readonly float $overheadFactor = 1.0)
     {
+        $this->costOverrides = $overrides + ($outletId ? OutletPrices::forOutlet($organizationId, $outletId) : []);
         $this->overheads = HppOverhead::query()->where('organization_id', $organizationId)->where('is_active', true)
             ->when($outletId !== null, fn ($q) => $q->whereIn('outlet_id', [0, $outletId]))->get()->all();
         $this->channels = HppChannel::query()->where('organization_id', $organizationId)->where('is_active', true)->orderBy('sort_order')->orderBy('id')->get()->all();
@@ -246,7 +250,7 @@ final class CostEngine
             return 0.0;
         }
 
-        return $ingredient->effectiveCost($this->overrides[$ingredientId] ?? null);
+        return $ingredient->effectiveCost($this->costOverrides[$ingredientId] ?? null);
     }
 
     /**
@@ -318,7 +322,7 @@ final class CostEngine
     /** @return array{material: float, packaging: float, labor: float, other: float} */
     private function batchCost(int $productId, array $stack): array
     {
-        if (isset($this->memo[$productId]) && $this->overrides === []) {
+        if (isset($this->memo[$productId])) {
             return $this->memo[$productId];
         }
         $product = $this->products[$productId] ?? null;

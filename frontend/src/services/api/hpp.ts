@@ -1,4 +1,4 @@
-import { apiRequest } from './client';
+import { apiRequest, apiRequestBlob, buildQuery } from './client';
 
 // Kalkulator HPP (dashboard app "hpp"): backend App\Http\Controllers\Api\V1\Hellom\Hpp\*.
 // One engine for Mode Cepat / Resep / Pro; numbers are per unit of the product.
@@ -19,6 +19,7 @@ export type HppSettings = {
   monthly_labor_hours: number;
   main_channel_id: number | null;
   backflush_enabled: boolean;
+  per_outlet_prices: boolean;
   onboarded: boolean;
 };
 
@@ -140,6 +141,8 @@ export type HppOverview = {
   counts: { products: number; ingredients: number; without_price: number; incomplete: number; red: number; below_target: number };
   overhead_total: number;
   alerts: HppAlert[];
+  pro: HppPro;
+  outlets: Array<{ id: number; name: string }>;
   products: HppProductSummary[];
   options: HppOptions;
 };
@@ -196,8 +199,8 @@ export function deleteHppIngredient(id: number) {
   return apiRequest<{ archived: boolean }>(`/hpp/ingredients/${id}`, { method: 'DELETE' });
 }
 
-export function getHppProducts() {
-  return apiRequest<{ products: HppProductSummary[] }>('/hpp/products');
+export function getHppProducts(outletId?: number | null) {
+  return apiRequest<{ products: HppProductSummary[] }>(`/hpp/products${buildQuery({ outlet_id: outletId ?? undefined })}`);
 }
 
 export function getHppProduct(id: number) {
@@ -292,4 +295,59 @@ export function getHppPosOptions(posProductId: number) {
 
 export function getHppAlerts() {
   return apiRequest<{ alerts: HppAlert[] }>('/hpp/alerts');
+}
+
+// ── Tahap 4: Pro (gratis untuk pelanggan POS Kasir, atau langganan hpp_pro_*) ──
+export type HppPro = { active: boolean; source: 'pos' | 'hpp' | null; plans: Array<{ slug: string; name: string; price: number; billing_cycles: string[] }> };
+export type HppStockCountSummary = { id: number; counted_at: string; outlet_id: number | null; notes: string | null; items: number };
+export type HppVarianceRow = {
+  ingredient_id: number; name: string; unit: string; opening: number; purchased: number; closing: number;
+  theoretical: number; actual: number; variance: number; variance_pct: number | null; value: number; flag: boolean;
+};
+export type HppVariance = { from: HppStockCountSummary | null; to: HppStockCountSummary | null; rows: HppVarianceRow[]; total_value: number };
+export type HppSimulationRow = {
+  id: number; name: string; selling_price: number; incomplete: boolean; cost_now: number; cost_sim: number;
+  margin_now: number | null; margin_sim: number | null; suggested_now: number | null; suggested_sim: number | null; target_margin_pct: number;
+};
+export type HppOutletPrices = {
+  outlet_id: number | null;
+  outlets: Array<{ id: number; name: string }>;
+  ingredients: Array<{ id: number; name: string; use_unit: string; cost_per_unit: number; outlet_cost: number | null }>;
+};
+
+export function getHppStockCounts(outletId?: number | null) {
+  return apiRequest<{ counts: HppStockCountSummary[]; outlets: Array<{ id: number; name: string }> }>(`/hpp/pro/stock-counts${buildQuery({ outlet_id: outletId ?? undefined })}`);
+}
+
+export function createHppStockCount(body: { outlet_id?: number | null; notes?: string; items: Array<{ ingredient_id: number; counted_qty: number }> }) {
+  return apiRequest<{ count: HppStockCountSummary }>('/hpp/pro/stock-counts', { method: 'POST', body });
+}
+
+export function getHppVariance(outletId?: number | null) {
+  return apiRequest<HppVariance>(`/hpp/pro/variance${buildQuery({ outlet_id: outletId ?? undefined })}`);
+}
+
+export function simulateHpp(body: { ingredients: Array<{ id: number; pct: number }>; overhead_pct?: number; outlet_id?: number | null }) {
+  return apiRequest<{ products: HppSimulationRow[] }>('/hpp/pro/simulate', { method: 'POST', body });
+}
+
+export function getHppOutletPrices(outletId?: number | null) {
+  return apiRequest<HppOutletPrices>(`/hpp/pro/outlet-prices${buildQuery({ outlet_id: outletId ?? undefined })}`);
+}
+
+export function saveHppOutletPrice(body: { outlet_id: number; ingredient_id: number; cost_per_unit: number | null }) {
+  return apiRequest<{ saved: boolean }>('/hpp/pro/outlet-prices', { method: 'PUT', body });
+}
+
+/** CSV (Excel) download of the products report or the stock variance. */
+export async function downloadHppExport(type: 'products' | 'variance', outletId?: number | null) {
+  const blob = await apiRequestBlob(`/hpp/pro/export${buildQuery({ type, outlet_id: outletId ?? undefined })}`);
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `hpp-${type}-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }

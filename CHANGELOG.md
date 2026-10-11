@@ -4,6 +4,14 @@
 
 Audit lengkap dan status per temuan: [docs/AUDIT.md](docs/AUDIT.md). Langkah deploy khusus rilis ini: [docs/DEPLOY.md §3](docs/DEPLOY.md#3-catatan-khusus-rilis-refactor-branch-refactorcleanup).
 
+### Kalkulator HPP — aplikasi baru di dashboard (2026-10-12)
+Menu **Kalkulator HPP** tepat di bawah Landing Page Builder, **gratis untuk semua toko** (tanpa POS pun jalan). Prinsip: input sekali, hitung terus — catat belanja, resep, dan biaya tetap; HPP, harga jual, margin, BEP, dan peringatan dihitung otomatis.
+- **Tahap 1**: master bahan & kemasan (satuan beli → satuan pakai otomatis, yield/susut, template bahan per jenis usaha), resep + kemasan + sub-resep, **Mode Cepat** (total belanja ÷ jumlah hasil), saran harga dengan pembulatan (ribuan, Rp500, harga psikologis), indikator food cost hijau/kuning/merah. Menu POS bisa diimpor/ditautkan; harga saran bisa langsung dipakai di POS (tercatat di Log Audit).
+- **Tahap 2**: biaya tetap per bulan (per estimasi penjualan, persentase omzet, atau per jam kerja), fee per channel (QRIS, Hellom Page, GoFood, GrabFood, ShopeeFood) dengan saran harga per channel, BEP per bulan/hari, laporan paling untung vs "makan modal"; **belanja bahan** memperbarui harga (harga terakhir / rata-rata tertimbang) dan stok, HPP semua produk dihitung ulang di latar belakang + tren harian.
+- **Tahap 3**: stok bahan **otomatis berkurang dari transaksi POS yang lunas** (sesuai resep, sub-resep, dan modifier), varian & modifier dengan tambahan HPP sendiri (bisa diambil dari pilihan menu POS), **peringatan margin** ("harga susu naik 15%: margin turun ke 28%, saran Rp22.000") dengan tombol pakai harga saran.
+- **Tahap 4 — Pro (berbayar)**: selisih stok teoritis vs aktual dari stok opname, simulasi "bagaimana jika", FIFO, harga bahan per outlet, ekspor CSV. **Gratis untuk pelanggan POS Kasir**, atau langganan sendiri (paket `hpp_pro_monthly` Rp29.000 / `hpp_pro_yearly` Rp290.000 — harga diatur di Admin › Paket).
+- Deploy: `php artisan migrate` (tabel `hpp_*` baru, aplikasi `hpp`, dua paket Pro); queue worker (PM2 `hellom-queue`) menjalankan hitung ulang HPP & pemotongan stok.
+
 ### POS — anti-kecurangan Fase 2 & 3: ubah pesanan, diskon, pisah/gabung/pindah meja (2026-10-11)
 - **Atur pesanan** (pesanan belum dibayar): ubah jumlah/hapus item (wajib alasan; setelah struk dicetak wajib PIN pemilik), **diskon manual** persen/nominal (selalu PIN pemilik), **pisah bill** ke pesanan baru di meja yang sama, **pindah meja**. Total selalu dihitung ulang server, stok ikut berubah.
 - **Tagihan meja › Pindah / gabung**: semua pesanan belum dibayar pindah ke meja lain; kalau meja itu sudah punya tagihan, digabung. Pesanan yang sudah lunas tidak pernah ikut dipindah/dipisah/diubah.

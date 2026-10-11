@@ -205,6 +205,47 @@ try {
   const eggsAfter = (await call('GET', '/hpp/ingredients')).json.data.ingredients.find((i) => i.name === 'Telur ayam').stock ?? 0;
   check('Tahap 3: paid POS order (2× Nasi Goreng + telur ceplok) takes 4 eggs from stock', !!posOrder && Math.round((eggsBefore - eggsAfter) * 1000) / 1000 === 4, JSON.stringify({ eggsBefore, eggsAfter }));
 
+  // Tahap 4 — Pro (free with POS Kasir): stock count → POS sale → stock count = variance.
+  await ev(`[...document.querySelectorAll('[role="tab"]')].find((t) => t.textContent.trim() === 'Pro')?.click(); true`);
+  const proFree = await waitFor(`document.querySelector('[data-hpp-pro]')?.textContent.includes('POS Kasir')`, 8000);
+  await waitFor(`!!document.querySelector('[data-start-count]')`, 8000);
+  await click('[data-start-count]');
+  await waitFor(`!!document.querySelector('[data-count-input="Telur ayam"]')`, 8000);
+  await fill('[data-count-input="Telur ayam"]', '30');
+  await click('[data-count-form] button[type="submit"]');
+  await toast('Stok opname disimpan');
+  await sleep(1200);
+  const order2 = (await call('POST', '/pos/orders', { items: [{ product_id: nasiPos.id, quantity: 2 }] })).json?.data?.order;
+  await call('POST', `/pos/orders/${order2?.id}/payment`, { payment_method: 'cash', payment_amount: 100000 });
+  await sleep(1200);
+  await click('[data-start-count]');
+  await waitFor(`!!document.querySelector('[data-count-input="Telur ayam"]')`, 8000);
+  await fill('[data-count-input="Telur ayam"]', '25');
+  await click('[data-count-form] button[type="submit"]');
+  await toast('Stok opname disimpan');
+  // Recipe: 2 eggs; the tray lost 5 → +3 eggs unexplained, flagged.
+  const varianceShown = await waitFor(`document.querySelector('[data-variance-row="Telur ayam"]')?.textContent.includes('+3')`, 8000);
+  await shot('hpp-variance');
+  check('Tahap 4 (Pro, free with POS): opname → POS sale → opname shows +3 eggs over the recipe', proFree && varianceShown);
+
+  await clickText('[data-hpp-pro] button', 'Simulasi');
+  await waitFor(`!!document.querySelector('[data-sim-input="Susu UHT"]')`, 8000);
+  await fill('[data-sim-input="Susu UHT"]', '20');
+  await click('[data-run-simulation]');
+  const simulated = await waitFor(`!!document.querySelector('[data-sim-row="Es Kopi Susu"]')`, 8000);
+  await shot('hpp-simulation');
+  const csv = await (await fetch(`${API}/hpp/pro/export?type=products`, { headers: { Authorization: `Bearer ${seed.owner_token}` } })).text();
+  check('Tahap 4: simulation "susu +20%" and CSV export', simulated && csv.includes('Es Kopi Susu'));
+
+  // Tahap 4 — without POS (subscription ended) Pro shows the offer: free with POS, or its own plan.
+  execFileSync('php', ['artisan', 'tinker', `--execute=App\\Models\\Entitlement::query()->where('organization_id', App\\Models\\Organization::query()->where('slug', 'resto-e2e-kasir')->value('id'))->update(['status' => 'expired', 'ends_at' => now()->subDay()]);`], { env, input: '' });
+  await send('Page.reload', {});
+  await waitFor(`!!document.querySelector('[data-hpp-app]')`, 15000);
+  await ev(`[...document.querySelectorAll('[role="tab"]')].find((t) => t.textContent.trim() === 'Pro')?.click(); true`);
+  const upsell = await waitFor(`document.querySelector('[data-hpp-upsell]')?.textContent.includes('Gratis untuk pelanggan POS Kasir') && document.querySelector('[data-hpp-upsell]')?.textContent.includes('29.000')`, 8000);
+  await shot('hpp-upsell');
+  check('Tahap 4: without POS the Pro tab offers POS Kasir (free Pro) or Kalkulator HPP Pro Rp29.000', upsell);
+
   check('no browser pop-ups, no script errors', (await ev(`(window.__popups || []).length`)) === 0 && errors.length === 0, JSON.stringify(errors));
 } finally {
   browser.close();

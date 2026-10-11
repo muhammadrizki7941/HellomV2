@@ -49,6 +49,12 @@ Tes PHPUnit fitur gagal di sqlite (migration memakai `information_schema` MySQL)
 - Validasi masih di controller (`$request->validate`) setelah cek otorisasi; kalau memakai Form Request, pindahkan otorisasi ke `authorize()` agar urutan 401/403 → 422 sama.
 - Frontend: tipe respons API mengikuti payload backend; jangan menambah error `tsc`.
 
+## Kalkulator HPP (aplikasi dashboard `hpp`)
+- Gratis untuk semua toko (kartu dashboard selalu terbuka, menu tepat di bawah Landing Builder: `APP_ORDER` di `DashboardLayout`); **Pro** (Tahap 4) = `App\Services\Hpp\HppAccess::isPro()` → langganan POS aktif **atau** entitlement app `hpp` (paket `hpp_*`, harga di Admin › Paket; prefix didaftarkan di `planEligibleForApp` ActivatesPlans + PricingController). Endpoint Pro di `HppProController` (403 `HPP_PRO_REQUIRED`); mode `pro`, `price_method=fifo`, `per_outlet_prices` juga dijaga.
+- Data per `organization_id` (bukan `pos_tenant_slug`, karena toko tanpa POS); `hpp_products.pos_product_id` menaut menu POS (impor, harga dibaca dari POS, "pakai harga saran" menulis ke POS + Log Audit). Owner/admin saja (`ResolvesSellerOrganization`). `outlet_id` 0 = tanpa outlet.
+- Satu mesin: `App\Services\Hpp\CostEngine` (per unit = batch ÷ yield, sub-resep rekursif + cegah loop, varian per unit, overhead 3 metode, override harga per outlet/simulasi) → `ProductCosting` (margin setelah fee channel utama, saran harga per channel, BEP) → `PriceAdvisor` (harga = HPP ÷ (1 − margin − fee), dibulatkan **ke atas**; food cost 35/45%). Rumus frontend kembaran ada di `pages/apps/hpp/pricing.ts` — ubah keduanya.
+- Harga bahan hanya berubah otomatis lewat `PurchaseService` (terakhir / rata-rata / FIFO Pro); setiap perubahan biaya → `RecalculateHppCosts` (queue, afterCommit, snapshot harian). Stok bahan = `StockLedger` (movement + `hpp_ingredient_stocks`); POS backflush = `BackflushPosOrder` (dipicu `OrderPaid` lewat auto-discovery listener `App\Listeners\Hpp\BackflushOnOrderPaid` — jangan daftarkan manual), sekali per pesanan (`ref pos_order`). Tes: `tests/Hpp` (phpunit.pos.xml), e2e `tests/e2e/hpp.mjs`.
+
 ## Hellom Page (Landing Builder + toko online) — konteks proyek berjalan
 Audit & status: [docs/AUDIT_LANDING_BUILDER.md](docs/AUDIT_LANDING_BUILDER.md). Dikerjakan per fase (1 audit → 2 uang → 3 produk → 4 builder/publik → 5 poles); **berhenti & minta konfirmasi setelah tiap fase**.
 - Identitas penjual di modul ini = `organization_id` (halaman, blok, order, saldo, KYC) — dikonfirmasi pemilik (Q1).

@@ -168,6 +168,8 @@ class PricingController extends BaseApiController
             // Hellom Page: the free plan, or paid multi-page plans (slug landing_*, quota in max_landing_pages).
             'landing_builder' => $planSlug === 'free' || str_starts_with($planSlug, 'landing_'),
             'pos' => str_starts_with($planSlug, 'pos_'),
+            // Kalkulator HPP Pro (the base calculator is free; POS subscribers get Pro for free).
+            'hpp' => str_starts_with($planSlug, 'hpp_'),
             default => false,
         };
     }

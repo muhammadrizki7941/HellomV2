@@ -13,6 +13,7 @@ use App\Models\Organization;
 use App\Models\Product;
 use App\Models\ProductOptionValue;
 use App\Services\Hpp\CostEngine;
+use App\Services\Hpp\HppAccess;
 use App\Services\Hpp\ProductCosting;
 use App\Services\OutletService;
 use App\Services\Pos\Audit\ActivityLogger;
@@ -37,7 +38,7 @@ class HppProductController extends HppBaseController
         if ($denied) {
             return $denied;
         }
-        $costing = new ProductCosting(CostEngine::for($org->id));
+        $costing = new ProductCosting(CostEngine::for($org->id, [], $this->outletFilter($request, $org)));
         $products = collect($costing->engine()->products())
             ->filter(fn (HppProduct $p) => $request->boolean('with_archived') || !$p->is_archived)
             ->sortBy(fn (HppProduct $p) => mb_strtolower((string) $p->name))
@@ -52,7 +53,7 @@ class HppProductController extends HppBaseController
         if ($denied) {
             return $denied;
         }
-        $costing = new ProductCosting(CostEngine::for($org->id));
+        $costing = new ProductCosting(CostEngine::for($org->id, [], $this->outletFilter($request, $org)));
         $product = $costing->engine()->product($id);
         if (!$product) {
             return $this->notFound('Produk');
@@ -364,6 +365,14 @@ class HppProductController extends HppBaseController
                 ->orderBy('snapshot_date')->get(['snapshot_date', 'cost_full', 'selling_price', 'margin_pct'])
                 ->map(fn ($s) => ['date' => $s->snapshot_date->toDateString(), 'cost' => (float) $s->cost_full, 'price' => (int) $s->selling_price, 'margin_pct' => $s->margin_pct])->values(),
         ];
+    }
+
+    /** ?outlet_id → that outlet's ingredient prices and overhead (Pro); otherwise the whole business. */
+    private function outletFilter(Request $request, Organization $org): ?int
+    {
+        $outletId = (int) $request->query('outlet_id', 0);
+
+        return $outletId > 0 && HppAccess::isPro($org->id) && \App\Models\Outlet::query()->where('organization_id', $org->id)->whereKey($outletId)->exists() ? $outletId : null;
     }
 
     private function posQuery(Organization $org)

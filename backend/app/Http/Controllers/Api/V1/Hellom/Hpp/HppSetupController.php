@@ -8,6 +8,7 @@ use App\Models\Hpp\HppIngredient;
 use App\Models\Hpp\HppProduct;
 use App\Models\Hpp\HppSetting;
 use App\Services\Hpp\CostEngine;
+use App\Services\Hpp\HppAccess;
 use App\Services\Hpp\MarginAlerts;
 use App\Services\Hpp\ProductCosting;
 use App\Support\Hpp\Templates;
@@ -43,6 +44,8 @@ class HppSetupController extends HppBaseController
             'products' => $products->sortBy(fn ($p) => $p['margin_pct'] ?? 999)->take(5)->values(),
             'overhead_total' => (int) round($costing->engine()->overheadTotal()),
             'alerts' => app(MarginAlerts::class)->build($costing),
+            'pro' => HppAccess::pro($org->id),
+            'outlets' => \App\Models\Outlet::query()->where('organization_id', $org->id)->orderBy('id')->get(['id', 'name'])->map(fn ($o) => ['id' => (int) $o->id, 'name' => (string) $o->name])->values(),
             'options' => $this->options(),
         ], 'Kalkulator HPP');
     }
@@ -66,9 +69,16 @@ class HppSetupController extends HppBaseController
             'monthly_labor_hours' => 'sometimes|integer|min:0|max:1000000',
             'main_channel_id' => ['sometimes', 'nullable', 'integer', Rule::exists('hpp_channels', 'id')->where('organization_id', $org->id)],
             'backflush_enabled' => 'sometimes|boolean',
+            'per_outlet_prices' => 'sometimes|boolean',
         ], [
             'target_margin_pct.max' => 'Target margin maksimal 90%.',
         ]);
+        // Pro only: mode Pro, FIFO, prices per outlet.
+        $wantsPro = ($validated['mode'] ?? null) === 'pro' || ($validated['price_method'] ?? null) === 'fifo' || ($validated['per_outlet_prices'] ?? false);
+        if ($wantsPro && !HppAccess::isPro($org->id)) {
+            return response()->json(['success' => false, 'message' => 'Fitur ini bagian dari Kalkulator HPP Pro. Gratis untuk pelanggan POS Kasir, atau berlangganan Pro.',
+                'data' => HppAccess::pro($org->id), 'error' => ['code' => 'HPP_PRO_REQUIRED', 'detail' => 'Kalkulator HPP Pro']], 403);
+        }
         $settings = HppSetting::for($org->id);
         $settings->fill($validated)->save();
         RecalculateHppCosts::dispatch($org->id);
@@ -120,6 +130,7 @@ class HppSetupController extends HppBaseController
             'monthly_labor_hours' => (int) $settings->monthly_labor_hours,
             'main_channel_id' => $settings->main_channel_id ? (int) $settings->main_channel_id : null,
             'backflush_enabled' => (bool) ($settings->backflush_enabled ?? true),
+            'per_outlet_prices' => (bool) ($settings->per_outlet_prices ?? false),
             'onboarded' => $settings->onboarded_at !== null,
         ];
     }

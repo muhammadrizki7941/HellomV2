@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, Calculator, CheckCircle2, Coffee, Laptop, Loader2, Package, Scissors, Store } from 'lucide-react';
+import { AlertTriangle, Calculator, CheckCircle2, Coffee, Laptop, Loader2, Lock, Package, Scissors, Store } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { applyHppPrice, getHppOverview, onboardHpp, updateHppSettings } from '@/lib/hellomApi';
 import type { HppAlert, HppMode, HppOverview, HppRounding, HppSettings } from '@/lib/hellomApi';
 import CostsTab from './CostsTab';
 import IngredientsTab from './IngredientsTab';
 import ProductsTab from './ProductsTab';
+import ProTab from './ProTab';
 import PurchasesTab from './PurchasesTab';
 import ReportsTab from './ReportsTab';
 import { FoodCostBadge, Field, MarginText, MoneyInput, PrimaryButton, errorsFrom, inputClass, rupiah, useToast } from './shared';
@@ -16,11 +17,12 @@ import { ROUNDING_LABELS } from './pricing';
 // Users record purchases, recipes and monthly fixed costs; HPP, suggested prices, margin and
 // warnings are calculated. Backend: App\Services\Hpp\CostEngine.
 
-type Tab = 'overview' | 'products' | 'ingredients' | 'purchases' | 'costs' | 'reports' | 'settings';
+type Tab = 'overview' | 'products' | 'ingredients' | 'purchases' | 'costs' | 'reports' | 'pro' | 'settings';
 
 const MODES: Array<{ key: HppMode; label: string; hint: string }> = [
   { key: 'quick', label: 'Cepat', hint: 'Pemula: total belanja ÷ jumlah hasil' },
   { key: 'recipe', label: 'Resep', hint: 'Bahan & takaran per menu, kemasan, biaya' },
+  { key: 'pro', label: 'Pro', hint: 'Multi-outlet: selisih stok, simulasi, FIFO, ekspor' },
 ];
 
 const BUSINESS_ICONS: Record<string, typeof Coffee> = { fnb: Coffee, retail: Store, service: Scissors, production: Package, digital: Laptop };
@@ -45,6 +47,10 @@ export default function HppApp() {
 
   const settings = data.settings;
   const setMode = async (mode: HppMode) => {
+    if (mode === 'pro' && !data.pro.active) {
+      setTab('pro');
+      return;
+    }
     try {
       await updateHppSettings({ mode });
       load();
@@ -55,7 +61,7 @@ export default function HppApp() {
   // Mode Cepat keeps the screen simple; Resep/Pro show purchases, costs & channels, and reports.
   const tabs: Array<[Tab, string]> = settings.mode === 'quick'
     ? [['overview', 'Ringkasan'], ['products', 'Produk'], ['ingredients', 'Bahan & kemasan'], ['settings', 'Pengaturan']]
-    : [['overview', 'Ringkasan'], ['products', 'Produk'], ['ingredients', 'Bahan & kemasan'], ['purchases', 'Pembelian'], ['costs', 'Biaya & channel'], ['reports', 'Laporan'], ['settings', 'Pengaturan']];
+    : [['overview', 'Ringkasan'], ['products', 'Produk'], ['ingredients', 'Bahan & kemasan'], ['purchases', 'Pembelian'], ['costs', 'Biaya & channel'], ['reports', 'Laporan'], ['pro', 'Pro'], ['settings', 'Pengaturan']];
 
   return (
     <div className="mx-auto max-w-6xl space-y-4 p-4 sm:p-6" data-hpp-app>
@@ -68,7 +74,7 @@ export default function HppApp() {
           {MODES.map((m) => (
             <button key={m.key} type="button" role="radio" aria-checked={settings.mode === m.key} title={m.hint} onClick={() => void setMode(m.key)}
               className={cn('min-h-10 rounded-xl px-4 text-sm font-semibold', settings.mode === m.key ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-600')} data-app-mode={m.key}>
-              {m.label}
+              {m.key === 'pro' && !data.pro.active && <Lock className="mr-1 inline h-3.5 w-3.5" />}{m.label}
             </button>
           ))}
         </div>
@@ -84,10 +90,11 @@ export default function HppApp() {
       </nav>
 
       {tab === 'overview' && <OverviewTab data={data} goTo={setTab} onToast={toast} onChanged={load} />}
-      {tab === 'products' && <ProductsTab settings={settings} overheadTotal={data.overhead_total} onToast={toast} onChanged={load} />}
+      {tab === 'products' && <ProductsTab settings={settings} overheadTotal={data.overhead_total} outlets={data.pro.active ? data.outlets : []} onToast={toast} onChanged={load} />}
       {tab === 'purchases' && <PurchasesTab onToast={toast} onChanged={load} />}
       {tab === 'costs' && <CostsTab settings={settings} onToast={toast} onChanged={load} />}
       {tab === 'reports' && <ReportsTab />}
+      {tab === 'pro' && <ProTab pro={data.pro} outlets={data.outlets} onToast={toast} onChanged={load} />}
       {tab === 'ingredients' && <IngredientsTab options={data.options} onToast={toast} onChanged={load} />}
       {tab === 'settings' && <SettingsTab settings={settings} data={data} onSaved={(m) => { toast(m); load(); }} />}
       {toastNode}
@@ -249,6 +256,8 @@ function SettingsTab({ settings, data, onSaved }: { settings: HppSettings; data:
   const [labor, setLabor] = useState(settings.labor_rate_per_hour);
   const [type, setType] = useState(settings.business_type);
   const [backflush, setBackflush] = useState(settings.backflush_enabled);
+  const [priceMethod, setPriceMethod] = useState(settings.price_method);
+  const [perOutlet, setPerOutlet] = useState(settings.per_outlet_prices);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [busy, setBusy] = useState(false);
 
@@ -257,7 +266,7 @@ function SettingsTab({ settings, data, onSaved }: { settings: HppSettings; data:
     setBusy(true);
     setErrors({});
     try {
-      await updateHppSettings({ target_margin_pct: Number(margin.replace(',', '.')) || 0, rounding, labor_rate_per_hour: labor, business_type: type, backflush_enabled: backflush });
+      await updateHppSettings({ target_margin_pct: Number(margin.replace(',', '.')) || 0, rounding, labor_rate_per_hour: labor, business_type: type, backflush_enabled: backflush, price_method: priceMethod, ...(data.pro.active ? { per_outlet_prices: perOutlet } : {}) });
       onSaved('Pengaturan disimpan. Saran harga ikut diperbarui.');
     } catch (err) {
       setErrors(errorsFrom(err));
@@ -284,6 +293,19 @@ function SettingsTab({ settings, data, onSaved }: { settings: HppSettings; data:
           {data.options.business_types.map((b) => <option key={b.key} value={b.key}>{b.label}</option>)}
         </select>
       </Field>
+      <Field label="Harga bahan dari pembelian" error={errors.price_method} hint="Rata-rata tertimbang meratakan naik-turun harga. FIFO memakai harga stok paling lama dulu (Pro).">
+        <select name="price_method" value={priceMethod} onChange={(e) => setPriceMethod(e.target.value as HppSettings['price_method'])} className={inputClass(errors.price_method)}>
+          <option value="last">Harga belanja terakhir</option>
+          <option value="average">Rata-rata tertimbang</option>
+          <option value="fifo" disabled={!data.pro.active}>FIFO{data.pro.active ? '' : ' (Pro)'}</option>
+        </select>
+      </Field>
+      {data.pro.active && data.outlets.length > 1 && (
+        <label className="flex items-start gap-3 rounded-xl border border-zinc-200 p-3 text-sm">
+          <input type="checkbox" name="per_outlet_prices" checked={perOutlet} onChange={(e) => setPerOutlet(e.target.checked)} className="mt-0.5 h-5 w-5" />
+          <span><strong className="text-zinc-900">Harga bahan per outlet</strong><span className="block text-zinc-500">Belanja yang dicatat untuk satu outlet mengubah harga bahan outlet itu saja.</span></span>
+        </label>
+      )}
       <label className="flex items-start gap-3 rounded-xl border border-zinc-200 p-3 text-sm">
         <input type="checkbox" name="backflush_enabled" checked={backflush} onChange={(e) => setBackflush(e.target.checked)} className="mt-0.5 h-5 w-5" />
         <span><strong className="text-zinc-900">Potong stok bahan otomatis dari POS</strong><span className="block text-zinc-500">Setiap pesanan POS yang lunas mengurangi stok bahan sesuai resep produk yang ditautkan (termasuk modifier).</span></span>

@@ -9,15 +9,16 @@ import { FoodCostBadge, MarginText, PrimaryButton, errorsFrom, rupiah } from './
 // Products and their HPP. Sub-recipes (sirup, saus…) are listed separately: they are not sold
 // on their own, they are used inside other recipes.
 
-export default function ProductsTab({ settings, overheadTotal, onToast, onChanged }: { settings: HppSettings; overheadTotal: number; onToast: (m: string) => void; onChanged: () => void }) {
+export default function ProductsTab({ settings, overheadTotal, outlets, onToast, onChanged }: { settings: HppSettings; overheadTotal: number; outlets: Array<{ id: number; name: string }>; onToast: (m: string) => void; onChanged: () => void }) {
   const [products, setProducts] = useState<HppProductSummary[] | null>(null);
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState<number | 'new' | 'new-sub' | null>(null);
   const [importing, setImporting] = useState(false);
+  const [outlet, setOutlet] = useState<number | null>(null);
 
   const load = useCallback(() => {
-    getHppProducts().then((r) => setProducts(r.products)).catch(() => setProducts([]));
-  }, []);
+    getHppProducts(outlet).then((r) => setProducts(r.products)).catch(() => setProducts([]));
+  }, [outlet]);
   useEffect(load, [load]);
 
   const shown = useMemo(() => (products ?? []).filter((p) => p.name.toLowerCase().includes(query.toLowerCase())), [products, query]);
@@ -45,6 +46,12 @@ export default function ProductsTab({ settings, overheadTotal, onToast, onChange
           <Search className="h-4 w-4 text-zinc-400" />
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Cari produk" className="min-w-0 flex-1 bg-transparent text-sm outline-none" />
         </div>
+        {outlets.length > 1 && (
+          <select aria-label="Outlet" value={outlet ?? ''} onChange={(e) => setOutlet(e.target.value ? Number(e.target.value) : null)} className="min-h-11 rounded-xl border border-zinc-300 bg-white px-3 text-sm" data-product-outlet>
+            <option value="">Harga umum</option>
+            {outlets.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+          </select>
+        )}
         <button type="button" onClick={() => void importPos()} disabled={importing} className="flex min-h-11 items-center gap-2 rounded-xl border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-700 disabled:opacity-50" data-import-pos>
           <Download className="h-4 w-4" /> Impor menu POS
         </button>
