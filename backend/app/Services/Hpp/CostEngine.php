@@ -2,7 +2,9 @@
 
 namespace App\Services\Hpp;
 
+use App\Models\Hpp\HppChannel;
 use App\Models\Hpp\HppIngredient;
+use App\Models\Hpp\HppOverhead;
 use App\Models\Hpp\HppProduct;
 use App\Models\Hpp\HppRecipeItem;
 use App\Models\Hpp\HppSetting;
@@ -14,6 +16,8 @@ use App\Models\Hpp\HppSetting;
  *   Mode Cepat   batch spend ÷ yield                         (Rp200.000 → 50 porsi = Rp4.000)
  *   Resep        Σ qty × ingredient cost (after yield loss) + sub-recipes, split into bahan/kemasan
  *   + labour     labour minutes × rate per hour,  + other     ongkir etc. — both per batch ÷ yield
+ *
+ *   overhead     per estimated unit sold (Rp5,8 jt ÷ 1.500 cup), % of revenue, or per labour hour
  *
  * $overrides: ingredient_id => cost per use unit (simulation, per-outlet prices).
  */
@@ -35,9 +39,18 @@ final class CostEngine
 
     public readonly HppSetting $settings;
 
+    /** @var list<HppOverhead> */
+    private array $overheads = [];
+
+    /** @var list<HppChannel> */
+    private array $channels = [];
+
     /** @param array<int, float> $overrides */
-    public function __construct(public readonly int $organizationId, private readonly array $overrides = [])
+    public function __construct(public readonly int $organizationId, private readonly array $overrides = [], private readonly ?int $outletId = null, private readonly float $overheadFactor = 1.0)
     {
+        $this->overheads = HppOverhead::query()->where('organization_id', $organizationId)->where('is_active', true)
+            ->when($outletId !== null, fn ($q) => $q->whereIn('outlet_id', [0, $outletId]))->get()->all();
+        $this->channels = HppChannel::query()->where('organization_id', $organizationId)->where('is_active', true)->orderBy('sort_order')->orderBy('id')->get()->all();
         $this->settings = HppSetting::for($organizationId);
         $this->ingredients = HppIngredient::query()->where('organization_id', $organizationId)->get()->keyBy('id')->all();
         $this->products = HppProduct::query()->where('organization_id', $organizationId)->get()->keyBy('id')->all();
@@ -48,9 +61,65 @@ final class CostEngine
     }
 
     /** @param array<int, float> $overrides */
-    public static function for(int $organizationId, array $overrides = []): self
+    public static function for(int $organizationId, array $overrides = [], ?int $outletId = null, float $overheadFactor = 1.0): self
     {
-        return new self($organizationId, $overrides);
+        return new self($organizationId, $overrides, $outletId, $overheadFactor);
+    }
+
+    /** Fixed costs per month (active, this outlet + whole business). */
+    public function overheadTotal(): float
+    {
+        return array_sum(array_map(fn (HppOverhead $o) => (int) $o->amount, $this->overheads)) * $this->overheadFactor;
+    }
+
+    /** Overhead as % of revenue (method revenue_pct), else 0. */
+    public function overheadRevenuePct(): float
+    {
+        $revenue = (int) $this->settings->monthly_revenue;
+
+        return $this->settings->overhead_method === 'revenue_pct' && $revenue > 0 ? $this->overheadTotal() / $revenue * 100 : 0.0;
+    }
+
+    /** Overhead carried by ONE unit of the product at $price (revenue_pct depends on the price). */
+    public function overheadPerUnit(int $productId, int $price): float
+    {
+        $product = $this->products[$productId] ?? null;
+        $total = $this->overheadTotal();
+        if (!$product || $product->is_subrecipe || $total <= 0) {
+            return 0.0;
+        }
+
+        return match ((string) $this->settings->overhead_method) {
+            'revenue_pct' => $price * $this->overheadRevenuePct() / 100,
+            'labor_hour' => (int) $this->settings->monthly_labor_hours > 0
+                ? $total / (int) $this->settings->monthly_labor_hours * ((int) $product->labor_minutes / 60) / max(0.001, (float) $product->yield_qty)
+                : 0.0,
+            default => (int) $this->settings->monthly_units > 0 ? $total / (int) $this->settings->monthly_units : 0.0,
+        };
+    }
+
+    /** @return list<HppChannel> */
+    public function channels(): array
+    {
+        return $this->channels;
+    }
+
+    /** Channel used for the main margin / BEP: the chosen one, else QRIS, else the first. */
+    public function mainChannel(): ?HppChannel
+    {
+        $chosen = (int) ($this->settings->main_channel_id ?? 0);
+        foreach ($this->channels as $channel) {
+            if ((int) $channel->id === $chosen) {
+                return $channel;
+            }
+        }
+        foreach ($this->channels as $channel) {
+            if ($channel->kind === 'qris') {
+                return $channel;
+            }
+        }
+
+        return $this->channels[0] ?? null;
     }
 
     /** @return array<int, HppProduct> */

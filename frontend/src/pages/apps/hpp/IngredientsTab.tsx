@@ -47,6 +47,7 @@ export default function IngredientsTab({ options, onToast, onChanged }: { option
                     {rupiah(i.buy_price)}/{i.buy_unit} · <strong className="text-zinc-700">{rupiahUnit(i.effective_cost)}/{i.use_unit}</strong>
                     {i.yield_pct < 100 && ` · yield ${i.yield_pct}%`}
                     {i.used_in ? ` · dipakai di ${i.used_in} resep` : ''}
+                    {i.stock ? ` · stok ${i.stock.toLocaleString('id-ID', { maximumFractionDigits: 1 })} ${i.use_unit}` : ''}
                   </p>
                 </div>
                 <button type="button" onClick={() => setEditing(i)} aria-label={`Ubah ${i.name}`} className="flex h-10 w-10 items-center justify-center rounded-full text-zinc-500 hover:bg-zinc-100"><Pencil className="h-4 w-4" /></button>

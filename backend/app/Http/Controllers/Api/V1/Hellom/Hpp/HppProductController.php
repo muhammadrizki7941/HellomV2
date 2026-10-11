@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers\Api\V1\Hellom\Hpp;
 
+use App\Jobs\RecalculateHppCosts;
+use App\Models\Hpp\HppChannel;
+use App\Models\Hpp\HppCostSnapshot;
 use App\Models\Hpp\HppIngredient;
 use App\Models\Hpp\HppProduct;
 use App\Models\Hpp\HppRecipeItem;
@@ -203,6 +206,8 @@ class HppProductController extends HppBaseController
             'items.*.component_id' => 'required|integer',
             'items.*.qty' => 'required|numeric|min:0.001|max:10000000',
             'items.*.note' => 'nullable|string|max:120',
+            'channel_prices' => 'nullable|array|max:30',
+            'channel_prices.*' => 'nullable|integer|min:0|max:100000000',
         ], [
             'name.required' => 'Nama produk wajib diisi.',
             'yield_qty.required' => 'Isi jumlah hasil (porsi/pcs).',
@@ -254,7 +259,9 @@ class HppProductController extends HppBaseController
             'quick_batch_cost' => (int) ($validated['quick_batch_cost'] ?? 0),
             'labor_minutes' => (int) ($validated['labor_minutes'] ?? 0),
             'other_cost' => (int) ($validated['other_cost'] ?? 0),
+            'channel_prices' => $this->channelPrices($org, (array) ($validated['channel_prices'] ?? [])),
         ])->save();
+        RecalculateHppCosts::dispatch($org->id);
 
         HppRecipeItem::query()->where('product_id', $product->id)->delete();
         foreach ($items as $index => $item) {
@@ -263,6 +270,20 @@ class HppProductController extends HppBaseController
                 'qty' => (float) $item['qty'], 'note' => $item['note'] ?? null, 'sort_order' => $index,
             ]);
         }
+    }
+
+    /** Own price per channel (ojol menus are often priced higher); only this shop's channels, > 0. */
+    private function channelPrices(Organization $org, array $prices): ?array
+    {
+        $valid = HppChannel::query()->where('organization_id', $org->id)->pluck('id')->map(fn ($id) => (string) $id)->all();
+        $clean = [];
+        foreach ($prices as $channelId => $price) {
+            if (in_array((string) $channelId, $valid, true) && (int) $price > 0) {
+                $clean[(string) $channelId] = (int) $price;
+            }
+        }
+
+        return $clean ?: null;
     }
 
     /** @return array<string, mixed> */
@@ -274,6 +295,10 @@ class HppProductController extends HppBaseController
             'other_cost' => (int) $product->other_cost,
             'own_target_margin_pct' => $product->target_margin_pct,
             'lines' => $costing->engine()->lines((int) $product->id),
+            'channel_prices' => (object) ((array) ($product->channel_prices ?? [])),
+            'trend' => HppCostSnapshot::query()->where('product_id', $product->id)->where('snapshot_date', '>=', now()->subDays(60)->toDateString())
+                ->orderBy('snapshot_date')->get(['snapshot_date', 'cost_full', 'selling_price', 'margin_pct'])
+                ->map(fn ($s) => ['date' => $s->snapshot_date->toDateString(), 'cost' => (float) $s->cost_full, 'price' => (int) $s->selling_price, 'margin_pct' => $s->margin_pct])->values(),
         ];
     }
 

@@ -6,7 +6,10 @@
 | HppBaseController.
 */
 
+use App\Http\Controllers\Api\V1\Hellom\Hpp\HppCostController;
 use App\Http\Controllers\Api\V1\Hellom\Hpp\HppIngredientController;
+use App\Http\Controllers\Api\V1\Hellom\Hpp\HppPurchaseController;
+use App\Http\Controllers\Api\V1\Hellom\Hpp\HppReportController;
 use App\Http\Controllers\Api\V1\Hellom\Hpp\HppProductController;
 use App\Http\Controllers\Api\V1\Hellom\Hpp\HppSetupController;
 use Illuminate\Support\Facades\Route;
@@ -29,4 +32,17 @@ Route::prefix('hpp')->name('hpp.')->group(function () {
     Route::post('/products/{id}/apply-price', [HppProductController::class, 'applyPrice'])->whereNumber('id')->name('products.apply_price');
     Route::get('/pos-products', [HppProductController::class, 'posProducts'])->name('pos_products');
     Route::post('/products/import-pos', [HppProductController::class, 'importPos'])->name('products.import_pos');
+
+    // Tahap 2: biaya tetap, channel, pembelian, laporan.
+    Route::get('/costs', [HppCostController::class, 'index'])->name('costs.index');
+    Route::post('/overheads', [HppCostController::class, 'storeOverhead'])->name('overheads.store');
+    Route::post('/overheads/template', [HppCostController::class, 'loadTemplate'])->name('overheads.template');
+    Route::put('/overheads/{id}', [HppCostController::class, 'updateOverhead'])->whereNumber('id')->name('overheads.update');
+    Route::delete('/overheads/{id}', [HppCostController::class, 'destroyOverhead'])->whereNumber('id')->name('overheads.destroy');
+    Route::post('/channels', [HppCostController::class, 'storeChannel'])->name('channels.store');
+    Route::put('/channels/{id}', [HppCostController::class, 'updateChannel'])->whereNumber('id')->name('channels.update');
+    Route::delete('/channels/{id}', [HppCostController::class, 'destroyChannel'])->whereNumber('id')->name('channels.destroy');
+    Route::get('/purchases', [HppPurchaseController::class, 'index'])->name('purchases.index');
+    Route::post('/purchases', [HppPurchaseController::class, 'store'])->name('purchases.store');
+    Route::get('/reports/products', [HppReportController::class, 'products'])->name('reports.products');
 });

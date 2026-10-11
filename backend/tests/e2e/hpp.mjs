@@ -114,6 +114,54 @@ try {
   await click('[data-ingredient-form] button[type="submit"]');
   check('Tahap 1: ingredient form converts Rp40.000/kg → Rp40/g → Rp50/g after 80% yield', conversion && await toast('Ayam fillet'));
 
+  // Tahap 2 — fixed costs from the template, spread per estimated unit sold.
+  await clickText('[role="tab"]', 'Biaya');
+  await waitFor(`!!document.querySelector('[data-overhead-template]')`, 8000);
+  await click('[data-overhead-template]');
+  const overheadLoaded = await waitFor(`document.querySelector('[data-overhead-total]')?.textContent.includes('5.800.000')`, 8000);
+  await fill('[data-allocation-form] input[name="monthly_units"]', '1500');
+  const perUnitHint = await waitFor(`document.querySelector('[data-allocation-form]')?.textContent.includes('3.867')`, 3000);
+  await click('[data-allocation-form] button[type="submit"]');
+  await toast('pembagian biaya disimpan');
+  await shot('hpp-costs');
+  check('Tahap 2: overhead Rp5,8 jt ÷ 1.500 terjual = Rp3.867 per produk', overheadLoaded && perUnitHint);
+
+  // Tahap 2 — product shows overhead, per-channel price & margin, BEP.
+  await clickText('[role="tab"]', 'Produk');
+  await waitFor(`!!document.querySelector('[data-product-row="Es Kopi Susu"]')`, 8000);
+  await click('[data-product-row="Es Kopi Susu"]');
+  await waitFor(`!!document.querySelector('[data-channel="GoFood"]')`, 8000);
+  await fill('[data-channel="GoFood"] input', '25000');
+  const channelView = await waitFor(`document.querySelector('[data-cost-summary]')?.textContent.includes('Overhead') && !!document.querySelector('[data-bep]')`, 3000);
+  await shot('hpp-channels');
+  await click('[data-product-form] button[type="submit"]');
+  await toast('disimpan');
+  const kopi = (await call('GET', '/hpp/products')).json.data.products.find((p) => p.name === 'Es Kopi Susu');
+  const go = kopi?.channels.find((c) => c.name === 'GoFood');
+  check('Tahap 2: overhead in HPP, own GoFood price with its margin, BEP shown', channelView && Math.round(kopi?.cost.overhead) === 3867 && go?.price === 25000 && go?.margin_pct !== null && kopi?.bep?.units_per_month > 0,
+    JSON.stringify({ overhead: kopi?.cost.overhead, go, bep: kopi?.bep }));
+
+  // Tahap 2 — a purchase updates the ingredient price (+15%) and HPP.
+  await clickText('[role="tab"]', 'Pembelian');
+  await waitFor(`!!document.querySelector('[data-add-purchase]')`, 8000);
+  await click('[data-add-purchase]');
+  await waitFor(`document.querySelectorAll('[data-purchase-form] select[name="items.0.ingredient_id"] option').length > 3`, 8000);
+  await fill('[data-purchase-form] select[name="items.0.ingredient_id"]', await optionValue('[data-purchase-form] select[name="items.0.ingredient_id"]', 'Susu UHT'));
+  await fill('[data-purchase-form] input[name="items.0.qty"]', '2');
+  await fill('[data-purchase-form] input[name="items.0.total_price"]', '46000');
+  const purchasePreview = await waitFor(`document.querySelector('[data-purchase-preview]')?.textContent.includes('naik 15')`, 3000);
+  await shot('hpp-purchase');
+  await click('[data-purchase-form] button[type="submit"]');
+  const purchased = await toast('Susu UHT naik 15');
+  const kopiAfter = (await call('GET', '/hpp/products')).json.data.products.find((p) => p.name === 'Es Kopi Susu');
+  check('Tahap 2: purchase 2 L susu Rp46.000 → Rp23/ml (+15%), HPP updated automatically', purchasePreview && purchased && Math.round(kopiAfter?.cost.direct) === 7690, JSON.stringify({ direct: kopiAfter?.cost.direct }));
+
+  // Tahap 2 — reports.
+  await clickText('[role="tab"]', 'Laporan');
+  const reported = await waitFor(`document.querySelector('[data-report-table]')?.textContent.includes('Es Kopi Susu') && document.querySelector('[data-hpp-reports]')?.textContent.includes('/bln')`, 8000);
+  await shot('hpp-reports');
+  check('Tahap 2: report with HPP, overhead, margin and BEP per product', reported);
+
   check('no browser pop-ups, no script errors', (await ev(`(window.__popups || []).length`)) === 0 && errors.length === 0, JSON.stringify(errors));
 } finally {
   browser.close();

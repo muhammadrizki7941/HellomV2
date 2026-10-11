@@ -2,16 +2,22 @@
 
 namespace App\Services\Hpp;
 
+use App\Models\Hpp\HppChannel;
 use App\Models\Hpp\HppProduct;
 use App\Models\Product;
 
 /**
- * What the HPP screens show for a product: cost per unit split into bahan / kemasan / tenaga kerja /
- * lain-lain, the selling price (live from POS when linked), margin, food cost %, and the suggested
- * price for the target margin.
+ * What the HPP screens show for a product: cost per unit (bahan / kemasan / tenaga kerja /
+ * lain-lain / overhead), the selling price (live from POS when linked), margin after the main
+ * channel's fee, food cost %, the suggested price per channel and the break-even point:
+ *
+ *   BEP (porsi/bulan) = biaya tetap per bulan ÷ (harga − biaya variabel − fee channel)
  */
 final class ProductCosting
 {
+    /** Channels whose default price is the shop price; ojol channels need their own price. */
+    private const SHOP_PRICE_KINDS = ['cash', 'qris', 'hellom', 'custom'];
+
     /** @var array<int, int> POS product id => price */
     private array $posPrices = [];
 
@@ -46,12 +52,42 @@ final class ProductCosting
     /** @return array<string, mixed> */
     public function summary(HppProduct $product): array
     {
-        $unit = $this->engine->unitCost((int) $product->id);
-        $full = $unit['direct'];
+        $engine = $this->engine;
+        $unit = $engine->unitCost((int) $product->id);
         $price = $this->price($product);
         $target = $this->marginTarget($product);
-        $rounding = (string) $this->engine->settings->rounding;
-        $foodCost = PriceAdvisor::foodCostPct($price, $unit['material'] + $unit['packaging']);
+        $rounding = (string) $engine->settings->rounding;
+        // revenue_pct overhead moves with the price: treat it like a fee when suggesting prices.
+        $overheadPct = $engine->overheadRevenuePct();
+        $overhead = $engine->overheadPerUnit((int) $product->id, $price);
+        $fixedOverhead = $overheadPct > 0 ? 0.0 : $overhead;
+        $full = $unit['direct'] + $overhead;
+        $main = $engine->mainChannel();
+        $mainPct = (float) ($main?->fee_pct ?? 0);
+        $mainFlat = (float) ($main?->fee_flat ?? 0);
+        // No recipe / batch cost yet: no margin, food cost or BEP (a Rp0 HPP would look very profitable).
+        $incomplete = $unit['direct'] <= 0;
+        $foodCost = $incomplete ? null : PriceAdvisor::foodCostPct($price, $unit['material'] + $unit['packaging']);
+
+        $channels = [];
+        if (!$product->is_subrecipe) {
+            foreach ($engine->channels() as $channel) {
+                $channelPrice = $this->channelPrice($product, $channel, $price);
+                $channelOverhead = $overheadPct > 0 ? ($channelPrice ?? 0) * $overheadPct / 100 : $fixedOverhead;
+                $channels[] = [
+                    'id' => (int) $channel->id,
+                    'name' => (string) $channel->name,
+                    'kind' => (string) $channel->kind,
+                    'fee_pct' => (float) $channel->fee_pct,
+                    'fee_flat' => (int) $channel->fee_flat,
+                    'price' => $channelPrice,
+                    'own_price' => isset(((array) ($product->channel_prices ?? []))[(string) $channel->id]),
+                    'margin_pct' => $channelPrice && $unit['direct'] > 0 ? PriceAdvisor::margin($channelPrice, $unit['direct'] + $channelOverhead, (float) $channel->fee_pct, (float) $channel->fee_flat) : null,
+                    'suggested_price' => PriceAdvisor::suggest($unit['direct'] + $fixedOverhead, $target, (float) $channel->fee_pct + $overheadPct, (float) $channel->fee_flat, $rounding),
+                    'is_main' => $main !== null && (int) $main->id === (int) $channel->id,
+                ];
+            }
+        }
 
         return [
             'id' => (int) $product->id,
@@ -69,14 +105,41 @@ final class ProductCosting
                 'labor' => round($unit['labor'], 2),
                 'other' => round($unit['other'], 2),
                 'direct' => round($unit['direct'], 2),
-                'overhead' => 0.0,
+                'overhead' => round($overhead, 2),
                 'full' => round($full, 2),
             ],
-            'margin_pct' => PriceAdvisor::margin($price, $full),
+            'main_channel' => $main ? ['id' => (int) $main->id, 'name' => (string) $main->name, 'fee_pct' => $mainPct] : null,
+            'incomplete' => $incomplete,
+            'margin_pct' => $incomplete ? null : PriceAdvisor::margin($price, $full, $mainPct, $mainFlat),
             'food_cost_pct' => $foodCost,
             'food_cost_status' => PriceAdvisor::foodCostStatus($foodCost),
-            'suggested_price' => PriceAdvisor::suggest($full, $target, 0, 0, $rounding),
+            'suggested_price' => $product->is_subrecipe || $incomplete ? null : PriceAdvisor::suggest($unit['direct'] + $fixedOverhead, $target, $mainPct + $overheadPct, $mainFlat, $rounding),
+            'channels' => $channels,
+            'bep' => $product->is_subrecipe || $incomplete ? null : $this->breakEven($price, $unit['direct'], $mainPct, $mainFlat),
             'is_archived' => (bool) $product->is_archived,
         ];
+    }
+
+    /** @return array{units_per_month: int, units_per_day: float, contribution: float}|null */
+    private function breakEven(int $price, float $variableCost, float $feePct, float $feeFlat): ?array
+    {
+        $fixed = $this->engine->overheadTotal();
+        $contribution = $price - $variableCost - ($price * $feePct / 100 + $feeFlat);
+        if ($fixed <= 0 || $price <= 0 || $contribution <= 0) {
+            return null;
+        }
+        $units = (int) ceil($fixed / $contribution);
+
+        return ['units_per_month' => $units, 'units_per_day' => round($units / 30, 1), 'contribution' => round($contribution, 2)];
+    }
+
+    private function channelPrice(HppProduct $product, HppChannel $channel, int $shopPrice): ?int
+    {
+        $own = ((array) ($product->channel_prices ?? []))[(string) $channel->id] ?? null;
+        if ($own !== null && (int) $own > 0) {
+            return (int) $own;
+        }
+
+        return in_array((string) $channel->kind, self::SHOP_PRICE_KINDS, true) && $shopPrice > 0 ? $shopPrice : null;
     }
 }

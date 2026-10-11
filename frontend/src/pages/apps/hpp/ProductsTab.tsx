@@ -9,7 +9,7 @@ import { FoodCostBadge, MarginText, PrimaryButton, errorsFrom, rupiah } from './
 // Products and their HPP. Sub-recipes (sirup, saus…) are listed separately: they are not sold
 // on their own, they are used inside other recipes.
 
-export default function ProductsTab({ settings, onToast, onChanged }: { settings: HppSettings; onToast: (m: string) => void; onChanged: () => void }) {
+export default function ProductsTab({ settings, overheadTotal, onToast, onChanged }: { settings: HppSettings; overheadTotal: number; onToast: (m: string) => void; onChanged: () => void }) {
   const [products, setProducts] = useState<HppProductSummary[] | null>(null);
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState<number | 'new' | 'new-sub' | null>(null);
@@ -71,7 +71,7 @@ export default function ProductsTab({ settings, onToast, onChanged }: { settings
                     <p className="font-medium text-zinc-900">{p.name}</p>
                     <p className="text-xs text-zinc-500">{p.mode === 'quick' ? 'Mode Cepat' : 'Resep'}{p.pos_product_id ? ' · tertaut POS' : ''}</p>
                   </td>
-                  <td className="px-3 py-3 font-semibold">{rupiah(p.cost.full)}</td>
+                  <td className="px-3 py-3 font-semibold">{p.incomplete ? <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800">Lengkapi resep</span> : rupiah(p.cost.full)}</td>
                   <td className="px-3 py-3">{p.selling_price ? rupiah(p.selling_price) : <span className="text-zinc-400">belum diisi</span>}</td>
                   <td className="px-3 py-3"><MarginText value={p.margin_pct} target={p.target_margin_pct} /></td>
                   <td className="px-3 py-3"><FoodCostBadge status={p.food_cost_status} value={p.food_cost_pct} /></td>
@@ -116,6 +116,7 @@ export default function ProductsTab({ settings, onToast, onChanged }: { settings
           productId={typeof editing === 'number' ? editing : null}
           asSubrecipe={editing === 'new-sub'}
           settings={settings}
+          overheadTotal={overheadTotal}
           products={products ?? []}
           onClose={() => setEditing(null)}
           onSaved={(message) => { setEditing(null); onToast(message); load(); onChanged(); }}

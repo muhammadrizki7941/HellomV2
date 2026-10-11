@@ -3,8 +3,11 @@ import { AlertTriangle, Calculator, CheckCircle2, Coffee, Laptop, Loader2, Packa
 import { cn } from '@/lib/utils';
 import { getHppOverview, onboardHpp, updateHppSettings } from '@/lib/hellomApi';
 import type { HppMode, HppOverview, HppRounding, HppSettings } from '@/lib/hellomApi';
+import CostsTab from './CostsTab';
 import IngredientsTab from './IngredientsTab';
 import ProductsTab from './ProductsTab';
+import PurchasesTab from './PurchasesTab';
+import ReportsTab from './ReportsTab';
 import { FoodCostBadge, Field, MarginText, MoneyInput, PrimaryButton, errorsFrom, inputClass, rupiah, useToast } from './shared';
 import type { FieldErrors } from './shared';
 import { ROUNDING_LABELS } from './pricing';
@@ -13,7 +16,7 @@ import { ROUNDING_LABELS } from './pricing';
 // Users record purchases, recipes and monthly fixed costs; HPP, suggested prices, margin and
 // warnings are calculated. Backend: App\Services\Hpp\CostEngine.
 
-type Tab = 'overview' | 'products' | 'ingredients' | 'settings';
+type Tab = 'overview' | 'products' | 'ingredients' | 'purchases' | 'costs' | 'reports' | 'settings';
 
 const MODES: Array<{ key: HppMode; label: string; hint: string }> = [
   { key: 'quick', label: 'Cepat', hint: 'Pemula: total belanja ÷ jumlah hasil' },
@@ -49,7 +52,10 @@ export default function HppApp() {
       toast(errorsFrom(err).form ?? 'Mode belum diganti.');
     }
   };
-  const tabs: Array<[Tab, string]> = [['overview', 'Ringkasan'], ['products', 'Produk'], ['ingredients', 'Bahan & kemasan'], ['settings', 'Pengaturan']];
+  // Mode Cepat keeps the screen simple; Resep/Pro show purchases, costs & channels, and reports.
+  const tabs: Array<[Tab, string]> = settings.mode === 'quick'
+    ? [['overview', 'Ringkasan'], ['products', 'Produk'], ['ingredients', 'Bahan & kemasan'], ['settings', 'Pengaturan']]
+    : [['overview', 'Ringkasan'], ['products', 'Produk'], ['ingredients', 'Bahan & kemasan'], ['purchases', 'Pembelian'], ['costs', 'Biaya & channel'], ['reports', 'Laporan'], ['settings', 'Pengaturan']];
 
   return (
     <div className="mx-auto max-w-6xl space-y-4 p-4 sm:p-6" data-hpp-app>
@@ -78,7 +84,10 @@ export default function HppApp() {
       </nav>
 
       {tab === 'overview' && <OverviewTab data={data} goTo={setTab} />}
-      {tab === 'products' && <ProductsTab settings={settings} onToast={toast} onChanged={load} />}
+      {tab === 'products' && <ProductsTab settings={settings} overheadTotal={data.overhead_total} onToast={toast} onChanged={load} />}
+      {tab === 'purchases' && <PurchasesTab onToast={toast} onChanged={load} />}
+      {tab === 'costs' && <CostsTab settings={settings} onToast={toast} onChanged={load} />}
+      {tab === 'reports' && <ReportsTab />}
       {tab === 'ingredients' && <IngredientsTab options={data.options} onToast={toast} onChanged={load} />}
       {tab === 'settings' && <SettingsTab settings={settings} data={data} onSaved={(m) => { toast(m); load(); }} />}
       {toastNode}
@@ -154,12 +163,13 @@ function OverviewTab({ data, goTo }: { data: HppOverview; goTo: (t: Tab) => void
   const cards: Array<[string, number, string, Tab]> = [
     ['Produk dihitung', c.products, 'text-zinc-900', 'products'],
     ['Bahan & kemasan', c.ingredients, 'text-zinc-900', 'ingredients'],
+    ['Resep belum diisi', c.incomplete, c.incomplete ? 'text-amber-700' : 'text-zinc-900', 'products'],
     ['Margin di bawah target', c.below_target, c.below_target ? 'text-amber-700' : 'text-zinc-900', 'products'],
     ['Food cost merah', c.red, c.red ? 'text-red-700' : 'text-zinc-900', 'products'],
   ];
   return (
     <section className="space-y-4" data-hpp-overview>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         {cards.map(([label, value, color, target]) => (
           <button key={label} type="button" onClick={() => goTo(target)} className="rounded-2xl border border-zinc-200 bg-white p-4 text-left hover:border-zinc-400">
             <p className="text-xs text-zinc-500">{label}</p>

@@ -18,6 +18,10 @@ class HppSetting extends Model
     protected $casts = [
         'target_margin_pct' => 'float',
         'labor_rate_per_hour' => 'integer',
+        'monthly_units' => 'integer',
+        'monthly_revenue' => 'integer',
+        'monthly_labor_hours' => 'integer',
+        'main_channel_id' => 'integer',
         'extra' => 'array',
         'onboarded_at' => 'datetime',
     ];
@@ -26,6 +30,7 @@ class HppSetting extends Model
     public const BUSINESS_TYPES = ['fnb', 'retail', 'service', 'production', 'digital'];
     public const ROUNDINGS = ['none', '100', '500', '1000', 'psych'];
     public const PRICE_METHODS = ['last', 'average', 'fifo'];
+    public const OVERHEAD_METHODS = ['per_unit', 'revenue_pct', 'labor_hour'];
 
     public static function for(int $organizationId): self
     {

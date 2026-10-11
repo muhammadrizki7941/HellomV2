@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1\Hellom\Hpp;
 
+use App\Jobs\RecalculateHppCosts;
+use App\Models\Hpp\HppChannel;
 use App\Models\Hpp\HppIngredient;
 use App\Models\Hpp\HppProduct;
 use App\Models\Hpp\HppSetting;
@@ -33,10 +35,12 @@ class HppSetupController extends HppBaseController
                 'products' => $products->count(),
                 'ingredients' => HppIngredient::query()->where('organization_id', $org->id)->where('is_archived', false)->count(),
                 'without_price' => $products->where('selling_price', 0)->count(),
+                'incomplete' => $products->where('incomplete', true)->count(),
                 'red' => $products->where('food_cost_status', 'red')->count(),
                 'below_target' => $products->filter(fn ($p) => $p['margin_pct'] !== null && $p['margin_pct'] < $p['target_margin_pct'])->count(),
             ],
             'products' => $products->sortBy(fn ($p) => $p['margin_pct'] ?? 999)->take(5)->values(),
+            'overhead_total' => (int) round($costing->engine()->overheadTotal()),
             'options' => $this->options(),
         ], 'Kalkulator HPP');
     }
@@ -54,11 +58,17 @@ class HppSetupController extends HppBaseController
             'rounding' => ['sometimes', Rule::in(HppSetting::ROUNDINGS)],
             'price_method' => ['sometimes', Rule::in(HppSetting::PRICE_METHODS)],
             'labor_rate_per_hour' => 'sometimes|integer|min:0|max:10000000',
+            'overhead_method' => ['sometimes', Rule::in(HppSetting::OVERHEAD_METHODS)],
+            'monthly_units' => 'sometimes|integer|min:0|max:100000000',
+            'monthly_revenue' => 'sometimes|integer|min:0|max:1000000000000',
+            'monthly_labor_hours' => 'sometimes|integer|min:0|max:1000000',
+            'main_channel_id' => ['sometimes', 'nullable', 'integer', Rule::exists('hpp_channels', 'id')->where('organization_id', $org->id)],
         ], [
             'target_margin_pct.max' => 'Target margin maksimal 90%.',
         ]);
         $settings = HppSetting::for($org->id);
         $settings->fill($validated)->save();
+        RecalculateHppCosts::dispatch($org->id);
 
         return $this->ok(['settings' => $this->presentSettings($settings->fresh())], 'Pengaturan disimpan');
     }
@@ -79,6 +89,7 @@ class HppSetupController extends HppBaseController
         DB::transaction(function () use ($org, $validated) {
             $settings = HppSetting::for($org->id);
             $settings->fill(['business_type' => $validated['business_type'], 'mode' => $validated['mode'], 'onboarded_at' => $settings->onboarded_at ?? now()])->save();
+            HppChannel::ensureDefaults($org->id);
             $empty = !HppIngredient::query()->where('organization_id', $org->id)->exists();
             if (($validated['use_template'] ?? true) && $empty) {
                 foreach (Templates::ingredients($validated['business_type']) as $row) {
@@ -100,6 +111,11 @@ class HppSetupController extends HppBaseController
             'rounding' => (string) $settings->rounding,
             'price_method' => (string) $settings->price_method,
             'labor_rate_per_hour' => (int) $settings->labor_rate_per_hour,
+            'overhead_method' => (string) ($settings->overhead_method ?? 'per_unit'),
+            'monthly_units' => (int) $settings->monthly_units,
+            'monthly_revenue' => (int) $settings->monthly_revenue,
+            'monthly_labor_hours' => (int) $settings->monthly_labor_hours,
+            'main_channel_id' => $settings->main_channel_id ? (int) $settings->main_channel_id : null,
             'onboarded' => $settings->onboarded_at !== null,
         ];
     }

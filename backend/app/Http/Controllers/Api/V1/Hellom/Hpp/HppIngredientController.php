@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\Api\V1\Hellom\Hpp;
 
+use App\Jobs\RecalculateHppCosts;
 use App\Models\Hpp\HppIngredient;
 use App\Models\Hpp\HppRecipeItem;
+use App\Services\Hpp\StockLedger;
 use App\Support\Hpp\Units;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -28,8 +30,10 @@ class HppIngredientController extends HppBaseController
             ->when(!$request->boolean('with_archived'), fn ($q) => $q->where('is_archived', false))
             ->orderBy('kind')->orderBy('name')->get();
 
+        $stock = app(StockLedger::class)->all($ingredients->pluck('id')->all());
+
         return $this->ok([
-            'ingredients' => $ingredients->map(fn (HppIngredient $i) => $this->present($i) + ['used_in' => (int) ($usage[$i->id] ?? 0)])->values(),
+            'ingredients' => $ingredients->map(fn (HppIngredient $i) => $this->present($i) + ['used_in' => (int) ($usage[$i->id] ?? 0), 'stock' => round($stock[$i->id] ?? 0, 3)])->values(),
         ], 'Bahan');
     }
 
@@ -41,6 +45,7 @@ class HppIngredientController extends HppBaseController
         }
         $data = $this->validated($request);
         $ingredient = HppIngredient::query()->create(['organization_id' => $org->id] + $data);
+        RecalculateHppCosts::dispatch($org->id);
 
         return $this->ok(['ingredient' => $this->present($ingredient)], 'Bahan ditambahkan', 201);
     }
@@ -56,6 +61,7 @@ class HppIngredientController extends HppBaseController
             return $this->notFound('Bahan');
         }
         $ingredient->fill($this->validated($request))->save();
+        RecalculateHppCosts::dispatch($org->id);
 
         return $this->ok(['ingredient' => $this->present($ingredient)], 'Bahan disimpan');
     }

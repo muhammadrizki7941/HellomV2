@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Archive, Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { applyHppPrice, deleteHppProduct, getHppIngredients, getHppPosProducts, getHppProduct, saveHppProduct } from '@/lib/hellomApi';
-import type { HppIngredient, HppProductDetail, HppProductSummary, HppSettings } from '@/lib/hellomApi';
+import { applyHppPrice, deleteHppProduct, getHppCosts, getHppIngredients, getHppPosProducts, getHppProduct, saveHppProduct } from '@/lib/hellomApi';
+import type { HppChannel, HppIngredient, HppProductDetail, HppProductSummary, HppSettings } from '@/lib/hellomApi';
 import { Dialog, Field, FoodCostBadge, MarginText, MoneyInput, PrimaryButton, errorsFrom, inputClass, rupiah, rupiahUnit, toDecimal } from './shared';
 import type { FieldErrors } from './shared';
 import { foodCostStatus, marginPct, suggestPrice } from './pricing';
@@ -13,10 +13,13 @@ import { foodCostStatus, marginPct, suggestPrice } from './pricing';
 type Line = { key: string; component: string; qty: string; note?: string | null };
 const newKey = () => Math.random().toString(36).slice(2);
 
-export default function ProductEditor({ productId, asSubrecipe, settings, products, onClose, onSaved }: {
+const SHOP_PRICE_KINDS = ['cash', 'qris', 'hellom', 'custom'];
+
+export default function ProductEditor({ productId, asSubrecipe, settings, overheadTotal, products, onClose, onSaved }: {
   productId: number | null;
   asSubrecipe: boolean;
   settings: HppSettings;
+  overheadTotal: number;
   products: HppProductSummary[];
   onClose: () => void;
   onSaved: (message: string) => void;
@@ -39,10 +42,13 @@ export default function ProductEditor({ productId, asSubrecipe, settings, produc
   const [errors, setErrors] = useState<FieldErrors>({});
   const [busy, setBusy] = useState(false);
   const [showExtra, setShowExtra] = useState(false);
+  const [channels, setChannels] = useState<HppChannel[]>([]);
+  const [channelPrices, setChannelPrices] = useState<Record<string, number>>({});
 
   useEffect(() => {
     getHppIngredients().then((r) => setIngredients(r.ingredients)).catch(() => undefined);
     getHppPosProducts().then((r) => setPosProducts(r.products)).catch(() => undefined);
+    getHppCosts().then((r) => setChannels(r.channels.filter((c) => c.is_active))).catch(() => undefined);
     if (!productId) return;
     getHppProduct(productId).then(({ product: p }) => {
       setLoaded(p);
@@ -59,6 +65,7 @@ export default function ProductEditor({ productId, asSubrecipe, settings, produc
       setOwnMargin(p.own_target_margin_pct === null ? '' : String(p.own_target_margin_pct));
       setPosId(p.pos_product_id ? String(p.pos_product_id) : '');
       setShowExtra(p.labor_minutes > 0 || p.other_cost > 0);
+      setChannelPrices(p.channel_prices ?? {});
     }).catch((err) => setErrors(errorsFrom(err)));
   }, [productId]);
 
@@ -98,10 +105,33 @@ export default function ProductEditor({ productId, asSubrecipe, settings, produc
     }
     const labor = (toDecimal(laborMinutes) / 60) * settings.labor_rate_per_hour;
     const unit = { material: material / y, packaging: packaging / y, labor: labor / y, other: otherCost / y };
-    const full = unit.material + unit.packaging + unit.labor + unit.other;
+    const direct = unit.material + unit.packaging + unit.labor + unit.other;
+    // Overhead, same three methods as the server (revenue % works like an extra fee on price).
+    const overheadPct = settings.overhead_method === 'revenue_pct' && settings.monthly_revenue > 0 ? (overheadTotal / settings.monthly_revenue) * 100 : 0;
+    const fixedOverhead = isSub ? 0 : settings.overhead_method === 'per_unit'
+      ? (settings.monthly_units > 0 ? overheadTotal / settings.monthly_units : 0)
+      : settings.overhead_method === 'labor_hour' && settings.monthly_labor_hours > 0
+        ? (overheadTotal / settings.monthly_labor_hours) * (toDecimal(laborMinutes) / 60) / y : 0;
+    const overhead = isSub ? 0 : fixedOverhead + (effectivePrice * overheadPct) / 100;
+    const full = direct + overhead;
+    const main = channels.find((c) => c.id === settings.main_channel_id) ?? channels.find((c) => c.kind === 'qris') ?? channels[0];
     const fc = effectivePrice > 0 ? Math.round(((unit.material + unit.packaging) / effectivePrice) * 1000) / 10 : null;
-    return { unit, full, lineCosts, margin: marginPct(effectivePrice, full), foodCost: fc, suggested: suggestPrice(full, target, settings.rounding) };
-  }, [mode, batchCost, lines, ingredients, products, yieldQty, laborMinutes, otherCost, settings, effectivePrice, target]);
+    const perChannel = channels.map((c) => {
+      const own = channelPrices[String(c.id)];
+      const p = own && own > 0 ? own : SHOP_PRICE_KINDS.includes(c.kind) && effectivePrice > 0 ? effectivePrice : null;
+      const chOverhead = fixedOverhead + ((p ?? 0) * overheadPct) / 100;
+      return { channel: c, price: p, own: !!own, margin: p ? marginPct(p, direct + chOverhead, c.fee_pct, c.fee_flat) : null,
+        suggested: suggestPrice(direct + fixedOverhead, target, settings.rounding, c.fee_pct + overheadPct, c.fee_flat) };
+    });
+    const fee = main ? (effectivePrice * main.fee_pct) / 100 + main.fee_flat : 0;
+    const contribution = effectivePrice - direct - fee;
+    const bep = overheadTotal > 0 && effectivePrice > 0 && contribution > 0 ? Math.ceil(overheadTotal / contribution) : null;
+    return {
+      unit, direct, overhead, full, lineCosts, foodCost: fc, perChannel, main, bep,
+      margin: marginPct(effectivePrice, full, main?.fee_pct ?? 0, main?.fee_flat ?? 0),
+      suggested: suggestPrice(direct + fixedOverhead, target, settings.rounding, (main?.fee_pct ?? 0) + overheadPct, main?.fee_flat ?? 0),
+    };
+  }, [mode, batchCost, lines, ingredients, products, yieldQty, laborMinutes, otherCost, settings, effectivePrice, target, isSub, overheadTotal, channels, channelPrices]);
 
   const addLine = () => setLines((l) => [...l, { key: newKey(), component: '', qty: '' }]);
   const setLine = (key: string, patch: Partial<Line>) => setLines((l) => l.map((x) => (x.key === key ? { ...x, ...patch } : x)));
@@ -118,7 +148,7 @@ export default function ProductEditor({ productId, asSubrecipe, settings, produc
       const r = await saveHppProduct({
         name, mode, is_subrecipe: isSub, pos_product_id: isSub || !posId ? null : Number(posId), selling_price: isSub ? 0 : price,
         target_margin_pct: ownMargin.trim() === '' ? null : toDecimal(ownMargin), yield_qty: toDecimal(yieldQty), yield_unit: yieldUnit,
-        quick_batch_cost: batchCost, labor_minutes: Math.round(toDecimal(laborMinutes)), other_cost: otherCost, items,
+        quick_batch_cost: batchCost, labor_minutes: Math.round(toDecimal(laborMinutes)), other_cost: otherCost, items, channel_prices: channelPrices,
       }, productId ?? undefined);
       onSaved(`"${r.product.name}" disimpan. HPP ${rupiah(r.product.cost.full)} per ${r.product.yield_unit}.`);
     } catch (err) {
@@ -163,8 +193,8 @@ export default function ProductEditor({ productId, asSubrecipe, settings, produc
   return (
     <Dialog title={productId ? (isSub ? 'Ubah sub-resep' : 'Ubah produk') : isSub ? 'Sub-resep baru' : 'Produk baru'} onClose={onClose} busy={busy} wide>
       {productId && !loaded && !errors.form ? <p className="p-6 text-center text-sm text-zinc-500">Memuat…</p> : (
-        <form onSubmit={(e) => void submit(e)} noValidate className="grid gap-5 lg:grid-cols-[1fr_260px]" data-product-form>
-          <div className="space-y-4">
+        <form onSubmit={(e) => void submit(e)} noValidate className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_260px]" data-product-form>
+          <div className="min-w-0 space-y-4">
             <Field label={isSub ? 'Nama sub-resep' : 'Nama produk'} error={errors.name}>
               <input name="name" value={name} onChange={(e) => setName(e.target.value)} className={inputClass(errors.name)} placeholder={isSub ? 'mis. Sirup gula aren' : 'mis. Es Kopi Susu'} autoFocus={!productId} />
             </Field>
@@ -266,6 +296,31 @@ export default function ProductEditor({ productId, asSubrecipe, settings, produc
                 </Field>
               </div>
             )}
+            {!isSub && preview.perChannel.length > 0 && (
+              <div className="overflow-x-auto rounded-xl border border-zinc-200" data-channel-prices>
+                <table className="w-full min-w-[460px] text-left text-sm text-zinc-800">
+                  <thead className="bg-zinc-50 text-xs text-zinc-500">
+                    <tr><th className="px-3 py-2 font-medium">Channel</th><th className="px-3 py-2 font-medium">Harga di channel</th><th className="px-3 py-2 font-medium">Margin</th><th className="px-3 py-2 font-medium">Saran</th></tr>
+                  </thead>
+                  <tbody>
+                    {preview.perChannel.map((row) => (
+                      <tr key={row.channel.id} className="border-t border-zinc-100" data-channel={row.channel.name}>
+                        <td className="px-3 py-2">{row.channel.name}<span className="block text-xs text-zinc-500">fee {row.channel.fee_pct.toLocaleString('id-ID')}%</span></td>
+                        <td className="px-3 py-2">
+                          <input name={`channel_prices.${row.channel.id}`} inputMode="numeric" aria-label={`Harga di ${row.channel.name}`}
+                            value={channelPrices[String(row.channel.id)] ? channelPrices[String(row.channel.id)].toLocaleString('id-ID') : ''}
+                            placeholder={row.price && !row.own ? row.price.toLocaleString('id-ID') : 'harga sendiri'}
+                            onChange={(e) => setChannelPrices((cp) => ({ ...cp, [String(row.channel.id)]: Number(e.target.value.replace(/\D/g, '')) || 0 }))}
+                            className="min-h-10 w-28 rounded-lg border border-zinc-300 px-2 text-sm" />
+                        </td>
+                        <td className="px-3 py-2"><MarginText value={row.margin} target={target} /></td>
+                        <td className="px-3 py-2">{rupiah(row.suggested)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
             {errors.form && <p role="alert" className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{errors.form}</p>}
             {errors.notice && <p role="status" className="rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{errors.notice}</p>}
           </div>
@@ -279,13 +334,17 @@ export default function ProductEditor({ productId, asSubrecipe, settings, produc
                 <div className="flex justify-between"><dt>Kemasan</dt><dd>{rupiah(preview.unit.packaging)}</dd></div>
                 {preview.unit.labor > 0 && <div className="flex justify-between"><dt>Tenaga kerja</dt><dd>{rupiah(preview.unit.labor)}</dd></div>}
                 {preview.unit.other > 0 && <div className="flex justify-between"><dt>Lain-lain</dt><dd>{rupiah(preview.unit.other)}</dd></div>}
+                {preview.overhead > 0 && <div className="flex justify-between border-t border-zinc-200 pt-1"><dt>HPP bahan</dt><dd>{rupiah(preview.direct)}</dd></div>}
+                {preview.overhead > 0 && <div className="flex justify-between"><dt>Overhead</dt><dd>{rupiah(preview.overhead)}</dd></div>}
               </dl>
+              {loaded && loaded.trend.length > 1 && <Trend points={loaded.trend} />}
             </div>
             {!isSub && (
               <div className="rounded-2xl border border-zinc-200 p-4 text-sm">
-                <div className="flex justify-between"><span className="text-zinc-600">Margin</span><MarginText value={preview.margin} target={target} /></div>
+                <div className="flex justify-between"><span className="text-zinc-600">Margin{preview.main ? ` (${preview.main.name})` : ''}</span><MarginText value={preview.margin} target={target} /></div>
                 <div className="mt-2 flex items-center justify-between gap-2"><span className="text-zinc-600">Food cost</span><FoodCostBadge status={foodCostStatus(preview.foodCost)} value={preview.foodCost} /></div>
                 <div className="mt-3 border-t border-zinc-100 pt-3">
+                  {preview.bep !== null && <p className="mb-2 text-xs text-zinc-600" data-bep>BEP: <strong>{preview.bep.toLocaleString('id-ID')}</strong>/bulan (±{Math.round((preview.bep / 30) * 10) / 10}/hari) supaya biaya tetap tertutup.</p>}
                   <p className="text-xs text-zinc-500">Saran harga (margin {target}%)</p>
                   <p className="text-xl font-bold text-zinc-900" data-suggested-price>{rupiah(preview.suggested)}</p>
                   {preview.suggested !== null && preview.suggested !== effectivePrice && (
@@ -306,5 +365,23 @@ export default function ProductEditor({ productId, asSubrecipe, settings, produc
         </form>
       )}
     </Dialog>
+  );
+}
+
+/** Small HPP trend line (daily snapshots). */
+function Trend({ points }: { points: Array<{ date: string; cost: number }> }) {
+  const values = points.map((p) => p.cost);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min || 1;
+  const d = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${(i / (points.length - 1)) * 100} ${30 - ((p.cost - min) / span) * 26 - 2}`).join(' ');
+  const change = values[0] > 0 ? ((values[values.length - 1] - values[0]) / values[0]) * 100 : 0;
+  return (
+    <div className="mt-3 border-t border-zinc-200 pt-2" data-trend>
+      <svg viewBox="0 0 100 30" className="h-10 w-full" preserveAspectRatio="none" aria-hidden="true">
+        <path d={d} fill="none" stroke="currentColor" strokeWidth="2" vectorEffect="non-scaling-stroke" className={change > 0 ? 'text-red-500' : 'text-emerald-600'} />
+      </svg>
+      <p className="text-xs text-zinc-500">HPP {points.length} hari terakhir: {change >= 0 ? 'naik' : 'turun'} {Math.abs(Math.round(change * 10) / 10).toLocaleString('id-ID')}%</p>
+    </div>
   );
 }
