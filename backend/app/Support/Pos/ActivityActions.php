@@ -27,6 +27,16 @@ final class ActivityActions
     public const PIN_FAILED = 'PIN_FAILED';
     public const PIN_LOCKED = 'PIN_LOCKED';
     public const AUDIT_UNLOCKED = 'AUDIT_UNLOCKED';
+    public const ITEM_QTY_CHANGED = 'ITEM_QTY_CHANGED';
+    public const ITEM_REMOVED = 'ITEM_REMOVED';
+    public const DISCOUNT_APPLIED = 'DISCOUNT_APPLIED';
+    public const DISCOUNT_REMOVED = 'DISCOUNT_REMOVED';
+    public const PAYMENT_METHOD_CHANGED = 'PAYMENT_METHOD_CHANGED';
+    public const DRAWER_NO_SALE = 'DRAWER_NO_SALE';
+    public const ORDER_SPLIT = 'ORDER_SPLIT';
+    public const TABLE_TRANSFERRED = 'TABLE_TRANSFERRED';
+    public const BILL_MOVED = 'BILL_MOVED';
+    public const BILL_MERGED = 'BILL_MERGED';
 
     public const CATALOG = [
         self::ORDER_VOID => ['Pesanan dibatalkan (void)', 'critical'],
@@ -48,6 +58,16 @@ final class ActivityActions
         self::PIN_FAILED => ['PIN salah', 'warning'],
         self::PIN_LOCKED => ['PIN terkunci (terlalu banyak salah)', 'critical'],
         self::AUDIT_UNLOCKED => ['Log audit dibuka', 'info'],
+        self::ITEM_QTY_CHANGED => ['Jumlah item diubah', 'info'],
+        self::ITEM_REMOVED => ['Item dihapus dari pesanan', 'warning'],
+        self::DISCOUNT_APPLIED => ['Diskon manual diberikan', 'critical'],
+        self::DISCOUNT_REMOVED => ['Diskon manual dihapus', 'info'],
+        self::PAYMENT_METHOD_CHANGED => ['Metode bayar diganti', 'critical'],
+        self::DRAWER_NO_SALE => ['Laci dibuka tanpa transaksi', 'warning'],
+        self::ORDER_SPLIT => ['Bill dipisah', 'info'],
+        self::TABLE_TRANSFERRED => ['Pesanan pindah meja', 'info'],
+        self::BILL_MOVED => ['Tagihan pindah meja', 'warning'],
+        self::BILL_MERGED => ['Tagihan meja digabung', 'warning'],
     ];
 
     public static function label(string $action): string

@@ -156,6 +156,22 @@ const ReceiptModal = ({ isOpen, onClose, orderId }: ReceiptProps) => {
     }
   };
 
+  // Subtotal → discounts → service/tax/rounding → TOTAL (= what the customer pays, final_amount).
+  const breakdown = (r: ReceiptData): Array<[string, number]> => {
+    const rows: Array<[string, number]> = [
+      ['Diskon', -(r.discount_amount ?? 0)],
+      ['Diskon poin', -(r.points_discount_amount ?? 0)],
+      ['Diskon kasir', -(r.manual_discount_amount ?? 0)],
+      ['Service', r.service_amount ?? 0],
+      ['Pajak', r.tax_amount ?? 0],
+      ['Pembulatan', r.rounding_amount ?? 0],
+    ];
+    const shown = rows.filter(([, v]) => v !== 0);
+    return shown.length ? [['Subtotal', r.total_amount], ...shown] : [];
+  };
+  const finalTotal = (r: ReceiptData) => r.final_amount ?? r.total_amount;
+  const signedRp = (v: number) => (v < 0 ? `-${formatRp(-v)}` : formatRp(v));
+
   const getReceiptText = (): string => {
     if (!receipt) return '';
 
@@ -196,7 +212,8 @@ const ReceiptModal = ({ isOpen, onClose, orderId }: ReceiptProps) => {
     lines.push(''.padEnd(50, '-'));
 
     // TOTAL
-    lines.push(`TOTAL${' '.repeat(40)}${formatRp(receipt.total_amount)}`);
+    breakdown(receipt).forEach(([label, value]) => lines.push(`${label.padEnd(45)}${signedRp(value)}`));
+    lines.push(`TOTAL${' '.repeat(40)}${formatRp(finalTotal(receipt))}`);
 
     // PAYMENT INFO
     if (receipt.payment) {
@@ -377,6 +394,13 @@ const ReceiptModal = ({ isOpen, onClose, orderId }: ReceiptProps) => {
               {/* DIVIDER */}
               <div style={{ borderTop: '1px dashed #000', margin: '8px 0', height: '0' }}></div>
 
+              {breakdown(receipt).map(([label, value]) => (
+                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                  <span>{label}</span>
+                  <span>{signedRp(value)}</span>
+                </div>
+              ))}
+
               {/* TOTAL */}
               <div style={{
                 display: 'flex',
@@ -385,7 +409,7 @@ const ReceiptModal = ({ isOpen, onClose, orderId }: ReceiptProps) => {
                 fontSize: '14px'
               }}>
                 <span>TOTAL</span>
-                <span>{formatRp(receipt.total_amount)}</span>
+                <span>{formatRp(finalTotal(receipt))}</span>
               </div>
 
               {/* PAYMENT INFO */}

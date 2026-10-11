@@ -39,6 +39,14 @@ Route::middleware(['canUseApp:pos', 'App\Http\Middleware\Api\InjectPosContext'])
     Route::post('/pos/orders/{orderId}/refund', [PosOrderController::class, 'refund'])->middleware('posPermission:order_refund');
     Route::get('/pos/orders/{orderId}/receipt', [PosOrderController::class, 'receipt'])->middleware('posPermission:orders');
     Route::post('/pos/orders/{orderId}/receipt/printed', [PosOrderController::class, 'receiptPrinted'])->middleware('posPermission:orders');
+    // Changes after the order was placed (App\Services\Pos\OrderAdjustmentService); risky ones need the owner PIN.
+    Route::patch('/pos/orders/{orderId}/items/{itemId}', [PosOrderController::class, 'updateItem'])->middleware('posPermission:orders');
+    Route::post('/pos/orders/{orderId}/discount', [PosOrderController::class, 'discount'])->middleware('posPermission:orders');
+    Route::post('/pos/orders/{orderId}/payment-method', [PosOrderController::class, 'changePaymentMethod'])->middleware('posPermission:orders');
+    Route::post('/pos/orders/{orderId}/split', [PosOrderController::class, 'split'])->middleware('posPermission:orders');
+    Route::post('/pos/orders/{orderId}/transfer', [PosOrderController::class, 'transfer'])->middleware('posPermission:orders');
+    Route::post('/pos/table-bills/{billId}/move', [PosOrderController::class, 'moveTableBill'])->middleware('posPermission:orders');
+    Route::post('/pos/cash/no-sale', [PosStaffController::class, 'noSale'])->middleware('posPermission:cash_control');
     Route::get('/pos/table-bills', [PosOrderController::class, 'tableBills'])->middleware('posPermission:orders');
     Route::get('/pos/table-bills/{billId}', [PosOrderController::class, 'showTableBill'])->middleware('posPermission:orders');
     Route::post('/pos/table-bills/{billId}/pay', [PosOrderController::class, 'payTableBill'])->middleware('posPermission:orders');

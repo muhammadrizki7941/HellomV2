@@ -2,6 +2,7 @@
 // realtime tokens, outlet settings, QR tables and the owner member page.
 // Part of the Hellom API client; import from '@/lib/hellomApi' or '@/services/api'.
 import { apiRequest, apiRequestBlob, buildQuery, publicApiRequest } from './client';
+import type { PosOrderListItem } from './pos';
 
 // Stored status codes (labels come from the server as status_label).
 export type PosOrderStatus = 'new' | 'accepted' | 'preparing' | 'prepared' | 'completed' | 'cancelled';
@@ -254,4 +255,37 @@ export function getCustomerRealtimeToken(tableToken: string) {
   return publicApiRequest<{ enabled: boolean; token: string | null; expires_at: number | null; poll_seconds: number }>(
     `/pos/customer/table/${encodeURIComponent(tableToken)}/realtime-token`
   );
+}
+
+// Changes after the order was placed (backend OrderAdjustmentService). Unpaid orders only, except
+// the payment-method change. Owner PIN: discount, payment method, and reducing items once a receipt
+// was printed. Every change is written to POS › Log Audit.
+type PosOrderResult = { order: PosOrderListItem };
+
+export function updatePosOrderItem(orderId: number, itemId: number, body: { qty: number; reason?: string; approval_pin?: string }) {
+  return apiRequest<PosOrderResult>(`/pos/orders/${orderId}/items/${itemId}`, { method: 'PATCH', body });
+}
+
+export function setPosOrderDiscount(orderId: number, body: { type: 'percent' | 'fixed' | 'none'; value?: number; reason: string; approval_pin?: string }) {
+  return apiRequest<PosOrderResult>(`/pos/orders/${orderId}/discount`, { method: 'POST', body });
+}
+
+export function changePosOrderPaymentMethod(orderId: number, body: { payment_method: string; reason: string; approval_pin: string }) {
+  return apiRequest<PosOrderResult>(`/pos/orders/${orderId}/payment-method`, { method: 'POST', body });
+}
+
+export function splitPosOrder(orderId: number, items: Array<{ item_id: number; qty: number }>) {
+  return apiRequest<PosOrderResult & { new_order: PosOrderListItem }>(`/pos/orders/${orderId}/split`, { method: 'POST', body: { items } });
+}
+
+export function transferPosOrder(orderId: number, tableId: number) {
+  return apiRequest<PosOrderResult>(`/pos/orders/${orderId}/transfer`, { method: 'POST', body: { table_id: tableId } });
+}
+
+export function movePosTableBill(billId: number, tableId: number) {
+  return apiRequest<{ mode: 'moved' | 'merged'; bill: PosTableBill | null }>(`/pos/table-bills/${billId}/move`, { method: 'POST', body: { table_id: tableId } });
+}
+
+export function recordPosNoSale(reason: string) {
+  return apiRequest<{ count_today: number }>('/pos/cash/no-sale', { method: 'POST', body: { reason } });
 }

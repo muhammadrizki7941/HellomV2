@@ -107,6 +107,10 @@ export type PosOrderListItem = {
   total_amount: number;
   discount_amount: number;
   points_discount_amount?: number;
+  manual_discount_amount?: number;
+  manual_discount?: { type: 'percent' | 'fixed'; value: number } | null;
+  receipt_prints?: number; // > 0: reducing items needs the owner PIN
+  split_from_order_id?: number | null;
   service_amount?: number;
   tax_amount?: number;
   rounding_amount?: number;
@@ -343,6 +347,11 @@ export type PosReceipt = {
   }>;
   total_amount: number;
   discount_amount?: number;
+  points_discount_amount?: number;
+  manual_discount_amount?: number;
+  service_amount?: number;
+  tax_amount?: number;
+  rounding_amount?: number;
   final_amount?: number;
   payment?: {
     method: string;

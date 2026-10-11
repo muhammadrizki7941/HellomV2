@@ -12,6 +12,8 @@ class TableBill extends Model
     public const STATUS_OPEN = 'open';
     public const STATUS_PAID = 'paid';
     public const STATUS_CANCELLED = 'cancelled';
+    /** Moved or merged into another table's bill (merged_into_bill_id). */
+    public const STATUS_MERGED = 'merged';
 
     protected $fillable = ['outlet_id', 'tenant_id', 'dining_table_id', 'status', 'opened_at', 'closed_at'];
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Loader2, Wallet, X } from 'lucide-react';
+import { Loader2, LockOpen, Wallet, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { canPos, closePosStaffCash, getPosMyCash, openPosStaffCash } from '@/lib/hellomApi';
+import { canPos, closePosStaffCash, getPosMyCash, openPosStaffCash, recordPosNoSale } from '@/lib/hellomApi';
 import type { PosMyCash, PosStaffCashLog } from '@/lib/hellomApi';
 
 // Cashier's own cash drawer on the orders screen: open with the counted opening cash, close with
@@ -145,6 +145,9 @@ function CashDialog({ cash, onClose, onChanged }: { cash: PosMyCash; onClose: ()
                   <p className="pt-1 text-xs text-gray-500">Hitung semua uang di laci, lalu masukkan jumlahnya. Total sistem tidak ditampilkan supaya hitungan tetap jujur.</p>
                 )}
               </dl>
+            ) : null}
+            {drawer ? (
+              <NoSale />
             ) : (
               <p className="mt-1 text-sm text-gray-600">
                 Hitung uang di laci sebelum mulai melayani, lalu masukkan sebagai kas awal.
@@ -189,6 +192,62 @@ function CashDialog({ cash, onClose, onChanged }: { cash: PosMyCash; onClose: ()
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+const NO_SALE_REASONS = ['Tukar uang kecil', 'Cek / hitung uang', 'Salah tekan'];
+
+// The drawer was opened without a sale: say why. Logged for the owner (POS › Log Audit) and counted
+// per cashier per day; frequent openings are flagged as a fraud alert.
+function NoSale() {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async (value: string) => {
+    if (!value.trim()) { setError('Pilih atau tulis alasannya.'); return; }
+    setBusy(true);
+    setError(null);
+    try {
+      const { count_today: count } = await recordPosNoSale(value.trim());
+      setNote(`Tercatat. Laci dibuka tanpa transaksi ${count}× hari ini.`);
+      setOpen(false);
+      setReason('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Belum tercatat. Coba lagi.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mt-3" data-no-sale>
+      {!open ? (
+        <button type="button" onClick={() => { setOpen(true); setNote(null); }} className="flex min-h-10 items-center gap-2 text-sm font-medium text-gray-600 underline-offset-2 hover:underline">
+          <LockOpen className="h-4 w-4" /> Buka laci tanpa transaksi
+        </button>
+      ) : (
+        <div className="rounded-2xl border border-gray-200 p-3">
+          <p className="text-sm font-medium text-gray-800">Kenapa laci dibuka?</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {NO_SALE_REASONS.map((r) => (
+              <button key={r} type="button" disabled={busy} onClick={() => void submit(r)} className="min-h-10 rounded-xl border border-gray-300 px-3 text-sm hover:bg-gray-50">{r}</button>
+            ))}
+          </div>
+          <div className="mt-2 flex gap-2">
+            <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={120} placeholder="Alasan lain" name="no_sale_reason"
+              className="min-h-10 min-w-0 flex-1 rounded-xl border border-gray-300 px-3 text-sm outline-none focus:border-gray-900" />
+            <button type="button" disabled={busy} onClick={() => void submit(reason)} className="flex min-h-10 items-center gap-1 rounded-xl bg-gray-900 px-3 text-sm font-semibold text-white disabled:opacity-50">
+              {busy && <Loader2 className="h-4 w-4 animate-spin" />} Catat
+            </button>
+          </div>
+          {error && <p role="alert" className="mt-2 text-xs text-red-600">{error}</p>}
+        </div>
+      )}
+      {note && <p role="status" data-no-sale-note className="mt-1 text-xs text-gray-600">{note}</p>}
     </div>
   );
 }

@@ -44,7 +44,7 @@ export function PinField({ label, value, onChange, error, autoFocus, name, hint 
   );
 }
 
-function Shell({ titleId, onClose, busy, children }: { titleId: string; onClose?: () => void; busy: boolean; children: React.ReactNode }) {
+export function PosDialogShell({ titleId, onClose, busy, children }: { titleId: string; onClose?: () => void; busy: boolean; children: React.ReactNode }) {
   useEffect(() => {
     if (!onClose) return undefined;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !busy) onClose(); };
@@ -108,7 +108,7 @@ export function OwnerApprovalDialog({ title, summary, confirmLabel, reasonLabel,
   };
 
   return (
-    <Shell titleId={titleId} onClose={onClose} busy={busy}>
+    <PosDialogShell titleId={titleId} onClose={onClose} busy={busy}>
       <form onSubmit={(e) => void submit(e)} noValidate data-approval-dialog>
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -147,7 +147,7 @@ export function OwnerApprovalDialog({ title, summary, confirmLabel, reasonLabel,
           </button>
         </div>
       </form>
-    </Shell>
+    </PosDialogShell>
   );
 }
 
@@ -177,7 +177,7 @@ export function OwnerPinSetupDialog({ resetEmail, onDone }: { resetEmail: string
   };
 
   return (
-    <Shell titleId={titleId} busy={busy}>
+    <PosDialogShell titleId={titleId} busy={busy}>
       <form onSubmit={(e) => void submit(e)} noValidate data-pin-setup>
         <span className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-amber-700"><KeyRound className="h-6 w-6" /></span>
         <h2 id={titleId} className="mt-3 text-xl font-bold text-gray-900">Buat PIN pemilik</h2>
@@ -196,6 +196,6 @@ export function OwnerPinSetupDialog({ resetEmail, onDone }: { resetEmail: string
           {busy && <Loader2 className="h-5 w-5 animate-spin" />} Simpan PIN
         </button>
       </form>
-    </Shell>
+    </PosDialogShell>
   );
 }

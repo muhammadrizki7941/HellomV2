@@ -1135,6 +1135,43 @@ class PosStaffController extends BasePosController
         ], 'Kas saya');
     }
 
+    /**
+     * POST /pos/cash/no-sale {reason}: the drawer was opened without a sale (change for a note,
+     * checking cash…). There is no drawer hardware in the web POS: this records it, with the
+     * cashier's count for today, so the owner sees unusual drawer openings in Log Audit.
+     */
+    public function noSale(Request $request): JsonResponse
+    {
+        $validated = $request->validate(['reason' => 'required|string|max:120'], ['reason.required' => 'Pilih atau tulis alasan membuka laci.']);
+        $tenantSlug = (string) $request->attributes->get('posTenantSlug');
+        $staff = $request->attributes->get('posStaff');
+        if (!$staff instanceof PosStaff) {
+            $staff = PosStaff::query()->where('tenant_id', $tenantSlug)->where('linked_user_id', (int) $request->user()->id)
+                ->where('employment_status', 'active')->first();
+        }
+        $open = $staff instanceof PosStaff
+            ? PosStaffCashLog::query()->where('tenant_id', $tenantSlug)->where('staff_id', $staff->id)->where('status', 'open')->latest('started_at')->first()
+            : null;
+        $organizationId = $this->posOrganizationId($request);
+
+        $count = DB::transaction(function () use ($request, $validated, $staff, $open, $organizationId) {
+            $count = \App\Models\PosActivityLog::query()->where('organization_id', $organizationId)
+                ->where('action', ActivityActions::DRAWER_NO_SALE)->where('actor_user_id', (int) $request->user()->id)
+                ->where('occurred_at', '>=', now()->startOfDay())->count() + 1;
+            $this->recordActivity($request, ActivityActions::DRAWER_NO_SALE, [
+                'target_type' => 'cash_session', 'target_id' => $open?->id,
+                'target_label' => $open ? 'Kas ' . ($staff?->name ?? '') : 'Laci kasir',
+                'after' => ['cash_session_id' => $open?->id, 'count_today' => $count],
+                'reason' => $validated['reason'],
+                'severity' => $count >= 3 ? 'critical' : 'warning',
+            ]);
+
+            return $count;
+        });
+
+        return $this->success(['count_today' => $count], 'Tercatat: laci dibuka tanpa transaksi');
+    }
+
     /** GET /pos/me/access: the signed-in user's POS permissions (cashier menu refresh). */
     public function myAccess(Request $request): JsonResponse
     {

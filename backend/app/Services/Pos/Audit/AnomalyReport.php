@@ -7,8 +7,9 @@ use App\Support\Pos\ActivityActions as A;
 use Illuminate\Support\Carbon;
 
 /**
- * Fraud alert summary per cashier from the audit trail: void / refund / reprint ratios compared
- * with the shop's own average for the same period, cash shortages at closing, wrong PINs.
+ * Fraud alert summary per cashier from the audit trail: void / refund / reprint / manual discount /
+ * item reduction ratios compared with the shop's own average for the same period, cash shortages at
+ * closing, drawer openings without a sale, payment-method changes, wrong PINs.
  * A cashier is flagged when a ratio is well above the shop average (2×, with a minimum floor
  * and a minimum count so one void on a quiet day is not an alarm).
  */
@@ -19,7 +20,12 @@ final class AnomalyReport
         'voids' => [2, 0.05, 'Rasio pembatalan (void) tinggi'],
         'refunds' => [2, 0.05, 'Rasio refund tinggi'],
         'reprints' => [3, 0.10, 'Sering cetak ulang struk'],
+        'discounts' => [2, 0.05, 'Sering memberi diskon manual'],
+        'item_reductions' => [3, 0.10, 'Sering mengurangi/menghapus item pesanan'],
     ];
+
+    /** Drawer opened without a sale this many times per active day → flagged. */
+    public const NO_SALE_PER_DAY = 3;
 
     public const CASH_SHORT_CRITICAL = 50000;
 
@@ -29,7 +35,8 @@ final class AnomalyReport
         $logs = PosActivityLog::query()
             ->where('organization_id', $organizationId)
             ->whereBetween('occurred_at', [$from->copy()->startOfDay(), $to->copy()->endOfDay()])
-            ->whereIn('action', [A::PAYMENT_RECORDED, A::TABLE_BILL_PAID, A::ORDER_VOID, A::ORDER_REFUND, A::RECEIPT_REPRINTED, A::CASH_CLOSED, A::PIN_FAILED])
+            ->whereIn('action', [A::PAYMENT_RECORDED, A::TABLE_BILL_PAID, A::ORDER_VOID, A::ORDER_REFUND, A::RECEIPT_REPRINTED, A::CASH_CLOSED, A::PIN_FAILED,
+                A::DISCOUNT_APPLIED, A::ITEM_REMOVED, A::ITEM_QTY_CHANGED, A::PAYMENT_METHOD_CHANGED, A::DRAWER_NO_SALE])
             ->when($outletId, fn ($q) => $q->where('outlet_id', $outletId))
             ->orderBy('id')
             ->get(['action', 'actor_user_id', 'actor_staff_id', 'actor_name', 'actor_role', 'after_state', 'occurred_at']);
@@ -39,7 +46,8 @@ final class AnomalyReport
             $key = $log->actor_staff_id ? 's' . $log->actor_staff_id : 'u' . ($log->actor_user_id ?? 0);
             $p = &$people[$key];
             $p ??= ['name' => $log->actor_name ?: 'Tanpa nama', 'role' => $log->actor_role, 'transactions' => 0, 'voids' => 0, 'refunds' => 0,
-                'reprints' => 0, 'cash_closes' => 0, 'cash_short' => 0, 'cash_over' => 0, 'pin_failed' => 0, 'active_days' => []];
+                'reprints' => 0, 'cash_closes' => 0, 'cash_short' => 0, 'cash_over' => 0, 'pin_failed' => 0,
+                'discounts' => 0, 'discount_total' => 0, 'item_reductions' => 0, 'method_changes' => 0, 'no_sales' => 0, 'active_days' => []];
             $p['active_days'][substr((string) $log->occurred_at, 0, 10)] = true;
             $after = (array) $log->after_state;
             switch ($log->action) {
@@ -67,6 +75,25 @@ final class AnomalyReport
                 case A::PIN_FAILED:
                     $p['pin_failed']++;
                     break;
+                case A::DISCOUNT_APPLIED:
+                    $p['discounts']++;
+                    $p['discount_total'] += (int) ($after['manual_discount_amount'] ?? 0);
+                    break;
+                case A::ITEM_REMOVED:
+                    $p['item_reductions']++;
+                    break;
+                case A::ITEM_QTY_CHANGED:
+                    $changed = (array) ($after['changed_item'] ?? []);
+                    if ((int) ($changed['to'] ?? 0) < (int) ($changed['from'] ?? 0)) {
+                        $p['item_reductions']++;
+                    }
+                    break;
+                case A::PAYMENT_METHOD_CHANGED:
+                    $p['method_changes']++;
+                    break;
+                case A::DRAWER_NO_SALE:
+                    $p['no_sales']++;
+                    break;
             }
             unset($p);
         }
@@ -93,6 +120,15 @@ final class AnomalyReport
                 $flags[] = ['type' => 'cash_short', 'severity' => $p['cash_short'] >= self::CASH_SHORT_CRITICAL ? 'critical' : 'warning',
                     'message' => 'Kas kurang total Rp ' . number_format($p['cash_short'], 0, ',', '.') . ' saat tutup kas'];
             }
+            $activeDays = max(1, count($p['active_days']));
+            if ($p['no_sales'] >= self::NO_SALE_PER_DAY && $p['no_sales'] / $activeDays >= self::NO_SALE_PER_DAY) {
+                $flags[] = ['type' => 'no_sales', 'severity' => $p['no_sales'] / $activeDays >= self::NO_SALE_PER_DAY * 2 ? 'critical' : 'warning',
+                    'message' => sprintf('Laci dibuka tanpa transaksi %d kali (%.1f per hari)', $p['no_sales'], $p['no_sales'] / $activeDays)];
+            }
+            if ($p['method_changes'] > 0) {
+                $flags[] = ['type' => 'method_changes', 'severity' => $p['method_changes'] >= 3 ? 'critical' : 'warning',
+                    'message' => "Mengganti metode bayar {$p['method_changes']} kali"];
+            }
             if ($p['pin_failed'] >= 3) {
                 $flags[] = ['type' => 'pin_failed', 'severity' => 'warning', 'message' => "PIN pemilik salah {$p['pin_failed']} kali"];
             }
@@ -100,7 +136,7 @@ final class AnomalyReport
             unset($p['active_days']);
             $cashiers[] = $p + [
                 'active_days' => $days,
-                'per_day' => ['transactions' => round($p['transactions'] / $days, 1), 'voids' => round($p['voids'] / $days, 1), 'reprints' => round($p['reprints'] / $days, 1)],
+                'per_day' => ['transactions' => round($p['transactions'] / $days, 1), 'voids' => round($p['voids'] / $days, 1), 'reprints' => round($p['reprints'] / $days, 1), 'no_sales' => round($p['no_sales'] / $days, 1)],
                 'rates' => array_map(fn ($m) => round($p[$m] / $tx, 4), array_combine(array_keys(self::RULES), array_keys(self::RULES))),
                 'flags' => $flags,
             ];

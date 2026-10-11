@@ -17,6 +17,7 @@ import ReceiptModal from '@/components/pos/ReceiptModal';
 import PaymentModal from '@/components/pos/PaymentModal';
 import CashDrawerButton from '@/components/pos/CashDrawerButton';
 import { OwnerApprovalDialog } from '@/components/pos/OwnerPin';
+import { MoveBillDialog, OrderManageDialog, PaymentMethodDialog } from '@/components/pos/OrderAdjustDialog';
 import { getPosRealtimeEventName, isPosRealtimeConnected } from '@/lib/realtime';
 import {
   ensurePosOrderListResetAt,
@@ -64,6 +65,16 @@ export default function PosOrders() {
   const [payingBill, setPayingBill] = useState<PosTableBill | null>(null);
   // Void / refund wait for the owner's PIN in a dialog (no browser prompt).
   const [approval, setApproval] = useState<{ kind: 'cancel' | 'refund'; order: PosOrderListItem } | null>(null);
+  // Changes after the order was placed (items, discount, split, table) and paid-order method fix.
+  const [managing, setManaging] = useState<PosOrderListItem | null>(null);
+  const [methodOrder, setMethodOrder] = useState<PosOrderListItem | null>(null);
+  const [movingBill, setMovingBill] = useState<PosTableBill | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  useEffect(() => {
+    if (!toast) return undefined;
+    const timer = window.setTimeout(() => setToast(null), 4000);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
 
   useEffect(() => {
     const timer = setTimeout(() => setShowInfoBoxes(false), 5000);
@@ -345,6 +356,13 @@ export default function PosOrders() {
                     <div className="flex items-center gap-3">
                       <span className="text-sm font-semibold text-gray-900">{rupiah(bill.unpaid_amount)}</span>
                       <button
+                        onClick={() => setMovingBill(bill)}
+                        data-move-bill={bill.id}
+                        className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                      >
+                        Pindah / gabung
+                      </button>
+                      <button
                         onClick={() => setPayingBill(bill)}
                         className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-green-700"
                       >
@@ -447,6 +465,13 @@ export default function PosOrders() {
                       {statusLabel(order)}
                     </span>
                     <PaymentBadge method={order.payment_method} status={order.payment_status} />
+                    {(order.manual_discount_amount ?? 0) > 0 && (
+                      <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">Diskon kasir {rupiah(order.manual_discount_amount ?? 0)}</span>
+                    )}
+                    {(order.receipt_prints ?? 0) > 0 && (
+                      <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[11px] text-gray-500">Struk dicetak {order.receipt_prints}×</span>
+                    )}
+                    {order.split_from_order_id && <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[11px] text-gray-500">Pisahan bill</span>}
                   </div>
 
                   <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-2.5">
@@ -468,6 +493,27 @@ export default function PosOrders() {
                         className="rounded-lg bg-amber-400 px-3 py-1.5 text-xs font-bold text-[#111111] transition hover:bg-amber-500 disabled:opacity-50"
                       >
                         {NEXT_ACTION[nextStep] ?? POS_ORDER_STATUS_LABELS[nextStep]}
+                      </button>
+                    )}
+
+                    {!isPaid && order.payment_status !== 'refunded' && order.status !== 'cancelled' && (
+                      <button
+                        disabled={busy}
+                        onClick={() => setManaging(order)}
+                        data-manage-order={order.id}
+                        className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        Atur pesanan
+                      </button>
+                    )}
+                    {isPaid && (
+                      <button
+                        disabled={busy}
+                        onClick={() => setMethodOrder(order)}
+                        data-change-method={order.id}
+                        className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        Ganti metode bayar
                       </button>
                     )}
 
@@ -532,6 +578,14 @@ export default function PosOrders() {
         <NewOrderModal isOpen={showNewOrderModal} onClose={() => setShowNewOrderModal(false)} onOrderCreated={announce} />
 
         <ReceiptModal isOpen={showReceiptModal} onClose={() => setShowReceiptModal(false)} orderId={receiptOrderId} />
+        {managing && <OrderManageDialog order={managing} onClose={() => setManaging(null)} onChanged={(m) => { setToast(m); announce(); }} />}
+        {methodOrder && <PaymentMethodDialog order={methodOrder} onClose={() => setMethodOrder(null)} onChanged={(m) => { setToast(m); announce(); }} />}
+        {movingBill && <MoveBillDialog bill={movingBill} onClose={() => setMovingBill(null)} onChanged={(m) => { setToast(m); announce(); }} />}
+        {toast && (
+          <div role="status" data-toast className="fixed inset-x-0 bottom-20 z-[70] mx-auto w-fit max-w-[90vw] rounded-2xl bg-gray-900 px-4 py-3 text-sm font-medium text-white shadow-lg sm:bottom-6">
+            {toast}
+          </div>
+        )}
         {approval && (
           <OwnerApprovalDialog
             title={approval.kind === 'cancel' ? 'Batalkan pesanan?' : 'Refund pesanan?'}

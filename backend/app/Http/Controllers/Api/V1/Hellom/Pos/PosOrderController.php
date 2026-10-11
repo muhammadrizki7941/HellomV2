@@ -13,6 +13,7 @@ use App\Models\TableBill;
 use App\Services\Pos\Audit\OwnerPinException;
 use App\Services\Pos\Audit\OwnerPinService;
 use App\Services\Pos\Audit\Snapshots;
+use App\Services\Pos\OrderAdjustmentService;
 use App\Services\Pos\OrderService;
 use App\Services\Pos\OrderStatus;
 use App\Services\Pos\OutletSettings;
@@ -30,8 +31,11 @@ use Illuminate\Validation\Rule;
  */
 class PosOrderController extends BasePosController
 {
-    public function __construct(private readonly OrderService $orders, private readonly OwnerPinService $pins)
-    {
+    public function __construct(
+        private readonly OrderService $orders,
+        private readonly OwnerPinService $pins,
+        private readonly OrderAdjustmentService $adjust,
+    ) {
     }
 
     /** Price a cart exactly as store() would, without saving (server totals are final). */
@@ -353,6 +357,7 @@ class PosOrderController extends BasePosController
                 'total_amount' => (int) $order->total_amount,
                 'discount_amount' => (int) $order->discount_amount,
                 'points_discount_amount' => (int) $order->points_discount_amount,
+                'manual_discount_amount' => (int) $order->manual_discount_amount,
                 'service_amount' => (int) $order->service_amount,
                 'tax_amount' => (int) $order->tax_amount,
                 'rounding_amount' => (int) $order->rounding_amount,
@@ -454,6 +459,9 @@ class PosOrderController extends BasePosController
                 ->whereIn('action', [ActivityActions::RECEIPT_PRINTED, ActivityActions::RECEIPT_REPRINTED])->count();
             $printNo = $previous + 1;
             $kind = $order->isPaid() ? 'final' : 'draft';
+            $meta = (array) ($order->payment_meta ?? []);
+            $meta['receipt_prints'] = $printNo;
+            $order->forceFill(['payment_meta' => $meta])->saveQuietly();
             $this->recordActivity($request, $printNo > 1 ? ActivityActions::RECEIPT_REPRINTED : ActivityActions::RECEIPT_PRINTED, [
                 'target_type' => 'order', 'target_id' => $order->id, 'target_label' => '#' . $order->order_number,
                 'after' => ['print_no' => $printNo, 'kind' => $kind, 'payment_status' => (string) $order->payment_status, 'final_amount' => (int) $order->final_amount],
@@ -463,6 +471,251 @@ class PosOrderController extends BasePosController
         });
 
         return $this->success($result, $result['print_no'] > 1 ? 'Cetak ulang tercatat' : 'Cetak struk tercatat');
+    }
+
+    /**
+     * PATCH /pos/orders/{id}/items/{itemId} {qty, reason?, approval_pin?} — unpaid orders; qty 0
+     * removes the line. Reducing needs a reason, and the owner PIN once a receipt was printed.
+     */
+    public function updateItem(Request $request, int $orderId, int $itemId): JsonResponse
+    {
+        $validated = $request->validate([
+            'qty' => 'required|integer|min:0|max:999',
+            'reason' => 'nullable|string|max:255',
+            'approval_pin' => 'nullable|string|max:12',
+        ], self::APPROVAL_MESSAGES + ['qty.required' => 'Isi jumlahnya.']);
+        $order = $this->findOrder($request, $orderId);
+        $item = $order->items()->find($itemId);
+        if (!$item) {
+            return $this->error('Item tidak ditemukan di pesanan ini.', 'ITEM_NOT_FOUND', null, 404);
+        }
+        $reducing = (int) $validated['qty'] < (int) $item->qty;
+        $printed = OrderAdjustmentService::receiptPrinted($order);
+        if ($reducing && blank($validated['reason'] ?? null)) {
+            return $this->fieldError('reason', 'Tulis alasan mengurangi/menghapus item.');
+        }
+        $approver = null;
+        if ($reducing && $printed) {
+            if (blank($validated['approval_pin'] ?? null)) {
+                return $this->fieldError('approval_pin', 'Struk sudah dicetak. Minta PIN pemilik untuk mengurangi item.', 'PIN_REQUIRED');
+            }
+            try {
+                $approver = $this->pins->verify($this->organization($request), (string) $validated['approval_pin'], 'kurangi item pesanan #' . $order->order_number);
+            } catch (OwnerPinException $e) {
+                return $this->pinFailed($e, 'approval_pin');
+            }
+        }
+
+        try {
+            $result = DB::transaction(function () use ($request, $order, $itemId, $validated, $approver, $printed) {
+                $before = Snapshots::order($order);
+                $result = $this->adjust->changeItemQty($order, $itemId, (int) $validated['qty'], $request->user()?->id);
+                $removed = $result['item']['to'] === 0;
+                $this->recordActivity($request, $removed ? ActivityActions::ITEM_REMOVED : ActivityActions::ITEM_QTY_CHANGED, [
+                    'target_type' => 'order', 'target_id' => $order->id, 'target_label' => '#' . $order->order_number . ' · ' . $result['item']['name'],
+                    'before' => $before, 'after' => Snapshots::order($result['order']) + ['changed_item' => $result['item'], 'receipt_printed' => $printed],
+                    'reason' => $validated['reason'] ?? null, 'approver' => $approver,
+                    'severity' => $result['item']['to'] > $result['item']['from'] ? 'info' : ($printed ? 'critical' : 'warning'),
+                ]);
+
+                return $result;
+            });
+        } catch (PricingException $e) {
+            return $this->orderRuleFailed($e);
+        }
+
+        return $this->success(['order' => $this->present($result['order']->fresh(['items.options', 'table']), true)], $result['item']['to'] === 0 ? 'Item dihapus' : 'Jumlah item diubah');
+    }
+
+    /** POST /pos/orders/{id}/discount {type: percent|fixed|none, value, reason, approval_pin} */
+    public function discount(Request $request, int $orderId): JsonResponse
+    {
+        $validated = $request->validate([
+            'type' => 'required|in:percent,fixed,none',
+            'value' => 'required_unless:type,none|nullable|integer|min:1|max:100000000',
+            'reason' => 'required|string|max:255',
+            'approval_pin' => 'required_unless:type,none|nullable|string|max:12',
+        ], self::APPROVAL_MESSAGES + ['value.required_unless' => 'Isi nilai diskonnya.', 'approval_pin.required_unless' => 'Minta pemilik toko memasukkan PIN untuk menyetujui.']);
+        $order = $this->findOrder($request, $orderId);
+        $type = $validated['type'] === 'none' ? null : $validated['type'];
+        $approver = null;
+        if ($type !== null) {
+            try {
+                $approver = $this->pins->verify($this->organization($request), (string) $validated['approval_pin'], 'diskon manual pesanan #' . $order->order_number);
+            } catch (OwnerPinException $e) {
+                return $this->pinFailed($e, 'approval_pin');
+            }
+        }
+
+        try {
+            $result = DB::transaction(function () use ($request, $order, $type, $validated, $approver) {
+                $before = Snapshots::order($order, false);
+                $result = $this->adjust->setManualDiscount($order, $type, (int) ($validated['value'] ?? 0), $request->user()?->id);
+                $this->recordActivity($request, $type ? ActivityActions::DISCOUNT_APPLIED : ActivityActions::DISCOUNT_REMOVED, [
+                    'target_type' => 'order', 'target_id' => $order->id, 'target_label' => '#' . $order->order_number,
+                    'before' => $before + ['manual_discount_amount' => $result['from']],
+                    'after' => Snapshots::order($result['order'], false) + ['manual_discount_amount' => $result['to'], 'discount_type' => $type ?? 'none', 'discount_value' => $type ? (int) $validated['value'] : 0],
+                    'reason' => $validated['reason'], 'approver' => $approver,
+                ]);
+
+                return $result;
+            });
+        } catch (PricingException $e) {
+            return $this->orderRuleFailed($e);
+        }
+
+        return $this->success(['order' => $this->present($result['order']->fresh(['items.options', 'table']), true)], $type ? 'Diskon diterapkan' : 'Diskon dihapus');
+    }
+
+    /** POST /pos/orders/{id}/payment-method {payment_method, reason, approval_pin} — paid orders. */
+    public function changePaymentMethod(Request $request, int $orderId): JsonResponse
+    {
+        $validated = $request->validate([
+            'payment_method' => ['required', Rule::in(OrderService::PAYMENT_METHODS)],
+            'reason' => 'required|string|max:255',
+            'approval_pin' => 'required|string|max:12',
+        ], self::APPROVAL_MESSAGES);
+        $order = $this->findOrder($request, $orderId);
+        try {
+            $approver = $this->pins->verify($this->organization($request), (string) $validated['approval_pin'], 'ganti metode bayar #' . $order->order_number);
+        } catch (OwnerPinException $e) {
+            return $this->pinFailed($e, 'approval_pin');
+        }
+
+        try {
+            $result = DB::transaction(function () use ($request, $order, $validated, $approver) {
+                $before = Snapshots::order($order, false);
+                $result = $this->adjust->changePaymentMethod($order, $validated['payment_method'], $validated['reason'], $request->user()?->id);
+                $this->recordActivity($request, ActivityActions::PAYMENT_METHOD_CHANGED, [
+                    'target_type' => 'order', 'target_id' => $order->id, 'target_label' => '#' . $order->order_number,
+                    'before' => $before, 'after' => Snapshots::order($result['order'], false), 'reason' => $validated['reason'], 'approver' => $approver,
+                ]);
+
+                return $result;
+            });
+        } catch (PricingException $e) {
+            return $this->orderRuleFailed($e);
+        }
+
+        return $this->success(['order' => $this->present($result['order'])], 'Metode bayar diganti');
+    }
+
+    /** POST /pos/orders/{id}/split {items: [{item_id, qty}]} — "pisah bill" into a new order. */
+    public function split(Request $request, int $orderId): JsonResponse
+    {
+        $validated = $request->validate([
+            'items' => 'required|array|min:1|max:100',
+            'items.*.item_id' => 'required|integer',
+            'items.*.qty' => 'required|integer|min:0|max:999',
+        ], ['items.required' => 'Pilih item yang mau dipisah.']);
+        $order = $this->findOrder($request, $orderId);
+
+        try {
+            $result = DB::transaction(function () use ($request, $order, $validated) {
+                $before = Snapshots::order($order);
+                $result = $this->adjust->split($order, $validated['items'], $request->user()?->id);
+                $this->recordActivity($request, ActivityActions::ORDER_SPLIT, [
+                    'target_type' => 'order', 'target_id' => $order->id,
+                    'target_label' => '#' . $order->order_number . ' → #' . $result['created']->order_number,
+                    'before' => $before,
+                    'after' => Snapshots::order($result['source']) + ['new_order' => '#' . $result['created']->order_number, 'new_order_id' => (int) $result['created']->id,
+                        'moved_items' => $result['moved'], 'new_order_total' => (int) $result['created']->final_amount],
+                ]);
+
+                return $result;
+            });
+        } catch (PricingException $e) {
+            return $this->orderRuleFailed($e);
+        }
+
+        return $this->success([
+            'order' => $this->present($result['source']->fresh(['items.options', 'table']), true),
+            'new_order' => $this->present($result['created']->fresh(['items.options', 'table']), true),
+        ], 'Bill dipisah', 201);
+    }
+
+    /** POST /pos/orders/{id}/transfer {table_id} — move one unpaid order to another table. */
+    public function transfer(Request $request, int $orderId): JsonResponse
+    {
+        $validated = $request->validate(['table_id' => 'required|integer'], ['table_id.required' => 'Pilih meja tujuan.']);
+        $order = $this->findOrder($request, $orderId);
+        $table = $this->findTable($request, (int) $validated['table_id']);
+        if (!$table) {
+            return $this->fieldError('table_id', 'Meja tujuan tidak ditemukan di outlet ini.');
+        }
+
+        try {
+            $result = DB::transaction(function () use ($request, $order, $table) {
+                $before = Snapshots::order($order, false);
+                $result = $this->adjust->transferOrder($order, $table, $request->user()?->id);
+                $this->recordActivity($request, ActivityActions::TABLE_TRANSFERRED, [
+                    'target_type' => 'order', 'target_id' => $order->id,
+                    'target_label' => '#' . $order->order_number . ' · ' . ($result['from'] ?? 'tanpa meja') . ' → ' . $result['to'],
+                    'before' => $before, 'after' => Snapshots::order($result['order'], false),
+                ]);
+
+                return $result;
+            });
+        } catch (PricingException $e) {
+            return $this->orderRuleFailed($e);
+        }
+
+        return $this->success(['order' => $this->present($result['order']->fresh(['items.options', 'table']), true)], 'Pesanan dipindah ke ' . $result['to']);
+    }
+
+    /** POST /pos/table-bills/{billId}/move {table_id} — move a table's unpaid orders; merges into an open bill there. */
+    public function moveTableBill(Request $request, int $billId): JsonResponse
+    {
+        $validated = $request->validate(['table_id' => 'required|integer'], ['table_id.required' => 'Pilih meja tujuan.']);
+        $bill = $this->findBill($request, $billId);
+        $table = $this->findTable($request, (int) $validated['table_id']);
+        if (!$table) {
+            return $this->fieldError('table_id', 'Meja tujuan tidak ditemukan di outlet ini.');
+        }
+        $service = app(\App\Services\Pos\TableBillService::class);
+
+        try {
+            $result = DB::transaction(function () use ($request, $bill, $table, $service) {
+                $before = $service->summary($bill);
+                $result = $this->adjust->moveBill($bill, $table, $request->user()?->id);
+                $merged = $result['mode'] === 'merged';
+                $this->recordActivity($request, $merged ? ActivityActions::BILL_MERGED : ActivityActions::BILL_MOVED, [
+                    'target_type' => 'table_bill', 'target_id' => $bill->id,
+                    'target_label' => ($result['from'] ?? 'Meja') . ' → ' . $result['to'],
+                    'before' => ['bill_id' => (int) $bill->id, 'table_label' => $before['table_label'], 'unpaid_amount' => $before['unpaid_amount'],
+                        'orders' => array_map(fn ($o) => ['order_number' => $o['order_number'], 'payment_status' => $o['payment_status'], 'final_amount' => $o['final_amount'], 'items' => $o['items']], $before['orders'])],
+                    'after' => ['bill_id' => $result['target_bill_id'], 'table_label' => $result['to'], 'mode' => $result['mode'],
+                        'moved_orders' => $result['orders']->pluck('order_number')->map(fn ($n) => (string) $n)->values()->all(),
+                        'moved_amount' => (int) $result['orders']->sum('final_amount')],
+                ]);
+
+                return $result;
+            });
+        } catch (PricingException $e) {
+            return $this->orderRuleFailed($e);
+        }
+        $target = $result['target_bill_id'] ? \App\Models\TableBill::query()->find($result['target_bill_id']) : null;
+
+        return $this->success([
+            'mode' => $result['mode'],
+            'bill' => $target ? $service->summary($target) : null,
+        ], $result['mode'] === 'merged' ? 'Tagihan digabung ke ' . $result['to'] : 'Tagihan dipindah ke ' . $result['to']);
+    }
+
+    private function findTable(Request $request, int $tableId): ?DiningTable
+    {
+        return DiningTable::withoutGlobalScope('tenant')
+            ->where('tenant_id', (string) $request->attributes->get('posTenantSlug'))
+            ->where('is_active', true)
+            ->find($tableId);
+    }
+
+    private function fieldError(string $field, string $message, string $code = 'VALIDATION_ERROR'): JsonResponse
+    {
+        return response()->json([
+            'success' => false, 'message' => $message, 'data' => null,
+            'error' => ['code' => $code, 'detail' => $message], 'errors' => [$field => [$message]],
+        ], 422);
     }
 
     private const APPROVAL_MESSAGES = [
@@ -515,6 +768,10 @@ class PosOrderController extends BasePosController
             'total_amount' => (int) $order->total_amount,
             'discount_amount' => (int) $order->discount_amount,
             'points_discount_amount' => (int) $order->points_discount_amount,
+            'manual_discount_amount' => (int) $order->manual_discount_amount,
+            'manual_discount' => ((array) ($order->payment_meta ?? []))['manual_discount'] ?? null,
+            'receipt_prints' => (int) (((array) ($order->payment_meta ?? []))['receipt_prints'] ?? 0),
+            'split_from_order_id' => $order->split_from_order_id ? (int) $order->split_from_order_id : null,
             'service_amount' => (int) $order->service_amount,
             'tax_amount' => (int) $order->tax_amount,
             'rounding_amount' => (int) $order->rounding_amount,

@@ -10,7 +10,7 @@ use App\Models\Product;
  * self-order, so the same cart always gives the same total.
  *
  *   subtotal       = Σ (base price + chosen add-ons) × qty
- *   net            = subtotal − reward discount − points discount   (never below 0)
+ *   net            = subtotal − reward − points − manual discount   (never below 0)
  *   service charge = round(net × service%)
  *   tax            = round((net + service) × tax%)
  *   final          = net + service + tax, rounded to the outlet step (0 = no rounding)
@@ -91,15 +91,18 @@ final class PricingService
     }
 
     /**
-     * @return array{subtotal:int, discount_amount:int, points_discount_amount:int, service_amount:int,
+     * $manualDiscount: cashier discount approved with the owner PIN (OrderAdjustmentService), applied last.
+     *
+     * @return array{subtotal:int, discount_amount:int, points_discount_amount:int, manual_discount_amount:int, service_amount:int,
      *               tax_amount:int, rounding_amount:int, final_amount:int,
      *               service_percent:float, tax_percent:float, rounding_step:int}
      */
-    public function totals(OutletSettings $settings, int $subtotal, int $rewardDiscount = 0, int $pointsDiscount = 0): array
+    public function totals(OutletSettings $settings, int $subtotal, int $rewardDiscount = 0, int $pointsDiscount = 0, int $manualDiscount = 0): array
     {
         $rewardDiscount = max(0, min($rewardDiscount, $subtotal));
         $pointsDiscount = max(0, min($pointsDiscount, $subtotal - $rewardDiscount));
-        $net = $subtotal - $rewardDiscount - $pointsDiscount;
+        $manualDiscount = max(0, min($manualDiscount, $subtotal - $rewardDiscount - $pointsDiscount));
+        $net = $subtotal - $rewardDiscount - $pointsDiscount - $manualDiscount;
 
         $service = (int) round($net * $settings->servicePercent() / 100);
         $tax = (int) round(($net + $service) * $settings->taxPercent() / 100);
@@ -112,6 +115,7 @@ final class PricingService
             'subtotal' => $subtotal,
             'discount_amount' => $rewardDiscount,
             'points_discount_amount' => $pointsDiscount,
+            'manual_discount_amount' => $manualDiscount,
             'service_amount' => $service,
             'tax_amount' => $tax,
             'rounding_amount' => $final - $beforeRounding,

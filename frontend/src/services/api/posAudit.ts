@@ -66,9 +66,14 @@ export type PosAnomalyCashier = {
   cash_short: number;
   cash_over: number;
   pin_failed: number;
+  discounts: number;
+  discount_total: number;
+  item_reductions: number;
+  method_changes: number;
+  no_sales: number;
   active_days: number;
-  per_day: { transactions: number; voids: number; reprints: number };
-  rates: { voids: number; refunds: number; reprints: number };
+  per_day: { transactions: number; voids: number; reprints: number; no_sales: number };
+  rates: { voids: number; refunds: number; reprints: number; discounts: number; item_reductions: number };
   flags: PosAuditFlag[];
 };
 
@@ -76,7 +81,7 @@ export type PosAnomalyReport = {
   from: string;
   to: string;
   days: number;
-  average: { voids: number; refunds: number; reprints: number };
+  average: { voids: number; refunds: number; reprints: number; discounts: number; item_reductions: number };
   cashiers: PosAnomalyCashier[];
 };
 

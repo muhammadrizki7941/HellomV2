@@ -31,11 +31,17 @@ const FIELD_LABELS: Record<string, string> = {
   transactions: 'Transaksi', blind: 'Tutup kas buta', name: 'Nama', price: 'Harga', stock: 'Stok', track_stock: 'Pakai stok', is_available: 'Tersedia',
   category_id: 'Kategori', role: 'Peran', employment_status: 'Status kerja', permissions: 'Hak akses', linked_user_id: 'Akun login', total: 'Total',
   change: 'Kembalian', order_numbers: 'Pesanan', order_ids: 'ID pesanan', sent_to: 'Dikirim ke', staff_id: 'ID staf', started_at: 'Dibuka',
+  manual_discount_amount: 'Diskon kasir', discount_type: 'Jenis diskon', discount_value: 'Nilai diskon', changed_item: 'Item diubah',
+  receipt_printed: 'Struk sudah dicetak', from: 'Dari', to: 'Menjadi', unit_price: 'Harga satuan', id: 'ID', new_order: 'Pesanan baru',
+  new_order_id: 'ID pesanan baru', moved_items: 'Item dipindah', new_order_total: 'Total pesanan baru', mode: 'Cara', moved_orders: 'Pesanan dipindah',
+  moved_amount: 'Nilai dipindah', unpaid_amount: 'Belum dibayar', orders: 'Pesanan', bill_id: 'Tagihan', cash_session_id: 'Sesi kas',
+  count_today: 'Ke- (hari ini)',
 };
 const MONEY_KEYS = /amount|cash|price|total|tendered|change|sales/;
 const VALUE_LABELS: Record<string, string> = {
   paid: 'Lunas', unpaid: 'Belum bayar', refunded: 'Direfund', cancelled: 'Dibatalkan', new: 'Baru', accepted: 'Dikonfirmasi', preparing: 'Diproses',
   prepared: 'Siap', completed: 'Selesai', draft: 'Draf (belum lunas)', final: 'Final', cash: 'Tunai', qris: 'QRIS', transfer: 'Transfer',
+  gopay: 'GoPay', dana: 'DANA', other: 'Lainnya', percent: 'Persen', fixed: 'Nominal', none: 'Tanpa diskon', merged: 'Digabung ke tagihan meja tujuan', moved: 'Dipindah ke meja kosong',
 };
 
 const rupiah = (v: number) => `Rp ${Math.round(v).toLocaleString('id-ID')}`;
@@ -53,8 +59,11 @@ function formatValue(key: string, value: unknown): string {
   if (typeof value === 'number') return MONEY_KEYS.test(key) ? rupiah(value) : value.toLocaleString('id-ID');
   if (typeof value === 'string') return VALUE_LABELS[value] ?? value;
   if (Array.isArray(value)) {
-    if (key === 'items') {
-      return (value as Array<Record<string, unknown>>).map((i) => `${i.qty}× ${i.name} (${rupiah(Number(i.line_total ?? 0))})`).join(', ') || '–';
+    if (key === 'items' || key === 'moved_items') {
+      return (value as Array<Record<string, unknown>>).map((i) => `${i.qty}× ${i.name}${i.line_total !== undefined ? ` (${rupiah(Number(i.line_total))})` : ''}`).join(', ') || '–';
+    }
+    if (key === 'orders') {
+      return (value as Array<Record<string, unknown>>).map((o) => `#${o.order_number} ${VALUE_LABELS[String(o.payment_status)] ?? o.payment_status} ${rupiah(Number(o.final_amount ?? 0))}`).join('; ') || '–';
     }
     return value.map((v) => formatValue(key, v)).join(', ');
   }
@@ -408,16 +417,18 @@ function AlertsTab({ token, onApiError }: { token: string; onApiError: (err: unk
           )}
 
           <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white">
-            <table className="w-full min-w-[640px] text-left text-sm text-gray-800">
+            <table className="w-full min-w-[960px] text-left text-sm text-gray-800">
               <thead className="bg-gray-50 text-xs text-gray-500">
                 <tr>
                   <th className="px-3 py-2 font-medium">Staf</th><th className="px-3 py-2 font-medium">Transaksi</th><th className="px-3 py-2 font-medium">Void</th>
                   <th className="px-3 py-2 font-medium">Refund</th><th className="px-3 py-2 font-medium">Cetak ulang</th><th className="px-3 py-2 font-medium">Kas kurang</th>
+                  <th className="px-3 py-2 font-medium">Diskon manual</th><th className="px-3 py-2 font-medium">Kurangi item</th>
+                  <th className="px-3 py-2 font-medium">Laci tanpa transaksi</th><th className="px-3 py-2 font-medium">Ganti metode</th>
                   <th className="px-3 py-2 font-medium">PIN salah</th><th className="px-3 py-2 font-medium">Per hari</th>
                 </tr>
               </thead>
               <tbody>
-                {report.cashiers.length === 0 && <tr><td colSpan={8} className="px-3 py-6 text-center text-gray-500">Belum ada transaksi tercatat di periode ini.</td></tr>}
+                {report.cashiers.length === 0 && <tr><td colSpan={12} className="px-3 py-6 text-center text-gray-500">Belum ada transaksi tercatat di periode ini.</td></tr>}
                 {report.cashiers.map((c) => (
                   <tr key={c.name + c.role} className={cn('border-t border-gray-100', c.flags.length > 0 && 'bg-red-50/40')}>
                     <td className="px-3 py-2 font-medium text-gray-900">{c.name}</td>
@@ -426,6 +437,10 @@ function AlertsTab({ token, onApiError }: { token: string; onApiError: (err: unk
                     <td className="px-3 py-2">{c.refunds}</td>
                     <td className="px-3 py-2">{c.reprints}</td>
                     <td className={cn('px-3 py-2', c.cash_short > 0 && 'font-semibold text-red-700')}>{c.cash_short > 0 ? rupiah(c.cash_short) : '–'}</td>
+                    <td className="px-3 py-2">{c.discounts ? <>{c.discounts}× <span className="text-xs text-gray-500">{rupiah(c.discount_total)}</span></> : '–'}</td>
+                    <td className="px-3 py-2">{c.item_reductions || '–'}</td>
+                    <td className="px-3 py-2">{c.no_sales || '–'}</td>
+                    <td className={cn('px-3 py-2', c.method_changes > 0 && 'font-semibold text-amber-800')}>{c.method_changes || '–'}</td>
                     <td className="px-3 py-2">{c.pin_failed || '–'}</td>
                     <td className="px-3 py-2 text-xs text-gray-600">{c.per_day.transactions} trx · {c.per_day.voids} void · {c.per_day.reprints} cetak ulang</td>
                   </tr>
@@ -434,7 +449,7 @@ function AlertsTab({ token, onApiError }: { token: string; onApiError: (err: unk
             </table>
           </div>
           <p className="text-xs text-gray-500">
-            Ditandai kalau rasio void/refund/cetak ulang seorang staf jauh di atas rata-rata toko (2× rata-rata, minimal 5–10%), ada kekurangan kas saat tutup kas, atau PIN salah berulang.
+            Ditandai kalau rasio void/refund/cetak ulang/diskon manual/kurangi item seorang staf jauh di atas rata-rata toko (2× rata-rata, minimal 5–10%), laci sering dibuka tanpa transaksi (3× sehari atau lebih), metode bayar diganti, ada kekurangan kas saat tutup kas, atau PIN salah berulang.
             Tanda ini bahan pengecekan, bukan bukti kecurangan.
           </p>
         </>

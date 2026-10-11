@@ -4,6 +4,15 @@
 
 Audit lengkap dan status per temuan: [docs/AUDIT.md](docs/AUDIT.md). Langkah deploy khusus rilis ini: [docs/DEPLOY.md §3](docs/DEPLOY.md#3-catatan-khusus-rilis-refactor-branch-refactorcleanup).
 
+### POS — anti-kecurangan Fase 2 & 3: ubah pesanan, diskon, pisah/gabung/pindah meja (2026-10-11)
+- **Atur pesanan** (pesanan belum dibayar): ubah jumlah/hapus item (wajib alasan; setelah struk dicetak wajib PIN pemilik), **diskon manual** persen/nominal (selalu PIN pemilik), **pisah bill** ke pesanan baru di meja yang sama, **pindah meja**. Total selalu dihitung ulang server, stok ikut berubah.
+- **Tagihan meja › Pindah / gabung**: semua pesanan belum dibayar pindah ke meja lain; kalau meja itu sudah punya tagihan, digabung. Pesanan yang sudah lunas tidak pernah ikut dipindah/dipisah/diubah.
+- **Ganti metode bayar** pesanan lunas (mis. tunai ↔ QRIS) dengan alasan + PIN pemilik.
+- **Buka laci tanpa transaksi** dari dialog kas, wajib alasan, dihitung per kasir per hari.
+- Semua tercatat di Log Audit (sebelum/sesudah, item yang dipindah, penyetuju). Peringatan kecurangan kini juga menandai diskon manual, pengurangan item, buka laci ≥3× sehari, dan ganti metode bayar.
+- **Perbaikan struk**: TOTAL di struk dulu menampilkan subtotal (tanpa diskon/pajak); sekarang struk merinci subtotal, diskon, service, pajak, pembulatan, dan total yang benar-benar dibayar.
+- Deploy: `php artisan migrate` (kolom baru `orders.manual_discount_amount`, `orders.split_from_order_id`, `table_bills.merged_into_bill_id`).
+
 ### POS — PIN pemilik & log audit anti-kecurangan, Fase 1 (2026-10-11)
 - **PIN pemilik**: pemilik toko wajib membuat PIN 6 angka saat pertama membuka POS (angka sama/berurutan ditolak). Salah 5× → terkunci 15 menit dan email ke pemilik utama. **Lupa PIN** → link reset (30 menit, sekali pakai) hanya ke email pemilik utama, halaman `/reset-pin-pos`.
 - **Pembatalan (void) dan refund** wajib disetujui PIN pemilik di dialog kasir (tidak ada lagi pop-up browser); pembatalan lewat ganti status juga.
