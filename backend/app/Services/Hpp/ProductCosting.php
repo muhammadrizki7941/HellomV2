@@ -115,6 +115,24 @@ final class ProductCosting
             'food_cost_status' => PriceAdvisor::foodCostStatus($foodCost),
             'suggested_price' => $product->is_subrecipe || $incomplete ? null : PriceAdvisor::suggest($unit['direct'] + $fixedOverhead, $target, $mainPct + $overheadPct, $mainFlat, $rounding),
             'channels' => $channels,
+            'variants' => $product->is_subrecipe ? [] : array_map(function ($variant) use ($engine, $full, $price, $target, $mainPct, $mainFlat, $overheadPct, $fixedOverhead, $unit, $rounding) {
+                $extra = $engine->variantExtraCost((int) $variant->id);
+                $extraCost = $extra['material'] + $extra['packaging'];
+                $variantPrice = $price > 0 ? $price + (int) $variant->price_delta : 0;
+
+                return [
+                    'id' => (int) $variant->id,
+                    'name' => (string) $variant->name,
+                    'kind' => (string) $variant->kind,
+                    'price_delta' => (int) $variant->price_delta,
+                    'pos_option_value_id' => $variant->pos_option_value_id ? (int) $variant->pos_option_value_id : null,
+                    'extra_cost' => round($extraCost, 2),
+                    'full' => round($full + $extraCost, 2),
+                    'price' => $variantPrice,
+                    'margin_pct' => $variantPrice > 0 && $unit['direct'] > 0 ? PriceAdvisor::margin($variantPrice, $full + $extraCost, $mainPct, $mainFlat) : null,
+                    'suggested_price' => $unit['direct'] > 0 ? PriceAdvisor::suggest($unit['direct'] + $extraCost + $fixedOverhead, $target, $mainPct + $overheadPct, $mainFlat, $rounding) : null,
+                ];
+            }, $engine->variantsOf((int) $product->id)),
             'bep' => $product->is_subrecipe || $incomplete ? null : $this->breakEven($price, $unit['direct'], $mainPct, $mainFlat),
             'is_archived' => (bool) $product->is_archived,
         ];

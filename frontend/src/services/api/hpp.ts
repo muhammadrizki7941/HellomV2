@@ -18,6 +18,7 @@ export type HppSettings = {
   monthly_revenue: number;
   monthly_labor_hours: number;
   main_channel_id: number | null;
+  backflush_enabled: boolean;
   onboarded: boolean;
 };
 
@@ -48,8 +49,36 @@ export type HppProductSummary = {
   suggested_price: number | null;
   main_channel: { id: number; name: string; fee_pct: number } | null;
   channels: HppChannelPrice[];
+  variants: HppVariantSummary[];
   bep: { units_per_month: number; units_per_day: number; contribution: number } | null;
   is_archived: boolean;
+};
+
+export type HppVariantSummary = {
+  id: number;
+  name: string;
+  kind: 'size' | 'modifier';
+  price_delta: number;
+  pos_option_value_id: number | null;
+  extra_cost: number;
+  full: number;
+  price: number;
+  margin_pct: number | null;
+  suggested_price: number | null;
+};
+
+export type HppAlert = {
+  product_id: number;
+  name: string;
+  severity: 'warning' | 'critical';
+  margin_pct: number;
+  target_margin_pct: number;
+  food_cost_pct: number | null;
+  selling_price: number;
+  suggested_price: number | null;
+  pos_product_id: number | null;
+  cause: { ingredient_id: number; name: string; change_pct: number } | null;
+  message: string;
 };
 
 export type HppChannelPrice = {
@@ -85,6 +114,7 @@ export type HppProductDetail = HppProductSummary & {
   own_target_margin_pct: number | null;
   lines: HppLine[];
   channel_prices: Record<string, number>;
+  variant_lines: Record<string, HppLine[]>;
   trend: Array<{ date: string; cost: number; price: number; margin_pct: number | null }>;
 };
 
@@ -109,6 +139,7 @@ export type HppOverview = {
   settings: HppSettings;
   counts: { products: number; ingredients: number; without_price: number; incomplete: number; red: number; below_target: number };
   overhead_total: number;
+  alerts: HppAlert[];
   products: HppProductSummary[];
   options: HppOptions;
 };
@@ -127,6 +158,7 @@ export type HppProductInput = {
   other_cost?: number;
   items?: Array<{ component_type: 'ingredient' | 'product'; component_id: number; qty: number; note?: string | null }>;
   channel_prices?: Record<string, number>;
+  variants?: Array<{ name: string; kind: 'size' | 'modifier'; price_delta: number; pos_option_value_id: number | null; items: Array<{ component_type: 'ingredient' | 'product'; component_id: number; qty: number }> }>;
 };
 
 export type HppIngredientInput = {
@@ -249,4 +281,15 @@ export function createHppPurchase(body: { purchased_at: string; supplier?: strin
 
 export function getHppProductReport() {
   return apiRequest<HppProductReport>('/hpp/reports/products');
+}
+
+// ── Tahap 3: varian/modifier dari POS, peringatan margin ──
+export type HppPosOption = { id: number; name: string; values: Array<{ id: number; name: string; price_delta: number }> };
+
+export function getHppPosOptions(posProductId: number) {
+  return apiRequest<{ options: HppPosOption[] }>(`/hpp/pos-products/${posProductId}/options`);
+}
+
+export function getHppAlerts() {
+  return apiRequest<{ alerts: HppAlert[] }>('/hpp/alerts');
 }

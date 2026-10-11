@@ -162,6 +162,49 @@ try {
   await shot('hpp-reports');
   check('Tahap 2: report with HPP, overhead, margin and BEP per product', reported);
 
+  // Tahap 3 — margin alert names the price rise and applies the suggested price.
+  await clickText('[role="tab"]', 'Ringkasan');
+  const alertShown = await waitFor(`document.querySelector('[data-alert="Es Kopi Susu"]')?.textContent.includes('Susu UHT naik 15')`, 10000);
+  await shot('hpp-alerts');
+  await click('[data-alert="Es Kopi Susu"] [data-apply-alert]');
+  const applied = await toast('Harga Es Kopi Susu jadi');
+  const kopiPriced = (await call('GET', '/hpp/products')).json.data.products.find((p) => p.name === 'Es Kopi Susu');
+  check('Tahap 3: margin alert "Harga Susu UHT naik 15%…" with one-click suggested price', alertShown && applied && kopiPriced?.selling_price === kopiPriced?.suggested_price, JSON.stringify({ alertShown, price: kopiPriced?.selling_price }));
+
+  // Tahap 3 — POS option → variant, recipe for the linked POS menu, then a paid POS order backflushes stock.
+  const nasiPos = (await call('GET', '/hpp/pos-products')).json.data.products.find((p) => p.name === 'Nasi Goreng');
+  const posProduct = (await call('GET', '/pos/products')).json.data.products.find((p) => p.id === nasiPos.id);
+  await call('PATCH', `/pos/products/${nasiPos.id}`, { category_id: posProduct.category_id, name: 'Nasi Goreng', price: 25000, is_available: 'true',
+    options: [{ name: 'Tambahan', type: 'multi', is_required: 'false', values: [{ name: 'Telur ceplok', price_delta: 4000 }] }] });
+  await clickText('[role="tab"]', 'Produk');
+  await waitFor(`!!document.querySelector('[data-product-row="Nasi Goreng"]')`, 8000);
+  await click('[data-product-row="Nasi Goreng"]');
+  await waitFor(`!!document.querySelector('[data-product-form]')`, 5000);
+  await pick(0, 'Beras', '150');
+  await pick(1, 'Minyak goreng', '10');
+  await pick(2, 'Telur ayam', '1');
+  await waitFor(`!!document.querySelector('[data-import-variants]')`, 8000);
+  await click('[data-import-variants]');
+  await waitFor(`!!document.querySelector('[data-variant="Telur ceplok"]')`, 3000);
+  await clickText('[data-variant="Telur ceplok"] button', '+ bahan tambahan');
+  await fill('[data-variant="Telur ceplok"] select[aria-label="Bahan tambahan"]', await optionValue('[data-variant="Telur ceplok"] select[aria-label="Bahan tambahan"]', 'Telur ayam'));
+  await fill('[data-variant="Telur ceplok"] input[aria-label="Takaran tambahan"]', '1');
+  const variantCost = await waitFor(`document.querySelector('[data-variant="Telur ceplok"] [data-variant-extra]')?.textContent.includes('2.000')`, 3000);
+  await shot('hpp-variants');
+  await click('[data-product-form] button[type="submit"]');
+  await toast('Nasi Goreng');
+  const nasiHpp = (await call('GET', '/hpp/products')).json.data.products.find((p) => p.name === 'Nasi Goreng');
+  check('Tahap 3: variant imported from the POS option with its own extra cost', variantCost && nasiHpp?.variants?.[0]?.name === 'Telur ceplok' && nasiHpp.variants[0].extra_cost === 2000 && nasiHpp.variants[0].pos_option_value_id,
+    JSON.stringify(nasiHpp?.variants));
+
+  const eggsBefore = (await call('GET', '/hpp/ingredients')).json.data.ingredients.find((i) => i.name === 'Telur ayam').stock ?? 0;
+  const optionId = (await call('GET', `/hpp/pos-products/${nasiPos.id}/options`)).json.data.options[0];
+  const posOrder = (await call('POST', '/pos/orders', { items: [{ product_id: nasiPos.id, quantity: 2, options: [{ option_id: optionId.id, value_id: optionId.values[0].id }] }] })).json?.data?.order;
+  await call('POST', `/pos/orders/${posOrder?.id}/payment`, { payment_method: 'cash', payment_amount: 100000 });
+  await sleep(1500);
+  const eggsAfter = (await call('GET', '/hpp/ingredients')).json.data.ingredients.find((i) => i.name === 'Telur ayam').stock ?? 0;
+  check('Tahap 3: paid POS order (2× Nasi Goreng + telur ceplok) takes 4 eggs from stock', !!posOrder && Math.round((eggsBefore - eggsAfter) * 1000) / 1000 === 4, JSON.stringify({ eggsBefore, eggsAfter }));
+
   check('no browser pop-ups, no script errors', (await ev(`(window.__popups || []).length`)) === 0 && errors.length === 0, JSON.stringify(errors));
 } finally {
   browser.close();

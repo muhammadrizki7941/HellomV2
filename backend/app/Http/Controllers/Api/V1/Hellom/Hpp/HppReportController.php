@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Hellom\Hpp;
 
 use App\Models\Hpp\HppProduct;
 use App\Services\Hpp\CostEngine;
+use App\Services\Hpp\MarginAlerts;
 use App\Services\Hpp\ProductCosting;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -38,5 +39,16 @@ class HppReportController extends HppBaseController
                 'monthly_units' => (int) $costing->engine()->settings->monthly_units,
             ],
         ], 'Laporan HPP');
+    }
+
+    /** Peringatan margin (below target / red food cost) with cause and suggested price. */
+    public function alerts(Request $request, MarginAlerts $alerts): JsonResponse
+    {
+        [$org, $denied] = $this->organization($request);
+        if ($denied) {
+            return $denied;
+        }
+
+        return $this->ok(['alerts' => $alerts->build(new ProductCosting(CostEngine::for($org->id)))], 'Peringatan margin');
     }
 }

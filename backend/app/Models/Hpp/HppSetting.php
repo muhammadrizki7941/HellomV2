@@ -22,6 +22,7 @@ class HppSetting extends Model
         'monthly_revenue' => 'integer',
         'monthly_labor_hours' => 'integer',
         'main_channel_id' => 'integer',
+        'backflush_enabled' => 'boolean',
         'extra' => 'array',
         'onboarded_at' => 'datetime',
     ];

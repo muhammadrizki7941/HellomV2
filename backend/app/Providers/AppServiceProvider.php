@@ -86,6 +86,8 @@ class AppServiceProvider extends ServiceProvider
         // ─── POS order side effects (stock, points, socket, audit, fraud) ───
         Event::subscribe(\App\Listeners\Pos\OrderStockSubscriber::class);
         Event::subscribe(\App\Listeners\Pos\OrderSideEffectsSubscriber::class);
+        // Kalkulator HPP backflush (App\Listeners\Hpp\BackflushOnOrderPaid) is registered by listener
+        // auto-discovery (handle(OrderPaid)); do not add Event::listen for it (it would run twice).
 
         // ─── RBAC: Policy bindings + super-admin bypass ───
         Gate::policy(OrganizationLandingPage::class, LandingPagePolicy::class);

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, Calculator, CheckCircle2, Coffee, Laptop, Loader2, Package, Scissors, Store } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getHppOverview, onboardHpp, updateHppSettings } from '@/lib/hellomApi';
-import type { HppMode, HppOverview, HppRounding, HppSettings } from '@/lib/hellomApi';
+import { applyHppPrice, getHppOverview, onboardHpp, updateHppSettings } from '@/lib/hellomApi';
+import type { HppAlert, HppMode, HppOverview, HppRounding, HppSettings } from '@/lib/hellomApi';
 import CostsTab from './CostsTab';
 import IngredientsTab from './IngredientsTab';
 import ProductsTab from './ProductsTab';
@@ -83,7 +83,7 @@ export default function HppApp() {
         ))}
       </nav>
 
-      {tab === 'overview' && <OverviewTab data={data} goTo={setTab} />}
+      {tab === 'overview' && <OverviewTab data={data} goTo={setTab} onToast={toast} onChanged={load} />}
       {tab === 'products' && <ProductsTab settings={settings} overheadTotal={data.overhead_total} onToast={toast} onChanged={load} />}
       {tab === 'purchases' && <PurchasesTab onToast={toast} onChanged={load} />}
       {tab === 'costs' && <CostsTab settings={settings} onToast={toast} onChanged={load} />}
@@ -158,7 +158,7 @@ function Onboarding({ data, onDone }: { data: HppOverview; onDone: () => void })
   );
 }
 
-function OverviewTab({ data, goTo }: { data: HppOverview; goTo: (t: Tab) => void }) {
+function OverviewTab({ data, goTo, onToast, onChanged }: { data: HppOverview; goTo: (t: Tab) => void; onToast: (m: string) => void; onChanged: () => void }) {
   const c = data.counts;
   const cards: Array<[string, number, string, Tab]> = [
     ['Produk dihitung', c.products, 'text-zinc-900', 'products'],
@@ -169,6 +169,7 @@ function OverviewTab({ data, goTo }: { data: HppOverview; goTo: (t: Tab) => void
   ];
   return (
     <section className="space-y-4" data-hpp-overview>
+      {data.alerts.length > 0 && <AlertsPanel alerts={data.alerts} onToast={onToast} onChanged={onChanged} />}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         {cards.map(([label, value, color, target]) => (
           <button key={label} type="button" onClick={() => goTo(target)} className="rounded-2xl border border-zinc-200 bg-white p-4 text-left hover:border-zinc-400">
@@ -190,13 +191,15 @@ function OverviewTab({ data, goTo }: { data: HppOverview; goTo: (t: Tab) => void
             {data.products.map((p) => (
               <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
                 <span className="flex items-center gap-2 font-medium text-zinc-900">
-                  {p.margin_pct !== null && p.margin_pct < p.target_margin_pct ? <AlertTriangle className="h-4 w-4 text-amber-600" /> : <CheckCircle2 className="h-4 w-4 text-emerald-600" />}
+                  {p.incomplete || (p.margin_pct !== null && p.margin_pct < p.target_margin_pct) ? <AlertTriangle className="h-4 w-4 text-amber-600" /> : <CheckCircle2 className="h-4 w-4 text-emerald-600" />}
                   {p.name}
                 </span>
+                {p.incomplete ? <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800">Lengkapi resep</span> : (
                 <span className="flex items-center gap-3 text-zinc-600">
                   HPP {rupiah(p.cost.full)} · jual {rupiah(p.selling_price)} · <MarginText value={p.margin_pct} target={p.target_margin_pct} />
                   <FoodCostBadge status={p.food_cost_status} value={p.food_cost_pct} />
                 </span>
+                )}
               </li>
             ))}
           </ul>
@@ -206,11 +209,46 @@ function OverviewTab({ data, goTo }: { data: HppOverview; goTo: (t: Tab) => void
   );
 }
 
+function AlertsPanel({ alerts, onToast, onChanged }: { alerts: HppAlert[]; onToast: (m: string) => void; onChanged: () => void }) {
+  const [busy, setBusy] = useState<number | null>(null);
+  const apply = async (alert: HppAlert) => {
+    if (!alert.suggested_price) return;
+    setBusy(alert.product_id);
+    try {
+      await applyHppPrice(alert.product_id, alert.suggested_price);
+      onToast(`Harga ${alert.name} jadi ${rupiah(alert.suggested_price)}${alert.pos_product_id ? ' (juga di POS)' : ''}.`);
+      onChanged();
+    } catch (err) {
+      onToast(errorsFrom(err).form ?? 'Harga belum diubah.');
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <div className="rounded-2xl border border-amber-200 bg-amber-50/60" data-hpp-alerts>
+      <p className="flex items-center gap-2 border-b border-amber-200 px-4 py-3 font-semibold text-amber-900"><AlertTriangle className="h-5 w-5" /> Peringatan margin ({alerts.length})</p>
+      <ul className="divide-y divide-amber-100">
+        {alerts.map((a) => (
+          <li key={a.product_id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm" data-alert={a.name}>
+            <span className={cn('min-w-0 flex-1', a.severity === 'critical' ? 'text-red-800' : 'text-amber-900')}>{a.message}</span>
+            {a.suggested_price && a.suggested_price > a.selling_price && (
+              <button type="button" disabled={busy === a.product_id} onClick={() => void apply(a)} className="min-h-10 rounded-xl bg-zinc-900 px-3 text-xs font-bold text-white disabled:opacity-50" data-apply-alert>
+                Pakai {rupiah(a.suggested_price)}{a.pos_product_id ? ' di POS' : ''}
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function SettingsTab({ settings, data, onSaved }: { settings: HppSettings; data: HppOverview; onSaved: (m: string) => void }) {
   const [margin, setMargin] = useState(String(settings.target_margin_pct));
   const [rounding, setRounding] = useState<HppRounding>(settings.rounding);
   const [labor, setLabor] = useState(settings.labor_rate_per_hour);
   const [type, setType] = useState(settings.business_type);
+  const [backflush, setBackflush] = useState(settings.backflush_enabled);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [busy, setBusy] = useState(false);
 
@@ -219,7 +257,7 @@ function SettingsTab({ settings, data, onSaved }: { settings: HppSettings; data:
     setBusy(true);
     setErrors({});
     try {
-      await updateHppSettings({ target_margin_pct: Number(margin.replace(',', '.')) || 0, rounding, labor_rate_per_hour: labor, business_type: type });
+      await updateHppSettings({ target_margin_pct: Number(margin.replace(',', '.')) || 0, rounding, labor_rate_per_hour: labor, business_type: type, backflush_enabled: backflush });
       onSaved('Pengaturan disimpan. Saran harga ikut diperbarui.');
     } catch (err) {
       setErrors(errorsFrom(err));
@@ -246,6 +284,10 @@ function SettingsTab({ settings, data, onSaved }: { settings: HppSettings; data:
           {data.options.business_types.map((b) => <option key={b.key} value={b.key}>{b.label}</option>)}
         </select>
       </Field>
+      <label className="flex items-start gap-3 rounded-xl border border-zinc-200 p-3 text-sm">
+        <input type="checkbox" name="backflush_enabled" checked={backflush} onChange={(e) => setBackflush(e.target.checked)} className="mt-0.5 h-5 w-5" />
+        <span><strong className="text-zinc-900">Potong stok bahan otomatis dari POS</strong><span className="block text-zinc-500">Setiap pesanan POS yang lunas mengurangi stok bahan sesuai resep produk yang ditautkan (termasuk modifier).</span></span>
+      </label>
       {errors.form && <p role="alert" className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{errors.form}</p>}
       <PrimaryButton type="submit" busy={busy}>Simpan pengaturan</PrimaryButton>
     </form>

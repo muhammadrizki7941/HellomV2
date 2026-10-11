@@ -31,6 +31,7 @@ Route::prefix('hpp')->name('hpp.')->group(function () {
     Route::delete('/products/{id}', [HppProductController::class, 'destroy'])->whereNumber('id')->name('products.destroy');
     Route::post('/products/{id}/apply-price', [HppProductController::class, 'applyPrice'])->whereNumber('id')->name('products.apply_price');
     Route::get('/pos-products', [HppProductController::class, 'posProducts'])->name('pos_products');
+    Route::get('/pos-products/{id}/options', [HppProductController::class, 'posOptions'])->whereNumber('id')->name('pos_products.options');
     Route::post('/products/import-pos', [HppProductController::class, 'importPos'])->name('products.import_pos');
 
     // Tahap 2: biaya tetap, channel, pembelian, laporan.
@@ -45,4 +46,7 @@ Route::prefix('hpp')->name('hpp.')->group(function () {
     Route::get('/purchases', [HppPurchaseController::class, 'index'])->name('purchases.index');
     Route::post('/purchases', [HppPurchaseController::class, 'store'])->name('purchases.store');
     Route::get('/reports/products', [HppReportController::class, 'products'])->name('reports.products');
+
+    // Tahap 3: peringatan margin.
+    Route::get('/alerts', [HppReportController::class, 'alerts'])->name('alerts');
 });

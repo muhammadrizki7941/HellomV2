@@ -7,9 +7,11 @@ use App\Models\Hpp\HppChannel;
 use App\Models\Hpp\HppCostSnapshot;
 use App\Models\Hpp\HppIngredient;
 use App\Models\Hpp\HppProduct;
+use App\Models\Hpp\HppProductVariant;
 use App\Models\Hpp\HppRecipeItem;
 use App\Models\Organization;
 use App\Models\Product;
+use App\Models\ProductOptionValue;
 use App\Services\Hpp\CostEngine;
 use App\Services\Hpp\ProductCosting;
 use App\Services\OutletService;
@@ -132,6 +134,26 @@ class HppProductController extends HppBaseController
         ], 'Menu POS');
     }
 
+    /** Options of a POS menu item (size, extra shot, …) to link variants for stock backflush. */
+    public function posOptions(Request $request, int $posProductId): JsonResponse
+    {
+        [$org, $denied] = $this->organization($request);
+        if ($denied) {
+            return $denied;
+        }
+        $pos = $this->posQuery($org)->with('options.values')->find($posProductId);
+        if (!$pos) {
+            return $this->notFound('Menu POS');
+        }
+
+        return $this->ok([
+            'options' => $pos->options->map(fn ($option) => [
+                'id' => (int) $option->id, 'name' => (string) $option->name,
+                'values' => $option->values->map(fn ($value) => ['id' => (int) $value->id, 'name' => (string) $value->name, 'price_delta' => (int) $value->price_delta])->values(),
+            ])->values(),
+        ], 'Pilihan menu POS');
+    }
+
     /** Create an HPP product (Mode Resep, empty recipe) for every POS menu item not linked yet. */
     public function importPos(Request $request): JsonResponse
     {
@@ -206,6 +228,15 @@ class HppProductController extends HppBaseController
             'items.*.component_id' => 'required|integer',
             'items.*.qty' => 'required|numeric|min:0.001|max:10000000',
             'items.*.note' => 'nullable|string|max:120',
+            'variants' => 'nullable|array|max:30',
+            'variants.*.name' => 'required|string|max:80',
+            'variants.*.kind' => ['required', Rule::in(['size', 'modifier'])],
+            'variants.*.price_delta' => 'nullable|integer|min:-100000000|max:100000000',
+            'variants.*.pos_option_value_id' => 'nullable|integer',
+            'variants.*.items' => 'nullable|array|max:30',
+            'variants.*.items.*.component_type' => ['required', Rule::in(['ingredient', 'product'])],
+            'variants.*.items.*.component_id' => 'required|integer',
+            'variants.*.items.*.qty' => 'required|numeric|min:0.001|max:10000000',
             'channel_prices' => 'nullable|array|max:30',
             'channel_prices.*' => 'nullable|integer|min:0|max:100000000',
         ], [
@@ -213,6 +244,8 @@ class HppProductController extends HppBaseController
             'yield_qty.required' => 'Isi jumlah hasil (porsi/pcs).',
             'yield_qty.min' => 'Jumlah hasil harus lebih dari 0.',
             'items.*.qty.min' => 'Takaran harus lebih dari 0.',
+            'variants.*.name.required' => 'Nama varian wajib diisi.',
+            'variants.*.items.*.qty.min' => 'Takaran harus lebih dari 0.',
         ]);
 
         $posId = $validated['pos_product_id'] ?? null;
@@ -247,6 +280,22 @@ class HppProductController extends HppBaseController
             }
         }
 
+        $variants = ($validated['is_subrecipe'] ?? false) ? [] : array_values($validated['variants'] ?? []);
+        $posOptionIds = $posId ? ProductOptionValue::query()->join('product_options', 'product_options.id', '=', 'product_option_values.product_option_id')
+            ->where('product_options.product_id', $posId)->pluck('product_option_values.id')->flip() : collect();
+        foreach ($variants as $v => $variant) {
+            if (!empty($variant['pos_option_value_id']) && !isset($posOptionIds[(int) $variant['pos_option_value_id']])) {
+                throw ValidationException::withMessages(["variants.{$v}.pos_option_value_id" => 'Pilihan POS ini bukan milik menu yang ditautkan.']);
+            }
+            foreach (array_values($variant['items'] ?? []) as $i => $item) {
+                $id = (int) $item['component_id'];
+                $ok = $item['component_type'] === 'ingredient' ? isset($ingredientIds[$id]) : (bool) $engine->product($id)?->is_subrecipe;
+                if (!$ok) {
+                    throw ValidationException::withMessages(["variants.{$v}.items.{$i}.component_id" => 'Bahan tidak ditemukan.']);
+                }
+            }
+        }
+
         $product->forceFill([
             'name' => trim($validated['name']),
             'mode' => $validated['mode'],
@@ -264,6 +313,19 @@ class HppProductController extends HppBaseController
         RecalculateHppCosts::dispatch($org->id);
 
         HppRecipeItem::query()->where('product_id', $product->id)->delete();
+        HppProductVariant::query()->where('product_id', $product->id)->delete();
+        foreach ($variants as $v => $variant) {
+            $saved = HppProductVariant::query()->create([
+                'product_id' => $product->id, 'name' => trim($variant['name']), 'kind' => $variant['kind'], 'price_delta' => (int) ($variant['price_delta'] ?? 0),
+                'pos_option_value_id' => $variant['pos_option_value_id'] ?? null, 'sort_order' => $v,
+            ]);
+            foreach (array_values($variant['items'] ?? []) as $i => $item) {
+                HppRecipeItem::query()->create([
+                    'product_id' => $product->id, 'variant_id' => $saved->id, 'component_type' => $item['component_type'],
+                    'component_id' => (int) $item['component_id'], 'qty' => (float) $item['qty'], 'sort_order' => $i,
+                ]);
+            }
+        }
         foreach ($items as $index => $item) {
             HppRecipeItem::query()->create([
                 'product_id' => $product->id, 'component_type' => $item['component_type'], 'component_id' => (int) $item['component_id'],
@@ -296,6 +358,8 @@ class HppProductController extends HppBaseController
             'own_target_margin_pct' => $product->target_margin_pct,
             'lines' => $costing->engine()->lines((int) $product->id),
             'channel_prices' => (object) ((array) ($product->channel_prices ?? [])),
+            'variant_lines' => (object) collect($costing->engine()->variantsOf((int) $product->id))
+                ->mapWithKeys(fn ($variant) => [(string) $variant->id => $costing->engine()->lines((int) $product->id, (int) $variant->id)])->all(),
             'trend' => HppCostSnapshot::query()->where('product_id', $product->id)->where('snapshot_date', '>=', now()->subDays(60)->toDateString())
                 ->orderBy('snapshot_date')->get(['snapshot_date', 'cost_full', 'selling_price', 'margin_pct'])
                 ->map(fn ($s) => ['date' => $s->snapshot_date->toDateString(), 'cost' => (float) $s->cost_full, 'price' => (int) $s->selling_price, 'margin_pct' => $s->margin_pct])->values(),

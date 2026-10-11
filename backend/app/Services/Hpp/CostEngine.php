@@ -6,6 +6,7 @@ use App\Models\Hpp\HppChannel;
 use App\Models\Hpp\HppIngredient;
 use App\Models\Hpp\HppOverhead;
 use App\Models\Hpp\HppProduct;
+use App\Models\Hpp\HppProductVariant;
 use App\Models\Hpp\HppRecipeItem;
 use App\Models\Hpp\HppSetting;
 
@@ -31,8 +32,14 @@ final class CostEngine
     /** @var array<int, HppProduct> */
     private array $products = [];
 
-    /** @var array<int, list<HppRecipeItem>> */
+    /** @var array<int, list<HppRecipeItem>> base recipe per product */
     private array $items = [];
+
+    /** @var array<int, list<HppRecipeItem>> extra items per variant (per ONE unit) */
+    private array $variantItems = [];
+
+    /** @var array<int, list<HppProductVariant>> */
+    private array $variants = [];
 
     /** @var array<int, array<string, float>> */
     private array $memo = [];
@@ -56,7 +63,14 @@ final class CostEngine
         $this->products = HppProduct::query()->where('organization_id', $organizationId)->get()->keyBy('id')->all();
         $productIds = array_keys($this->products);
         foreach (HppRecipeItem::query()->whereIn('product_id', $productIds ?: [0])->orderBy('sort_order')->orderBy('id')->get() as $item) {
-            $this->items[(int) $item->product_id][] = $item;
+            if ($item->variant_id) {
+                $this->variantItems[(int) $item->variant_id][] = $item;
+            } else {
+                $this->items[(int) $item->product_id][] = $item;
+            }
+        }
+        foreach (HppProductVariant::query()->whereIn('product_id', $productIds ?: [0])->orderBy('sort_order')->orderBy('id')->get() as $variant) {
+            $this->variants[(int) $variant->product_id][] = $variant;
         }
     }
 
@@ -150,6 +164,80 @@ final class CostEngine
         return $this->items[$productId] ?? [];
     }
 
+    /** @return list<HppProductVariant> */
+    public function variantsOf(int $productId): array
+    {
+        return $this->variants[$productId] ?? [];
+    }
+
+    /** @return list<HppRecipeItem> */
+    public function variantItemsOf(int $variantId): array
+    {
+        return $this->variantItems[$variantId] ?? [];
+    }
+
+    /**
+     * Extra cost of a variant/modifier on top of one unit of the product.
+     *
+     * @return array{material: float, packaging: float}
+     */
+    public function variantExtraCost(int $variantId): array
+    {
+        $cost = ['material' => 0.0, 'packaging' => 0.0];
+        foreach ($this->variantItemsOf($variantId) as $item) {
+            if ($item->component_type === 'product') {
+                $sub = $this->unitCost((int) $item->component_id);
+                $cost['material'] += ($sub['material'] + $sub['labor'] + $sub['other']) * (float) $item->qty;
+                $cost['packaging'] += $sub['packaging'] * (float) $item->qty;
+                continue;
+            }
+            $ingredient = $this->ingredients[(int) $item->component_id] ?? null;
+            if ($ingredient) {
+                $cost[$ingredient->kind === 'packaging' ? 'packaging' : 'material'] += $this->ingredientUnitCost((int) $ingredient->id) * (float) $item->qty;
+            }
+        }
+
+        return $cost;
+    }
+
+    /**
+     * Raw ingredients used by $units of a product (+ chosen variants), sub-recipes expanded —
+     * what POS backflush takes from stock. Mode Cepat products use nothing.
+     *
+     * @param list<int> $variantIds
+     * @return array<int, float> ingredient_id => qty (use units)
+     */
+    public function consumption(int $productId, float $units, array $variantIds = []): array
+    {
+        $out = [];
+        $this->expand($this->itemsOf($productId), $units / max(0.001, (float) ($this->products[$productId]->yield_qty ?? 1)), $out, [$productId]);
+        foreach ($variantIds as $variantId) {
+            $this->expand($this->variantItemsOf($variantId), $units, $out, [$productId]);
+        }
+
+        return $out;
+    }
+
+    /** @param list<HppRecipeItem> $items */
+    private function expand(array $items, float $factor, array &$out, array $stack): void
+    {
+        if (count($stack) > self::MAX_DEPTH) {
+            return;
+        }
+        foreach ($items as $item) {
+            $qty = (float) $item->qty * $factor;
+            if ($item->component_type === 'product') {
+                $subId = (int) $item->component_id;
+                $sub = $this->products[$subId] ?? null;
+                if ($sub && !in_array($subId, $stack, true) && $sub->mode !== 'quick') {
+                    $this->expand($this->itemsOf($subId), $qty / max(0.001, (float) $sub->yield_qty), $out, [...$stack, $subId]);
+                }
+                continue;
+            }
+            $out[(int) $item->component_id] = ($out[(int) $item->component_id] ?? 0) + $qty;
+        }
+    }
+
     /** Cost of one use unit of an ingredient (after yield loss, with overrides). */
     public function ingredientUnitCost(int $ingredientId): float
     {
@@ -181,10 +269,10 @@ final class CostEngine
      *
      * @return list<array<string, mixed>>
      */
-    public function lines(int $productId): array
+    public function lines(int $productId, ?int $variantId = null): array
     {
         $lines = [];
-        foreach ($this->itemsOf($productId) as $item) {
+        foreach ($variantId ? $this->variantItemsOf($variantId) : $this->itemsOf($productId) as $item) {
             [$name, $unit, $unitCost, $kind] = $this->componentInfo($item, []);
             $lines[] = [
                 'id' => (int) $item->id,

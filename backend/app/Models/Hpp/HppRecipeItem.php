@@ -11,5 +11,5 @@ class HppRecipeItem extends Model
 
     protected $guarded = ['id'];
 
-    protected $casts = ['qty' => 'float', 'component_id' => 'integer', 'sort_order' => 'integer'];
+    protected $casts = ['qty' => 'float', 'component_id' => 'integer', 'variant_id' => 'integer', 'sort_order' => 'integer'];
 }

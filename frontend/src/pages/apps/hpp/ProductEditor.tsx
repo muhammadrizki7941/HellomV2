@@ -6,6 +6,8 @@ import type { HppChannel, HppIngredient, HppProductDetail, HppProductSummary, Hp
 import { Dialog, Field, FoodCostBadge, MarginText, MoneyInput, PrimaryButton, errorsFrom, inputClass, rupiah, rupiahUnit, toDecimal } from './shared';
 import type { FieldErrors } from './shared';
 import { foodCostStatus, marginPct, suggestPrice } from './pricing';
+import VariantsEditor, { newKey as variantKey } from './VariantsEditor';
+import type { VariantDraft } from './VariantsEditor';
 
 // One product: Mode Cepat (total belanja ÷ jumlah hasil) or a recipe (bahan, kemasan, sub-resep).
 // The summary on the right updates while typing; saving returns the server's numbers.
@@ -44,13 +46,16 @@ export default function ProductEditor({ productId, asSubrecipe, settings, overhe
   const [showExtra, setShowExtra] = useState(false);
   const [channels, setChannels] = useState<HppChannel[]>([]);
   const [channelPrices, setChannelPrices] = useState<Record<string, number>>({});
+  const [variants, setVariants] = useState<VariantDraft[]>([]);
 
   useEffect(() => {
     getHppIngredients().then((r) => setIngredients(r.ingredients)).catch(() => undefined);
     getHppPosProducts().then((r) => setPosProducts(r.products)).catch(() => undefined);
     getHppCosts().then((r) => setChannels(r.channels.filter((c) => c.is_active))).catch(() => undefined);
-    if (!productId) return;
+    if (!productId) return undefined;
+    let alive = true; // ignore a late response (StrictMode double effect, fast re-open)
     getHppProduct(productId).then(({ product: p }) => {
+      if (!alive) return;
       setLoaded(p);
       setName(p.name);
       setMode(p.mode);
@@ -66,7 +71,12 @@ export default function ProductEditor({ productId, asSubrecipe, settings, overhe
       setPosId(p.pos_product_id ? String(p.pos_product_id) : '');
       setShowExtra(p.labor_minutes > 0 || p.other_cost > 0);
       setChannelPrices(p.channel_prices ?? {});
-    }).catch((err) => setErrors(errorsFrom(err)));
+      setVariants(p.variants.map((v) => ({
+        key: variantKey(), name: v.name, kind: v.kind, price_delta: v.price_delta, pos_option_value_id: v.pos_option_value_id ? String(v.pos_option_value_id) : '',
+        items: (p.variant_lines[String(v.id)] ?? []).map((l) => ({ key: variantKey(), component: `${l.component_type}:${l.component_id}`, qty: String(l.qty).replace('.', ',') })),
+      })));
+    }).catch((err) => { if (alive) setErrors(errorsFrom(err)); });
+    return () => { alive = false; };
   }, [productId]);
 
   const subrecipes = products.filter((p) => p.is_subrecipe && p.id !== productId);
@@ -149,6 +159,10 @@ export default function ProductEditor({ productId, asSubrecipe, settings, overhe
         name, mode, is_subrecipe: isSub, pos_product_id: isSub || !posId ? null : Number(posId), selling_price: isSub ? 0 : price,
         target_margin_pct: ownMargin.trim() === '' ? null : toDecimal(ownMargin), yield_qty: toDecimal(yieldQty), yield_unit: yieldUnit,
         quick_batch_cost: batchCost, labor_minutes: Math.round(toDecimal(laborMinutes)), other_cost: otherCost, items, channel_prices: channelPrices,
+        variants: isSub || mode !== 'recipe' ? [] : variants.filter((v) => v.name.trim()).map((v) => ({
+          name: v.name.trim(), kind: v.kind, price_delta: v.price_delta, pos_option_value_id: v.pos_option_value_id ? Number(v.pos_option_value_id) : null,
+          items: v.items.filter((i) => i.component).map((i) => { const [t, id] = i.component.split(':'); return { component_type: t as 'ingredient' | 'product', component_id: Number(id), qty: toDecimal(i.qty) }; }),
+        })),
       }, productId ?? undefined);
       onSaved(`"${r.product.name}" disimpan. HPP ${rupiah(r.product.cost.full)} per ${r.product.yield_unit}.`);
     } catch (err) {
@@ -277,6 +291,10 @@ export default function ProductEditor({ productId, asSubrecipe, settings, overhe
                   </div>
                 )}
               </div>
+            )}
+
+            {!isSub && mode === 'recipe' && settings.mode !== 'quick' && (
+              <VariantsEditor variants={variants} onChange={setVariants} ingredients={ingredients} subrecipes={subrecipes} posProductId={posId ? Number(posId) : null} errors={errors} />
             )}
 
             {!isSub && (

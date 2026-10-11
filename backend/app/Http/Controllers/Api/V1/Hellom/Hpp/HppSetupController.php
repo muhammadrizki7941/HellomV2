@@ -8,6 +8,7 @@ use App\Models\Hpp\HppIngredient;
 use App\Models\Hpp\HppProduct;
 use App\Models\Hpp\HppSetting;
 use App\Services\Hpp\CostEngine;
+use App\Services\Hpp\MarginAlerts;
 use App\Services\Hpp\ProductCosting;
 use App\Support\Hpp\Templates;
 use App\Support\Hpp\Units;
@@ -41,6 +42,7 @@ class HppSetupController extends HppBaseController
             ],
             'products' => $products->sortBy(fn ($p) => $p['margin_pct'] ?? 999)->take(5)->values(),
             'overhead_total' => (int) round($costing->engine()->overheadTotal()),
+            'alerts' => app(MarginAlerts::class)->build($costing),
             'options' => $this->options(),
         ], 'Kalkulator HPP');
     }
@@ -63,6 +65,7 @@ class HppSetupController extends HppBaseController
             'monthly_revenue' => 'sometimes|integer|min:0|max:1000000000000',
             'monthly_labor_hours' => 'sometimes|integer|min:0|max:1000000',
             'main_channel_id' => ['sometimes', 'nullable', 'integer', Rule::exists('hpp_channels', 'id')->where('organization_id', $org->id)],
+            'backflush_enabled' => 'sometimes|boolean',
         ], [
             'target_margin_pct.max' => 'Target margin maksimal 90%.',
         ]);
@@ -116,6 +119,7 @@ class HppSetupController extends HppBaseController
             'monthly_revenue' => (int) $settings->monthly_revenue,
             'monthly_labor_hours' => (int) $settings->monthly_labor_hours,
             'main_channel_id' => $settings->main_channel_id ? (int) $settings->main_channel_id : null,
+            'backflush_enabled' => (bool) ($settings->backflush_enabled ?? true),
             'onboarded' => $settings->onboarded_at !== null,
         ];
     }
