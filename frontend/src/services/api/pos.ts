@@ -233,6 +233,12 @@ export function createPosProduct(payload: Record<string, unknown> | FormData) {
 }
 
 export function updatePosProduct(productId: number, payload: Record<string, unknown> | FormData) {
+  // PHP does not parse a multipart body on PATCH (every field would arrive empty → "category id
+  // field is required"): FormData goes as POST + _method=PATCH, JSON stays a real PATCH.
+  if (payload instanceof FormData) {
+    if (!payload.has('_method')) payload.append('_method', 'PATCH');
+    return apiRequest<Record<string, unknown>>(`/pos/products/${productId}`, { method: 'POST', body: payload });
+  }
   return apiRequest<Record<string, unknown>>(`/pos/products/${productId}`, {
     method: 'PATCH',
     body: payload,

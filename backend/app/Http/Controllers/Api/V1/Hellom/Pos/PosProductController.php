@@ -7,7 +7,10 @@ use App\Models\Product;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use App\Support\ImageOptimizer;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\ValidationException;
+use RuntimeException;
 
 class PosProductController extends BaseApiController
 {
@@ -35,56 +38,16 @@ class PosProductController extends BaseApiController
             return $this->error('POS context not available', 'CONTEXT_MISSING');
         }
 
-        try {
-            $validated = $request->validate([
-            'category_id' => [
-                'required',
-                function ($attribute, $value, $fail) use ($tenantSlug) {
-                    $exists = \App\Models\Category::withoutGlobalScope('tenant')
-                        ->where('id', $value)
-                        ->where('tenant_id', $tenantSlug)
-                        ->exists();
-                    if (!$exists) {
-                        $fail('Category not found for this tenant.');
-                    }
-                }
-            ],
-            'name' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'price' => 'required|numeric|min:0',
-            'is_available' => 'nullable|in:true,false,1,0',
-            'track_stock' => 'nullable|in:true,false,1,0',
-            'stock' => 'nullable|integer|min:0|required_if:track_stock,1',
-            'image' => 'nullable|image|max:2048',
-            'options' => 'nullable|array',
-            'options.*.name' => 'required_with:options|string|max:100',
-            'options.*.type' => 'required_with:options|string|in:single,multi',
-            'options.*.is_required' => 'nullable|in:true,false,1,0',
-            'options.*.values' => 'required_with:options|array|min:1',
-            'options.*.values.*.name' => 'required|string|max:100',
-            'options.*.values.*.price_delta' => 'nullable|numeric|min:0',
-        ]);
+        $validated = $request->validate($this->rules($tenantSlug), $this->messages(), $this->attributeNames());
 
-        } catch (ValidationException $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $e->errors(),
-                'debug_received' => $request->all(),
-            ], 422);
-        }
-
-        $imagePath = null;
-        if ($request->hasFile('image')) {
-            $imagePath = $request->file('image')->store('products', 'public');
-        }
+        $imagePath = $request->hasFile('image') ? $this->storeImage($request->file('image')) : null;
 
         $product = Product::create([
             'tenant_id' => $tenantSlug,
             'category_id' => $validated['category_id'],
             'name' => $validated['name'],
             'slug' => \Illuminate\Support\Str::slug($validated['name']),
-            'description' => $validated['description'],
+            'description' => $validated['description'] ?? null,
             'price' => (int) $validated['price'],
             'image_path' => $imagePath,
             'is_available' => $this->parseBool($request->input('is_available'), true),
@@ -142,48 +105,22 @@ class PosProductController extends BaseApiController
 
         $product = Product::where('tenant_id', $tenantSlug)->findOrFail($productId);
 
-        $validated = $request->validate([
-            'category_id' => [
-                'required',
-                function ($attribute, $value, $fail) use ($tenantSlug) {
-                    $exists = \App\Models\Category::withoutGlobalScope('tenant')
-                        ->where('id', $value)
-                        ->where('tenant_id', $tenantSlug)
-                        ->exists();
-                    if (!$exists) {
-                        $fail('Category not found for this tenant.');
-                    }
-                }
-            ],
-            'name' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'price' => 'required|numeric|min:0',
-            'is_available' => 'nullable|in:true,false,1,0',
-            'track_stock' => 'nullable|in:true,false,1,0',
-            'stock' => 'nullable|integer|min:0|required_if:track_stock,1',
-            'image' => 'nullable|image|max:2048',
-            'options' => 'nullable|array',
-            'options.*.name' => 'required_with:options|string|max:100',
-            'options.*.type' => 'required_with:options|string|in:single,multi',
-            'options.*.is_required' => 'nullable|in:true,false,1,0',
-            'options.*.values' => 'required_with:options|array|min:1',
-            'options.*.values.*.name' => 'required|string|max:100',
-            'options.*.values.*.price_delta' => 'nullable|numeric|min:0',
-        ]);
+        $validated = $request->validate($this->rules($tenantSlug), $this->messages(), $this->attributeNames());
 
         $imagePath = $product->image_path;
         if ($request->hasFile('image')) {
+            $newPath = $this->storeImage($request->file('image'));
             if ($imagePath) {
-                Storage::disk('public')->delete($imagePath);
+                ImageOptimizer::delete($imagePath);
             }
-            $imagePath = $request->file('image')->store('products', 'public');
+            $imagePath = $newPath;
         }
 
         $product->update([
             'category_id' => $validated['category_id'],
             'name' => $validated['name'],
             'slug' => \Illuminate\Support\Str::slug($validated['name']),
-            'description' => $validated['description'],
+            'description' => $validated['description'] ?? null,
             'price' => (int) $validated['price'],
             'image_path' => $imagePath,
             'is_available' => $this->parseBool($request->input('is_available'), true),
@@ -247,7 +184,7 @@ class PosProductController extends BaseApiController
         $product = Product::where('tenant_id', $tenantSlug)->findOrFail($productId);
 
         if ($product->image_path) {
-            Storage::disk('public')->delete($product->image_path);
+            ImageOptimizer::delete($product->image_path);
         }
 
         $product->delete();
@@ -258,5 +195,75 @@ class PosProductController extends BaseApiController
     private function parseBool(mixed $value, bool $default = false): bool
     {
         return filter_var($value ?? $default, FILTER_VALIDATE_BOOLEAN);
+    }
+
+    /** Rules shared by create and update (multipart FormData from the POS menu page). */
+    private function rules(string $tenantSlug): array
+    {
+        return [
+            'category_id' => [
+                'required',
+                function ($attribute, $value, $fail) use ($tenantSlug) {
+                    $exists = \App\Models\Category::withoutGlobalScope('tenant')
+                        ->where('id', $value)
+                        ->where('tenant_id', $tenantSlug)
+                        ->exists();
+                    if (!$exists) {
+                        $fail('Kategori tidak ditemukan. Pilih kategori yang ada.');
+                    }
+                },
+            ],
+            'name' => 'required|string|max:255',
+            'description' => 'nullable|string|max:2000',
+            'price' => 'required|numeric|min:0|max:100000000',
+            'is_available' => 'nullable|in:true,false,1,0',
+            'track_stock' => 'nullable|in:true,false,1,0',
+            'stock' => 'nullable|integer|min:0|max:1000000',
+            // Phone photos are big: up to 8 MB, stored as a compressed WebP (max 1600 px).
+            'image' => 'nullable|file|mimes:jpg,jpeg,png,webp|max:8192',
+            'options' => 'nullable|array|max:20',
+            'options.*.name' => 'required_with:options|string|max:100',
+            'options.*.type' => 'required_with:options|string|in:single,multi',
+            'options.*.is_required' => 'nullable|in:true,false,1,0',
+            'options.*.values' => 'required_with:options|array|min:1|max:30',
+            'options.*.values.*.name' => 'required|string|max:100',
+            'options.*.values.*.price_delta' => 'nullable|numeric|min:0|max:100000000',
+        ];
+    }
+
+    /** @return array<string, string> */
+    private function messages(): array
+    {
+        return [
+            'category_id.required' => 'Pilih kategori produk dulu.',
+            'name.required' => 'Nama produk wajib diisi.',
+            'name.max' => 'Nama produk maksimal 255 karakter.',
+            'price.required' => 'Harga wajib diisi.',
+            'price.numeric' => 'Harga harus berupa angka.',
+            'price.min' => 'Harga tidak boleh minus.',
+            'stock.integer' => 'Stok harus angka bulat.',
+            'stock.min' => 'Stok tidak boleh minus.',
+            'image.mimes' => 'Foto harus JPG, PNG, atau WebP.',
+            'image.max' => 'Ukuran foto maksimal 8 MB.',
+            'image.uploaded' => 'Foto gagal diunggah. Coba foto lain atau yang lebih kecil (maks. 8 MB).',
+            'options.*.name.required_with' => 'Nama opsi wajib diisi.',
+            'options.*.values.required_with' => 'Setiap opsi butuh minimal satu pilihan.',
+            'options.*.values.*.name.required' => 'Nama pilihan wajib diisi.',
+        ];
+    }
+
+    /** @return array<string, string> */
+    private function attributeNames(): array
+    {
+        return ['category_id' => 'kategori', 'name' => 'nama produk', 'price' => 'harga', 'stock' => 'stok', 'image' => 'foto', 'description' => 'deskripsi'];
+    }
+
+    private function storeImage(UploadedFile $file): string
+    {
+        try {
+            return ImageOptimizer::storeWebp($file, 'products');
+        } catch (RuntimeException $e) {
+            throw ValidationException::withMessages(['image' => $e->getMessage()]);
+        }
     }
 }

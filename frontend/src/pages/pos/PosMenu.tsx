@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Search, Plus, Edit2, Trash2, Upload, Package, Eye, X, Grid, List } from 'lucide-react';
+import { Search, Plus, Edit2, Trash2, Upload, Package, Eye, X, Grid, List, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getPosProducts, getPosCategories, createPosCategory, updatePosCategory, deletePosCategory, createPosProduct, updatePosProduct, deletePosProduct, getImageUrl } from '@/lib/hellomApi';
+import { ApiError, getPosProducts, getPosCategories, createPosCategory, updatePosCategory, createPosProduct, updatePosProduct, deletePosProduct, getImageUrl } from '@/lib/hellomApi';
+
+const MAX_IMAGE_MB = 8;
+/** Readable message for any failed request (Indonesian text from the server when it has one). */
+const focusFirstError = () => window.setTimeout(() => document.querySelector<HTMLElement>('[data-pos-product-form] [aria-invalid="true"]')?.focus(), 0);
+const errorMessage = (err: unknown, fallback: string) => (err instanceof ApiError ? Object.values(err.fieldErrors)[0]?.[0] ?? err.message : err instanceof Error && err.message ? err.message : fallback);
 
 type Product = {
   id: number;
@@ -66,6 +71,21 @@ export default function PosMenu() {
     name: '',
     is_active: true,
   });
+  // Saving state, errors shown in the form (not browser pop-ups), toast after success.
+  const [saving, setSaving] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState<string | null>(null);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
+  const [savingCategory, setSavingCategory] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<Product | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [toast, setToast] = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => {
+    if (!toast) return undefined;
+    const timer = window.setTimeout(() => setToast(null), 3500);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
 
   useEffect(() => {
     loadData();
@@ -81,7 +101,7 @@ export default function PosMenu() {
       setProducts(productsRes.products || []);
       setCategories(categoriesRes.categories || []);
     } catch (err) {
-      setError('Failed to load menu data');
+      setError(errorMessage(err, 'Menu belum bisa dimuat. Coba muat ulang halaman.'));
     } finally {
       setLoading(false);
     }
@@ -138,19 +158,41 @@ export default function PosMenu() {
     setShowCreateModal(true);
   };
 
-  const handleDeleteProduct = async (productId: number) => {
-    if (confirm('Are you sure you want to delete this product?')) {
-      try {
-        await deletePosProduct(productId);
-        await loadData();
-      } catch (err) {
-        alert('Failed to delete product');
-      }
+  const handleDeleteProduct = (productId: number) => {
+    setConfirmDelete(products.find((p) => p.id === productId) ?? null);
+  };
+
+  const confirmDeleteProduct = async () => {
+    if (!confirmDelete) return;
+    setDeleting(true);
+    try {
+      await deletePosProduct(confirmDelete.id);
+      setToast({ ok: true, text: `"${confirmDelete.name}" dihapus.` });
+      setConfirmDelete(null);
+      await loadData();
+    } catch (err) {
+      setToast({ ok: false, text: errorMessage(err, 'Produk belum bisa dihapus. Coba lagi.') });
+    } finally {
+      setDeleting(false);
     }
   };
 
   const handleSubmitProduct = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saving) return;
+    const found: Record<string, string> = {};
+    if (!formData.category_id) found.category_id = 'Pilih kategori produk dulu.';
+    if (!formData.name.trim()) found.name = 'Nama produk wajib diisi.';
+    if (formData.price === '' || Number(formData.price) < 0) found.price = 'Isi harga (angka, tidak boleh minus).';
+    if (formData.track_stock && formData.stock !== '' && Number(formData.stock) < 0) found.stock = 'Stok tidak boleh minus.';
+    setFieldErrors(found);
+    setFormError(null);
+    if (Object.keys(found).length > 0) {
+      setFormError('Ada data yang belum lengkap. Cek kolom yang ditandai merah.');
+      focusFirstError();
+      return;
+    }
+    setSaving(true);
     try {
 
       const data = new FormData();
@@ -186,23 +228,26 @@ export default function PosMenu() {
         data.append('image', imageFile);
       }
 
-      // Add method spoofing for updates
-      if (editingProduct) {
-        data.append('_method', 'PATCH');
-      }
-
       if (editingProduct) {
         await updatePosProduct(editingProduct.id, data);
       } else {
         await createPosProduct(data);
       }
 
-      await loadData();
+      const savedName = formData.name.trim();
+      const wasEditing = !!editingProduct;
       setShowCreateModal(false);
       resetForm();
+      setToast({ ok: true, text: wasEditing ? `"${savedName}" diperbarui.` : `"${savedName}" ditambahkan ke menu.` });
+      await loadData();
     } catch (err) {
-      console.error('Error saving product:', err);
-      alert(`Failed to save product: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      if (err instanceof ApiError && Object.keys(err.fieldErrors).length > 0) {
+        setFieldErrors(Object.fromEntries(Object.entries(err.fieldErrors).map(([key, messages]) => [key.startsWith('options.') ? 'options' : key, messages[0]])));
+      }
+      setFormError(errorMessage(err, 'Produk belum tersimpan. Periksa koneksi lalu coba lagi.'));
+      focusFirstError();
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -219,12 +264,19 @@ export default function PosMenu() {
     setImageFile(null);
     setImagePreview(null);
     setProductOptions([]);
-    setError(null);
-    setSearchTerm('');
+    setFieldErrors({});
+    setFormError(null);
   };
 
   const handleSubmitCategory = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (savingCategory) return;
+    if (!categoryFormData.name.trim()) {
+      setCategoryError('Nama kategori wajib diisi.');
+      return;
+    }
+    setSavingCategory(true);
+    setCategoryError(null);
     try {
       if (editingCategory) {
         await updatePosCategory(editingCategory.id, categoryFormData);
@@ -236,8 +288,11 @@ export default function PosMenu() {
       setShowCategoryModal(false);
       setEditingCategory(null);
       setCategoryFormData({ name: '', is_active: true });
+      setToast({ ok: true, text: 'Kategori disimpan.' });
     } catch (err) {
-      alert('Failed to save category');
+      setCategoryError(errorMessage(err, 'Kategori belum tersimpan. Coba lagi.'));
+    } finally {
+      setSavingCategory(false);
     }
   };
 
@@ -378,12 +433,16 @@ export default function PosMenu() {
                   <div className="absolute top-1 right-1 flex gap-1">
                     <button
                       onClick={() => handleEditProduct(product)}
+                      aria-label={`Ubah ${product.name}`}
+                      data-edit-product={product.id}
                       className="p-1 bg-white rounded-full shadow-sm hover:bg-gray-50"
                     >
                       <Edit2 className="w-3 h-3 md:w-4 md:h-4 text-gray-600" />
                     </button>
                     <button
                       onClick={() => handleDeleteProduct(product.id)}
+                      aria-label={`Hapus ${product.name}`}
+                      data-delete-product={product.id}
                       className="p-1 bg-white rounded-full shadow-sm hover:bg-red-50"
                     >
                       <Trash2 className="w-3 h-3 md:w-4 md:h-4 text-red-600" />
@@ -472,6 +531,8 @@ export default function PosMenu() {
                 <div className="flex gap-1 flex-shrink-0">
                   <button
                     onClick={() => handleEditProduct(product)}
+                      aria-label={`Ubah ${product.name}`}
+                      data-edit-product={product.id}
                     className="p-1.5 md:p-2 text-gray-600 hover:text-amber-600 hover:bg-amber-50 rounded"
                     title="Edit"
                   >
@@ -479,6 +540,8 @@ export default function PosMenu() {
                   </button>
                   <button
                     onClick={() => handleDeleteProduct(product.id)}
+                      aria-label={`Hapus ${product.name}`}
+                      data-delete-product={product.id}
                     className="p-1.5 md:p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded"
                     title="Delete"
                   >
@@ -518,7 +581,13 @@ export default function PosMenu() {
                 </button>
               </div>
 
-              <form onSubmit={handleSubmitProduct} className="space-y-4">
+              <form onSubmit={handleSubmitProduct} noValidate data-pos-product-form className="space-y-4">
+                {formError && (
+                  <div role="alert" className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800" data-form-error>
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>{formError}</span>
+                  </div>
+                )}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-800 mb-1">
@@ -526,15 +595,17 @@ export default function PosMenu() {
                     </label>
                     <select
                       value={formData.category_id}
-                      onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
-                      className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-amber-300 focus:border-amber-300"
-                      required
+                      onChange={(e) => { setFormData({ ...formData, category_id: e.target.value }); setFieldErrors((x) => ({ ...x, category_id: '' })); }}
+                      className={cn("w-full px-3 py-2 bg-white border rounded-lg text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-amber-300 focus:border-amber-300", fieldErrors.category_id ? "border-red-400" : "border-gray-300")}
+                      aria-invalid={fieldErrors.category_id ? true : undefined}
                     >
                       <option value="">Pilih kategori dulu ya</option>
                       {categories.map(category => (
                         <option key={category.id} value={category.id}>{category.name}</option>
                       ))}
                     </select>
+                    {fieldErrors.category_id && <p className="mt-1 text-sm text-red-600">{fieldErrors.category_id}</p>}
+                    {categories.length === 0 && <p className="mt-1 text-sm text-gray-500">Belum ada kategori. Tutup form ini lalu klik "+ Tambah Kategori".</p>}
                   </div>
 
                   <div>
@@ -544,11 +615,12 @@ export default function PosMenu() {
                     <input
                       type="text"
                       value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      onChange={(e) => { setFormData({ ...formData, name: e.target.value }); setFieldErrors((x) => ({ ...x, name: '' })); }}
                       placeholder="misalnya: Nasi Goreng Spesial"
-                      className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-amber-300 focus:border-amber-300"
-                      required
+                      className={cn("w-full px-3 py-2 bg-white border rounded-lg text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-amber-300 focus:border-amber-300", fieldErrors.name ? "border-red-400" : "border-gray-300")}
+                      aria-invalid={fieldErrors.name ? true : undefined}
                     />
+                    {fieldErrors.name && <p className="mt-1 text-sm text-red-600">{fieldErrors.name}</p>}
                   </div>
                 </div>
 
@@ -573,12 +645,14 @@ export default function PosMenu() {
                     <input
                       type="number"
                       value={formData.price}
-                      onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                      onChange={(e) => { setFormData({ ...formData, price: e.target.value }); setFieldErrors((x) => ({ ...x, price: '' })); }}
                       placeholder="0"
-                      className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-amber-300 focus:border-amber-300"
+                      inputMode="numeric"
+                      className={cn("w-full px-3 py-2 bg-white border rounded-lg text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-amber-300 focus:border-amber-300", fieldErrors.price ? "border-red-400" : "border-gray-300")}
+                      aria-invalid={fieldErrors.price ? true : undefined}
                       min="0"
-                      required
                     />
+                    {fieldErrors.price && <p className="mt-1 text-sm text-red-600">{fieldErrors.price}</p>}
                   </div>
 
                   <div className="flex items-center">
@@ -621,11 +695,13 @@ export default function PosMenu() {
                       type="number"
                       value={formData.stock}
                       onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
-                      placeholder={formData.track_stock ? '0' : 'Unlimited'}
-                      className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-amber-300 focus:border-amber-300"
+                      placeholder={formData.track_stock ? '0' : 'Tidak dibatasi'}
+                      className={cn("w-full px-3 py-2 bg-white border rounded-lg text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-amber-300 focus:border-amber-300", fieldErrors.stock ? "border-red-400" : "border-gray-300")}
+                      aria-invalid={fieldErrors.stock ? true : undefined}
                       min="0"
                       disabled={!formData.track_stock}
                     />
+                    {fieldErrors.stock && <p className="mt-1 text-sm text-red-600">{fieldErrors.stock}</p>}
                   </div>
                 </div>
 
@@ -636,13 +712,22 @@ export default function PosMenu() {
                   <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer">
                     <input
                       type="file"
-                      accept="image/*"
+                      accept="image/jpeg,image/png,image/webp"
                       onChange={(e) => {
                         const file = e.target.files?.[0];
-                        if (file) {
-                          setImageFile(file);
-                          setImagePreview(URL.createObjectURL(file)); // preview lokal
+                        e.target.value = '';
+                        if (!file) return;
+                        if (!/^image\/(jpeg|png|webp)$/.test(file.type)) {
+                          setFieldErrors((x) => ({ ...x, image: 'Foto harus JPG, PNG, atau WebP.' }));
+                          return;
                         }
+                        if (file.size > MAX_IMAGE_MB * 1024 * 1024) {
+                          setFieldErrors((x) => ({ ...x, image: `Ukuran foto maksimal ${MAX_IMAGE_MB} MB (foto ini ${(file.size / 1024 / 1024).toFixed(1)} MB).` }));
+                          return;
+                        }
+                        setFieldErrors((x) => ({ ...x, image: '' }));
+                        setImageFile(file);
+                        setImagePreview(URL.createObjectURL(file)); // preview lokal
                       }}
                       className="hidden"
                       id="image-upload"
@@ -677,12 +762,13 @@ export default function PosMenu() {
                           <div>
                             <p className="text-sm font-medium text-gray-700">Klik untuk upload foto produk</p>
                             <p className="text-sm text-gray-400">atau seret & lepas di sini</p>
-                            <p className="text-xs text-gray-400 mt-1">PNG, JPG, WEBP maks. 2MB</p>
+                            <p className="text-xs text-gray-400 mt-1">PNG, JPG, WEBP maks. 8 MB — otomatis dikompres</p>
                           </div>
                         </div>
                       )}
                     </label>
                   </div>
+                  {fieldErrors.image && <p className="mt-1 text-sm text-red-600">{fieldErrors.image}</p>}
                 </div>
 
                 {/* Product Options */}
@@ -821,6 +907,7 @@ export default function PosMenu() {
                     ))}
                   </div>
 
+                  {fieldErrors.options && <p className="mt-2 text-sm text-red-600">{fieldErrors.options}</p>}
                   {productOptions.length === 0 && (
                     <p className="text-sm text-gray-500 text-center py-4">
                       Belum ada opsi tambahan. Klik "Tambah Opsi" untuk buat pilihan custom produk ini.
@@ -841,9 +928,11 @@ export default function PosMenu() {
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-amber-400 text-[#111111] hover:bg-amber-500 rounded-lg transition-colors"
+                    disabled={saving}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-amber-400 text-[#111111] hover:bg-amber-500 rounded-lg transition-colors disabled:opacity-60"
                   >
-                    {editingProduct ? 'Update Produk' : 'Simpan Produk'}
+                    {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+                    {saving ? 'Menyimpan…' : editingProduct ? 'Simpan Perubahan' : 'Simpan Produk'}
                   </button>
                 </div>
               </form>
@@ -861,14 +950,15 @@ export default function PosMenu() {
                 {editingCategory ? 'Edit Kategori' : 'Tambah Kategori Baru'}
               </h3>
               <button
-                onClick={() => setShowCategoryModal(false)}
+                onClick={() => { setShowCategoryModal(false); setCategoryError(null); }}
                 className="text-gray-400 hover:text-gray-600"
               >
                 <X className="w-6 h-6" />
               </button>
             </div>
 
-            <form onSubmit={handleSubmitCategory} className="space-y-4">
+            <form onSubmit={handleSubmitCategory} noValidate className="space-y-4">
+              {categoryError && <p role="alert" className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />{categoryError}</p>}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Nama Kategori *
@@ -905,13 +995,41 @@ export default function PosMenu() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-amber-400 text-[#111111] hover:bg-amber-500 rounded-lg transition-colors"
+                  disabled={savingCategory}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-amber-400 text-[#111111] hover:bg-amber-500 rounded-lg transition-colors disabled:opacity-60"
                 >
-                  {editingCategory ? 'Update Kategori' : 'Simpan Kategori'}
+                  {savingCategory && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {savingCategory ? 'Menyimpan…' : editingCategory ? 'Simpan Perubahan' : 'Simpan Kategori'}
                 </button>
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* Delete confirmation */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="delete-title" data-delete-dialog>
+          <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-2xl">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-red-50"><Trash2 className="h-6 w-6 text-red-600" /></div>
+            <h3 id="delete-title" className="text-center text-lg font-semibold text-gray-900">Hapus produk?</h3>
+            <p className="mt-1 text-center text-sm text-gray-600">"{confirmDelete.name}" akan dihapus dari menu. Pesanan lama tetap tersimpan.</p>
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => setConfirmDelete(null)} disabled={deleting} className="min-h-11 rounded-lg bg-gray-100 font-medium text-gray-700 hover:bg-gray-200">Batal</button>
+              <button type="button" onClick={() => void confirmDeleteProduct()} disabled={deleting} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-red-600 font-medium text-white hover:bg-red-700 disabled:opacity-60">
+                {deleting && <Loader2 className="h-4 w-4 animate-spin" />} Hapus
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <div role="status" data-toast className={cn('fixed inset-x-4 bottom-6 z-[70] mx-auto flex max-w-sm items-center gap-2 rounded-xl px-4 py-3 text-sm font-medium text-white shadow-lg', toast.ok ? 'bg-gray-900' : 'bg-red-600')}>
+          {toast.ok ? <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-400" /> : <AlertCircle className="h-5 w-5 shrink-0" />}
+          <span className="flex-1">{toast.text}</span>
+          <button type="button" onClick={() => setToast(null)} aria-label="Tutup" className="rounded p-1 hover:bg-white/10"><X className="h-4 w-4" /></button>
         </div>
       )}
       </div>
