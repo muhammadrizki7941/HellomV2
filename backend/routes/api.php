@@ -22,6 +22,7 @@ Route::prefix('v1/hellom')->name('api.v1.hellom.')->group(function () {
         require __DIR__.'/api/billing.php';
         require __DIR__.'/api/consumer.php';
         require __DIR__.'/api/landing-builder.php';
+        require __DIR__.'/api/hpp.php';
         require __DIR__.'/api/member.php';
         require __DIR__.'/api/pos.php';
         require __DIR__.'/api/admin.php';

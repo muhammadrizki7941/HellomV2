@@ -17,6 +17,9 @@
         <testsuite name="Landing">
             <directory>tests/Landing</directory>
         </testsuite>
+        <testsuite name="Hpp">
+            <directory>tests/Hpp</directory>
+        </testsuite>
         <testsuite name="Admin">
             <directory>tests/Admin</directory>
         </testsuite>

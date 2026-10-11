@@ -33,6 +33,10 @@ class MemberDashboardController extends BaseApiController
             $entitlement = $app->entitlements->first();
             $status = $entitlement?->effectiveStatus() ?? 'locked';
             $allowed = (bool) $entitlement?->allowsAccess();
+            // Kalkulator HPP is free for every shop; its entitlement only unlocks the Pro tier.
+            if ($app->slug === 'hpp') {
+                [$status, $allowed] = ['active', true];
+            }
 
             $action = $allowed ? 'open' : 'upgrade';
 
@@ -56,12 +60,12 @@ class MemberDashboardController extends BaseApiController
                     'action' => $action,
                     'action_label' => $allowed ? 'Open App' : 'Upgrade',
                 ],
-                'access' => $app->slug === 'pos' ? [
+                'access' => $app->slug === 'hpp' ? ['dashboard_path' => '/dashboard/apps/hpp'] : ($app->slug === 'pos' ? [
                     'dashboard_path' => '/dashboard/apps/pos',
                     'legacy_admin_path' => '/admin',
                     'legacy_cashier_path' => '/cashier/login',
                     'legacy_customer_path' => '/pos',
-                ] : null,
+                ] : null),
             ];
         })->values();
 

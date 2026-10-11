@@ -39,6 +39,7 @@ const DashboardHome = lazy(() => import('@/pages/member/DashboardHome'));
 const MemberProfile = lazy(() => import('@/pages/member/MemberProfile'));
 const LandingBuilder = lazy(() => import('@/pages/apps/LandingBuilder'));
 const PosAccess = lazy(() => import('@/pages/apps/PosAccess'));
+const HppApp = lazy(() => import('@/pages/apps/hpp/HppApp'));
 const PosCustomerHub = lazy(() => import('@/pages/apps/PosCustomerHub'));
 const Payments = lazy(() => import('@/pages/dashboard/Payments'));
 const ConsumerProductCatalog = lazy(() => import('@/pages/dashboard/products'));
@@ -176,6 +177,7 @@ export default function App() {
           <Route path="products/:slug/checkout" element={<ConsumerProductDetail />} />
           <Route path="my-purchases" element={<MyPurchases />} />
           <Route path="apps/landing-builder" element={<LandingBuilder />} />
+          <Route path="apps/hpp" element={<HppApp />} />
           <Route path="apps/pos" element={<PosAccess />} />
           <Route path="apps/pos/customer" element={<PosCustomerHub />} />
         </Route>

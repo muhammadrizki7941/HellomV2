@@ -487,3 +487,5 @@ export type {
   PosLogIntegrity,
   PosOwnerPinStatus,
 } from './posAudit';
+
+export * from './hpp';

@@ -1,0 +1,122 @@
+// Kalkulator HPP in the browser (dashboard owner). Grows per stage; each check names its stage.
+// Needs Laravel :8010 + Vite :3010 on hellom_pos_test. Runs pos-cashier-seed.php (org with a POS
+// menu item "Nasi Goreng" Rp25.000). Expect "N/N checks OK".
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { checker, openChrome, sleep } from './cdp.mjs';
+
+const APP = 'http://127.0.0.1:3010';
+const API = 'http://127.0.0.1:8010/api/v1/hellom';
+const env = { ...process.env, DB_DATABASE: 'hellom_pos_test' };
+const { check, finish } = checker();
+execFileSync('php', ['tests/e2e/pos-cashier-seed.php'], { env });
+const seed = JSON.parse(readFileSync(new URL('../../storage/app/e2e_pos_cashier.json', import.meta.url), 'utf8'));
+const call = async (method, path, body) => {
+  const res = await fetch(`${API}${path}`, { method, headers: { Authorization: `Bearer ${seed.owner_token}`, Accept: 'application/json', 'Content-Type': 'application/json', 'X-Outlet-Id': String(seed.outlet_id) }, body: body ? JSON.stringify(body) : undefined });
+  return { status: res.status, json: await res.json().catch(() => null) };
+};
+const me = (await call('GET', '/auth/me')).json.data;
+
+const browser = await openChrome(9371, 'cdp-hpp');
+const { send, ev, waitFor, shot, errors } = browser;
+const fill = (selector, value) => ev(`(() => { const el = document.querySelector(${JSON.stringify(selector)}); if (!el) return false;
+  const proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : el.tagName === 'SELECT' ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
+  Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, ${JSON.stringify(value)}); el.dispatchEvent(new Event(el.tagName === 'SELECT' ? 'change' : 'input', { bubbles: true })); return true; })()`);
+const click = (selector) => ev(`(() => { const el = document.querySelector(${JSON.stringify(selector)}); if (!el) return false; el.click(); return true; })()`);
+const clickText = (selector, text) => ev(`(() => { const el = [...document.querySelectorAll(${JSON.stringify(selector)})].find((b) => b.textContent.includes(${JSON.stringify(text)})); if (!el) return false; el.click(); return true; })()`);
+const toast = (text) => waitFor(`document.querySelector('[data-toast]')?.textContent.includes(${JSON.stringify(text)})`, 10000);
+const text = (selector) => ev(`document.querySelector(${JSON.stringify(selector)})?.textContent ?? ''`);
+const optionValue = (selector, label) => ev(`[...document.querySelectorAll(${JSON.stringify(selector + ' option')})].find((o) => o.textContent.includes(${JSON.stringify(label)}))?.value ?? ''`);
+
+let exitCode = 1;
+try {
+  await send('Emulation.setDeviceMetricsOverride', { width: 1366, height: 900, deviceScaleFactor: 1, mobile: false });
+  await send('Page.navigate', { url: APP + '/' });
+  await waitFor(`document.readyState === 'complete'`);
+  await ev(`localStorage.clear(); localStorage.setItem('hellom_token', ${JSON.stringify(seed.owner_token)}); localStorage.setItem('hellom_user', ${JSON.stringify(JSON.stringify(me.user ?? me))}); true`);
+  await send('Page.navigate', { url: APP + '/dashboard/apps/hpp' });
+  await ev(`window.__popups = []; window.alert = (m) => window.__popups.push(String(m)); window.confirm = (m) => { window.__popups.push(String(m)); return true; }; true`);
+
+  // Tahap 1 — sidebar: Kalkulator HPP right below the landing page builder.
+  await waitFor(`!!document.querySelector('[data-hpp-onboarding]')`, 20000);
+  const order = await ev(`[...document.querySelectorAll('nav a')].map((a) => a.textContent.trim()).filter((t) => /Landing|HPP|POS/.test(t))`);
+  check('Tahap 1: sidebar shows Kalkulator HPP right below the landing page builder (free, unlocked)', Array.isArray(order) && order.indexOf('Kalkulator HPP') === order.findIndex((t) => /Landing/.test(t)) + 1, JSON.stringify(order));
+
+  // Tahap 1 — onboarding: F&B, Mode Cepat, starter ingredients.
+  await click('[data-business="fnb"]');
+  await click('[data-start-mode="quick"]');
+  await shot('hpp-onboarding');
+  await click('[data-hpp-start]');
+  await waitFor(`!!document.querySelector('[data-hpp-app]')`, 10000);
+  const ingredients = (await call('GET', '/hpp/ingredients')).json.data.ingredients;
+  check('Tahap 1: onboarding saves business type + mode and loads starter ingredients', ingredients.length > 10 && (await call('GET', '/hpp/overview')).json.data.settings.mode === 'quick');
+
+  // Tahap 1 — Mode Cepat: Rp200.000 → 50 porsi = Rp4.000.
+  await clickText('[role="tab"]', 'Produk');
+  await waitFor(`!!document.querySelector('[data-add-product]')`, 8000);
+  await click('[data-add-product]');
+  await waitFor(`!!document.querySelector('[data-product-form]')`, 5000);
+  await fill('[data-product-form] input[name="name"]', 'Nasi Kuning');
+  await fill('[data-product-form] input[name="quick_batch_cost"]', '200000');
+  await fill('[data-product-form] input[name="yield_qty"]', '50');
+  await fill('[data-product-form] input[name="selling_price"]', '8000');
+  const quickHpp = await waitFor(`document.querySelector('[data-hpp-value]')?.textContent.includes('4.000')`, 3000);
+  await click('[data-product-form] button[type="submit"]');
+  const quickSaved = await toast('HPP Rp4.000');
+  check('Tahap 1: Mode Cepat — Rp200.000 jadi 50 porsi = HPP Rp4.000 (live + saved)', quickHpp && quickSaved);
+
+  // Tahap 1 — recipe with ingredients + packaging, suggested price.
+  await click('[data-app-mode="recipe"]');
+  const modeSwitched = await waitFor(`document.querySelector('[data-app-mode="recipe"]')?.getAttribute('aria-checked') === 'true'`, 5000);
+  check('Tahap 1: switching mode Cepat → Resep keeps the data and updates the screen', modeSwitched && (await call('GET', '/hpp/products')).json.data.products.some((p) => p.name === 'Nasi Kuning'));
+  await clickText('[role="tab"]', 'Produk');
+  await waitFor(`!!document.querySelector('[data-add-product]')`, 8000);
+  await click('[data-add-product]');
+  await waitFor(`!!document.querySelector('[data-product-form]')`, 5000);
+  await click('[data-product-form] [data-mode="recipe"]');
+  await fill('[data-product-form] input[name="name"]', 'Es Kopi Susu');
+  const pick = async (index, label, qty) => {
+    await click('[data-add-line]');
+    await waitFor(`document.querySelectorAll('[name="items.${index}.component"] option').length > 3`, 8000);
+    await fill(`[name="items.${index}.component"]`, await optionValue(`[name="items.${index}.component"]`, label));
+    await fill(`[name="items.${index}.qty"]`, qty);
+  };
+  await pick(0, 'Biji kopi', '18');
+  await pick(1, 'Susu UHT', '150');
+  await pick(2, 'Cup + tutup', '1');
+  await fill('[data-product-form] input[name="selling_price"]', '18000');
+  const live = await waitFor(`document.querySelector('[data-hpp-value]')?.textContent.includes('7.240')`, 3000); // 3.240 + 3.000 + 1.000
+  await shot('hpp-recipe');
+  await click('[data-use-suggested]');
+  const suggested = await text('[data-suggested-price]');
+  await click('[data-product-form] button[type="submit"]');
+  const recipeSaved = await toast('Es Kopi Susu');
+  const saved = (await call('GET', '/hpp/products')).json.data.products.find((p) => p.name === 'Es Kopi Susu');
+  check('Tahap 1: recipe — bahan + kemasan HPP Rp7.240, suggested price applied (Rp13.000 at 40%)',
+    live && recipeSaved && saved?.cost.full === 7240 && saved?.selling_price === 13000 && suggested.includes('13.000'), JSON.stringify({ live, full: saved?.cost.full, price: saved?.selling_price, suggested }));
+
+  // Tahap 1 — import the POS menu and write a price back to POS.
+  await click('[data-import-pos]');
+  const imported = await toast('menu POS diimpor');
+  const nasi = (await call('GET', '/hpp/products')).json.data.products.find((p) => p.name === 'Nasi Goreng');
+  check('Tahap 1: POS menu imported and linked (price read from POS)', imported && nasi?.pos_product_id && nasi.selling_price === 25000);
+
+  // Tahap 1 — ingredient edit shows the unit conversion.
+  await clickText('[role="tab"]', 'Bahan');
+  await waitFor(`!!document.querySelector('[data-add-ingredient]')`, 8000);
+  await click('[data-add-ingredient]');
+  await waitFor(`!!document.querySelector('[data-ingredient-form]')`, 5000);
+  await fill('[data-ingredient-form] input[name="name"]', 'Ayam fillet');
+  await fill('[data-ingredient-form] input[name="buy_price"]', '40000');
+  await fill('[data-ingredient-form] input[name="yield_pct"]', '80');
+  const conversion = await waitFor(`document.querySelector('[data-unit-cost]')?.textContent.includes('Rp40') && document.querySelector('[data-unit-cost]')?.textContent.includes('Rp50')`, 3000);
+  await shot('hpp-ingredient');
+  await click('[data-ingredient-form] button[type="submit"]');
+  check('Tahap 1: ingredient form converts Rp40.000/kg → Rp40/g → Rp50/g after 80% yield', conversion && await toast('Ayam fillet'));
+
+  check('no browser pop-ups, no script errors', (await ev(`(window.__popups || []).length`)) === 0 && errors.length === 0, JSON.stringify(errors));
+} finally {
+  browser.close();
+  exitCode = finish();
+}
+process.exit(exitCode);

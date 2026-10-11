@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Outlet, NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Layout, ShoppingCart, LogOut, User, CreditCard, Menu, X, Lock, Settings, Sparkles, ArrowRight, Grid, Package, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { LayoutDashboard, Layout, Calculator, ShoppingCart, LogOut, User, CreditCard, Menu, X, Lock, Settings, Sparkles, ArrowRight, Grid, Package, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { ColorSchemeToggle, useDashboardColorScheme } from '@/lib/colorScheme';
 import { cn } from '@/lib/utils';
 import { clearSession, getAuthMe, getMemberDashboardCards, getPaymentGatewayStatus, getSessionEventName, getSessionUser, getToken, logout, setSession } from '@/lib/hellomApi';
@@ -39,7 +39,18 @@ const FALLBACK_APPS: DashboardApp[] = [
     isLocked: false,
     icon: Layout,
   },
+  // Kalkulator HPP is free for every shop (Pro tier unlocks inside the app).
+  {
+    id: 'hpp',
+    name: 'Kalkulator HPP',
+    path: '/dashboard/apps/hpp',
+    isLocked: false,
+    icon: Calculator,
+  },
 ];
+
+// Sidebar order: Kalkulator HPP sits right below the landing page builder.
+const APP_ORDER: Record<string, number> = { landing_builder: 0, hpp: 1, pos: 2 };
 
 export default function DashboardLayout() {
   useDashboardColorScheme();
@@ -71,8 +82,8 @@ export default function DashboardLayout() {
               ? '/dashboard/apps/pos'
               : '#'),
         isLocked: !card.entitlement.allowed || !(card.access?.dashboard_path || card.app.slug === 'landing_builder' || card.app.slug === 'pos'),
-        icon: card.app.slug === 'pos' ? ShoppingCart : Layout,
-      }));
+        icon: card.app.slug === 'pos' ? ShoppingCart : card.app.slug === 'hpp' ? Calculator : Layout,
+      })).sort((a, b) => (APP_ORDER[a.id] ?? 50) - (APP_ORDER[b.id] ?? 50));
       if (mapped.length > 0) {
         setApps(mapped);
       }
