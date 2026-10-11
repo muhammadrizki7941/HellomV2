@@ -2,8 +2,9 @@
 
 namespace App\Http\Controllers\Api\V1\Hellom\Pos;
 
-use App\Http\Controllers\Api\V1\BaseApiController;
 use App\Models\Product;
+use App\Services\Pos\Audit\Snapshots;
+use App\Support\Pos\ActivityActions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -12,7 +13,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
-class PosProductController extends BaseApiController
+class PosProductController extends BasePosController
 {
     public function index(Request $request): JsonResponse
     {
@@ -93,6 +94,9 @@ class PosProductController extends BaseApiController
             }
         }
 
+        $this->recordActivity($request, ActivityActions::PRODUCT_CREATED, ['target_type' => 'product', 'target_id' => $product->id, 'target_label' => $product->name,
+            'after' => Snapshots::product($product)]);
+
         return $this->success(['product' => $product->load(['category', 'options.values'])], 'Product created');
     }
 
@@ -107,6 +111,7 @@ class PosProductController extends BaseApiController
 
         $validated = $request->validate($this->rules($tenantSlug), $this->messages(), $this->attributeNames());
 
+        $before = Snapshots::product($product);
         $imagePath = $product->image_path;
         if ($request->hasFile('image')) {
             $newPath = $this->storeImage($request->file('image'));
@@ -171,6 +176,12 @@ class PosProductController extends BaseApiController
             }
         }
 
+        $after = Snapshots::product($product->fresh());
+        if ($before !== $after) {
+            $this->recordActivity($request, ActivityActions::PRODUCT_UPDATED, ['target_type' => 'product', 'target_id' => $product->id, 'target_label' => $product->name,
+                'before' => $before, 'after' => $after, 'severity' => $before['price'] !== $after['price'] || $before['stock'] !== $after['stock'] ? 'warning' : 'info']);
+        }
+
         return $this->success(['product' => $product->load(['category', 'options.values'])], 'Product updated');
     }
 
@@ -187,7 +198,9 @@ class PosProductController extends BaseApiController
             ImageOptimizer::delete($product->image_path);
         }
 
+        $before = Snapshots::product($product);
         $product->delete();
+        $this->recordActivity($request, ActivityActions::PRODUCT_DELETED, ['target_type' => 'product', 'target_id' => $productId, 'target_label' => $before['name'], 'before' => $before]);
 
         return $this->success(null, 'Product deleted');
     }

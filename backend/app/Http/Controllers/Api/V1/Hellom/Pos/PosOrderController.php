@@ -4,17 +4,24 @@ namespace App\Http\Controllers\Api\V1\Hellom\Pos;
 
 use App\Listeners\Pos\OrderSideEffectsSubscriber;
 use App\Models\DiningTable;
+use App\Models\Organization;
+use App\Models\PosActivityLog;
 use App\Models\Order;
 use App\Models\Outlet;
 use App\Models\PosMember;
 use App\Models\TableBill;
+use App\Services\Pos\Audit\OwnerPinException;
+use App\Services\Pos\Audit\OwnerPinService;
+use App\Services\Pos\Audit\Snapshots;
 use App\Services\Pos\OrderService;
 use App\Services\Pos\OrderStatus;
 use App\Services\Pos\OutletSettings;
 use App\Services\Pos\PricingException;
 use App\Services\Realtime\RealtimeTokenService;
+use App\Support\Pos\ActivityActions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 /**
@@ -23,7 +30,7 @@ use Illuminate\Validation\Rule;
  */
 class PosOrderController extends BasePosController
 {
-    public function __construct(private readonly OrderService $orders)
+    public function __construct(private readonly OrderService $orders, private readonly OwnerPinService $pins)
     {
     }
 
@@ -121,10 +128,10 @@ class PosOrderController extends BasePosController
         if ($to === Order::STATUS_CANCELLED && !$this->canPos($request, 'order_cancel')) {
             return $this->error('Akun kamu belum punya akses membatalkan pesanan. Minta owner/admin mengaktifkannya di POS › Staff.', 'POS_PERMISSION_DENIED', null, 403);
         }
-        $order = $this->findOrder($request, $orderId);
-        if ($to === Order::STATUS_CANCELLED && blank($validated['reason'] ?? null)) {
-            return $this->error('Alasan pembatalan wajib diisi', 'CANCEL_REASON_REQUIRED', null, 422);
+        if ($to === Order::STATUS_CANCELLED) {
+            return $this->cancel($request, $orderId);
         }
+        $order = $this->findOrder($request, $orderId);
 
         try {
             $order = $this->orders->transition($order, $to, $request->user()?->id, $validated['reason'] ?? null);
@@ -137,11 +144,23 @@ class PosOrderController extends BasePosController
 
     public function cancel(Request $request, string $orderId): JsonResponse
     {
-        $validated = $request->validate(['reason' => 'required|string|max:255']);
+        $validated = $request->validate(['reason' => 'required|string|max:255', 'approval_pin' => 'required|string|max:12'], self::APPROVAL_MESSAGES);
         $order = $this->findOrder($request, $orderId);
+        try {
+            $approver = $this->pins->verify($this->organization($request), (string) $validated['approval_pin'], 'void pesanan #' . $order->order_number);
+        } catch (OwnerPinException $e) {
+            return $this->pinFailed($e, 'approval_pin');
+        }
 
         try {
-            $order = $this->orders->cancel($order, $validated['reason'], $request->user()?->id);
+            $order = DB::transaction(function () use ($request, $order, $validated, $approver) {
+                $before = Snapshots::order($order);
+                $done = $this->orders->cancel($order, $validated['reason'], $request->user()?->id);
+                $this->recordActivity($request, ActivityActions::ORDER_VOID, ['target_type' => 'order', 'target_id' => $done->id, 'target_label' => '#' . $done->order_number,
+                    'before' => $before, 'after' => Snapshots::order($done, false), 'reason' => $validated['reason'], 'approver' => $approver]);
+
+                return $done;
+            });
         } catch (PricingException $e) {
             return $this->orderRuleFailed($e);
         }
@@ -160,7 +179,14 @@ class PosOrderController extends BasePosController
         $order = $this->findOrder($request, $orderId);
 
         try {
-            $order = $this->orders->markPaid($order, $validated['payment_method'], (int) $validated['payment_amount'], $validated['payment_note'] ?? null, $request->user()?->id);
+            $order = DB::transaction(function () use ($request, $order, $validated) {
+                $before = Snapshots::order($order, false);
+                $done = $this->orders->markPaid($order, $validated['payment_method'], (int) $validated['payment_amount'], $validated['payment_note'] ?? null, $request->user()?->id);
+                $this->recordActivity($request, ActivityActions::PAYMENT_RECORDED, ['target_type' => 'order', 'target_id' => $done->id, 'target_label' => '#' . $done->order_number,
+                    'before' => $before, 'after' => Snapshots::order($done, false) + ['tendered' => (int) $validated['payment_amount']]]);
+
+                return $done;
+            });
         } catch (PricingException $e) {
             return $this->orderRuleFailed($e);
         }
@@ -183,11 +209,23 @@ class PosOrderController extends BasePosController
         if (!$org || !$this->canPos($request, 'order_refund')) {
             return $this->error('Akun kamu belum punya akses refund. Minta owner/admin mengaktifkannya di POS › Staff.', 'FORBIDDEN', null, 403);
         }
-        $validated = $request->validate(['reason' => 'required|string|max:255']);
+        $validated = $request->validate(['reason' => 'required|string|max:255', 'approval_pin' => 'required|string|max:12'], self::APPROVAL_MESSAGES);
         $order = $this->findOrder($request, $orderId);
+        try {
+            $approver = $this->pins->verify($this->organization($request), (string) $validated['approval_pin'], 'refund pesanan #' . $order->order_number);
+        } catch (OwnerPinException $e) {
+            return $this->pinFailed($e, 'approval_pin');
+        }
 
         try {
-            $order = $this->orders->refund($order, $validated['reason'], $request->user()?->id);
+            $order = DB::transaction(function () use ($request, $order, $validated, $approver) {
+                $before = Snapshots::order($order);
+                $done = $this->orders->refund($order, $validated['reason'], $request->user()?->id);
+                $this->recordActivity($request, ActivityActions::ORDER_REFUND, ['target_type' => 'order', 'target_id' => $done->id, 'target_label' => '#' . $done->order_number,
+                    'before' => $before, 'after' => Snapshots::order($done, false), 'reason' => $validated['reason'], 'approver' => $approver]);
+
+                return $done;
+            });
         } catch (PricingException $e) {
             return $this->orderRuleFailed($e);
         }
@@ -230,7 +268,17 @@ class PosOrderController extends BasePosController
         $bill = $this->findBill($request, $billId);
 
         try {
-            $result = $this->orders->payBill($bill, $validated['payment_method'], (int) $validated['payment_amount'], $validated['payment_note'] ?? null, $request->user()?->id);
+            $result = DB::transaction(function () use ($request, $bill, $validated) {
+                $result = $this->orders->payBill($bill, $validated['payment_method'], (int) $validated['payment_amount'], $validated['payment_note'] ?? null, $request->user()?->id);
+                $this->recordActivity($request, ActivityActions::TABLE_BILL_PAID, ['target_type' => 'table_bill', 'target_id' => $bill->id,
+                    'target_label' => 'Meja ' . ($result['orders']->first()?->table_label ?? $bill->dining_table_id),
+                    'after' => ['order_ids' => $result['orders']->pluck('id')->map(fn ($id) => (int) $id)->values()->all(),
+                        'order_numbers' => $result['orders']->pluck('order_number')->map(fn ($n) => (string) $n)->values()->all(),
+                        'payment_method' => $validated['payment_method'], 'total' => (int) $result['total'],
+                        'tendered' => (int) $validated['payment_amount'], 'change' => (int) $result['change']]]);
+
+                return $result;
+            });
         } catch (PricingException $e) {
             return $this->orderRuleFailed($e);
         }
@@ -390,6 +438,41 @@ class PosOrderController extends BasePosController
         }
 
         return $table;
+    }
+
+    /**
+     * POST /pos/orders/{id}/receipt/printed — called right before the browser prints. Counts
+     * prints per order (reprints are flagged) and whether it was a draft (unpaid) or final receipt.
+     */
+    public function receiptPrinted(Request $request, int $orderId): JsonResponse
+    {
+        $order = $this->findOrder($request, $orderId);
+        $organizationId = $this->posOrganizationId($request);
+        $result = DB::transaction(function () use ($request, $order, $organizationId) {
+            Order::withoutGlobalScope('tenant')->whereKey($order->id)->lockForUpdate()->first(); // one print number per click
+            $previous = PosActivityLog::query()->where('organization_id', $organizationId)->where('target_type', 'order')->where('target_id', $order->id)
+                ->whereIn('action', [ActivityActions::RECEIPT_PRINTED, ActivityActions::RECEIPT_REPRINTED])->count();
+            $printNo = $previous + 1;
+            $kind = $order->isPaid() ? 'final' : 'draft';
+            $this->recordActivity($request, $printNo > 1 ? ActivityActions::RECEIPT_REPRINTED : ActivityActions::RECEIPT_PRINTED, [
+                'target_type' => 'order', 'target_id' => $order->id, 'target_label' => '#' . $order->order_number,
+                'after' => ['print_no' => $printNo, 'kind' => $kind, 'payment_status' => (string) $order->payment_status, 'final_amount' => (int) $order->final_amount],
+            ]);
+
+            return ['print_no' => $printNo, 'kind' => $kind];
+        });
+
+        return $this->success($result, $result['print_no'] > 1 ? 'Cetak ulang tercatat' : 'Cetak struk tercatat');
+    }
+
+    private const APPROVAL_MESSAGES = [
+        'reason.required' => 'Tulis alasannya dulu.',
+        'approval_pin.required' => 'Minta pemilik toko memasukkan PIN untuk menyetujui.',
+    ];
+
+    private function organization(Request $request): Organization
+    {
+        return Organization::query()->findOrFail($this->posOrganizationId($request));
     }
 
     private function findOrder(Request $request, string|int $orderId): Order

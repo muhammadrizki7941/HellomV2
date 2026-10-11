@@ -7,6 +7,7 @@ use App\Models\Order;
 use App\Models\Organization;
 use App\Models\OrganizationTeamInvitation;
 use App\Models\PosStaff;
+use App\Support\Pos\ActivityActions;
 use App\Support\Pos\PosAccess;
 use App\Support\Pos\PosPermissions;
 use App\Models\PosStaffAttendance;
@@ -373,6 +374,7 @@ class PosStaffController extends BasePosController
             $linkedUserId = $staff->linked_user_id;
         }
 
+        $beforeAccess = $this->accessSnapshot($staff);
         $staff->update([
             'linked_user_id' => $linkedUserId,
             'name' => trim($validated['name']),
@@ -385,6 +387,11 @@ class PosStaffController extends BasePosController
             'joined_at' => $validated['joined_at'] ?? null,
             'notes' => $validated['notes'] ?? null,
         ]);
+        $afterAccess = $this->accessSnapshot($staff->fresh());
+        if ($beforeAccess !== $afterAccess) {
+            $this->recordActivity($request, ActivityActions::STAFF_ACCESS_CHANGED, ['target_type' => 'staff', 'target_id' => $staff->id,
+                'target_label' => $staff->name, 'before' => $beforeAccess, 'after' => $afterAccess]);
+        }
 
         return $this->success([
             'staff' => $this->serializeStaff($staff->fresh('linkedUser'), collect(), null, null, null, null),
@@ -650,22 +657,29 @@ class PosStaffController extends BasePosController
             return $this->error('Masih ada kas shift yang belum ditutup', 'STAFF_CASH_STILL_OPEN', null, 422);
         }
 
-        $cashLog = PosStaffCashLog::create([
-            'tenant_id' => $tenantSlug,
-            'organization_id' => $org->id,
-            'staff_id' => $staff->id,
-            'shift_id' => $validated['shift_id'] ?? null,
-            'opening_cash' => $validated['opening_cash'],
-            'started_at' => now(),
-            'status' => 'open',
-            'notes' => $validated['notes'] ?? null,
-            'activity_log' => [
-                ['label' => 'Kas awal diinput', 'at' => now()->toIso8601String(), 'amount' => $validated['opening_cash']],
-            ],
-        ]);
+        $cashLog = DB::transaction(function () use ($request, $tenantSlug, $org, $staff, $validated) {
+            $cashLog = PosStaffCashLog::create([
+                'tenant_id' => $tenantSlug,
+                'organization_id' => $org->id,
+                'staff_id' => $staff->id,
+                'shift_id' => $validated['shift_id'] ?? null,
+                'opening_cash' => $validated['opening_cash'],
+                'started_at' => now(),
+                'status' => 'open',
+                'notes' => $validated['notes'] ?? null,
+                'activity_log' => [
+                    ['label' => 'Kas awal diinput', 'at' => now()->toIso8601String(), 'amount' => $validated['opening_cash']],
+                ],
+            ]);
+            $this->recordActivity($request, ActivityActions::CASH_OPENED, ['target_type' => 'cash_session', 'target_id' => $cashLog->id,
+                'target_label' => 'Kas ' . $staff->name, 'after' => ['staff_id' => (int) $staff->id, 'opening_cash' => (int) $validated['opening_cash']],
+                'reason' => $validated['notes'] ?? null]);
+
+            return $cashLog;
+        });
 
         return $this->success([
-            'cash_log' => $this->serializeCashLog($cashLog, $staff),
+            'cash_log' => $this->serializeCashLog($cashLog, $staff, $this->blindCash($request)),
         ], 'Cash shift opened', 201);
     }
 
@@ -703,20 +717,32 @@ class PosStaffController extends BasePosController
             'difference_cash' => $differenceCash,
         ];
 
-        $cashLog->update([
-            'closing_cash' => $validated['closing_cash'],
-            'expected_cash' => $expectedCash,
-            'difference_cash' => $differenceCash,
-            'total_cash_sales' => $totalCashSales,
-            'total_transactions' => $totalTransactions,
-            'closed_at' => now(),
-            'status' => 'closed',
-            'notes' => $validated['notes'] ?? $cashLog->notes,
-            'activity_log' => $activityLog,
-        ]);
+        DB::transaction(function () use ($request, $cashLog, $staff, $validated, $expectedCash, $differenceCash, $totalCashSales, $totalTransactions, $activityLog) {
+            $cashLog->update([
+                'closing_cash' => $validated['closing_cash'],
+                'expected_cash' => $expectedCash,
+                'difference_cash' => $differenceCash,
+                'total_cash_sales' => $totalCashSales,
+                'total_transactions' => $totalTransactions,
+                'closed_at' => now(),
+                'status' => 'closed',
+                'notes' => $validated['notes'] ?? $cashLog->notes,
+                'activity_log' => $activityLog,
+            ]);
+            $short = $differenceCash < 0 ? -$differenceCash : 0;
+            $this->recordActivity($request, ActivityActions::CASH_CLOSED, [
+                'target_type' => 'cash_session', 'target_id' => $cashLog->id, 'target_label' => 'Kas ' . $staff->name,
+                'before' => ['opening_cash' => (int) $cashLog->opening_cash, 'started_at' => optional($cashLog->started_at)->toIso8601String()],
+                'after' => ['staff_id' => (int) $staff->id, 'counted_cash' => (int) $validated['closing_cash'], 'expected_cash' => (int) $expectedCash,
+                    'difference_cash' => (int) $differenceCash, 'cash_sales' => (int) $totalCashSales, 'transactions' => (int) $totalTransactions,
+                    'blind' => $this->blindCash($request)],
+                'reason' => $validated['notes'] ?? null,
+                'severity' => $differenceCash === 0 ? 'info' : ($short >= \App\Services\Pos\Audit\AnomalyReport::CASH_SHORT_CRITICAL ? 'critical' : 'warning'),
+            ]);
+        });
 
         return $this->success([
-            'cash_log' => $this->serializeCashLog($cashLog->fresh(), $staff),
+            'cash_log' => $this->serializeCashLog($cashLog->fresh(), $staff, $this->blindCash($request)),
         ], 'Cash shift closed');
     }
 
@@ -916,7 +942,8 @@ class PosStaffController extends BasePosController
         ];
     }
 
-    private function serializeCashLog(PosStaffCashLog $cashLog, ?PosStaff $staff): array
+    /** $blind: hide what the system expects (cashiers count the drawer without seeing it). */
+    private function serializeCashLog(PosStaffCashLog $cashLog, ?PosStaff $staff, bool $blind = false): array
     {
         return [
             'id' => $cashLog->id,
@@ -925,9 +952,9 @@ class PosStaffController extends BasePosController
             'status' => $cashLog->status,
             'opening_cash' => $cashLog->opening_cash,
             'closing_cash' => $cashLog->closing_cash,
-            'expected_cash' => $cashLog->expected_cash,
-            'difference_cash' => $cashLog->difference_cash,
-            'total_cash_sales' => $cashLog->total_cash_sales,
+            'expected_cash' => $blind ? null : $cashLog->expected_cash,
+            'difference_cash' => $blind ? null : $cashLog->difference_cash,
+            'total_cash_sales' => $blind ? null : $cashLog->total_cash_sales,
             'total_transactions' => $cashLog->total_transactions,
             'started_at' => optional($cashLog->started_at)->toIso8601String(),
             'closed_at' => optional($cashLog->closed_at)->toIso8601String(),
@@ -1088,12 +1115,13 @@ class PosStaffController extends BasePosController
         $open = PosStaffCashLog::query()->where('tenant_id', $tenantSlug)->where('staff_id', $staff->id)
             ->where('status', 'open')->latest('started_at')->first();
         $openPayload = null;
+        $blind = $this->blindCash($request);
         if ($open) {
             [$transactions, $cashSales] = $this->calculateCashPerformance($tenantSlug, $staff, $open->started_at, now());
-            $openPayload = $this->serializeCashLog($open, $staff) + [
+            $openPayload = $this->serializeCashLog($open, $staff, $blind) + [
                 'live_transactions' => $transactions,
-                'live_cash_sales' => $cashSales,
-                'live_expected_cash' => (int) $open->opening_cash + $cashSales,
+                'live_cash_sales' => $blind ? null : $cashSales,
+                'live_expected_cash' => $blind ? null : (int) $open->opening_cash + $cashSales,
             ];
         }
         $lastClosed = PosStaffCashLog::query()->where('tenant_id', $tenantSlug)->where('staff_id', $staff->id)
@@ -1102,7 +1130,8 @@ class PosStaffController extends BasePosController
         return $this->success([
             'staff_id' => (int) $staff->id,
             'open' => $openPayload,
-            'last_closed' => $lastClosed ? $this->serializeCashLog($lastClosed, $staff) : null,
+            'last_closed' => $lastClosed ? $this->serializeCashLog($lastClosed, $staff, $blind) : null,
+            'blind' => $blind,
         ], 'Kas saya');
     }
 
@@ -1113,6 +1142,23 @@ class PosStaffController extends BasePosController
     }
 
     /** Cashiers (posStaff attribute) may only act on their own staff record. */
+    /** Blind closing: POS staff (cashiers / POS admins) never see expected cash or the difference. */
+    private function blindCash(Request $request): bool
+    {
+        return $request->attributes->get('posStaff') instanceof PosStaff;
+    }
+
+    /** @return array<string, mixed> */
+    private function accessSnapshot(PosStaff $staff): array
+    {
+        return [
+            'role' => (string) $staff->role,
+            'employment_status' => (string) $staff->employment_status,
+            'linked_user_id' => $staff->linked_user_id ? (int) $staff->linked_user_id : null,
+            'permissions' => PosPermissions::forStaff($staff),
+        ];
+    }
+
     private function denyOtherStaff(Request $request, int $staffId): ?JsonResponse
     {
         $me = $request->attributes->get('posStaff');

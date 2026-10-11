@@ -56,12 +56,13 @@ export function previewPosOrder(draft: PosOrderDraft) {
   );
 }
 
-export function cancelPosOrder(orderId: number, reason: string) {
-  return apiRequest<{ order: Record<string, unknown> }>(`/pos/orders/${orderId}/cancel`, { method: 'POST', body: { reason } });
+// Void and refund need the shop owner's PIN (approval_pin); the server logs the owner as approver.
+export function cancelPosOrder(orderId: number, reason: string, approvalPin: string) {
+  return apiRequest<{ order: Record<string, unknown> }>(`/pos/orders/${orderId}/cancel`, { method: 'POST', body: { reason, approval_pin: approvalPin } });
 }
 
-export function refundPosOrder(orderId: number, reason: string) {
-  return apiRequest<{ order: Record<string, unknown> }>(`/pos/orders/${orderId}/refund`, { method: 'POST', body: { reason } });
+export function refundPosOrder(orderId: number, reason: string, approvalPin: string) {
+  return apiRequest<{ order: Record<string, unknown> }>(`/pos/orders/${orderId}/refund`, { method: 'POST', body: { reason, approval_pin: approvalPin } });
 }
 
 export type PosTableBill = {

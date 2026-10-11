@@ -24,6 +24,25 @@ const SESSION_EVENT_NAME = 'hellom-session-changed';
 const ACTIVE_OUTLET_KEY = 'hellom_active_outlet_id';
 const ACTIVE_OUTLET_EVENT_NAME = 'hellom-active-outlet-changed';
 
+// Random id of this browser/POS terminal — sent as X-Device-Id so the POS audit log can tell
+// devices apart. Not a secret and not a fingerprint; clearing site data makes a new one.
+const DEVICE_ID_KEY = 'hellom_device_id';
+export function getDeviceId(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    let id = window.localStorage.getItem(DEVICE_ID_KEY);
+    if (!id || !/^[A-Za-z0-9-]{8,64}$/.test(id)) {
+      id = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+      window.localStorage.setItem(DEVICE_ID_KEY, id);
+    }
+    return id;
+  } catch {
+    return null;
+  }
+}
+
 // Active POS outlet — sent as X-Outlet-Id on every authenticated request so the
 // backend scopes POS data (orders, products, reports, staff…) to that outlet.
 export function getActiveOutletId(): string | null {
@@ -132,12 +151,14 @@ export async function apiRequest<T>(
     body?: unknown;
     token?: string | null;
     autoLogout?: boolean;
+    headers?: Record<string, string>;
   }
 ): Promise<T> {
   const token = options?.token ?? getToken();
   const autoLogout = options?.autoLogout ?? (path === '/auth/me' || path === '/auth/logout');
   const isFormData = options?.body instanceof FormData;
   const activeOutletId = getActiveOutletId();
+  const deviceId = getDeviceId();
 
   const response = await fetch(`${HELLOM_API_BASE}${path}`, {
     method: options?.method ?? 'GET',
@@ -146,6 +167,8 @@ export async function apiRequest<T>(
       ...(!isFormData && options?.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(activeOutletId ? { 'X-Outlet-Id': activeOutletId } : {}),
+      ...(deviceId ? { 'X-Device-Id': deviceId } : {}),
+      ...(options?.headers ?? {}),
     },
     body: options?.body !== undefined
       ? (isFormData ? (options.body as BodyInit) : JSON.stringify(options.body))

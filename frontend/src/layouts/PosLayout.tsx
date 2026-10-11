@@ -1,12 +1,14 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { LayoutDashboard, ShoppingCart, Users, BarChart3, Utensils, Settings, LogOut, Square, X, Menu, User, Ticket, Store } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Users, BarChart3, Utensils, Settings, LogOut, Square, X, Menu, User, Ticket, Store, ShieldCheck } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import BottomNav from '@/components/pos/BottomNav';
 import OutletSwitcher from '@/components/pos/OutletSwitcher';
-import { getActiveOutletEventName, getAuthMe, getPosMyAccess, getPosOrders, getPosRealtimeToken, getSessionEventName, getSessionUser, getSessionPosAccess, getToken, setSession, setSessionPosAccess, clearSession, POS_PERMISSION_DENIED_EVENT } from '@/lib/hellomApi';
+import { OwnerPinSetupDialog } from '@/components/pos/OwnerPin';
+import { getActiveOutletEventName, getAuthMe, getPosMyAccess, getPosOwnerPinStatus, getPosOrders, getPosRealtimeToken, getSessionEventName, getSessionUser, getSessionPosAccess, getToken, setSession, setSessionPosAccess, clearSession, POS_PERMISSION_DENIED_EVENT } from '@/lib/hellomApi';
 import { playOrderChime, setPosRealtimeConnected, subscribeRealtime } from '@/lib/realtime';
 import { usePWAInstall } from '@/hooks/usePWAInstall';
+import type { PosOwnerPinStatus } from '@/lib/hellomApi';
 import {
   getPosOrderListResetAt,
   getPosOrderListResetEventName,
@@ -71,13 +73,22 @@ export default function PosLayout() {
   const posAccess = getSessionPosAccess();
   const isCashier = posAccess?.is_cashier === true;
   const permissionsKey = JSON.stringify(posAccess?.permissions ?? {});
+  // Shop owner: "Log Audit" menu, and a PIN must exist before using POS (created on first visit).
+  const [ownerPin, setOwnerPin] = useState<PosOwnerPinStatus | null>(null);
+  useEffect(() => {
+    if (isCashier || !getToken()) return;
+    getPosOwnerPinStatus().then(setOwnerPin).catch(() => setOwnerPin(null));
+  }, [isCashier]);
+  const isOwner = ownerPin?.is_owner === true;
   const navItems = useMemo(
     () =>
       isCashier
         ? cashierNavigation.filter((item) => item.perm === 'orders' || posAccess?.permissions?.[item.perm] === true)
-        : sidebarNavigation,
+        : isOwner
+          ? [...sidebarNavigation, { name: 'Log Audit', href: '/pos/audit', icon: ShieldCheck }]
+          : sidebarNavigation,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [isCashier, permissionsKey]
+    [isCashier, permissionsKey, isOwner]
   );
   // Tablet bottom bar: tab ids = the second path segment (/pos/menu → "menu").
   const allowedTabs = isCashier ? navItems.map((item) => item.href.split('/')[2]) : undefined;
@@ -148,6 +159,7 @@ export default function PosLayout() {
     else if (path.includes('/pos/customer-hub')) setActiveTab('customer-hub');
     else if (path.includes('/pos/reports')) setActiveTab('reports');
     else if (path.includes('/pos/settings')) setActiveTab('settings');
+    else if (path.includes('/pos/audit')) setActiveTab('audit');
     else setActiveTab('admin-dashboard');
   }, [location]);
 
@@ -386,6 +398,9 @@ export default function PosLayout() {
         {/* Main Content */}
         <main className="flex-1 bg-[#fffdf5] p-3 pb-24 sm:p-5 lg:p-6 lg:pb-6">
           <Outlet />
+          {ownerPin?.is_owner && !ownerPin.pin_set && (
+            <OwnerPinSetupDialog resetEmail={ownerPin.reset_email} onDone={() => setOwnerPin({ ...ownerPin, pin_set: true })} />
+          )}
         </main>
 
         {/* New Floating Bottom Navigation */}

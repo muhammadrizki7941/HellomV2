@@ -6,6 +6,7 @@
 */
 
 use App\Http\Controllers\Api\V1\Hellom\EntitlementController;
+use App\Http\Controllers\Api\V1\Hellom\Pos\PosActivityController;
 use App\Http\Controllers\Api\V1\Hellom\Pos\PosCategoryController;
 use App\Http\Controllers\Api\V1\Hellom\Pos\PosExperienceController;
 use App\Http\Controllers\Api\V1\Hellom\Pos\PosLoyaltyController;
@@ -37,6 +38,7 @@ Route::middleware(['canUseApp:pos', 'App\Http\Middleware\Api\InjectPosContext'])
     Route::post('/pos/orders/{orderId}/cancel', [PosOrderController::class, 'cancel'])->middleware('posPermission:order_cancel');
     Route::post('/pos/orders/{orderId}/refund', [PosOrderController::class, 'refund'])->middleware('posPermission:order_refund');
     Route::get('/pos/orders/{orderId}/receipt', [PosOrderController::class, 'receipt'])->middleware('posPermission:orders');
+    Route::post('/pos/orders/{orderId}/receipt/printed', [PosOrderController::class, 'receiptPrinted'])->middleware('posPermission:orders');
     Route::get('/pos/table-bills', [PosOrderController::class, 'tableBills'])->middleware('posPermission:orders');
     Route::get('/pos/table-bills/{billId}', [PosOrderController::class, 'showTableBill'])->middleware('posPermission:orders');
     Route::post('/pos/table-bills/{billId}/pay', [PosOrderController::class, 'payTableBill'])->middleware('posPermission:orders');
@@ -131,6 +133,16 @@ Route::middleware(['canUseApp:pos', 'App\Http\Middleware\Api\InjectPosContext'])
         Route::post('/{staffId}/cash/close', [PosStaffController::class, 'closeCash'])->middleware('posPermission:cash_control');
         Route::get('/export/download', [PosStaffController::class, 'export'])->middleware('posPermission:manager');
     });
+
+    // Owner PIN + audit trail (POS › Log Audit). Manager routes; the owner check is in the controller.
+    Route::get('/pos/owner-pin', [PosActivityController::class, 'pinStatus'])->middleware('posPermission:manager');
+    Route::post('/pos/owner-pin', [PosActivityController::class, 'createPin'])->middleware(['posPermission:manager', 'throttle:10,1']);
+    Route::post('/pos/owner-pin/change', [PosActivityController::class, 'changePin'])->middleware(['posPermission:manager', 'throttle:10,1']);
+    Route::post('/pos/owner-pin/unlock', [PosActivityController::class, 'unlock'])->middleware(['posPermission:manager', 'throttle:10,1']);
+    Route::post('/pos/owner-pin/forgot', [PosActivityController::class, 'forgotPin'])->middleware(['posPermission:manager', 'throttle:5,1']);
+    Route::get('/pos/activity', [PosActivityController::class, 'index'])->middleware('posPermission:manager');
+    Route::get('/pos/activity/anomalies', [PosActivityController::class, 'anomalies'])->middleware('posPermission:manager');
+    Route::get('/pos/activity/integrity', [PosActivityController::class, 'integrity'])->middleware('posPermission:manager');
 
     // The signed-in cashier's current permissions (the POS menu refreshes from this).
     Route::get('/pos/me/access', [PosStaffController::class, 'myAccess']);

@@ -4,6 +4,14 @@
 
 Audit lengkap dan status per temuan: [docs/AUDIT.md](docs/AUDIT.md). Langkah deploy khusus rilis ini: [docs/DEPLOY.md §3](docs/DEPLOY.md#3-catatan-khusus-rilis-refactor-branch-refactorcleanup).
 
+### POS — PIN pemilik & log audit anti-kecurangan, Fase 1 (2026-10-11)
+- **PIN pemilik**: pemilik toko wajib membuat PIN 6 angka saat pertama membuka POS (angka sama/berurutan ditolak). Salah 5× → terkunci 15 menit dan email ke pemilik utama. **Lupa PIN** → link reset (30 menit, sekali pakai) hanya ke email pemilik utama, halaman `/reset-pin-pos`.
+- **Pembatalan (void) dan refund** wajib disetujui PIN pemilik di dialog kasir (tidak ada lagi pop-up browser); pembatalan lewat ganti status juga.
+- **Log Audit** (menu khusus pemilik, dibuka dengan PIN, terkunci lagi setelah 15 menit): void, refund, pembayaran, tagihan meja, cetak struk & **cetak ulang** (struk belum lunas dicap "DRAF"), buka/tutup kas, ubah harga/stok/hapus produk, ubah hak akses staf, kejadian PIN. Tiap catatan: waktu sampai milidetik, pelaku & perannya, penyetuju, data sebelum/sesudah, alasan, IP, ID perangkat, sesi. Catatan **tidak bisa diubah/dihapus** (dijaga aplikasi dan trigger MySQL) dan berantai sidik digital — tombol **Periksa keutuhan log**.
+- **Tutup kas buta**: kasir hanya memasukkan uang fisik, tidak melihat angka sistem/selisih; selisih tercatat untuk pemilik.
+- **Peringatan kecurangan**: staf dengan rasio void/refund/cetak ulang jauh di atas rata-rata toko, kas kurang, atau PIN salah berulang ditandai.
+- Deploy: `php artisan migrate` (tabel baru `pos_activity_logs`, `pos_owner_pins`, …; trigger butuh hak TRIGGER — kalau tidak ada, migrasi tetap jalan dan penjagaan di aplikasi tetap aktif).
+
 ### Hellom Page — editor link-in-bio, Fase 0–1 (branch `feat/linkinbio-builder`, 2026-10-03)
 Audit & status: [docs/audit-linkinbio-builder.md](docs/audit-linkinbio-builder.md).
 - **Perbaikan gambar**: foto HP (sampai 8 MB) bisa diunggah (dulu ditolak di atas 4 MB dengan pesan bahasa Inggris); gambar di editor tampil juga saat dashboard & server beda alamat (dev lokal).
@@ -16,7 +24,7 @@ Audit & status: [docs/audit-linkinbio-builder.md](docs/audit-linkinbio-builder.m
 - Jenis produk baru **Sewa / booking jadwal** untuk usaha rental & jasa terjadwal: per hari/malam (rental mobil, kamera, villa) atau per jam/sesi (studio, lapangan, salon). Penjual mengatur jumlah unit, lama sewa / jam buka, dan tanggal tutup.
 - Pembeli memilih tanggal/jam yang masih kosong di kalender, harga dihitung otomatis (harga × hari/sesi × unit), lalu bayar penuh. Jadwal ditahan selama membayar dan terkunci setelah lunas — tidak bisa dibooking dobel.
 - Tab **Jadwal** untuk penjual, jadwal tampil di Pesanan & email, dan **pengingat H-1** ke pembeli dan penjual.
-- Deploy: Could not open input file: artisan (tabel booking baru).
+- Deploy: jalankan `php artisan migrate` (tabel booking baru).
 
 ### Hellom Page — banner, animasi, video, template premium (Fase 7, 2026-10-04)
 - **Banner di atas profil**: gambar, GIF, atau video YouTube yang diputar tanpa suara; pilih bentuk 16:9 / 3:1 / 1:1, titik fokus, efek memudar, dan posisi foto profil.

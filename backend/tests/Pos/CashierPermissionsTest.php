@@ -109,16 +109,20 @@ class CashierPermissionsTest extends PosTestCase
         $order = $this->withHeaders($h)->postJson("{$api}/orders", ['items' => [['product_id' => $product->id, 'quantity' => 1]]])->assertCreated()->json('data.order');
         $this->withHeaders($h)->postJson("{$api}/orders/{$order['id']}/payment", ['payment_method' => 'cash', 'payment_amount' => 50000])->assertOk();
 
+        // Blind closing: the cashier never sees what the system expects.
         $this->withHeaders($h)->getJson("{$api}/me/cash")->assertOk()
+            ->assertJsonPath('data.blind', true)
             ->assertJsonPath('data.open.opening_cash', 200000)
-            ->assertJsonPath('data.open.live_cash_sales', (int) $order['final_amount'])
-            ->assertJsonPath('data.open.live_expected_cash', 200000 + (int) $order['final_amount']);
+            ->assertJsonPath('data.open.live_cash_sales', null)
+            ->assertJsonPath('data.open.live_expected_cash', null);
 
         $closed = $this->withHeaders($h)->postJson("{$api}/staff/{$staff->id}/cash/close", ['closing_cash' => 200000 + (int) $order['final_amount'] - 5000])
             ->assertOk()->json('data.cash_log');
         $this->assertSame('closed', $closed['status']);
-        $this->assertSame(-5000, $closed['difference_cash']);
-        $this->withHeaders($h)->getJson("{$api}/me/cash")->assertJsonPath('data.open', null)->assertJsonPath('data.last_closed.difference_cash', -5000);
+        $this->assertNull($closed['difference_cash']);
+        $this->assertNull($closed['expected_cash']);
+        $this->assertSame(-5000, (int) \App\Models\PosStaffCashLog::query()->find($closed['id'])->difference_cash);
+        $this->withHeaders($h)->getJson("{$api}/me/cash")->assertJsonPath('data.open', null)->assertJsonPath('data.last_closed.difference_cash', null);
 
         // Switched off: no drawer for this cashier.
         $staff->forceFill(['permissions' => ['cash_control' => false]])->save();
@@ -150,7 +154,7 @@ class CashierPermissionsTest extends PosTestCase
         $this->withHeaders($h)->postJson("{$api}/categories", ['name' => 'Minuman'])->assertSuccessful();
         $order = $this->withHeaders($h)->postJson("{$api}/orders", ['items' => [['product_id' => $product->id, 'quantity' => 1]]])->assertCreated()->json('data.order');
         $this->withHeaders($h)->postJson("{$api}/orders/{$order['id']}/payment", ['payment_method' => 'cash', 'payment_amount' => 20000])->assertOk();
-        $this->withHeaders($h)->postJson("{$api}/orders/{$order['id']}/refund", ['reason' => 'Salah input'])->assertOk();
+        $this->withHeaders($h)->postJson("{$api}/orders/{$order['id']}/refund", ['reason' => 'Salah input', 'approval_pin' => $this->ownerPin($org)])->assertOk();
         $this->withHeaders($h)->getJson("{$api}/me/access")->assertJsonPath('data.permissions.reports', true);
 
         // Revoke: takes effect on the next request, no re-login.

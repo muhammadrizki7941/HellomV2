@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from 'react';
 import { X, Printer, Copy, MessageCircle } from 'lucide-react';
-import { getPosOrderReceipt, type PosReceipt } from '@/lib/hellomApi';
+import { getPosOrderReceipt, recordPosReceiptPrint, type PosReceipt } from '@/lib/hellomApi';
 import html2canvas from 'html2canvas';
 
 interface ReceiptProps {
@@ -17,6 +17,8 @@ const ReceiptModal = ({ isOpen, onClose, orderId }: ReceiptProps) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [printing, setPrinting] = useState(false);
+  const [printNote, setPrintNote] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen && orderId) {
@@ -24,6 +26,7 @@ const ReceiptModal = ({ isOpen, onClose, orderId }: ReceiptProps) => {
     } else if (!isOpen) {
       setReceipt(null);
       setError(null);
+      setPrintNote(null);
     }
   }, [isOpen, orderId]);
 
@@ -44,12 +47,34 @@ const ReceiptModal = ({ isOpen, onClose, orderId }: ReceiptProps) => {
     }
   };
 
-  const handlePrint = () => {
-    if (!receipt) return;
+  // Every print is logged first (POS audit: reprints and unpaid drafts are flagged). The window is
+  // opened before the request so pop-up blockers allow it; nothing is printed if logging fails.
+  const handlePrint = async () => {
+    if (!receipt || !orderId || printing) return;
 
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
+    printWindow.document.write('<p style="font-family:sans-serif;padding:16px">Menyiapkan struk…</p>');
+    setPrinting(true);
+    setPrintNote(null);
+    let stamp = '';
+    try {
+      const { print_no: printNo, kind } = await recordPosReceiptPrint(orderId);
+      const lines = [
+        kind === 'draft' ? 'DRAF - BELUM LUNAS<br>Bukan bukti pembayaran' : '',
+        printNo > 1 ? `CETAK ULANG ke-${printNo}` : '',
+      ].filter(Boolean);
+      stamp = lines.length ? `<div class="center stamp">${lines.join('<br>')}</div><div class="divider"></div>` : '';
+      setPrintNote(printNo > 1 ? `Cetak ulang ke-${printNo} tercatat di log audit.` : kind === 'draft' ? 'Struk draf (belum lunas) tercatat di log audit.' : null);
+    } catch (err) {
+      printWindow.close();
+      setPrintNote(err instanceof Error ? `Struk belum dicetak: ${err.message}` : 'Struk belum dicetak. Coba lagi.');
+      return;
+    } finally {
+      setPrinting(false);
+    }
 
+    printWindow.document.open();
     printWindow.document.write(`
       <html>
         <head>
@@ -67,6 +92,7 @@ const ReceiptModal = ({ isOpen, onClose, orderId }: ReceiptProps) => {
             }
             .center { text-align: center; }
             .divider { border-top: 1px dashed #000; margin: 8px 0; height: 0; }
+            .stamp { font-weight: bold; font-size: 14px; letter-spacing: 1px; padding: 4px 0; }
             @media print {
               @page {
                 margin: 5mm;
@@ -76,7 +102,7 @@ const ReceiptModal = ({ isOpen, onClose, orderId }: ReceiptProps) => {
             }
           </style>
         </head>
-        <body>${receiptRef.current?.innerHTML || ''}</body>
+        <body>${stamp}${receiptRef.current?.innerHTML || ''}</body>
       </html>
     `);
     printWindow.document.close();
@@ -412,14 +438,17 @@ const ReceiptModal = ({ isOpen, onClose, orderId }: ReceiptProps) => {
         {/* TOMBOL AKSI */}
         {receipt && !loading && !error && (
           <div className="border-t border-gray-200 bg-gray-50 px-4 py-3">
+            {printNote && <p role="status" data-print-note className="mb-2 rounded-lg bg-white px-3 py-2 text-xs text-gray-600">{printNote}</p>}
             <div className="grid grid-cols-5 gap-2">
               <button
-                onClick={handlePrint}
-                className="flex flex-col items-center gap-1 rounded-lg py-2 px-2 text-xs font-medium text-gray-700 hover:bg-blue-50 transition"
+                onClick={() => void handlePrint()}
+                disabled={printing}
+                data-print-receipt
+                className="flex flex-col items-center gap-1 rounded-lg py-2 px-2 text-xs font-medium text-gray-700 hover:bg-blue-50 transition disabled:opacity-60"
                 title="Cetak Kwitansi"
               >
                 <Printer className="h-4 w-4 text-blue-600" />
-                <span>Cetak</span>
+                <span>{printing ? 'Mencetak…' : 'Cetak'}</span>
               </button>
               <button
                 onClick={handleDownload}

@@ -22,6 +22,7 @@ const OrderLookupPage = lazy(() => import('@/pages/public/OrderLookupPage'));
 const SellerPolicyPage = lazy(() => import('@/pages/public/SellerPolicyPage'));
 const InvitationAcceptPage = lazy(() => import('@/pages/public/InvitationAcceptPage'));
 const AdminInvitationPage = lazy(() => import('@/pages/public/AdminInvitationPage'));
+const PosPinResetPage = lazy(() => import('@/pages/public/PosPinResetPage'));
 const LoginPage = lazy(() => import('@/pages/auth/LoginPage'));
 const StaffLoginPage = lazy(() => import('@/pages/auth/StaffLoginPage'));
 const RegisterPage = lazy(() => import('@/pages/auth/RegisterPage'));
@@ -78,6 +79,7 @@ const PosLoyaltySettings = lazy(() => import('@/pages/pos/PosLoyaltySettings'));
 const PosStaff = lazy(() => import('@/pages/pos/PosStaff'));
 const PosReports = lazy(() => import('@/pages/pos/PosReports'));
 const PosExperienceCenter = lazy(() => import('@/pages/pos/PosExperienceCenter'));
+const PosAudit = lazy(() => import('@/pages/pos/PosAudit'));
 const PosLayout = lazy(() => import('@/layouts/PosLayout'));
 
 // Old article URLs (/insights/:slug) keep working.
@@ -128,6 +130,7 @@ export default function App() {
         <Route path="/p/:organizationSlug/:pageSlug" element={<PublicPage />} />
         <Route path="/invitation/accept" element={<InvitationAcceptPage />} />
         <Route path="/undangan-admin" element={<AdminInvitationPage />} />
+        <Route path="/reset-pin-pos" element={<PosPinResetPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/login/kasir" element={<StaffLoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
@@ -192,6 +195,7 @@ export default function App() {
           <Route path="customer-hub" element={<PosExperienceCenter />} />
           <Route path="reports" element={<PosReports />} />
           <Route path="settings" element={<PosSettings />} />
+          <Route path="audit" element={<PosAudit />} />
         </Route>
 
         {/* Super Admin Routes */}

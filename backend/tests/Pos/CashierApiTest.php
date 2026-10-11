@@ -79,7 +79,7 @@ class CashierApiTest extends PosTestCase
         $this->withHeaders($headers)->postJson("/api/v1/hellom/pos/orders/{$id}/refund", ['reason' => 'test'])->assertForbidden();
         $owner = $this->tokenFor($org, 'owner');
         $this->withHeaders(['Authorization' => "Bearer {$owner}", 'X-Outlet-Id' => (string) $outlet->id])
-            ->postJson("/api/v1/hellom/pos/orders/{$id}/refund", ['reason' => 'Salah input'])
+            ->postJson("/api/v1/hellom/pos/orders/{$id}/refund", ['reason' => 'Salah input', 'approval_pin' => $this->ownerPin($org)])
             ->assertOk()->assertJsonPath('data.order.payment_status', 'refunded');
     }
 

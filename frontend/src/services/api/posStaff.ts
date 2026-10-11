@@ -91,7 +91,7 @@ export type PosStaffCashLog = {
   closing_cash?: number | null;
   expected_cash?: number | null;
   difference_cash?: number | null;
-  total_cash_sales: number;
+  total_cash_sales: number | null; // null for cashiers (blind closing)
   total_transactions: number;
   started_at: string;
   closed_at?: string | null;
@@ -350,8 +350,10 @@ export async function downloadPosStaffExport(type: 'attendance' | 'performance' 
 
 export type PosMyCash = {
   staff_id: number | null;
-  open: (PosStaffCashLog & { live_transactions: number; live_cash_sales: number; live_expected_cash: number }) | null;
+  // live_cash_sales / live_expected_cash are null when blind (cashiers count without seeing them)
+  open: (PosStaffCashLog & { live_transactions: number; live_cash_sales: number | null; live_expected_cash: number | null }) | null;
   last_closed: PosStaffCashLog | null;
+  blind?: boolean;
 };
 
 /** The signed-in staff's cash drawer at the active outlet (cashier screen). */

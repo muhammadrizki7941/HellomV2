@@ -6,6 +6,9 @@ use App\Http\Controllers\Api\V1\BaseApiController;
 use App\Models\Organization;
 use App\Models\Outlet;
 use App\Models\PosStaff;
+use App\Services\Pos\Audit\ActivityLogger;
+use App\Services\Pos\Audit\OwnerPinException;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 abstract class BasePosController extends BaseApiController
@@ -47,6 +50,39 @@ abstract class BasePosController extends BaseApiController
         $staff = $request->attributes->get('posStaff');
 
         return !$staff instanceof PosStaff || \App\Support\Pos\PosPermissions::allows($staff, $permission);
+    }
+
+    /** Organization of the active POS context (outlet's organization, else the current one). */
+    protected function posOrganizationId(Request $request): ?int
+    {
+        $id = $this->posOutlet($request)?->organization_id ?? $request->attributes->get('currentOrganizationId') ?? $this->getOrg($request)?->id;
+
+        return $id ? (int) $id : null;
+    }
+
+    /** Append to the POS audit trail (App\Services\Pos\Audit\ActivityLogger). */
+    protected function recordActivity(Request $request, string $action, array $entry = []): void
+    {
+        $organizationId = $this->posOrganizationId($request);
+        if ($organizationId) {
+            app(ActivityLogger::class)->record($organizationId, $action, $entry);
+        }
+    }
+
+    /** Owner PIN error → standard envelope; a wrong/badly formatted PIN also lands on the field. */
+    protected function pinFailed(OwnerPinException $e, string $field = 'pin'): JsonResponse
+    {
+        $body = [
+            'success' => false,
+            'message' => $e->getMessage(),
+            'data' => $e->data ?: null,
+            'error' => ['code' => $e->errorCode, 'detail' => $e->getMessage()],
+        ];
+        if (in_array($e->errorCode, ['PIN_INVALID', 'PIN_FORMAT', 'PIN_WEAK', 'PIN_LOCKED'], true)) {
+            $body['errors'] = [$field => [$e->getMessage()]];
+        }
+
+        return response()->json($body, $e->status);
     }
 
     /**

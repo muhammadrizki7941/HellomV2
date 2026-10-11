@@ -455,3 +455,28 @@ export * from './landingStore';
 
 // Hellom Page editor & marketing (Fase 4).
 export * from './landingSite';
+
+export {
+  changePosOwnerPin,
+  createPosOwnerPin,
+  getPosActivity,
+  getPosAnomalies,
+  getPosLogIntegrity,
+  getPosOwnerPinStatus,
+  getPosPinReset,
+  recordPosReceiptPrint,
+  requestPosOwnerPinReset,
+  resetPosOwnerPin,
+  unlockPosAudit,
+} from './posAudit';
+export type {
+  PosActivityFilters,
+  PosActivityLog,
+  PosActivityPage,
+  PosActivitySeverity,
+  PosAnomalyCashier,
+  PosAnomalyReport,
+  PosAuditFlag,
+  PosLogIntegrity,
+  PosOwnerPinStatus,
+} from './posAudit';

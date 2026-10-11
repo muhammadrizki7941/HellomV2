@@ -7,7 +7,9 @@ use App\Models\DiningTable;
 use App\Models\Organization;
 use App\Models\Outlet;
 use App\Models\PosLoyaltySetting;
+use App\Models\PosOwnerPin;
 use App\Models\Product;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
@@ -48,6 +50,14 @@ abstract class PosTestCase extends TestCase
         $outlet = $this->makeOutlet($org, true, $outletSettings, (string) $org->pos_tenant_slug);
 
         return ['org' => $org, 'outlet' => $outlet];
+    }
+
+    /** Give the organization an owner PIN (approves void/refund, opens the audit log). */
+    protected function ownerPin(Organization $org, ?int $ownerUserId = null, string $pin = '482916'): string
+    {
+        PosOwnerPin::query()->updateOrCreate(['organization_id' => $org->id], ['pin_hash' => Hash::make($pin), 'set_by_user_id' => $ownerUserId, 'pin_changed_at' => now()]);
+
+        return $pin;
     }
 
     protected function makeOutlet(Organization $org, bool $primary = false, array $settings = [], ?string $tenantSlug = null): Outlet

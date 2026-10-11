@@ -16,6 +16,7 @@ import NewOrderModal from '@/components/pos/NewOrderModal';
 import ReceiptModal from '@/components/pos/ReceiptModal';
 import PaymentModal from '@/components/pos/PaymentModal';
 import CashDrawerButton from '@/components/pos/CashDrawerButton';
+import { OwnerApprovalDialog } from '@/components/pos/OwnerPin';
 import { getPosRealtimeEventName, isPosRealtimeConnected } from '@/lib/realtime';
 import {
   ensurePosOrderListResetAt,
@@ -61,6 +62,8 @@ export default function PosOrders() {
   const [bills, setBills] = useState<PosTableBill[]>([]);
   const [showBills, setShowBills] = useState(false);
   const [payingBill, setPayingBill] = useState<PosTableBill | null>(null);
+  // Void / refund wait for the owner's PIN in a dialog (no browser prompt).
+  const [approval, setApproval] = useState<{ kind: 'cancel' | 'refund'; order: PosOrderListItem } | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => setShowInfoBoxes(false), 5000);
@@ -133,18 +136,25 @@ export default function PosOrders() {
 
   const handleStatusUpdate = (order: PosOrderListItem, next: string) => {
     if (next === 'cancelled') {
-      const reason = window.prompt(`Alasan membatalkan pesanan #${order.order_number}?`);
-      if (!reason || !reason.trim()) return;
-      void runAction(order.id, () => cancelPosOrder(order.id, reason.trim()));
+      setApproval({ kind: 'cancel', order });
       return;
     }
     void runAction(order.id, () => updatePosOrderStatus(order.id, next));
   };
 
-  const handleRefund = (order: PosOrderListItem) => {
-    const reason = window.prompt(`Refund penuh ${rupiah(order.final_amount)} untuk #${order.order_number}. Alasan?`);
-    if (!reason || !reason.trim()) return;
-    void runAction(order.id, () => refundPosOrder(order.id, reason.trim()));
+  const handleRefund = (order: PosOrderListItem) => setApproval({ kind: 'refund', order });
+
+  const submitApproval = async (reason: string, pin: string) => {
+    if (!approval) return;
+    const { kind, order } = approval;
+    setBusyOrderId(order.id);
+    try {
+      await (kind === 'cancel' ? cancelPosOrder(order.id, reason, pin) : refundPosOrder(order.id, reason, pin));
+      setApproval(null);
+      announce();
+    } finally {
+      setBusyOrderId(null);
+    }
   };
 
   const handleResetOrderList = () => {
@@ -489,6 +499,7 @@ export default function PosOrders() {
                         <button
                           disabled={busy}
                           onClick={() => handleStatusUpdate(order, 'cancelled')}
+                          data-cancel-order={order.id}
                           className="rounded-lg border border-red-200 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
                         >
                           Batalkan
@@ -498,6 +509,7 @@ export default function PosOrders() {
                         <button
                           disabled={busy}
                           onClick={() => handleRefund(order)}
+                          data-refund-order={order.id}
                           className="rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
                         >
                           Refund
@@ -520,6 +532,24 @@ export default function PosOrders() {
         <NewOrderModal isOpen={showNewOrderModal} onClose={() => setShowNewOrderModal(false)} onOrderCreated={announce} />
 
         <ReceiptModal isOpen={showReceiptModal} onClose={() => setShowReceiptModal(false)} orderId={receiptOrderId} />
+        {approval && (
+          <OwnerApprovalDialog
+            title={approval.kind === 'cancel' ? 'Batalkan pesanan?' : 'Refund pesanan?'}
+            summary={(
+              <>
+                <p className="font-semibold text-gray-900">#{approval.order.order_number} · {rupiah(approval.order.final_amount)}</p>
+                <p className="mt-1">{approval.kind === 'cancel'
+                  ? 'Pesanan dibatalkan dan tidak bisa dikembalikan. Stok dan poin member dikembalikan.'
+                  : 'Seluruh pembayaran dikembalikan ke pelanggan. Poin member dari pesanan ini ditarik.'}</p>
+              </>
+            )}
+            reasonLabel={approval.kind === 'cancel' ? 'Alasan pembatalan' : 'Alasan refund'}
+            reasonPlaceholder={approval.kind === 'cancel' ? 'Mis. pelanggan batal pesan' : 'Mis. salah input menu'}
+            confirmLabel={approval.kind === 'cancel' ? 'Batalkan pesanan' : 'Refund'}
+            onSubmit={submitApproval}
+            onClose={() => setApproval(null)}
+          />
+        )}
 
         <PaymentModal
           isOpen={showPaymentModal}
