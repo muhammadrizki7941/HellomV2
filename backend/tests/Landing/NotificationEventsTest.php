@@ -11,6 +11,7 @@ use App\Services\Landing\RefundService;
 use App\Services\SellerFinance\FinanceSettings;
 use App\Services\SellerFinance\SellerLedger;
 use App\Services\SellerFinance\WithdrawalService;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Support\Facades\Http;
@@ -23,6 +24,8 @@ use Illuminate\Support\Str;
  */
 class NotificationEventsTest extends SellerFinanceTestCase
 {
+    use DatabaseTransactions;
+
     private function admin(): User
     {
         return User::query()->create(['name' => 'Super', 'email' => Str::lower(Str::random(10)) . '@example.test', 'password' => bcrypt(Str::random(16)), 'role' => 'super_admin']);

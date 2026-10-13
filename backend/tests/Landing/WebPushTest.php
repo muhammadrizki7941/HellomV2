@@ -8,6 +8,7 @@ use App\Models\PushSubscription;
 use App\Models\User;
 use App\Services\Notifications\Notifier;
 use App\Services\Notifications\PushSender;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 
@@ -17,6 +18,8 @@ use Illuminate\Support\Str;
  */
 class WebPushTest extends SellerFinanceTestCase
 {
+    use DatabaseTransactions;
+
     private function user(string $role = 'admin'): array
     {
         $user = User::query()->create(['name' => 'Push', 'email' => Str::lower(Str::random(10)) . '@example.test', 'password' => bcrypt(Str::random(16)), 'role' => $role]);

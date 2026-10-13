@@ -57,6 +57,7 @@ class LandingPaymentTest extends SellerFinanceTestCase
     {
         $seller = $this->seller(100000);
         $order = $this->pendingOrder($seller);
+        $logsBefore = (int) PaymentWebhookLog::query()->max('id'); // the shared test DB may hold older logs
 
         // Wrong callback token → 401, nothing happens.
         $this->ipaymuWebhook($order, 'trx-3', 'wrong-token')->assertStatus(401);
@@ -67,7 +68,7 @@ class LandingPaymentTest extends SellerFinanceTestCase
         $this->ipaymuWebhook($order, 'trx-3')->assertOk()->assertJsonPath('data.status', 'pending');
         $this->assertSame(LandingPageOrder::STATUS_PENDING, $order->fresh()->status);
 
-        $log = PaymentWebhookLog::query()->where('provider', 'ipaymu')->orderBy('id')->first();
+        $log = PaymentWebhookLog::query()->where('provider', 'ipaymu')->where('id', '>', $logsBefore)->orderBy('id')->first();
         $this->assertFalse($log->signature_valid);
         $this->assertStringNotContainsString('wrong-token', json_encode($log->headers));
     }
