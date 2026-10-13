@@ -104,6 +104,9 @@ Route::prefix('admin')->name('admin.')->middleware('superAdmin')->group(function
     Route::get('/mail-settings', [AdminMailController::class, 'showSettings']);
     Route::put('/mail-settings', [AdminMailController::class, 'updateSettings']);
     Route::post('/mail-settings/test', [AdminMailController::class, 'sendTest']);
+    Route::get('/mail-settings/dns-check', [AdminMailController::class, 'dnsCheck']);
+    Route::get('/mail-logs', [AdminMailController::class, 'logs']);
+    Route::post('/mail-logs/{id}/resend', [AdminMailController::class, 'resend'])->whereNumber('id');
 
     Route::get('/notifications', [\App\Http\Controllers\Admin\OwnerNotificationController::class, 'index']);
     Route::get('/notifications/unread-count', [\App\Http\Controllers\Admin\OwnerNotificationController::class, 'unreadCount']);

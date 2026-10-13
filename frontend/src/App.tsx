@@ -22,6 +22,7 @@ const OrderLookupPage = lazy(() => import('@/pages/public/OrderLookupPage'));
 const SellerPolicyPage = lazy(() => import('@/pages/public/SellerPolicyPage'));
 const InvitationAcceptPage = lazy(() => import('@/pages/public/InvitationAcceptPage'));
 const AdminInvitationPage = lazy(() => import('@/pages/public/AdminInvitationPage'));
+const UnsubscribePage = lazy(() => import('@/pages/public/UnsubscribePage'));
 const PosPinResetPage = lazy(() => import('@/pages/public/PosPinResetPage'));
 const LoginPage = lazy(() => import('@/pages/auth/LoginPage'));
 const StaffLoginPage = lazy(() => import('@/pages/auth/StaffLoginPage'));
@@ -131,6 +132,7 @@ export default function App() {
         <Route path="/p/:organizationSlug/:pageSlug" element={<PublicPage />} />
         <Route path="/invitation/accept" element={<InvitationAcceptPage />} />
         <Route path="/undangan-admin" element={<AdminInvitationPage />} />
+        <Route path="/berhenti-langganan" element={<UnsubscribePage />} />
         <Route path="/reset-pin-pos" element={<PosPinResetPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/login/kasir" element={<StaffLoginPage />} />

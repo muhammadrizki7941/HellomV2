@@ -155,7 +155,7 @@ class SellerOrderController extends BaseApiController
 
         if ($updated->buyer_email) {
             SendPlatformMail::dispatch([(string) $updated->buyer_email], ($isPhysical ? 'Pesanan dikirim — ' : 'Pesanan selesai — ') . $updated->product_name, [
-                'headline' => $isPhysical ? 'Pesanan kamu sudah dikirim 🚚' : 'Pesanan kamu sudah selesai',
+                'headline' => $isPhysical ? 'Pesanan kamu sudah dikirim' : 'Pesanan kamu sudah selesai',
                 'intro' => $isPhysical ? 'Penjual sudah mengirim pesanan kamu.' : 'Penjual menandai pesanan kamu selesai.',
                 'details' => array_filter([
                     'No. pesanan' => (string) $updated->reference_id,

@@ -8,6 +8,8 @@ import {
   updateAdminMailSettings,
   sendAdminMailTest,
 } from '@/lib/hellomApi';
+import MailDomainPanel from './MailDomainPanel';
+import MailLogPanel from './MailLogPanel';
 
 type MailSettings = {
   enabled: boolean;
@@ -421,11 +423,15 @@ export default function EmailSetting() {
         )}
       </div>
 
+      <MailDomainPanel />
+
+      <MailLogPanel />
+
       <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">
         <p className="font-semibold text-zinc-900">Catatan keamanan</p>
         <div className="mt-2 space-y-2">
           <p>Kredensial SMTP disimpan terenkripsi di database. Password tidak pernah dikirim ke frontend.</p>
-          <p>Gunakan app password jika menggunakan Gmail. Jangan gunakan password akun utama.</p>
+          <p>Rekomendasi: kirim lewat Brevo (smtp-relay.brevo.com, port 587) dengan domain sendiri yang sudah diverifikasi — Gmail SMTP yang mengirim atas nama domain lain akan masuk spam. Panduan: docs/EMAIL.md.</p>
           <p>Test email akan dikirim dari konfigurasi yang sudah tersimpan.</p>
         </div>
       </div>

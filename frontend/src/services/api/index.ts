@@ -124,6 +124,9 @@ export {
   rejectWithdrawal,
   resetIpaymuGatewayConfig,
   sendAdminMailTest,
+  checkAdminMailDomain,
+  getAdminEmailLogs,
+  resendAdminEmailLog,
   suspendUser,
   updateAdminApp,
   updateAdminMailSettings,
@@ -316,7 +319,7 @@ export type {
   PosReportProducts,
   PosReportSummary,
 } from './pos';
-export type { AdminNotificationQuery, OwnerNotification } from './admin';
+export type { AdminNotificationQuery, OwnerNotification, AdminEmailLog, MailDomainCheckResult } from './admin';
 export type { ConsumerNotification } from './consumer';
 export { currentPushEndpoint, deletePushSubscription, getPushPublicKey, savePushSubscription } from './push';
 export type { PosMemberSearchResult } from './pos';

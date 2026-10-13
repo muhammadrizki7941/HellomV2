@@ -1,5 +1,7 @@
 @extends('emails.partials.hellom-layout')
 
+@section('preheader'){{ $statusLabel }} — paket {{ $planName }} ({{ $appName }}) untuk {{ $organizationName }}.@endsection
+
 @section('content')
     <h1 style="margin:0 0 16px;font-size:22px;line-height:1.3;font-weight:800;color:#0a0a0a;">{{ $statusLabel }}</h1>
     <p style="margin:0 0 18px;font-size:15px;line-height:1.75;color:#374151;">

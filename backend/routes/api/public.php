@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\V1\Hellom\BannerController;
 use App\Http\Controllers\Api\V1\Hellom\Billing\LandingCheckoutController;
 use App\Http\Controllers\Api\V1\Hellom\BrandSettingController;
 use App\Http\Controllers\Api\V1\Hellom\CustomerOrderController;
+use App\Http\Controllers\Api\V1\Hellom\EmailUnsubscribeController;
 use App\Http\Controllers\Api\V1\Hellom\DokuWebhookController;
 use App\Http\Controllers\Api\V1\Hellom\EmailVerificationController;
 use App\Http\Controllers\Api\V1\Hellom\IpaymuWebhookController;
@@ -83,6 +84,11 @@ Route::post('/public/landingpage/orders/{reference}/purchase-event', [PublicStor
     ->name('public.landing.orders.purchase_event');
 Route::get('/public/email/verify/{id}/{hash}', [EmailVerificationController::class, 'verify'])->middleware('throttle:hellom-public-lookup')
     ->name('public.email.verify');
+// Info & tips email: signed one-click unsubscribe (POST from mail providers, GET from the footer).
+Route::post('/public/email/unsubscribe/{user}', [EmailUnsubscribeController::class, 'oneClick'])->middleware('throttle:hellom-public-lookup')
+    ->name('public.email.unsubscribe');
+Route::get('/public/email/unsubscribe/{user}', [EmailUnsubscribeController::class, 'link'])->middleware('throttle:hellom-public-lookup')
+    ->name('public.email.unsubscribe.link');
 Route::get('/public/showcase/portfolios', [ShowcaseController::class, 'publicPortfolios'])->name('public.showcase.portfolios');
 Route::get('/public/showcase/clients', [ShowcaseController::class, 'publicClients'])->name('public.showcase.clients');
 Route::get('/public/landing-content', [LandingContentController::class, 'publicContent'])->name('public.landing_content');

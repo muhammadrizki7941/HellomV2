@@ -390,6 +390,8 @@ Schedule::command('landing:orders release')->everyTenMinutes()->withoutOverlappi
 Schedule::command('landing:orders sla')->everyThirtyMinutes()->withoutOverlapping();
 Schedule::command('landing:bookings-remind')->hourly()->withoutOverlapping();
 Schedule::command('balance:reconcile')->dailyAt('03:10')->withoutOverlapping();
+// Email history (Pengaturan Email › Riwayat) is kept 90 days.
+Schedule::command('model:prune', ['--model' => [\App\Models\EmailLog::class]])->dailyAt('03:40')->withoutOverlapping();
 
 // Heartbeat for GET /api/health: proves cron schedule:run is installed and running.
 Schedule::call(fn () => Cache::forever(HealthController::HEARTBEAT_KEY, time()))

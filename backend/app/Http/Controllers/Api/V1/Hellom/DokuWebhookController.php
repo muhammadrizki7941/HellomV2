@@ -274,7 +274,7 @@ class DokuWebhookController extends BaseApiController
             ->values();
 
         foreach ($recipients as $email) {
-            $mailer->sendTo((string) $email, new HellomCheckoutStatusMail(
+            $mailer->queue((string) $email, new HellomCheckoutStatusMail(
                 subjectLine: 'Pembayaran aplikasi berhasil via DOKU',
                 payload: [
                     'headline' => 'Pembayaran gateway berhasil diterima',
@@ -285,7 +285,7 @@ class DokuWebhookController extends BaseApiController
         }
 
         if ($intent->user?->email) {
-            $mailer->sendTo((string) $intent->user->email, new HellomCheckoutStatusMail(
+            $mailer->queue((string) $intent->user->email, new HellomCheckoutStatusMail(
                 subjectLine: 'Pembayaran aplikasi Anda berhasil',
                 payload: [
                     'headline' => 'Pembayaran berhasil',

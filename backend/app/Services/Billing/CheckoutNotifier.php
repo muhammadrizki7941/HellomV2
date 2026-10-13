@@ -43,7 +43,7 @@ class CheckoutNotifier
             ->values();
 
         foreach ($recipients as $email) {
-            $this->platformMailService->sendTo($email, new HellomBillingNotificationMail(
+            $this->platformMailService->queue($email, new HellomBillingNotificationMail(
                 organizationName: (string) $subscription->organization->name,
                 appName: (string) ($subscription->app?->name ?? 'Aplikasi'),
                 planName: (string) ($subscription->plan?->name ?? 'Plan'),
@@ -66,7 +66,7 @@ class CheckoutNotifier
         $details = $this->buildCheckoutEmailDetails($intent, $invoice, $paymentUrl);
 
         foreach ($this->ownerBillingRecipients($subscription) as $email) {
-            $this->platformMailService->sendTo($email, new HellomCheckoutStatusMail(
+            $this->platformMailService->queue($email, new HellomCheckoutStatusMail(
                 subjectLine: 'Pembayaran aplikasi baru menunggu tindak lanjut',
                 payload: [
                     'headline' => 'Ada checkout aplikasi baru di Hellom',
@@ -78,7 +78,7 @@ class CheckoutNotifier
         }
 
         if ($intent->user?->email) {
-            $this->platformMailService->sendTo((string) $intent->user->email, new HellomCheckoutStatusMail(
+            $this->platformMailService->queue((string) $intent->user->email, new HellomCheckoutStatusMail(
                 subjectLine: 'Instruksi pembayaran aplikasi Hellom',
                 payload: [
                     'headline' => 'Checkout aplikasi Anda sudah dibuat',
@@ -108,7 +108,7 @@ class CheckoutNotifier
             : 'Owner menolak checkout manual ini. Silakan hubungi owner atau buat pembayaran baru.';
 
         foreach ($this->ownerBillingRecipients($subscription) as $email) {
-            $this->platformMailService->sendTo($email, new HellomCheckoutStatusMail(
+            $this->platformMailService->queue($email, new HellomCheckoutStatusMail(
                 subjectLine: $subject,
                 payload: [
                     'headline' => $headline,
@@ -119,7 +119,7 @@ class CheckoutNotifier
         }
 
         if ($intent->user?->email) {
-            $this->platformMailService->sendTo((string) $intent->user->email, new HellomCheckoutStatusMail(
+            $this->platformMailService->queue((string) $intent->user->email, new HellomCheckoutStatusMail(
                 subjectLine: $subject,
                 payload: [
                     'headline' => $headline,

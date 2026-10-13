@@ -17,7 +17,8 @@ class SendPlatformMail implements ShouldQueue
 
     public int $tries = 3;
 
-    public int $backoff = 60;
+    /** @var list<int> */
+    public array $backoff = [60, 300];
 
     /**
      * @param list<string> $to
@@ -32,8 +33,31 @@ class SendPlatformMail implements ShouldQueue
 
     public function handle(PlatformMailService $mailer): void
     {
-        foreach (array_unique(array_filter($this->to)) as $email) {
-            $mailer->sendTo($email, new HellomCheckoutStatusMail(subjectLine: $this->subject, payload: $this->payload));
+        $to = array_values(array_unique(array_filter($this->to)));
+        // Several owners: one job each, so a retry never re-sends to someone who already got it.
+        if (count($to) > 1) {
+            foreach ($to as $email) {
+                self::dispatch([$email], $this->subject, $this->payload);
+            }
+
+            return;
         }
+        if ($to === []) {
+            return;
+        }
+
+        // Throws on failure → the queue retries (tries/backoff), then failed().
+        // On the sync queue (local/tests) a throw would break the request that dispatched it.
+        if ($this->job === null || $this->job->getConnectionName() === 'sync') {
+            $mailer->sendTo($to[0], new HellomCheckoutStatusMail(subjectLine: $this->subject, payload: $this->payload));
+
+            return;
+        }
+        $mailer->sendOrFail($to[0], new HellomCheckoutStatusMail(subjectLine: $this->subject, payload: $this->payload));
+    }
+
+    public function failed(\Throwable $exception): void
+    {
+        \Illuminate\Support\Facades\Log::warning('Platform email gave up', ['subject' => $this->subject, 'error' => $exception->getMessage()]);
     }
 }

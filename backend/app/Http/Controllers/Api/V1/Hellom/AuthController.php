@@ -261,10 +261,12 @@ class AuthController extends BaseApiController
         [$plainToken] = $this->issueToken($user, 'hellom-web');
 
         $organizationName = $user->currentOrganization?->name;
-        $welcomeDelivery = $this->platformMailService->sendTo($user->email, new HellomWelcomeMail(
+        // Queued: signing up never waits on SMTP (retries if the mail server hiccups).
+        $this->platformMailService->queue($user->email, new HellomWelcomeMail(
             name: (string) $user->name,
             organizationName: $organizationName,
         ));
+        $welcomeDelivery = ['sent' => null, 'queued' => true, 'error' => null];
 
         // Create notification for new user registration.
         // The account is already committed at this point, so a failure here

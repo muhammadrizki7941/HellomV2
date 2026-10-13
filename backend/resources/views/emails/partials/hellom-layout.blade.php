@@ -1,9 +1,13 @@
 @php
     $brand = \App\Models\HellomBrandSetting::getSettings();
     $appName = $brand->app_name ?: ($brand->business_name ?: 'Hellom');
-    // Embedded (cid:) so every mail client shows it, even when the site URL is not reachable.
+    // Hosted https logo (lighter, no attachment — better for spam scores); embedded (cid:) only
+    // when the site URL is not public https (local/dev), so the logo still shows.
+    $logoUrl = $brand->logoUrl();
     $logoFile = $brand->logoFilePath();
-    $logo = (isset($message) && $logoFile) ? $message->embed($logoFile) : $brand->logoUrl();
+    $logo = ($logoUrl && str_starts_with($logoUrl, 'https://')) ? $logoUrl
+        : ((isset($message) && $logoFile) ? $message->embed($logoFile) : $logoUrl);
+    $unsubscribeUrl = $unsubscribeUrl ?? null;
     $font = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
 @endphp
 <!doctype html>
@@ -47,7 +51,10 @@
                         @if($brand->support_email)
                             Butuh bantuan? Balas email ini atau hubungi <a href="mailto:{{ $brand->support_email }}" style="color:#3f3f46;">{{ $brand->support_email }}</a>.<br>
                         @endif
-                        Email ini dikirim otomatis oleh {{ $appName }}.<br>
+                        Kamu menerima email ini karena punya akun atau transaksi di {{ $appName }}.<br>
+                        @if($unsubscribeUrl)
+                            Tidak mau menerima info &amp; tips lagi? <a href="{{ $unsubscribeUrl }}" style="color:#3f3f46;">Berhenti berlangganan</a>.<br>
+                        @endif
                         {{ $brand->footer_text ?: '© ' . date('Y') . ' ' . $appName }}
                     </td>
                 </tr>

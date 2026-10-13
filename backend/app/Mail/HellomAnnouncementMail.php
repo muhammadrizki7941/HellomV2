@@ -12,6 +12,9 @@ class HellomAnnouncementMail extends Mailable
 {
     use Queueable, SerializesModels;
 
+    /** Info/announcement: one-click unsubscribe applies (PlatformMailService::CATEGORY_MARKETING). */
+    public string $mailCategory = 'marketing';
+
     public function __construct(
         public string $subjectLine,
         public string $heading,

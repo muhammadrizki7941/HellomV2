@@ -2,6 +2,7 @@
 
 namespace App\Services\Hellom;
 
+use App\Models\EmailLog;
 use App\Models\HellomBrandSetting;
 use App\Models\SystemSetting;
 use Illuminate\Contracts\Mail\Mailable;
@@ -13,6 +14,12 @@ use Throwable;
 class PlatformMailService
 {
     public const OWNER_EMAIL_SETTING = 'hellom_owner_notification_email';
+
+    /** Receipts, resets, verification, withdrawals: always delivered. */
+    public const CATEGORY_TRANSACTIONAL = 'transactional';
+
+    /** Announcements, tips: honour one-click unsubscribe (users.email_preferences.marketing). */
+    public const CATEGORY_MARKETING = 'marketing';
 
     public function getSettings(): array
     {
@@ -148,11 +155,36 @@ class PlatformMailService
             && $settings['from_address'] !== '';
     }
 
+    /**
+     * Send now. Every email gets the same professional finish (see finish()): plain-text part,
+     * Reply-To, Auto-Submitted, List-Unsubscribe for non-transactional mail. Each attempt is
+     * written to email_logs. Never throws — use sendOrFail() inside jobs so retries happen.
+     *
+     * @return array{sent: bool, mailer: string, error: ?string, skipped?: bool}
+     */
     public function sendTo(string|array $to, Mailable $mailable): array
     {
+        $recipients = array_values(array_unique(array_filter(array_map(fn ($email) => trim((string) $email), (array) $to))));
+        $category = self::categoryOf($mailable);
+        $meta = ['subject' => ''];
+
+        $unsubscribeUrl = null;
+        if ($category === self::CATEGORY_MARKETING) {
+            $recipients = array_values(array_filter($recipients, fn (string $email) => !$this->hasUnsubscribed($email)));
+            if ($recipients === []) {
+                $this->log((array) $to, $mailable, $category, EmailLog::STATUS_SKIPPED, $meta, 'Penerima sudah berhenti berlangganan email info & tips.');
+
+                return ['sent' => false, 'skipped' => true, 'mailer' => 'none', 'error' => 'unsubscribed'];
+            }
+            $unsubscribeUrl = $this->unsubscribeUrl($recipients[0]);
+        }
+        $this->finish($mailable, $category, $unsubscribeUrl, $meta);
+
         try {
             $mailer = $this->configureMailer();
-            Mail::mailer($mailer)->to($to)->send($mailable);
+            $sent = Mail::mailer($mailer)->to($recipients)->send($mailable);
+            $meta['message_id'] = $sent?->getMessageId();
+            $this->log($recipients, $mailable, $category, EmailLog::STATUS_SENT, $meta);
 
             return [
                 'sent' => true,
@@ -160,11 +192,152 @@ class PlatformMailService
                 'error' => null,
             ];
         } catch (Throwable $exception) {
+            $this->log($recipients, $mailable, $category, EmailLog::STATUS_FAILED, $meta, $exception->getMessage(), true);
+
             return [
                 'sent' => false,
                 'mailer' => $this->isReady() ? 'smtp' : (string) config('mail.default', 'log'),
                 'error' => $exception->getMessage(),
             ];
+        }
+    }
+
+    /** For queued jobs: a failed send throws, so the queue retries (tries/backoff) and failed() runs. */
+    public function sendOrFail(string|array $to, Mailable $mailable): array
+    {
+        $result = $this->sendTo($to, $mailable);
+        if (!$result['sent'] && empty($result['skipped'])) {
+            throw new \RuntimeException('Email gagal terkirim: ' . ($result['error'] ?? 'unknown'));
+        }
+
+        return $result;
+    }
+
+    /** Send in the background (after the current DB transaction commits), with retries. */
+    public function queue(string|array $to, Mailable $mailable): void
+    {
+        $recipients = array_values(array_filter((array) $to));
+        if ($recipients === []) {
+            return;
+        }
+        \App\Jobs\SendMailable::dispatch($recipients, $mailable)->afterCommit();
+    }
+
+    /** "Kirim ulang" from Pengaturan Email › Riwayat (failed sends keep their mailable). */
+    public function resend(EmailLog $log): array
+    {
+        $mailable = $log->payload ? @unserialize((string) $log->payload) : false;
+        if (!$mailable instanceof Mailable) {
+            return ['sent' => false, 'mailer' => 'none', 'error' => 'Isi email ini tidak tersimpan, tidak bisa dikirim ulang.'];
+        }
+
+        $result = $this->sendTo(self::parseEmails($log->to_email) ?: [$log->to_email], $mailable);
+        if ($result['sent']) {
+            $log->forceFill(['status' => EmailLog::STATUS_SENT, 'error' => null, 'payload' => null, 'attempts' => $log->attempts + 1])->save();
+        }
+
+        return $result;
+    }
+
+    public static function categoryOf(Mailable $mailable): string
+    {
+        $category = property_exists($mailable, 'mailCategory') ? (string) $mailable->mailCategory : '';
+
+        return $category === self::CATEGORY_MARKETING ? self::CATEGORY_MARKETING : self::CATEGORY_TRANSACTIONAL;
+    }
+
+    public function hasUnsubscribed(string $email): bool
+    {
+        $preferences = \App\Models\User::query()->where('email', strtolower($email))->value('email_preferences');
+        $preferences = is_string($preferences) ? json_decode($preferences, true) : $preferences;
+
+        return is_array($preferences) && ($preferences['marketing'] ?? true) === false;
+    }
+
+    /** Signed one-click link (RFC 8058) — only info/tips emails; transactional mail always arrives. */
+    public function unsubscribeUrl(string $email): ?string
+    {
+        $userId = \App\Models\User::query()->where('email', strtolower($email))->value('id');
+        if (!$userId) {
+            return null;
+        }
+
+        return \Illuminate\Support\Facades\URL::signedRoute('api.v1.hellom.public.email.unsubscribe', ['user' => $userId]);
+    }
+
+    /** @param array{subject: string, message_id?: ?string} $meta */
+    private function finish(Mailable $mailable, string $category, ?string $unsubscribeUrl, array &$meta): void
+    {
+        if (!$mailable instanceof \Illuminate\Mail\Mailable) {
+            return;
+        }
+        $settings = $this->getSettings();
+        $mailable->with('unsubscribeUrl', $unsubscribeUrl);
+
+        $mailable->withSymfonyMessage(function (\Symfony\Component\Mime\Email $email) use ($settings, $category, $unsubscribeUrl, &$meta) {
+            $meta['subject'] = (string) $email->getSubject();
+            $headers = $email->getHeaders();
+            if ($headers->has('X-Hellom-Category')) {
+                return; // already finished (mailable sent twice, e.g. resend)
+            }
+            $headers->addTextHeader('X-Hellom-Category', $category);
+
+            // multipart/alternative: HTML-only mail scores as spam.
+            $html = $email->getHtmlBody();
+            if ($email->getTextBody() === null && is_string($html) && $html !== '') {
+                $email->text(\App\Support\Mail\HtmlToText::convert($html));
+            }
+
+            // Automated mail: no out-of-office storms back to us.
+            $headers->addTextHeader('Auto-Submitted', 'auto-generated');
+            $headers->addTextHeader('X-Auto-Response-Suppress', 'OOF, AutoReply');
+
+            // Replies go to a mailbox someone reads (Pengaturan Email › Reply-To).
+            $replyTo = trim((string) ($settings['reply_to_address'] ?? ''));
+            if ($email->getReplyTo() === [] && filter_var($replyTo, FILTER_VALIDATE_EMAIL)) {
+                $email->replyTo(new \Symfony\Component\Mime\Address($replyTo, (string) ($settings['reply_to_name'] ?? '')));
+            }
+
+            if ($category === self::CATEGORY_MARKETING && $unsubscribeUrl) {
+                $headers->addTextHeader('List-Unsubscribe', '<' . $unsubscribeUrl . '>');
+                $headers->addTextHeader('List-Unsubscribe-Post', 'List-Unsubscribe=One-Click');
+            }
+        });
+    }
+
+    /** @param list<string>|array<int, string> $to */
+    private function log(array $to, Mailable $mailable, string $category, string $status, array $meta, ?string $error = null, bool $keepPayload = false): void
+    {
+        try {
+            $subject = (string) ($meta['subject'] ?? '');
+            if ($subject === '' && method_exists($mailable, 'envelope')) {
+                $subject = (string) ($mailable->envelope()->subject ?? '');
+            }
+            $payload = null;
+            if ($keepPayload) {
+                try {
+                    // Without our finish() closure (not serializable); resend() adds it again.
+                    $copy = clone $mailable;
+                    if ($copy instanceof \Illuminate\Mail\Mailable) {
+                        $copy->callbacks = [];
+                    }
+                    $payload = serialize($copy);
+                } catch (Throwable) {
+                    $payload = null; // closures etc. — no resend for this one
+                }
+            }
+            EmailLog::query()->create([
+                'to_email' => mb_substr(implode(', ', $to), 0, 255),
+                'subject' => mb_substr($subject, 0, 255),
+                'mailable' => mb_substr(class_basename($mailable), 0, 120),
+                'category' => $category,
+                'status' => $status,
+                'error' => $error ? mb_substr($error, 0, 2000) : null,
+                'message_id' => isset($meta['message_id']) ? mb_substr((string) $meta['message_id'], 0, 255) : null,
+                'payload' => $payload,
+            ]);
+        } catch (Throwable $e) {
+            report($e); // logging must never break sending
         }
     }
 
@@ -186,7 +359,11 @@ class PlatformMailService
             'mail.mailers.smtp.password' => $settings['password'],
             'mail.from.address' => $settings['from_address'],
             'mail.from.name' => $settings['from_name'],
+            // EHLO with our real host name, not "localhost" (spam filters notice).
+            'mail.mailers.smtp.local_domain' => parse_url((string) config('app.url'), PHP_URL_HOST) ?: null,
         ]);
+        // A long-running queue worker would keep the first SMTP connection/settings forever.
+        Mail::purge('smtp');
 
         return 'smtp';
     }

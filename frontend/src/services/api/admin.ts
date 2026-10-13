@@ -570,6 +570,46 @@ export function sendAdminMailTest(email: string) {
   });
 }
 
+// Pengaturan Email › Cek domain (MailDomainCheck).
+export type MailDomainCheckItem = { key: string; label: string; status: 'ok' | 'warn' | 'fail'; detail: string; fix: string | null };
+export type MailDomainCheckResult = { domain: string; provider: string | null; provider_label: string | null; ok: boolean; checks: MailDomainCheckItem[] };
+
+export function checkAdminMailDomain() {
+  return apiRequest<MailDomainCheckResult>('/admin/mail-settings/dns-check');
+}
+
+// Pengaturan Email › Riwayat (email_logs, 90 hari).
+export type AdminEmailLog = {
+  id: number;
+  to_email: string;
+  subject: string;
+  mailable: string;
+  category: 'transactional' | 'marketing';
+  status: 'sent' | 'failed' | 'skipped';
+  error: string | null;
+  attempts: number;
+  can_resend: boolean;
+  created_at: string;
+};
+
+export function getAdminEmailLogs(query: { page?: number; status?: string; q?: string } = {}) {
+  const params = new URLSearchParams();
+  if (query.page) params.set('page', String(query.page));
+  if (query.status) params.set('status', query.status);
+  if (query.q) params.set('q', query.q);
+  const qs = params.toString() ? `?${params.toString()}` : '';
+
+  return apiRequest<{
+    data: AdminEmailLog[];
+    meta: { current_page: number; per_page: number; total: number; last_page: number };
+    summary: { sent_24h: number; failed_24h: number };
+  }>(`/admin/mail-logs${qs}`);
+}
+
+export function resendAdminEmailLog(id: number) {
+  return apiRequest<{ delivery: EmailDeliveryResult }>(`/admin/mail-logs/${id}/resend`, { method: 'POST', body: {} });
+}
+
 // ─── Admin Audit Log & Invoices ───
 
 export type AdminAuditLogItem = {

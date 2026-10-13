@@ -5,6 +5,8 @@
     $manualMethods = $payload['manual_methods'] ?? [];
 @endphp
 
+@section('preheader'){{ \Illuminate\Support\Str::limit((string) ($payload['intro'] ?? $payload['headline'] ?? ''), 140) }}@endsection
+
 @section('content')
     <h1 style="margin:0 0 16px;font-size:22px;line-height:1.3;font-weight:800;color:#0a0a0a;">{{ $payload['headline'] ?? 'Update pembayaran Hellom' }}</h1>
     <p style="margin:0;">{{ $payload['intro'] ?? 'Ada pembaruan pada pembayaran aplikasi kamu.' }}</p>

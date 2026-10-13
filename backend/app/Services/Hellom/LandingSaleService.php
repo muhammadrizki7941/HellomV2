@@ -116,7 +116,7 @@ class LandingSaleService
             $details['Total dibayar'] = $fmt((int) $order->amount);
 
             $buyerPayload = [
-                'headline' => 'Pembayaran berhasil 🎉',
+                'headline' => 'Pembayaran berhasil',
                 'intro' => 'Terima kasih, ' . ((string) $order->buyer_name ?: 'kak') . '! Pembayaran kamu untuk "' . (string) $order->product_name . '" sudah kami terima.',
                 'details' => $details,
             ];
@@ -196,7 +196,7 @@ class LandingSaleService
         $details = array_filter($details, fn ($value) => $value !== '');
         $needsAction = in_array((string) $order->product_kind, [LandingProduct::TYPE_PHYSICAL, LandingProduct::TYPE_SERVICE, LandingProduct::TYPE_RENTAL], true);
         $sellerPayload = [
-            'headline' => 'Ada penjualan baru 💰',
+            'headline' => 'Ada penjualan baru',
             'intro' => 'Produk "' . (string) $order->product_name . '" baru saja terjual di halaman Hellom kamu.'
                 . ((string) $order->product_kind === LandingProduct::TYPE_RENTAL ? ' Jadwalnya sudah terkunci — siapkan unitnya dan cek tab Jadwal.'
                     : ($needsAction ? ' Pesanan ini perlu kamu proses (kirim barang / hubungi pembeli).' : ' Akses produk sudah otomatis dikirim ke pembeli.')),
