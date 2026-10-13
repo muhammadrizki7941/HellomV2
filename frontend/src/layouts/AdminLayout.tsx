@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Settings, LogOut,
-  Menu, ShieldAlert, Activity, Package, Wallet, Film, Palette, ShoppingBag, FileText, Building2, ScrollText, Receipt
+  Menu, ShieldAlert, Activity, Package, Wallet, Film, Palette, ShoppingBag, FileText, Building2, ScrollText, Receipt, Bell
 } from 'lucide-react';
 import NotificationBell from '@/components/admin/NotificationBell';
+import LiveToasts from '@/components/notifications/LiveToasts';
+import { useNotifications } from '@/hooks/useNotifications';
 import { cn } from '@/lib/utils';
 import {
   clearSession,
@@ -30,6 +32,8 @@ export default function AdminLayout() {
   const [currentOrgId, setCurrentOrgId] = useState<number | null>(null);
   const [switchingOrg, setSwitchingOrg] = useState(false);
   const [brand, setBrand] = useState<BrandSettings | null>(null);
+  // One live notification state for the bell and the sidebar badges.
+  const notificationState = useNotifications();
 
   useEffect(() => {
     // Fetch brand settings on mount (use cache if available)
@@ -118,12 +122,13 @@ export default function AdminLayout() {
 
   const menuItems = [
     { icon: LayoutDashboard, label: 'Ringkasan', path: '/admin' },
+    { icon: Bell, label: 'Notifikasi', path: '/admin/notifications', badge: notificationState.unreadCount },
     { icon: Users, label: 'Pengguna', path: '/admin/users' },
     { icon: Building2, label: 'Organisasi', path: '/admin/organizations' },
     { icon: Package, label: 'Aplikasi & Paket', path: '/admin/apps' },
     { icon: Receipt, label: 'Invoice', path: '/admin/invoices' },
     { icon: Wallet, label: 'Keuangan Platform', path: '/admin/finance' },
-    { icon: Wallet, label: 'Keuangan Penjual', path: '/admin/keuangan-penjual' },
+    { icon: Wallet, label: 'Keuangan Penjual', path: '/admin/keuangan-penjual', badge: notificationState.badges.openWithdrawals },
     { icon: ShieldAlert, label: 'Moderasi Toko', path: '/admin/moderasi-toko' },
     { icon: Film, label: 'Showcase', path: '/admin/showcase' },
     { icon: FileText, label: 'Konten Situs', path: '/admin/landing-content' },
@@ -184,6 +189,11 @@ export default function AdminLayout() {
               >
                 <item.icon className="w-5 h-5" />
                 {item.label}
+                {'badge' in item && item.badge ? (
+                  <span className="ml-auto min-w-[20px] rounded-full bg-red-500 px-1.5 py-0.5 text-center text-[11px] font-bold leading-none text-white">
+                    {item.badge > 99 ? '99+' : item.badge}
+                  </span>
+                ) : null}
               </Link>
             );
           })}
@@ -252,7 +262,7 @@ export default function AdminLayout() {
                   ))}
                 </select>
               )}
-              <NotificationBell />
+              <NotificationBell state={notificationState} />
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-full bg-zinc-900 flex items-center justify-center text-white font-bold text-xs">
                   {adminInitials}
@@ -274,6 +284,7 @@ export default function AdminLayout() {
           <Outlet />
         </main>
       </div>
+      <LiveToasts />
     </div>
   );
 }

@@ -1,353 +1,300 @@
 import { useState } from 'react';
-import { Bell, User, CreditCard, Clock, CheckCheck, ChevronRight, ExternalLink, X } from 'lucide-react';
-import { Notification } from '@/hooks/useNotifications';
+import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
+import { Bell, CheckCheck, ChevronRight, ExternalLink, Volume2, VolumeX, X } from 'lucide-react';
+import type { AdminNotificationsState, Notification } from '@/hooks/useNotifications';
 import {
   executeOwnerNotificationAction,
   getOwnerNotificationDetail,
   ignoreOwnerNotificationAction,
 } from '@/lib/hellomApi';
+import { isNotificationSoundEnabled, setNotificationSoundEnabled } from '@/lib/liveNotifications';
+import {
+  ADMIN_NOTIFICATION_GROUPS,
+  adminActionLabel,
+  adminNotificationMeta,
+  formatNotificationAge,
+  groupTypes,
+  type AdminNotificationGroup,
+} from './notificationTypes';
 
 interface NotificationDropdownProps {
-  notifications: Notification[];
-  loading: boolean;
-  refreshNotifications: () => Promise<void>;
-  refreshUnreadCount: () => Promise<void>;
-  markAsRead: (id: number) => Promise<void>;
-  markAllAsRead: () => Promise<void>;
+  state: AdminNotificationsState;
+  group: AdminNotificationGroup;
+  onGroupChange: (group: AdminNotificationGroup) => void;
   onClose: () => void;
 }
 
-const typeIcons = {
-  new_user: User,
-  new_transaction: CreditCard,
-  expiry_reminder: Clock,
+export function ActionBadge({ notification }: { notification: Notification }) {
+  if (notification.action_status === 'done') {
+    return <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">Selesai</span>;
+  }
+  if (notification.action_status === 'ignored') {
+    return <span className="text-[11px] text-zinc-400">Diabaikan</span>;
+  }
+  if (notification.action_status === 'pending' && notification.action_type) {
+    return (
+      <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-semibold text-orange-700">
+        {adminActionLabel(notification.action_type)}
+      </span>
+    );
+  }
+  return null;
+}
+
+const formatDateTime = (dateString?: string | null) => {
+  if (!dateString) return '-';
+  return new Date(dateString).toLocaleString('id-ID', {
+    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
 };
 
-const typeLabels = {
-  new_user: 'Pendaftar',
-  new_transaction: 'Transaksi',
-  expiry_reminder: 'Tenggat',
-};
-
-export default function NotificationDropdown({
-  notifications,
-  loading,
-  refreshNotifications,
-  refreshUnreadCount,
-  markAsRead,
-  markAllAsRead,
+/** Detail + action dialog for one super admin notification (bell and full page). */
+export function NotificationDetailDialog({
+  notification,
   onClose,
-}: NotificationDropdownProps) {
-  const [filter, setFilter] = useState<'all' | 'new_user' | 'new_transaction' | 'expiry_reminder'>('all');
-  const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
-  const [isDetailOpen, setIsDetailOpen] = useState(false);
-  const [detailLoading, setDetailLoading] = useState(false);
+  onChanged,
+}: {
+  notification: Notification;
+  onClose: () => void;
+  onChanged: () => Promise<void> | void;
+}) {
+  const navigate = useNavigate();
+  const [busy, setBusy] = useState(false);
+  const pending = notification.action_status === 'pending' && Boolean(notification.action_type);
 
-  const filteredNotifications = notifications.filter(notif =>
-    filter === 'all' || notif.type === filter
+  const openUrl = () => {
+    const url = notification.action_url ?? '';
+    if (url.startsWith('/')) {
+      onClose();
+      navigate(url);
+    } else if (url) {
+      window.open(url, '_blank', 'noopener');
+    }
+  };
+
+  const run = async (action: 'execute' | 'ignore') => {
+    setBusy(true);
+    try {
+      if (action === 'execute') await executeOwnerNotificationAction(String(notification.id));
+      else await ignoreOwnerNotificationAction(String(notification.id));
+      await onChanged();
+      onClose();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const meta = adminNotificationMeta(notification.type);
+  const Icon = meta.icon;
+
+  // Portal: the bell's panel is a transformed box on mobile, which would trap "fixed".
+  return createPortal(
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-zinc-950/45 p-4" onClick={onClose}>
+      <div className="w-full max-w-lg rounded-2xl border border-zinc-200 bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
+        <div className="flex items-start justify-between gap-3 border-b border-zinc-100 px-5 py-4">
+          <div className="flex items-start gap-3">
+            <div className={`rounded-lg p-2 ${meta.tone}`}><Icon className="h-4 w-4" /></div>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">{meta.label}</p>
+              <h3 className="text-base font-semibold text-zinc-900">{notification.title}</h3>
+              <p className="mt-0.5 text-xs text-zinc-500">{formatDateTime(notification.created_at)}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700" aria-label="Tutup">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="space-y-3 px-5 py-4">
+          <p className="text-sm leading-6 text-zinc-700">{notification.message}</p>
+          {notification.action_status === 'done' && (
+            <div className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+              Selesai pada {formatDateTime(notification.action_done_at)}
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-wrap justify-end gap-2 border-t border-zinc-100 px-5 py-4">
+          {notification.action_url && (
+            <button
+              onClick={openUrl}
+              className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+            >
+              Buka halaman <ExternalLink className="h-4 w-4" />
+            </button>
+          )}
+          {pending ? (
+            <>
+              <button
+                disabled={busy}
+                onClick={() => void run('ignore')}
+                className="rounded-xl border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-60"
+              >
+                Abaikan
+              </button>
+              <button
+                disabled={busy}
+                onClick={() => void run('execute')}
+                className="rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-60"
+              >
+                Tandai selesai
+              </button>
+            </>
+          ) : (
+            <button onClick={onClose} className="rounded-xl border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50">
+              Tutup
+            </button>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
+}
+
+export default function NotificationDropdown({ state, group, onGroupChange, onClose }: NotificationDropdownProps) {
+  const navigate = useNavigate();
+  const { notifications, loading, fetchNotifications, fetchUnreadCount, markAsRead, markAllAsRead, connected } = state;
+  const [selected, setSelected] = useState<Notification | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [sound, setSound] = useState(isNotificationSoundEnabled);
+
+  const refresh = async () => {
+    const types = groupTypes(group);
+    await Promise.all([
+      fetchUnreadCount(),
+      fetchNotifications({ per_page: 15, type: types.length ? types.join(',') : undefined }),
+    ]);
+  };
 
   const handleNotificationClick = async (notification: Notification) => {
-    if (!notification.is_read) {
-      await markAsRead(notification.id);
-    }
-
+    if (!notification.is_read) await markAsRead(notification.id);
     setDetailLoading(true);
     try {
-      const detail = await getOwnerNotificationDetail(String(notification.id));
-      setSelectedNotification(detail);
-      setIsDetailOpen(true);
-      await refreshUnreadCount();
-      await refreshNotifications();
+      setSelected(await getOwnerNotificationDetail(String(notification.id)));
     } finally {
       setDetailLoading(false);
     }
   };
 
-  const handleMarkAllRead = async () => {
-    await markAllAsRead();
-  };
-
-  const handleExecuteAction = async () => {
-    if (!selectedNotification) {
-      return;
-    }
-
-    await executeOwnerNotificationAction(String(selectedNotification.id));
-    const detail = await getOwnerNotificationDetail(String(selectedNotification.id));
-    setSelectedNotification(detail);
-    await refreshUnreadCount();
-    await refreshNotifications();
-    setIsDetailOpen(false);
-  };
-
-  const handleIgnoreAction = async () => {
-    if (!selectedNotification) {
-      return;
-    }
-
-    await ignoreOwnerNotificationAction(String(selectedNotification.id));
-    const detail = await getOwnerNotificationDetail(String(selectedNotification.id));
-    setSelectedNotification(detail);
-    await refreshUnreadCount();
-    await refreshNotifications();
-    setIsDetailOpen(false);
-  };
-
-  const formatTime = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / (1000 * 60));
-    const diffHours = Math.floor(diffMins / 60);
-    const diffDays = Math.floor(diffHours / 24);
-
-    if (diffMins < 1) return 'Baru saja';
-    if (diffMins < 60) return `${diffMins} menit lalu`;
-    if (diffHours < 24) return `${diffHours} jam lalu`;
-    return `${diffDays} hari lalu`;
-  };
-
-  const formatDateTime = (dateString?: string | null) => {
-    if (!dateString) {
-      return '-';
-    }
-
-    return new Date(dateString).toLocaleString('id-ID', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
-  const renderActionBadge = (notification: Notification) => {
-    if (notification.action_status === 'done') {
-      return <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">✓ Selesai</span>;
-    }
-
-    if (notification.action_status === 'ignored') {
-      return <span className="text-[11px] text-zinc-400">Diabaikan</span>;
-    }
-
-    if (notification.action_status === 'pending' && notification.action_type) {
-      const map: Record<string, string> = {
-        verify_payment: 'rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-semibold text-orange-700',
-        open_access: 'rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-semibold text-rose-700',
-        process_refund: 'rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-semibold text-rose-700',
-        view_user: 'rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-700',
-      };
-      const labels: Record<string, string> = {
-        verify_payment: 'Verifikasi',
-        open_access: 'Buka Akses',
-        process_refund: 'Proses Refund',
-        view_user: 'Lihat User',
-      };
-
-      return (
-        <span className={map[notification.action_type] || 'rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-semibold text-zinc-700'}>
-          {labels[notification.action_type] || notification.action_type}
-        </span>
-      );
-    }
-
-    return null;
+  const toggleSound = () => {
+    setNotificationSoundEnabled(!sound);
+    setSound(!sound);
   };
 
   return (
     <>
-    <div className="w-full bg-white border border-zinc-200 rounded-xl shadow-lg overflow-hidden">
-      {/* Header */}
-      <div className="p-4 border-b border-zinc-100">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold text-zinc-900 flex items-center gap-2">
-            <Bell className="w-5 h-5" />
-            Notifikasi
-          </h3>
-          {notifications.some(n => !n.is_read) && (
-            <button
-              onClick={handleMarkAllRead}
-              className="text-xs text-zinc-600 hover:text-zinc-900 flex items-center gap-1"
-            >
-              <CheckCheck className="w-4 h-4" />
-              Tandai Semua Dibaca
-            </button>
+      <div className="w-full overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-lg">
+        <div className="border-b border-zinc-100 p-4">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h3 className="flex items-center gap-2 font-semibold text-zinc-900">
+              <Bell className="h-5 w-5" />
+              Notifikasi
+              <span
+                className={`h-2 w-2 rounded-full ${connected ? 'bg-emerald-500' : 'bg-zinc-300'}`}
+                title={connected ? 'Langsung (realtime)' : 'Diperbarui berkala'}
+              />
+            </h3>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={toggleSound}
+                className="rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900"
+                title={sound ? 'Matikan bunyi notifikasi' : 'Nyalakan bunyi notifikasi'}
+                aria-label={sound ? 'Matikan bunyi notifikasi' : 'Nyalakan bunyi notifikasi'}
+              >
+                {sound ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+              </button>
+              {notifications.some(n => !n.is_read) && (
+                <button onClick={() => void markAllAsRead()} className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900">
+                  <CheckCheck className="h-4 w-4" />
+                  Tandai semua dibaca
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none]">
+            {ADMIN_NOTIFICATION_GROUPS.map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => onGroupChange(key)}
+                className={`shrink-0 rounded-full px-3 py-1 text-xs transition-colors ${
+                  group === key ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:bg-zinc-100'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="max-h-96 overflow-y-auto">
+          {loading && notifications.length === 0 ? (
+            <div className="p-4 text-center text-sm text-zinc-500">
+              <div className="mx-auto mb-2 h-5 w-5 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-600" />
+              Memuat...
+            </div>
+          ) : notifications.length === 0 ? (
+            <div className="p-8 text-center text-zinc-500">
+              <Bell className="mx-auto mb-2 h-8 w-8 opacity-50" />
+              <p className="text-sm">Tidak ada notifikasi</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-zinc-100">
+              {notifications.slice(0, 15).map((notification) => {
+                const meta = adminNotificationMeta(notification.type);
+                const Icon = meta.icon;
+                return (
+                  <button
+                    key={notification.id}
+                    onClick={() => void handleNotificationClick(notification)}
+                    className={`w-full p-4 text-left transition-colors hover:bg-zinc-50 ${!notification.is_read ? 'bg-blue-50/50' : ''}`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`rounded-lg p-2 ${meta.tone}`}>
+                        <Icon className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-1 flex items-center gap-2">
+                          <span className="text-xs font-medium uppercase tracking-wide text-zinc-500">{meta.label}</span>
+                          {!notification.is_read && <span className="h-2 w-2 rounded-full bg-blue-500" />}
+                          <span className="ml-auto"><ActionBadge notification={notification} /></span>
+                        </div>
+                        <h4 className="truncate text-sm font-semibold text-zinc-900">{notification.title}</h4>
+                        <p className="line-clamp-2 text-sm text-zinc-600">{notification.message}</p>
+                        <p className="mt-1 text-xs text-zinc-500">{formatNotificationAge(notification.created_at)}</p>
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-zinc-400" />
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           )}
         </div>
 
-        {/* Filter Tabs */}
-        <div className="flex gap-1">
-          {[
-            { key: 'all' as const, label: 'Semua' },
-            { key: 'new_user' as const, label: 'Pendaftar' },
-            { key: 'new_transaction' as const, label: 'Transaksi' },
-            { key: 'expiry_reminder' as const, label: 'Tenggat' },
-          ].map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => setFilter(key)}
-              className={`px-3 py-1 text-xs rounded-full transition-colors ${
-                filter === key
-                  ? 'bg-zinc-900 text-white'
-                  : 'text-zinc-600 hover:bg-zinc-100'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Notifications List */}
-      <div className="max-h-96 overflow-y-auto">
-        {loading ? (
-          <div className="p-4 text-center text-zinc-500">
-            <div className="animate-spin w-5 h-5 border-2 border-zinc-300 border-t-zinc-600 rounded-full mx-auto mb-2"></div>
-            Memuat...
-          </div>
-        ) : filteredNotifications.length === 0 ? (
-          <div className="p-8 text-center text-zinc-500">
-            <Bell className="w-8 h-8 mx-auto mb-2 opacity-50" />
-            <p className="text-sm">Tidak ada notifikasi</p>
-          </div>
-        ) : (
-          <div className="divide-y divide-zinc-100">
-            {filteredNotifications.slice(0, 10).map((notification) => {
-              const Icon = typeIcons[notification.type];
-              return (
-                <button
-                  key={notification.id}
-                  onClick={() => handleNotificationClick(notification)}
-                  className={`w-full p-4 text-left hover:bg-zinc-50 transition-colors ${
-                    !notification.is_read ? 'bg-blue-50/50' : ''
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className={`p-2 rounded-lg ${
-                      notification.type === 'new_user' ? 'bg-green-100 text-green-600' :
-                      notification.type === 'new_transaction' ? 'bg-blue-100 text-blue-600' :
-                      'bg-amber-100 text-amber-600'
-                    }`}>
-                      <Icon className="w-4 h-4" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-medium text-zinc-500 uppercase tracking-wide">
-                          {typeLabels[notification.type]}
-                        </span>
-                        {!notification.is_read && (
-                          <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                        )}
-                      </div>
-                      <h4 className="text-sm font-semibold text-zinc-900 truncate">
-                        {notification.title}
-                      </h4>
-                      <div className="mt-1">
-                        {renderActionBadge(notification)}
-                      </div>
-                      <p className="text-sm text-zinc-600 line-clamp-2">
-                        {notification.message}
-                      </p>
-                      <p className="text-xs text-zinc-500 mt-1">
-                        {formatTime(notification.created_at)}
-                      </p>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-zinc-400" />
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* Footer */}
-      {filteredNotifications.length > 0 && (
-        <div className="p-3 border-t border-zinc-100 bg-zinc-50">
+        <div className="border-t border-zinc-100 bg-zinc-50 p-3">
           <button
-            onClick={onClose}
-            className="w-full text-sm text-zinc-600 hover:text-zinc-900 font-medium"
+            onClick={() => {
+              onClose();
+              navigate('/admin/notifications');
+            }}
+            className="w-full text-sm font-medium text-zinc-600 hover:text-zinc-900"
           >
-            Lihat Semua Notifikasi
+            Lihat semua notifikasi
           </button>
         </div>
+      </div>
+
+      {selected && (
+        <NotificationDetailDialog notification={selected} onClose={() => setSelected(null)} onChanged={refresh} />
       )}
-    </div>
-    {isDetailOpen && selectedNotification && (
-      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-zinc-950/45 p-4">
-        <div className="w-full max-w-lg rounded-2xl border border-zinc-200 bg-white shadow-2xl">
-          <div className="flex items-start justify-between border-b border-zinc-100 px-5 py-4">
-            <div>
-              <h3 className="text-lg font-semibold text-zinc-900">{selectedNotification.title}</h3>
-              <p className="mt-1 text-xs text-zinc-500">{formatDateTime(selectedNotification.created_at)}</p>
-            </div>
-            <button
-              onClick={() => setIsDetailOpen(false)}
-              className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-
-          <div className="space-y-4 px-5 py-4">
-            <p className="text-sm leading-6 text-zinc-700">{selectedNotification.message}</p>
-
-            {selectedNotification.reference_type && selectedNotification.reference_id && (
-              <div className="rounded-xl bg-zinc-50 px-4 py-3 text-sm text-zinc-600">
-                Referensi: {selectedNotification.reference_type} #{selectedNotification.reference_id}
-              </div>
-            )}
-
-            {selectedNotification.action_status === 'done' && (
-              <div className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-                Selesai pada {formatDateTime(selectedNotification.action_done_at)}
-              </div>
-            )}
-          </div>
-
-          <div className="flex flex-wrap justify-end gap-3 border-t border-zinc-100 px-5 py-4">
-            {selectedNotification.action_status === 'pending' && selectedNotification.action_type ? (
-              <>
-                {selectedNotification.action_url && (
-                  <button
-                    onClick={() => window.open(selectedNotification.action_url ?? '', '_blank')}
-                    className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
-                  >
-                    Buka Detail <ExternalLink className="h-4 w-4" />
-                  </button>
-                )}
-                <button
-                  onClick={() => void handleExecuteAction()}
-                  className="rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800"
-                >
-                  ✓ Tandai Selesai
-                </button>
-                <button
-                  onClick={() => void handleIgnoreAction()}
-                  className="rounded-xl border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50"
-                >
-                  Abaikan
-                </button>
-              </>
-            ) : null}
-            {(selectedNotification.action_status !== 'pending' || !selectedNotification.action_type) && (
-              <button
-                onClick={() => setIsDetailOpen(false)}
-                className="rounded-xl border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50"
-              >
-                Tutup
-              </button>
-            )}
-          </div>
+      {detailLoading && (
+        <div className="fixed inset-0 z-[55] flex items-center justify-center bg-zinc-950/20">
+          <div className="rounded-xl bg-white px-4 py-3 text-sm text-zinc-600 shadow-lg">Memuat detail...</div>
         </div>
-      </div>
-    )}
-    {detailLoading && (
-      <div className="fixed inset-0 z-[55] flex items-center justify-center bg-zinc-950/20">
-        <div className="rounded-xl bg-white px-4 py-3 text-sm text-zinc-600 shadow-lg">Memuat detail...</div>
-      </div>
-    )}
+      )}
     </>
   );
 }

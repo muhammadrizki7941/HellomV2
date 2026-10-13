@@ -125,6 +125,32 @@ class NotificationEventsTest extends SellerFinanceTestCase
         $this->assertStringContainsString('Foto KTP buram', $this->sellerBell((int) $fresh['user']->id, 'kyc')->sole()->body);
     }
 
+    public function test_admin_list_filters_by_group_status_and_search_and_counts_open_withdrawals(): void
+    {
+        $seller = $this->seller(100000);
+        $this->paidSale($seller);
+        $withdrawal = app(WithdrawalService::class)->request($seller['org'], $seller['user'], 50000);
+        $admin = $this->admin();
+        $plain = Str::random(40);
+        \App\Models\ApiToken::query()->create(['user_id' => $admin->id, 'name' => 't', 'token_hash' => hash('sha256', $plain)]);
+        $api = fn (string $uri) => $this->withHeader('Authorization', "Bearer {$plain}")->getJson('/api/v1/hellom/admin/notifications' . $uri)->assertOk();
+
+        $ids = fn ($response) => collect($response->json('data.data'))->pluck('id')->all();
+        $withdrawalItem = OwnerNotification::query()->where('reference_type', 'seller_withdrawal')->where('reference_id', $withdrawal->id)->value('id');
+
+        $group = $api('?per_page=100&type=withdrawal,refund,sla_warning');
+        $this->assertContains($withdrawalItem, $ids($group));
+        $this->assertSame([], array_values(array_diff(collect($group->json('data.data'))->pluck('type')->unique()->all(), ['withdrawal', 'refund', 'sla_warning'])));
+
+        $this->assertContains($withdrawalItem, $ids($api('?per_page=100&status=pending')));
+        $this->assertContains($withdrawalItem, $ids($api('?per_page=100&q=' . urlencode($seller['org']->name))));
+        $this->assertNotContains($withdrawalItem, $ids($api('?per_page=100&q=tidak-ada-yang-cocok-%25')));
+
+        $counts = $api('/unread-count');
+        $this->assertGreaterThanOrEqual(1, $counts->json('data.open_withdrawals'));
+        $this->assertGreaterThanOrEqual(1, $counts->json('data.pending'));
+    }
+
     public function test_new_notifications_are_pushed_to_the_users_room_and_admins(): void
     {
         $seller = $this->seller(100000);

@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\Hellom\BaseApiController;
 use App\Models\AuditLog;
 use App\Models\CheckoutIntent;
 use App\Models\OwnerNotification;
+use App\Models\SellerWithdrawal;
 use App\Services\Hellom\SubscriptionCheckoutActivationService;
 use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
@@ -25,9 +26,23 @@ class OwnerNotificationController extends BaseApiController
             ->orderBy('is_read', 'asc') // unread first
             ->orderBy('created_at', 'desc');
 
-        $type = $request->query('type');
-        if ($type) {
-            $query->where('type', $type);
+        // type: one type or a comma-separated group (e.g. "withdrawal,refund,sla_warning").
+        $types = array_values(array_filter(array_map('trim', explode(',', (string) $request->query('type', '')))));
+        if ($types !== []) {
+            $query->whereIn('type', array_slice($types, 0, 20));
+        }
+
+        $status = (string) $request->query('status', '');
+        if ($status === 'unread') {
+            $query->where('is_read', false);
+        } elseif ($status === 'pending') {
+            $query->where('action_status', 'pending');
+        }
+
+        $search = trim((string) $request->query('q', ''));
+        if ($search !== '') {
+            $like = '%' . addcslashes(mb_substr($search, 0, 100), '%_\\') . '%';
+            $query->where(fn ($q) => $q->where('title', 'like', $like)->orWhere('message', 'like', $like));
         }
 
         $perPage = max(1, min((int) $request->query('per_page', 20), 100));
@@ -48,7 +63,12 @@ class OwnerNotificationController extends BaseApiController
     {
         $count = OwnerNotification::where('is_read', false)->count();
 
-        return $this->ok(['count' => $count], 'Unread count loaded');
+        // Badges for the admin sidebar: open action items and seller withdrawals waiting for us.
+        return $this->ok([
+            'count' => $count,
+            'pending' => OwnerNotification::query()->where('action_status', 'pending')->count(),
+            'open_withdrawals' => SellerWithdrawal::query()->whereIn('status', SellerWithdrawal::OPEN_STATUSES)->count(),
+        ], 'Unread count loaded');
     }
 
     public function markAsRead(string $id): JsonResponse

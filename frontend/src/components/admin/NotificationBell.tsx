@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Bell } from 'lucide-react';
-import { useNotifications } from '@/hooks/useNotifications';
-import { HELLOM_REALTIME_PUBLIC_URL, getRealtimeToken } from '@/lib/hellomApi';
+import type { AdminNotificationsState } from '@/hooks/useNotifications';
+import { setTitleBadge } from '@/lib/liveNotifications';
 import NotificationDropdown from './NotificationDropdown';
+import { groupTypes, type AdminNotificationGroup } from './notificationTypes';
 
 declare global {
   interface Window {
@@ -14,112 +15,35 @@ declare global {
   }
 }
 
-export default function NotificationBell() {
-  const {
-    notifications,
-    unreadCount,
-    loading,
-    fetchNotifications,
-    fetchUnreadCount,
-    markAsRead,
-    markAllAsRead,
-  } = useNotifications();
+/** Super admin bell. The state (count, realtime) lives in AdminLayout so the sidebar badges share it. */
+export default function NotificationBell({ state }: { state: AdminNotificationsState }) {
+  const { unreadCount, lastEventAt, fetchNotifications, fetchUnreadCount } = state;
   const [isOpen, setIsOpen] = useState(false);
+  const [group, setGroup] = useState<AdminNotificationGroup>('all');
 
   useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
+    setTitleBadge(unreadCount);
+  }, [unreadCount]);
 
-    fetchUnreadCount();
-    fetchNotifications();
-  }, [fetchNotifications, fetchUnreadCount, isOpen]);
+  useEffect(() => () => setTitleBadge(0), []);
 
   useEffect(() => {
-    let cancelled = false;
-    let socket: {
-      on: (event: string, handler: (...args: unknown[]) => void) => void;
-      off?: (event: string, handler?: (...args: unknown[]) => void) => void;
-      disconnect: () => void;
-    } | null = null;
+    if (!isOpen) return;
+    const types = groupTypes(group);
+    void fetchNotifications({ per_page: 15, type: types.length ? types.join(',') : undefined });
+  }, [fetchNotifications, group, isOpen, lastEventAt]);
 
-    const handleNotificationCreated = () => {
-      void fetchUnreadCount();
-      void fetchNotifications();
-    };
-
-    const ensureSocketIoScript = async () => {
-      if (window.io) {
-        return true;
-      }
-
-      const scriptUrl = `${HELLOM_REALTIME_PUBLIC_URL.replace(/\/$/, '')}/socket.io/socket.io.js`;
-
-      return await new Promise<boolean>((resolve) => {
-        const existingScript = document.querySelector<HTMLScriptElement>(`script[data-socket-io="${scriptUrl}"]`);
-        if (existingScript) {
-          if (window.io) {
-            resolve(true);
-            return;
-          }
-
-          existingScript.addEventListener('load', () => resolve(true), { once: true });
-          existingScript.addEventListener('error', () => resolve(false), { once: true });
-          return;
-        }
-
-        const script = document.createElement('script');
-        script.src = scriptUrl;
-        script.async = true;
-        script.dataset.socketIo = scriptUrl;
-        script.onload = () => resolve(true);
-        script.onerror = () => resolve(false);
-        document.head.appendChild(script);
-      });
-    };
-
-    const connectRealtime = async () => {
-      const ready = await ensureSocketIoScript();
-      if (!ready || cancelled || !window.io) {
-        return;
-      }
-
-      socket = window.io(HELLOM_REALTIME_PUBLIC_URL, {
-        transports: ['websocket', 'polling'],
-        timeout: 2000,
-        // Called on every (re)connect so an expired token is replaced. The
-        // token puts this socket in the private "admins" room.
-        auth: (cb: (data: { token?: string }) => void) => {
-          getRealtimeToken()
-            .then((result) => cb({ token: result.token }))
-            .catch(() => cb({}));
-        },
-      });
-
-      socket.on('connect', handleNotificationCreated);
-      socket.on('admin.notification.created', handleNotificationCreated);
-    };
-
-    void connectRealtime();
-
-    return () => {
-      cancelled = true;
-
-      if (socket?.off) {
-        socket.off('connect', handleNotificationCreated);
-        socket.off('admin.notification.created', handleNotificationCreated);
-      }
-
-      socket?.disconnect();
-    };
-  }, [fetchNotifications, fetchUnreadCount]);
+  useEffect(() => {
+    if (isOpen) void fetchUnreadCount();
+  }, [fetchUnreadCount, isOpen]);
 
   return (
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="relative p-2 text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition-colors"
-        title="Notifications"
+        title="Notifikasi"
+        aria-label={unreadCount > 0 ? `Notifikasi, ${unreadCount} belum dibaca` : 'Notifikasi'}
       >
         <Bell className="w-5 h-5" />
         {unreadCount > 0 && (
@@ -131,20 +55,12 @@ export default function NotificationBell() {
 
       {isOpen && (
         <>
-          {/* Backdrop */}
-          <div
-            className="fixed inset-0 z-40"
-            onClick={() => setIsOpen(false)}
-          />
-          {/* Dropdown */}
-          <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[calc(100vw-2rem)] max-w-md lg:absolute lg:left-auto lg:top-12 lg:-translate-x-0 lg:-translate-y-0 lg:right-0 lg:w-96">
+          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
+          <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[calc(100vw-2rem)] max-w-md lg:absolute lg:left-auto lg:top-12 lg:-translate-x-0 lg:-translate-y-0 lg:right-0 lg:w-[26rem]">
             <NotificationDropdown
-              notifications={notifications}
-              loading={loading}
-              refreshNotifications={fetchNotifications}
-              refreshUnreadCount={fetchUnreadCount}
-              markAsRead={markAsRead}
-              markAllAsRead={markAllAsRead}
+              state={state}
+              group={group}
+              onGroupChange={setGroup}
               onClose={() => setIsOpen(false)}
             />
           </div>

@@ -316,7 +316,7 @@ export type {
   PosReportProducts,
   PosReportSummary,
 } from './pos';
-export type { OwnerNotification } from './admin';
+export type { AdminNotificationQuery, OwnerNotification } from './admin';
 export type { ConsumerNotification } from './consumer';
 export type { PosMemberSearchResult } from './pos';
 export type { HellomUser } from './auth';

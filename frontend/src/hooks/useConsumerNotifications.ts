@@ -6,14 +6,21 @@ import {
   markAllConsumerNotificationsAsRead,
 } from '@/lib/hellomApi';
 import type { ConsumerNotification } from '@/lib/hellomApi';
+import { subscribeLiveNotifications } from '@/lib/liveNotifications';
 
 export type { ConsumerNotification };
+
+// Live: realtime room user_{id}. Polling stays as the fallback (slow while the socket is up).
+const POLL_LIVE_MS = 120000;
+const POLL_OFFLINE_MS = 30000;
 
 export function useConsumerNotifications() {
   const [notifications, setNotifications] = useState<ConsumerNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [connected, setConnected] = useState(false);
+  const [lastEventAt, setLastEventAt] = useState(0);
 
   const fetchNotifications = useCallback(async () => {
     setLoading(true);
@@ -23,7 +30,7 @@ export function useConsumerNotifications() {
       setNotifications(response.notifications);
       setUnreadCount(response.unread_count);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch notifications');
+      setError(err instanceof Error ? err.message : 'Gagal memuat notifikasi');
     } finally {
       setLoading(false);
     }
@@ -33,8 +40,8 @@ export function useConsumerNotifications() {
     try {
       const response = await getConsumerNotificationsUnreadCount();
       setUnreadCount(response.count);
-    } catch (err) {
-      console.error('Failed to fetch consumer unread count:', err);
+    } catch {
+      // Keep the last known count; the next poll retries.
     }
   }, []);
 
@@ -50,7 +57,7 @@ export function useConsumerNotifications() {
       );
       setUnreadCount(prev => Math.max(0, prev - 1));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to mark as read');
+      setError(err instanceof Error ? err.message : 'Gagal menandai dibaca');
     }
   }, []);
 
@@ -67,24 +74,38 @@ export function useConsumerNotifications() {
       );
       setUnreadCount(0);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to mark all as read');
+      setError(err instanceof Error ? err.message : 'Gagal menandai semua dibaca');
     }
   }, []);
 
+  useEffect(() => subscribeLiveNotifications('user', () => {
+    setLastEventAt(Date.now());
+    void fetchUnreadCount();
+  }, setConnected), [fetchUnreadCount]);
+
   useEffect(() => {
-    fetchUnreadCount();
-    const interval = setInterval(fetchUnreadCount, 30000);
-    return () => clearInterval(interval);
-  }, [fetchUnreadCount]);
+    void fetchUnreadCount();
+    const interval = window.setInterval(fetchUnreadCount, connected ? POLL_LIVE_MS : POLL_OFFLINE_MS);
+    const onFocus = () => void fetchUnreadCount();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [connected, fetchUnreadCount]);
 
   return {
     notifications,
     unreadCount,
     loading,
     error,
+    connected,
+    lastEventAt,
     fetchNotifications,
     fetchUnreadCount,
     markAsRead,
     markAllAsRead,
   };
 }
+
+export type ConsumerNotificationsState = ReturnType<typeof useConsumerNotifications>;

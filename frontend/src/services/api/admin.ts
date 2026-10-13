@@ -464,7 +464,9 @@ export function getAdminDashboardStats(query: { days?: number } = {}) {
 // Owner (super admin) notification row (OwnerNotificationController).
 export type OwnerNotification = {
   id: number;
-  type: 'new_user' | 'new_transaction' | 'expiry_reminder';
+  // new_user, new_transaction, expiry_reminder, landing_sale, subscription, wallet_topup,
+  // withdrawal, refund, sla_warning, kyc, platform_notice (labels: components/admin/notificationTypes.ts)
+  type: string;
   title: string;
   message: string;
   data: Record<string, unknown>;
@@ -479,7 +481,10 @@ export type OwnerNotification = {
   updated_at: string;
 };
 
-export function getAdminNotifications(params?: Record<string, string | number | boolean | undefined>) {
+// type = one type or a comma-separated group; status = unread | pending; q = search title/message.
+export type AdminNotificationQuery = { page?: number; per_page?: number; type?: string; status?: '' | 'unread' | 'pending'; q?: string };
+
+export function getAdminNotifications(params?: AdminNotificationQuery) {
   const qs = params ? new URLSearchParams(
     Object.entries(params)
       .filter(([, value]) => value !== undefined)
@@ -490,7 +495,7 @@ export function getAdminNotifications(params?: Record<string, string | number | 
 }
 
 export function getAdminNotificationsUnreadCount() {
-  return apiRequest<{ count: number }>('/admin/notifications/unread-count');
+  return apiRequest<{ count: number; pending?: number; open_withdrawals?: number }>('/admin/notifications/unread-count');
 }
 
 export function markAdminNotificationAsRead(id: number | string) {

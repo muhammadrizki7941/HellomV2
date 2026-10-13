@@ -8,6 +8,8 @@ import { BRAND_LOGO_PATH, BRAND_NAME, getBrandLogo } from '@/lib/branding';
 import { fetchBrand, BrandSettings } from '@/hooks/useBrand';
 import SubscriptionModal from '@/components/SubscriptionModal';
 import NotificationBell from '@/components/consumer/NotificationBell';
+import LiveToasts from '@/components/notifications/LiveToasts';
+import { useConsumerNotifications } from '@/hooks/useConsumerNotifications';
 import { EditorChromeContext } from '@/contexts/editorChrome';
 
 type DashboardApp = {
@@ -68,6 +70,8 @@ export default function DashboardLayout() {
   const [memberWalletEnabled, setMemberWalletEnabled] = useState(false);
   const [activeGatewayLabel, setActiveGatewayLabel] = useState('Xendit');
   const [brand, setBrand] = useState<BrandSettings | null>(null);
+  // Shared by the mobile and desktop bells: one socket, one poller.
+  const notificationState = useConsumerNotifications();
 
   const loadCards = useCallback(async () => {
     try {
@@ -213,7 +217,7 @@ export default function DashboardLayout() {
           <span className="text-xl font-bold tracking-tight">{brand?.app_name || BRAND_NAME}</span>
         </Link>
         <div className="flex items-center gap-2">
-          <NotificationBell />
+          <NotificationBell state={notificationState} />
           <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} aria-label={isSidebarOpen ? 'Tutup menu' : 'Buka menu'} aria-expanded={isSidebarOpen} className="flex h-11 w-11 items-center justify-center text-zinc-600">
             {isSidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
           </button>
@@ -396,7 +400,7 @@ export default function DashboardLayout() {
               </div>
             </div>
             <div className="flex items-center gap-4">
-              <NotificationBell />
+              <NotificationBell state={notificationState} titleBadge />
               <div className="text-right">
                 <p className="text-sm font-semibold text-zinc-900">{userName}</p>
                 <p className="text-xs text-zinc-500">{userEmail}</p>
@@ -406,6 +410,7 @@ export default function DashboardLayout() {
           <Outlet />
         </div>
       </main>
+      <LiveToasts />
 
       {lockedAppPrompt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/55 p-4 backdrop-blur-sm">

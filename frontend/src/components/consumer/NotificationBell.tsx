@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
+  ArrowDownCircle,
+  ArrowUpCircle,
   Bell,
   CheckCheck,
   CheckCircle,
@@ -8,20 +10,29 @@ import {
   CreditCard,
   Gift,
   RotateCcw,
+  ShieldCheck,
+  Volume2,
+  VolumeX,
+  Wallet,
   Wrench,
 } from 'lucide-react';
-import {
+import type {
   ConsumerNotification,
-  useConsumerNotifications,
+  ConsumerNotificationsState,
 } from '@/hooks/useConsumerNotifications';
+import { isNotificationSoundEnabled, setNotificationSoundEnabled, setTitleBadge } from '@/lib/liveNotifications';
 
-const typeIcons: Record<string, typeof Bell> = {
-  transaction: CreditCard,
-  refund: RotateCcw,
-  access: CheckCircle,
-  expiry: Clock,
-  promo: Gift,
-  maintenance: Wrench,
+const typeIcons: Record<string, { icon: typeof Bell; tone: string }> = {
+  sale: { icon: ArrowDownCircle, tone: 'bg-emerald-100 text-emerald-700' },
+  balance_released: { icon: Wallet, tone: 'bg-emerald-100 text-emerald-700' },
+  withdrawal: { icon: ArrowUpCircle, tone: 'bg-orange-100 text-orange-700' },
+  kyc: { icon: ShieldCheck, tone: 'bg-violet-100 text-violet-700' },
+  transaction: { icon: CreditCard, tone: 'bg-blue-100 text-blue-700' },
+  refund: { icon: RotateCcw, tone: 'bg-rose-100 text-rose-700' },
+  access: { icon: CheckCircle, tone: 'bg-emerald-100 text-emerald-700' },
+  expiry: { icon: Clock, tone: 'bg-amber-100 text-amber-700' },
+  promo: { icon: Gift, tone: 'bg-pink-100 text-pink-700' },
+  maintenance: { icon: Wrench, tone: 'bg-zinc-100 text-zinc-700' },
 };
 
 function timeAgo(dateString: string) {
@@ -44,17 +55,32 @@ function timeAgo(dateString: string) {
   });
 }
 
-export default function NotificationBell() {
+/**
+ * Dashboard bell (shop owners, buyers). The state lives in DashboardLayout so the mobile and
+ * desktop bells share one socket and one poller; `titleBadge` on one of them only.
+ */
+export default function NotificationBell({ state, titleBadge = false }: { state: ConsumerNotificationsState; titleBadge?: boolean }) {
   const navigate = useNavigate();
   const {
     notifications,
     unreadCount,
     loading,
+    connected,
+    lastEventAt,
     fetchNotifications,
     markAsRead,
     markAllAsRead,
-  } = useConsumerNotifications();
+  } = state;
   const [isOpen, setIsOpen] = useState(false);
+  const [sound, setSound] = useState(isNotificationSoundEnabled);
+
+  useEffect(() => {
+    if (titleBadge) setTitleBadge(unreadCount);
+  }, [titleBadge, unreadCount]);
+
+  useEffect(() => () => {
+    if (titleBadge) setTitleBadge(0);
+  }, [titleBadge]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -62,15 +88,22 @@ export default function NotificationBell() {
     }
 
     void fetchNotifications();
-  }, [fetchNotifications, isOpen]);
+  }, [fetchNotifications, isOpen, lastEventAt]);
+
+  const toggleSound = () => {
+    setNotificationSoundEnabled(!sound);
+    setSound(!sound);
+  };
 
   const handleItemClick = async (notification: ConsumerNotification) => {
     if (!notification.is_read) {
       await markAsRead(notification.id);
     }
 
-    if (notification.action_url) {
+    if (notification.action_url?.startsWith('/')) {
       navigate(notification.action_url);
+    } else if (notification.action_url) {
+      window.open(notification.action_url, '_blank', 'noopener');
     }
 
     setIsOpen(false);
@@ -105,21 +138,35 @@ export default function NotificationBell() {
                 <h3 className="flex items-center gap-2 font-semibold text-zinc-900">
                   <Bell className="h-5 w-5" />
                   Notifikasi
+                  <span
+                    className={`h-2 w-2 rounded-full ${connected ? 'bg-emerald-500' : 'bg-zinc-300'}`}
+                    title={connected ? 'Langsung (realtime)' : 'Diperbarui berkala'}
+                  />
                 </h3>
-                {notifications.some(notification => !notification.is_read) && (
+                <div className="flex items-center gap-1">
                   <button
-                    onClick={handleMarkAllRead}
-                    className="flex items-center gap-1 text-xs text-zinc-600 hover:text-zinc-900"
+                    onClick={toggleSound}
+                    className="rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900"
+                    title={sound ? 'Matikan bunyi notifikasi' : 'Nyalakan bunyi notifikasi'}
+                    aria-label={sound ? 'Matikan bunyi notifikasi' : 'Nyalakan bunyi notifikasi'}
                   >
-                    <CheckCheck className="h-4 w-4" />
-                    Tandai semua dibaca
+                    {sound ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
                   </button>
-                )}
+                  {notifications.some(notification => !notification.is_read) && (
+                    <button
+                      onClick={handleMarkAllRead}
+                      className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
+                    >
+                      <CheckCheck className="h-4 w-4" />
+                      Tandai semua dibaca
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 
             <div className="max-h-96 overflow-y-auto">
-              {loading ? (
+              {loading && notifications.length === 0 ? (
                 <div className="p-6 text-center text-sm text-zinc-500">Memuat...</div>
               ) : notifications.length === 0 ? (
                 <div className="p-8 text-center text-sm text-zinc-500">
@@ -129,7 +176,8 @@ export default function NotificationBell() {
               ) : (
                 <div className="divide-y divide-zinc-100">
                   {notifications.map(notification => {
-                    const Icon = typeIcons[notification.type] || Bell;
+                    const meta = typeIcons[notification.type] ?? { icon: Bell, tone: 'bg-zinc-100 text-zinc-700' };
+                    const Icon = meta.icon;
                     return (
                       <button
                         key={notification.id}
@@ -139,7 +187,7 @@ export default function NotificationBell() {
                         }`}
                       >
                         <div className="flex items-start gap-3">
-                          <div className="rounded-xl bg-zinc-100 p-2 text-zinc-700">
+                          <div className={`rounded-xl p-2 ${meta.tone}`}>
                             <Icon className="h-4 w-4" />
                           </div>
                           <div className="min-w-0 flex-1">
