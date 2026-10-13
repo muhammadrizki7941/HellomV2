@@ -21,6 +21,7 @@ import type {
   ConsumerNotificationsState,
 } from '@/hooks/useConsumerNotifications';
 import { isNotificationSoundEnabled, setNotificationSoundEnabled, setTitleBadge } from '@/lib/liveNotifications';
+import PushToggle from '@/components/notifications/PushToggle';
 
 const typeIcons: Record<string, { icon: typeof Bell; tone: string }> = {
   sale: { icon: ArrowDownCircle, tone: 'bg-emerald-100 text-emerald-700' },
@@ -164,6 +165,8 @@ export default function NotificationBell({ state, titleBadge = false }: { state:
                 </div>
               </div>
             </div>
+
+            <PushToggle />
 
             <div className="max-h-96 overflow-y-auto">
               {loading && notifications.length === 0 ? (

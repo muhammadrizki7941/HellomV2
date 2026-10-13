@@ -318,6 +318,7 @@ export type {
 } from './pos';
 export type { AdminNotificationQuery, OwnerNotification } from './admin';
 export type { ConsumerNotification } from './consumer';
+export { currentPushEndpoint, deletePushSubscription, getPushPublicKey, savePushSubscription } from './push';
 export type { PosMemberSearchResult } from './pos';
 export type { HellomUser } from './auth';
 export type { OrganizationSummary } from './organizations';

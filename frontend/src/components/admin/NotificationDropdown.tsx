@@ -9,6 +9,7 @@ import {
   ignoreOwnerNotificationAction,
 } from '@/lib/hellomApi';
 import { isNotificationSoundEnabled, setNotificationSoundEnabled } from '@/lib/liveNotifications';
+import PushToggle from '@/components/notifications/PushToggle';
 import {
   ADMIN_NOTIFICATION_GROUPS,
   adminActionLabel,
@@ -228,6 +229,8 @@ export default function NotificationDropdown({ state, group, onGroupChange, onCl
             ))}
           </div>
         </div>
+
+        <PushToggle />
 
         <div className="max-h-96 overflow-y-auto">
           {loading && notifications.length === 0 ? (

@@ -1,6 +1,7 @@
 // Authentication and profile.
 // Part of the Hellom API client; import from '@/lib/hellomApi' or '@/services/api'.
 import { PosAccess, apiRequest } from './client';
+import { currentPushEndpoint } from './push';
 
 // ─── Auth ───
 
@@ -45,10 +46,12 @@ export function ssoLogin(ssoToken: string) {
   });
 }
 
-export function logout() {
+export async function logout() {
+  // This device stops getting the account's push notifications.
+  const pushEndpoint = await currentPushEndpoint();
   return apiRequest<null>('/auth/logout', {
     method: 'POST',
-    body: {},
+    body: pushEndpoint ? { push_endpoint: pushEndpoint } : {},
   });
 }
 

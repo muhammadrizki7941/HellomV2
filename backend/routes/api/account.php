@@ -8,6 +8,7 @@
 use App\Http\Controllers\Api\V1\Hellom\AuthController;
 use App\Http\Controllers\Api\V1\Hellom\OrganizationController;
 use App\Http\Controllers\Api\V1\Hellom\OrganizationTeamController;
+use App\Http\Controllers\Api\V1\Hellom\PushSubscriptionController;
 use App\Http\Controllers\Api\V1\Hellom\RealtimeController;
 use Illuminate\Support\Facades\Route;
 
@@ -37,3 +38,8 @@ Route::delete('/organizations/current/team/{userId}', [OrganizationTeamControlle
 
 // Socket.IO handshake token (private rooms: user_<id>, admins for super admins)
 Route::get('/realtime/token', [RealtimeController::class, 'token'])->name('realtime.token');
+
+// Web push (notifications while the dashboard is closed)
+Route::get('/push/public-key', [PushSubscriptionController::class, 'publicKey'])->name('push.public_key');
+Route::post('/push/subscriptions', [PushSubscriptionController::class, 'store'])->name('push.subscriptions.store');
+Route::delete('/push/subscriptions', [PushSubscriptionController::class, 'destroy'])->name('push.subscriptions.destroy');

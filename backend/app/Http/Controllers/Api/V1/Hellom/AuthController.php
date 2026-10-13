@@ -509,6 +509,13 @@ class AuthController extends BaseApiController
             $apiToken->delete();
         }
 
+        // This device stops getting the account's push notifications.
+        $endpoint = $request->input('push_endpoint');
+        if (is_string($endpoint) && $endpoint !== '' && $request->user() instanceof User) {
+            \App\Models\PushSubscription::query()->where('user_id', $request->user()->id)
+                ->where('endpoint_hash', \App\Models\PushSubscription::hashEndpoint($endpoint))->delete();
+        }
+
         return $this->ok(null, __('hellom.logged_out'));
     }
 

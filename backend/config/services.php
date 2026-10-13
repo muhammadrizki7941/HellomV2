@@ -65,4 +65,11 @@ return [
         'oembed_url' => env('YOUTUBE_OEMBED_URL', 'https://www.youtube.com/oembed'),
     ],
 
+    // Web push (php artisan webpush:vapid). Off while the keys are empty.
+    'webpush' => [
+        'public_key' => env('WEB_PUSH_VAPID_PUBLIC'),
+        'private_key' => env('WEB_PUSH_VAPID_PRIVATE'),
+        'subject' => env('WEB_PUSH_SUBJECT', 'mailto:halo@hellomspace.com'),
+    ],
+
 ];

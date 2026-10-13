@@ -125,6 +125,24 @@ try {
   const muted = await seller.ev(`localStorage.getItem('hellom.notificationSound')`);
   check('sound switch saved', muted === 'off', String(muted));
 
+  // Web push (only when the server has VAPID keys: WEB_PUSH_VAPID_* for :8010 and this script,
+  // OPENSSL_CONF on Windows). "Aktifkan" → subscription saved → server push → service worker shows it.
+  const pushKey = await (await fetch(`${API}/push/public-key`, { headers: { Authorization: `Bearer ${seed.owner_token}`, Accept: 'application/json' } })).json();
+  if (pushKey.data?.enabled) {
+    await seller.send('Browser.grantPermissions', { permissions: ['notifications'], origin: APP });
+    const toggle = `[...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Aktifkan')`;
+    await seller.waitFor(`!!(${toggle})`, 10000);
+    await seller.ev(`(${toggle}).click(); true`);
+    const subscribed = await seller.waitFor(`[...document.querySelectorAll('button')].some((b) => b.textContent.trim() === 'Matikan')`, 30000);
+    check('push: "Aktifkan" subscribes this browser', subscribed, await seller.ev(`document.body.innerText.match(/Gagal[^\\n]*/)?.[0] ?? ''`));
+    await seller.shot('notif-seller-push-toggle');
+    fire(3);
+    const shown = await seller.waitFor(`navigator.serviceWorker.getRegistration('/').then((r) => r ? r.getNotifications() : []).then((list) => list.some((n) => n.title.includes('Penjualan baru')))`, 30000);
+    check('push: service worker shows the sale notification', shown);
+  } else {
+    console.log('     (web push skipped: server has no VAPID keys)');
+  }
+
   check('no page errors', admin.errors.length === 0 && seller.errors.length === 0, JSON.stringify([...admin.errors, ...seller.errors]));
   exitCode = finish();
 } catch (error) {
