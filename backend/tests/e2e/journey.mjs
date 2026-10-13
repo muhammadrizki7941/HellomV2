@@ -166,6 +166,10 @@ try {
 
   await step('2. onboarding muncul otomatis: username', async () => {
     await tab.go(`${APP}/dashboard/apps/landing-builder`);
+    // Since the adaptive editor onboarding: "Sebelumnya pakai apa?" comes before the shop wizard.
+    await tab.waitFor(tab.bodyHas('Sebelumnya kamu terbiasa pakai apa?'), 'editor preference question', 20000);
+    await tab.eval(`[...document.querySelectorAll('[role="radio"]')].find((b) => b.innerText.includes('Belum pernah'))?.click(); true`);
+    await tab.eval(`[...document.querySelectorAll('button')].find((b) => b.innerText.trim() === 'Lanjut')?.click(); true`);
     await tab.waitFor(tab.bodyHas('Pilih alamat toko kamu'), 'wizard step 1', 20000);
     if (!(await tab.eval(noOverflow))) throw new Error('horizontal overflow');
     await tab.fill('#onb-username', seller.username);
