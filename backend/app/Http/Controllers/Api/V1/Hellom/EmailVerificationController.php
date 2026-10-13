@@ -8,7 +8,6 @@ use App\Support\FrontendUrl;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\URL;
 
 /**
  * Email verification (required before a seller withdraws and for the "Penjual
@@ -27,10 +26,7 @@ class EmailVerificationController extends BaseApiController
             return $this->ok(['email_verified' => true], 'Email kamu sudah terverifikasi');
         }
 
-        $link = URL::temporarySignedRoute('api.v1.hellom.public.email.verify', now()->addDay(), [
-            'id' => $user->id,
-            'hash' => sha1(strtolower((string) $user->email)),
-        ]);
+        $link = \App\Services\Notifications\LifecycleEmails::verificationUrl($user);
         SendPlatformMail::dispatch([(string) $user->email], 'Verifikasi email akun Hellom kamu', [
             'headline' => 'Verifikasi email kamu',
             'intro' => 'Klik tombol di bawah untuk memastikan email ini milik kamu. Tautan berlaku 24 jam.',

@@ -21,7 +21,6 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use App\Mail\HellomPasswordResetMail;
-use App\Mail\HellomWelcomeMail;
 
 class AuthController extends BaseApiController
 {
@@ -150,6 +149,9 @@ class AuthController extends BaseApiController
         if ($user && $user->email_verified_at === null) {
             $user->forceFill(['email_verified_at' => now()])->save();
         }
+        if ($user) {
+            app(\App\Services\Notifications\LifecycleEmails::class)->passwordChanged($user, 'reset', $request->ip());
+        }
         $isStaff = $user && app(\App\Services\Pos\StaffLogin::class)->candidates($user)->isNotEmpty();
 
         return $this->ok([
@@ -261,11 +263,8 @@ class AuthController extends BaseApiController
         [$plainToken] = $this->issueToken($user, 'hellom-web');
 
         $organizationName = $user->currentOrganization?->name;
-        // Queued: signing up never waits on SMTP (retries if the mail server hiccups).
-        $this->platformMailService->queue($user->email, new HellomWelcomeMail(
-            name: (string) $user->name,
-            organizationName: $organizationName,
-        ));
+        // Queued: signing up never waits on SMTP. Welcome + first steps + verify button.
+        app(\App\Services\Notifications\LifecycleEmails::class)->welcome($user, $organizationName);
         $welcomeDelivery = ['sent' => null, 'queued' => true, 'error' => null];
 
         // Create notification for new user registration.
@@ -569,6 +568,7 @@ class AuthController extends BaseApiController
         $user->forceFill([
             'password' => Hash::make((string) $request->input('password')),
         ])->save();
+        app(\App\Services\Notifications\LifecycleEmails::class)->passwordChanged($user, 'settings', $request->ip());
 
         return $this->ok(null, __('hellom.password_changed'));
     }

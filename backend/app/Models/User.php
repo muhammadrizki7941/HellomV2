@@ -54,6 +54,7 @@ class User extends Authenticatable
             'pending_guest_credentials' => 'boolean',
             'builder_tour_done_at' => 'datetime',
             'email_preferences' => 'array',
+            'lifecycle_emails' => 'array',
         ];
     }
 

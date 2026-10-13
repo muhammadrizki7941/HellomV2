@@ -66,6 +66,17 @@ class CheckExpiryNotifications extends Command
 
                 $notificationService->createExpiryReminderNotif($subscription, $days);
                 $created++;
+
+                $sent = (array) data_get($subscription->metadata, 'owner_reminders', []);
+                if (!isset($sent[(string) $days])) {
+                    try {
+                        app(\App\Services\Notifications\LifecycleEmails::class)->subscriptionReminder($subscription, $days);
+                        $sent[(string) $days] = $now->toISOString();
+                        $subscription->forceFill(['metadata' => array_merge((array) $subscription->metadata, ['owner_reminders' => $sent])])->saveQuietly();
+                    } catch (\Throwable $e) {
+                        report($e);
+                    }
+                }
             }
         }
 

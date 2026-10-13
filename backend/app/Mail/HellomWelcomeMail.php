@@ -15,6 +15,7 @@ class HellomWelcomeMail extends Mailable
     public function __construct(
         public string $name,
         public ?string $organizationName = null,
+        public ?string $verifyUrl = null,
     ) {
     }
 

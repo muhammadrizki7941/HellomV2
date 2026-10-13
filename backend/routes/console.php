@@ -366,6 +366,9 @@ Schedule::command('notifications:check-expiry')
     ->daily()
     ->withoutOverlapping();
 
+// New sign-ups: verification reminder after 24 h, tips on day 2 (once each).
+Schedule::command('users:lifecycle-emails')->hourly()->withoutOverlapping();
+
 Schedule::command('hellom:billing:auto-renew-wallet --limit=500')
     ->hourly()
     ->withoutOverlapping();

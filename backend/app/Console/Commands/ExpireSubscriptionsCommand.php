@@ -62,6 +62,11 @@ class ExpireSubscriptionsCommand extends Command
 
             DB::transaction(fn () => $this->entitlements->expire($subscription, $now, $reason));
             $expired++;
+            try {
+                app(\App\Services\Notifications\LifecycleEmails::class)->subscriptionExpired($subscription);
+            } catch (\Throwable $e) {
+                report($e);
+            }
         }
 
         $mode = $dryRun ? 'DRY RUN' : 'EXECUTED';

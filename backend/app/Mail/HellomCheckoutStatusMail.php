@@ -12,6 +12,9 @@ class HellomCheckoutStatusMail extends Mailable
 {
     use Queueable, SerializesModels;
 
+    /** 'transactional' (default, always sent) or 'marketing' (tips — unsubscribe applies). */
+    public string $mailCategory = 'transactional';
+
     /**
      * @param array<string,mixed> $payload
      */
