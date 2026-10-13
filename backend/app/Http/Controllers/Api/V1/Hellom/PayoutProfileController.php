@@ -97,7 +97,11 @@ class PayoutProfileController extends BaseApiController
         if ($bankChanged) {
             app(\App\Services\SellerFinance\WithdrawalService::class)->notifyBankChange($profile);
         }
-
+        // KYC waits for a super admin.
+        app(\App\Services\Notifications\Notifier::class)->admin('kyc', 'Verifikasi KTP & rekening menunggu',
+            ($organization->name ?? 'Toko #' . $organization->id) . ' mengirim data KTP & rekening ' . strtoupper((string) $profile->bank_code) . ' a.n. ' . $profile->account_name . ' untuk ditinjau.',
+            ['action_url' => '/admin/finance', 'action_type' => 'open_page', 'action_status' => 'pending',
+                'reference_type' => 'payout_profile', 'reference_id' => (int) $profile->id, 'data' => ['organization_id' => (int) $organization->id]]);
         return $this->ok([
             'profile' => $this->memberPayload($profile),
             'status' => (string) $profile->status,
@@ -146,6 +150,11 @@ class PayoutProfileController extends BaseApiController
             'review_notes' => (string) $request->input('notes', '') ?: null,
         ])->save();
 
+        $notifier = app(\App\Services\Notifications\Notifier::class);
+        $notifier->resolveAdmin('payout_profile', (int) $profile->id);
+        $notifier->organization((int) $profile->organization_id, 'kyc', 'Verifikasi KTP & rekening disetujui',
+            'Data kamu sudah diverifikasi. Sekarang kamu bisa menarik saldo penjualan.', '/dashboard/apps/landing-builder?tab=saldo', ['status' => 'verified']);
+
         return $this->ok(['profile' => $this->adminPayload($profile)], 'Verifikasi disetujui');
     }
 
@@ -171,6 +180,11 @@ class PayoutProfileController extends BaseApiController
             'reviewed_at' => now(),
             'review_notes' => (string) $validated['notes'],
         ])->save();
+
+        $notifier = app(\App\Services\Notifications\Notifier::class);
+        $notifier->resolveAdmin('payout_profile', (int) $profile->id);
+        $notifier->organization((int) $profile->organization_id, 'kyc', 'Verifikasi KTP & rekening ditolak',
+            'Alasan: ' . $validated['notes'] . '. Perbaiki datanya lalu kirim ulang di tab Saldo.', '/dashboard/apps/landing-builder?tab=saldo', ['status' => 'rejected']);
 
         return $this->ok(['profile' => $this->adminPayload($profile)], 'Verifikasi ditolak');
     }

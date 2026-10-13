@@ -164,16 +164,31 @@ final class SellerLedger
             ->pluck('order_id');
 
         $released = 0;
+        $byOrganization = [];
         foreach ($orderIds as $orderId) {
-            $released += (int) DB::transaction(function () use ($orderId): bool {
+            $done = DB::transaction(function () use ($orderId): ?array {
                 $order = LandingPageOrder::query()->find($orderId);
                 if (!$order || $order->status === LandingPageOrder::STATUS_REFUNDED) {
-                    return false;
+                    return null;
                 }
                 $balance = $this->lock((int) $order->organization_id);
+                $net = (int) SellerLedgerEntry::query()->where('order_id', $order->id)->where('bucket', SellerLedgerEntry::BUCKET_PENDING)->sum('amount');
 
-                return $this->releaseOrder($balance, $order);
+                return $this->releaseOrder($balance, $order) ? [(int) $order->organization_id, $net] : null;
             }, 3);
+            if ($done) {
+                $released++;
+                $byOrganization[$done[0]] ??= ['amount' => 0, 'orders' => 0];
+                $byOrganization[$done[0]]['amount'] += $done[1];
+                $byOrganization[$done[0]]['orders']++;
+            }
+        }
+        // One "saldo cair" notification per shop per run, not one per order.
+        foreach ($byOrganization as $organizationId => $sum) {
+            app(\App\Services\Notifications\Notifier::class)->organization($organizationId, 'balance_released',
+                'Saldo ' . \App\Services\Notifications\Notifier::rupiah($sum['amount']) . ' sudah bisa ditarik',
+                'Dana dari ' . $sum['orders'] . ' penjualan sudah lewat masa tahan dan masuk ke saldo tersedia.',
+                '/dashboard/apps/landing-builder?tab=saldo', ['amount' => $sum['amount'], 'orders' => $sum['orders']]);
         }
 
         return $released;

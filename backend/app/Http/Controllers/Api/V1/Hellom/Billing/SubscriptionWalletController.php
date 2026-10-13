@@ -196,6 +196,13 @@ class SubscriptionWalletController extends BaseApiController
         /** @var CheckoutIntent $confirmedIntent */
         $confirmedIntent = $result['intent'];
         $this->checkoutNotifier->sendSubscriptionBillingNotification((int) ($confirmedIntent->subscription?->id ?? 0), 'Pembayaran wallet berhasil');
+        $planName = (string) ($confirmedIntent->plan?->name ?? 'Paket');
+        $notifier = app(\App\Services\Notifications\Notifier::class);
+        $notifier->admin('subscription', 'Langganan dibayar dari saldo · ' . $planName,
+            (\App\Models\Organization::query()->whereKey($confirmedIntent->organization_id)->value('name') ?? 'Toko #' . $confirmedIntent->organization_id)
+            . ' mengaktifkan ' . $planName . ' memakai saldo wallet (' . \App\Services\Notifications\Notifier::rupiah((int) ($confirmedIntent->metadata['wallet_payment']['charged_amount'] ?? 0)) . ').',
+            ['action_url' => '/admin/finance', 'reference_type' => 'checkout_intent', 'reference_id' => (int) $confirmedIntent->id, 'email' => false]);
+        $notifier->user($user, 'transaction', 'Langganan aktif · ' . $planName, 'Pembayaran dari saldo wallet berhasil. Paket ' . $planName . ' sudah aktif.', '/dashboard/billing');
 
         return $this->ok([
             'wallet' => $this->walletPayload($result['wallet']),

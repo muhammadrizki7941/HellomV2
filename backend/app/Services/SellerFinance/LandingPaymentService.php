@@ -7,6 +7,7 @@ use App\Jobs\SendMetaPurchaseEvent;
 use App\Models\LandingPageOrder;
 use App\Models\PlatformFinanceLedger;
 use App\Services\Landing\CheckoutService;
+use App\Services\Notifications\Notifier;
 use App\Services\Payments\GatewayRegistry;
 use App\Services\Payments\PaymentStatus;
 use Illuminate\Support\Facades\DB;
@@ -155,9 +156,36 @@ final class LandingPaymentService
             SendLandingSaleEmails::dispatch((int) $order->id)->afterCommit();
             // Seller's Meta Conversions API (no-op when the seller has no pixel + token).
             SendMetaPurchaseEvent::dispatch((int) $order->id)->afterCommit();
+            $this->notifySale((int) $order->id);
         }
 
         return $outcome;
+    }
+
+    /**
+     * "Dana masuk": the shop owners see the sale in their bell (net amount, when it becomes
+     * withdrawable); super admins see money coming into Hellom's gateway account.
+     */
+    private function notifySale(int $orderId): void
+    {
+        $order = LandingPageOrder::query()->with('organization:id,name')->find($orderId);
+        if (!$order) {
+            return;
+        }
+        $notifier = app(Notifier::class);
+        $amount = Notifier::rupiah((int) $order->amount);
+        $quantity = (int) ($order->quantity ?: 1) > 1 ? ((int) $order->quantity) . '× ' : '';
+        $notifier->organization((int) $order->organization_id, 'sale', 'Penjualan baru · ' . $amount,
+            trim(($order->buyer_name ?: 'Pembeli') . " membeli {$quantity}{$order->product_name}. ")
+            . 'Saldo bersih ' . Notifier::rupiah((int) $order->net_amount) . ' masuk ke saldo tertahan'
+            . ($order->settlement_eta ? ', bisa ditarik mulai ' . $order->settlement_eta->translatedFormat('j M Y') : '') . '.',
+            '/dashboard/apps/landing-builder?tab=pesanan',
+            ['order_reference' => (string) $order->reference_id, 'amount' => (int) $order->amount, 'net_amount' => (int) $order->net_amount]);
+        $notifier->admin('landing_sale', 'Dana masuk Hellom Page · ' . $amount,
+            ($order->organization?->name ?? 'Toko #' . $order->organization_id) . " menjual {$quantity}{$order->product_name} (#{$order->reference_id}). "
+            . 'Biaya layanan ' . Notifier::rupiah((int) $order->commission_amount) . ', hak penjual ' . Notifier::rupiah((int) $order->net_amount) . '.',
+            ['action_url' => '/admin/keuangan-penjual', 'reference_type' => 'landing_order', 'reference_id' => (int) $order->id,
+                'data' => ['organization_id' => (int) $order->organization_id, 'amount' => (int) $order->amount], 'email' => false]);
     }
 
     public function markFailed(LandingPageOrder $order): bool

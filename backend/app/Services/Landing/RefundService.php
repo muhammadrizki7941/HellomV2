@@ -75,6 +75,12 @@ final class RefundService
         }, 3);
 
         $this->notifyBuyer($refund, 'Refund sedang diproses', 'Penjual mengajukan pengembalian dana untuk pesanan kamu. Tim Hellom akan mentransfernya ke rekening yang didaftarkan.');
+        // Refunds are paid out by the super admin (Keuangan Penjual).
+        app(\App\Services\Notifications\Notifier::class)->admin('refund', 'Refund perlu ditransfer · ' . $this->rupiah((int) $refund->amount),
+            (Organization::query()->whereKey($refund->organization_id)->value('name') ?? 'Toko #' . $refund->organization_id)
+            . ' mengajukan refund ' . $this->rupiah((int) $refund->amount) . ' (' . $refund->reference . ') ke ' . strtoupper((string) $refund->bank_code) . ' a.n. ' . $refund->account_name . '.',
+            ['action_url' => '/admin/keuangan-penjual', 'action_type' => 'process_refund', 'action_status' => 'pending',
+                'reference_type' => 'landing_refund', 'reference_id' => (int) $refund->id, 'data' => ['organization_id' => (int) $refund->organization_id, 'amount' => (int) $refund->amount]]);
 
         return $refund;
     }
@@ -102,6 +108,11 @@ final class RefundService
         }, 3);
 
         $this->notifyBuyer($updated, 'Dana sudah dikembalikan', 'Pengembalian dana untuk pesanan kamu sudah ditransfer. Waktu masuk tergantung bank/e-wallet tujuan.');
+        $notifier = app(\App\Services\Notifications\Notifier::class);
+        $notifier->resolveAdmin('landing_refund', (int) $updated->id);
+        $notifier->organization((int) $updated->organization_id, 'refund', 'Refund ' . $this->rupiah((int) $updated->amount) . ' sudah ditransfer',
+            'Tim Hellom sudah mengembalikan dana ke pembeli (' . $updated->reference . ').', '/dashboard/apps/landing-builder?tab=pesanan',
+            ['refund_id' => (int) $updated->id, 'status' => 'paid']);
 
         return $updated;
     }
@@ -132,6 +143,11 @@ final class RefundService
 
         $sellerEmails = Organization::query()->with('users')->find($updated->organization_id)?->users
             ->filter(fn ($m) => in_array((string) ($m->pivot->role ?? ''), ['owner', 'admin'], true))->pluck('email')->filter()->unique()->values()->all() ?? [];
+        $notifier = app(\App\Services\Notifications\Notifier::class);
+        $notifier->resolveAdmin('landing_refund', (int) $updated->id);
+        $notifier->organization((int) $updated->organization_id, 'refund', 'Refund ' . $this->rupiah((int) $updated->amount) . ' gagal ditransfer',
+            $reason . '. Dana sudah kembali ke saldo tersedia kamu.', '/dashboard/apps/landing-builder?tab=pesanan',
+            ['refund_id' => (int) $updated->id, 'status' => 'failed']);
         SendPlatformMail::dispatch($sellerEmails, 'Refund gagal — ' . $updated->reference, [
             'headline' => 'Refund belum berhasil',
             'intro' => 'Refund ' . $this->rupiah((int) $updated->amount) . ' gagal ditransfer: ' . $reason . '. Dana sudah kembali ke saldo tersedia kamu.',

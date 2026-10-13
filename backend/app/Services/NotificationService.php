@@ -406,7 +406,8 @@ class NotificationService
         ]);
     }
 
-    private function emitCreated(OwnerNotification $notification): void
+    /** Push a new super admin notification to the admins room (+ web push) and email the owner copy. */
+    public function emitCreated(OwnerNotification $notification, bool $email = true): void
     {
         $payload = [
             'id' => (int) $notification->id,
@@ -414,11 +415,18 @@ class NotificationService
             'title' => (string) $notification->title,
             'message' => (string) $notification->message,
             'is_read' => (bool) $notification->is_read,
+            'action_url' => $notification->action_url,
             'created_at' => $notification->created_at?->toISOString(),
         ];
 
-        $this->realtimeClient->emitToRoom(RealtimeClient::ROOM_ADMINS, 'admin.notification.created', $payload);
-        $this->emailOwner($notification);
+        // After commit: a rolled-back action must not ring the bell.
+        \Illuminate\Support\Facades\DB::afterCommit(function () use ($payload, $notification, $email) {
+            $this->realtimeClient->emitToRoom(RealtimeClient::ROOM_ADMINS, 'admin.notification.created', $payload);
+            \App\Services\Notifications\WebPush::toSuperAdmins((string) $notification->title, (string) $notification->message, (string) ($notification->action_url ?: '/admin/notifications'), 'admin-' . $notification->id);
+            if ($email) {
+                $this->emailOwner($notification);
+            }
+        });
     }
 
     /** Copy of every super admin notification to the owner's email (Pengaturan › Email), queued. */
@@ -442,7 +450,7 @@ class NotificationService
     public function createPlatformNotice(string $title, string $message, ?string $actionUrl = null): OwnerNotification
     {
         $notification = OwnerNotification::create([
-            'type' => 'new_user',
+            'type' => 'platform_notice',
             'title' => $title,
             'message' => $message,
             'data' => ['notice' => true],
@@ -461,7 +469,7 @@ class NotificationService
         $organization = $withdrawal->organization;
         $amount = 'Rp ' . number_format((int) $withdrawal->amount, 0, ',', '.');
         $notification = OwnerNotification::create([
-            'type' => 'new_transaction',
+            'type' => 'withdrawal',
             'title' => 'Penarikan dana menunggu persetujuan',
             'message' => ($organization?->name ?? 'Toko #' . $withdrawal->organization_id) . " mengajukan penarikan {$amount} ke " . ($withdrawal->bank_name ?: $withdrawal->bank_code)
                 . ' a.n. ' . $withdrawal->account_name . ' (' . $withdrawal->reference . '). Setujui atau tolak di Keuangan Penjual.',

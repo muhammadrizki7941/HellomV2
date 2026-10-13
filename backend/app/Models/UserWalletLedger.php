@@ -43,6 +43,16 @@ class UserWalletLedger extends Model
         $currentBalance = self::getUserBalance($userId);
         $newBalance = $currentBalance + $amount;
 
+        // A paid top-up from a payment gateway webhook: tell the user and the super admins.
+        if ($referenceType !== null && str_ends_with($referenceType, '_webhook') && $amount > 0) {
+            $notifier = app(\App\Services\Notifications\Notifier::class);
+            $rupiah = \App\Services\Notifications\Notifier::rupiah($amount);
+            $notifier->user($userId, 'transaction', 'Top up saldo berhasil · ' . $rupiah, 'Saldo wallet kamu bertambah ' . $rupiah . '.', '/dashboard/billing');
+            $notifier->admin('wallet_topup', 'Top up wallet · ' . $rupiah,
+                (User::query()->whereKey($userId)->value('email') ?? 'User #' . $userId) . ' top up ' . $rupiah . ' lewat ' . str_replace('_webhook', '', $referenceType) . '.',
+                ['action_url' => '/admin/finance', 'data' => ['user_id' => $userId, 'amount' => $amount], 'email' => false]);
+        }
+
         return self::create([
             'user_id' => $userId,
             'type' => 'deposit',

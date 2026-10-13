@@ -9,6 +9,7 @@ use App\Models\SellerLedgerEntry;
 use App\Models\SellerWithdrawal;
 use App\Models\User;
 use App\Services\Payments\DisbursementRequest;
+use App\Services\Notifications\Notifier;
 use App\Services\Payments\GatewayRegistry;
 use App\Support\FrontendUrl;
 use Illuminate\Http\UploadedFile;
@@ -145,6 +146,7 @@ final class WithdrawalService
             return $locked;
         }, 3);
         $this->notifySeller($updated, 'Penarikan dana sedang diproses', 'Tim Hellom sedang mentransfer dana ke rekening kamu.');
+        app(Notifier::class)->resolveAdmin('seller_withdrawal', (int) $updated->id);
 
         if ($updated->mode === 'auto') {
             $this->tryAutoDisburse($updated);
@@ -176,7 +178,8 @@ final class WithdrawalService
 
             return $locked;
         }, 3);
-        $this->notifySeller($updated, 'Penarikan dana berhasil 🎉', 'Dana sudah ditransfer ke rekening kamu. Waktu masuk tergantung bank/e-wallet tujuan.');
+        $this->notifySeller($updated, 'Penarikan dana berhasil', 'Dana sudah ditransfer ke rekening kamu. Waktu masuk tergantung bank/e-wallet tujuan.');
+        app(Notifier::class)->resolveAdmin('seller_withdrawal', (int) $updated->id);
 
         return $updated;
     }
@@ -207,6 +210,9 @@ final class WithdrawalService
                 . ' · diajukan ' . $withdrawal->created_at->diffForHumans();
             $withdrawal->forceFill(['sla_warned_at' => now()])->save();
         }
+        app(Notifier::class)->admin('sla_warning', count($late) . ' penarikan mendekati batas 1×24 jam',
+            'Penarikan berikut sudah lebih dari ' . $settings['sla_warn_hours'] . ' jam: ' . implode('; ', array_map(fn ($k, $v) => $k . ' (' . $v . ')', array_keys($details), $details)) . '.',
+            ['action_url' => '/admin/keuangan-penjual', 'data' => ['references' => array_keys($details)], 'email' => false]);
         if ($admins !== []) {
             SendPlatformMail::dispatch($admins, 'Peringatan: penarikan mendekati batas 1×24 jam', [
                 'headline' => count($late) . ' penarikan belum selesai',
@@ -262,6 +268,7 @@ final class WithdrawalService
         if ($status === SellerWithdrawal::STATUS_FAILED) {
             $this->notifySeller($updated, 'Penarikan dana gagal', 'Penarikan belum berhasil: ' . $reason . '. Dana sudah kembali ke saldo tersedia kamu.');
         }
+        app(Notifier::class)->resolveAdmin('seller_withdrawal', (int) $updated->id, $status === SellerWithdrawal::STATUS_CANCELLED ? 'ignored' : 'done');
 
         return $updated;
     }
@@ -333,6 +340,9 @@ final class WithdrawalService
 
     private function notifySeller(SellerWithdrawal $withdrawal, string $headline, string $intro): void
     {
+        app(Notifier::class)->organization((int) $withdrawal->organization_id, 'withdrawal', $headline . ' · ' . $this->rupiah((int) $withdrawal->amount),
+            $intro, '/dashboard/apps/landing-builder?tab=saldo',
+            ['withdrawal_id' => (int) $withdrawal->id, 'reference' => (string) $withdrawal->reference, 'status' => (string) $withdrawal->status, 'amount' => (int) $withdrawal->amount]);
         SendPlatformMail::dispatch($this->ownerEmails((int) $withdrawal->organization_id), $headline . ' — ' . $withdrawal->reference, [
             'headline' => $headline,
             'intro' => $intro,
