@@ -9,6 +9,7 @@ use App\Services\Hellom\PlatformMailService;
 use App\Support\FrontendUrl;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 
 /**
@@ -75,6 +76,17 @@ class ProductAccessMailer
             ])->save();
         }
 
+        // New account: the default password stays in the email, plus a link to choose their own
+        // (password broker account_setup: 7 days like the sign-in link, single use).
+        $setPasswordUrl = null;
+        if ($password !== null) {
+            $setPasswordUrl = FrontendUrl::to('/reset-password?' . http_build_query([
+                'token' => Password::broker('account_setup')->createToken($user),
+                'email' => (string) $user->email,
+                'setup' => 1,
+            ]));
+        }
+
         [$token] = LoginLink::issue($user, "/dashboard/products/{$product->slug}");
         $result = $this->mail->sendTo((string) $user->email, new DigitalProductAccessMail(
             productName: (string) $product->name,
@@ -88,6 +100,7 @@ class ProductAccessMailer
             accessPeriod: $purchase->expires_at
                 ? 'Sampai ' . $purchase->expires_at->translatedFormat('d M Y')
                 : 'Selamanya (sekali beli)',
+            setPasswordUrl: $setPasswordUrl,
         ));
 
         if ($result['sent'] ?? false) {

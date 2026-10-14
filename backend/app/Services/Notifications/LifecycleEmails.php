@@ -66,7 +66,11 @@ class LifecycleEmails
     {
         $this->mail->queue((string) $user->email, new HellomCheckoutStatusMail('Kata sandi akun Hellom kamu diganti', [
             'headline' => 'Kata sandi kamu baru saja diganti',
-            'intro' => 'Kata sandi akun Hellom (' . $user->email . ') ' . ($via === 'reset' ? 'diatur ulang lewat tautan lupa kata sandi' : 'diganti dari pengaturan akun') . '.',
+            'intro' => 'Kata sandi akun Hellom (' . $user->email . ') ' . match ($via) {
+                'reset' => 'diatur ulang lewat tautan lupa kata sandi',
+                'setup' => 'dibuat lewat tautan "Buat kata sandi sendiri" di email akses produk — kata sandi bawaan dari email sudah tidak berlaku',
+                default => 'diganti dari pengaturan akun',
+            } . '.',
             'details' => array_filter([
                 'Waktu' => now()->timezone('Asia/Jakarta')->translatedFormat('d M Y, H:i') . ' WIB',
                 'Alamat IP' => $ip,

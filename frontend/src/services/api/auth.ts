@@ -115,6 +115,8 @@ export function resetPassword(payload: {
   token: string;
   password: string;
   password_confirmation: string;
+  /** "Buat kata sandi sendiri" link from the product access email (7-day token). */
+  setup?: boolean;
 }) {
   // `next`: /login/kasir for POS staff, /login otherwise.
   return apiRequest<{ email: string; reset: boolean; next?: string }>('/auth/reset-password', {

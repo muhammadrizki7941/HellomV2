@@ -116,11 +116,14 @@ class AuthController extends BaseApiController
             'email' => ['required', 'email', 'max:255'],
             'token' => ['required', 'string', 'min:10'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'setup' => ['nullable'],
         ]);
 
         $email = strtolower((string) $validated['email']);
+        // setup=1: "Buat kata sandi sendiri" from the product access email (7-day token, own table).
+        $setup = filter_var($request->input('setup', false), FILTER_VALIDATE_BOOLEAN);
 
-        $status = Password::broker()->reset(
+        $status = Password::broker($setup ? 'account_setup' : null)->reset(
             [
                 'email' => $email,
                 'token' => (string) $validated['token'],
@@ -138,7 +141,9 @@ class AuthController extends BaseApiController
 
         if ($status !== Password::PASSWORD_RESET) {
             $message = $status === Password::INVALID_TOKEN
-                ? 'Link ini sudah tidak berlaku atau sudah dipakai. Minta link baru dari halaman Lupa kata sandi.'
+                ? ($setup
+                    ? 'Link ini sudah tidak berlaku atau sudah dipakai. Kata sandi dari email tetap bisa dipakai, atau minta link baru dari halaman Lupa kata sandi.'
+                    : 'Link ini sudah tidak berlaku atau sudah dipakai. Minta link baru dari halaman Lupa kata sandi.')
                 : 'Kata sandi belum bisa diubah. Minta link baru dari halaman Lupa kata sandi.';
 
             return $this->fail($message, ['code' => 'PASSWORD_RESET_FAILED', 'status' => $status], 422);
@@ -150,7 +155,7 @@ class AuthController extends BaseApiController
             $user->forceFill(['email_verified_at' => now()])->save();
         }
         if ($user) {
-            app(\App\Services\Notifications\LifecycleEmails::class)->passwordChanged($user, 'reset', $request->ip());
+            app(\App\Services\Notifications\LifecycleEmails::class)->passwordChanged($user, $setup ? 'setup' : 'reset', $request->ip());
         }
         $isStaff = $user && app(\App\Services\Pos\StaffLogin::class)->candidates($user)->isNotEmpty();
 

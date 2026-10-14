@@ -97,6 +97,15 @@ return [
             'expire' => 60,
             'throttle' => 60,
         ],
+
+        // "Buat kata sandi sendiri" in the digital product access email (guest checkout
+        // accounts): same lifetime as the sign-in link (LoginLink::TTL_DAYS), single use.
+        'account_setup' => [
+            'provider' => 'users',
+            'table' => 'password_setup_tokens',
+            'expire' => 60 * 24 * 7,
+            'throttle' => 0,
+        ],
     ],
 
     /*

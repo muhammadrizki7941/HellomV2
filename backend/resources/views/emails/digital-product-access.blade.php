@@ -44,9 +44,26 @@
             <p style="margin:0 0 6px;font-size:14px;color:#374151;">Email: <strong>{{ $email }}</strong></p>
             <p style="margin:0;font-size:14px;color:#374151;">Password: <strong style="font-family:Consolas,monospace;letter-spacing:0.5px;">{{ $password }}</strong></p>
         </div>
-        <p style="margin:0 0 16px;font-size:13px;line-height:1.6;color:#6b7280;">
-            Setelah link di atas kedaluwarsa, masuk di <a href="{{ $loginUrl }}" style="color:#111827;">{{ $loginUrl }}</a>. Demi keamanan, segera ganti password di menu profil.
-        </p>
+        @if($setPasswordUrl)
+            <p style="margin:0 0 10px;font-size:14px;line-height:1.6;color:#374151;">
+                Lebih aman pakai kata sandi pilihan kamu sendiri:
+            </p>
+            <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 10px;">
+                <tr>
+                    <td style="border-radius:12px;border:1px solid #111827;">
+                        <a href="{{ $setPasswordUrl }}" style="display:inline-block;padding:12px 22px;font-size:14px;font-weight:700;color:#111827;text-decoration:none;">Buat kata sandi sendiri</a>
+                    </td>
+                </tr>
+            </table>
+            <p style="margin:0 0 16px;font-size:13px;line-height:1.6;color:#6b7280;">
+                Tautan ini berlaku {{ $linkValidDays }} hari dan sekali pakai. Tidak wajib — kata sandi di atas tetap bisa dipakai sampai kamu menggantinya.
+                Masuk kapan saja di <a href="{{ $loginUrl }}" style="color:#111827;">{{ $loginUrl }}</a>.
+            </p>
+        @else
+            <p style="margin:0 0 16px;font-size:13px;line-height:1.6;color:#6b7280;">
+                Setelah link di atas kedaluwarsa, masuk di <a href="{{ $loginUrl }}" style="color:#111827;">{{ $loginUrl }}</a>. Demi keamanan, segera ganti password di menu profil.
+            </p>
+        @endif
     @else
         <p style="margin:0 0 16px;font-size:13px;line-height:1.6;color:#6b7280;">
             Produk ditambahkan ke akun <strong>{{ $email }}</strong> yang sudah terdaftar. Setelah link kedaluwarsa, masuk di

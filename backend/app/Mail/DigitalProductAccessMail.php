@@ -26,6 +26,7 @@ class DigitalProductAccessMail extends Mailable
         public ?string $password,
         public string $loginUrl,
         public string $accessPeriod,
+        public ?string $setPasswordUrl = null,
     ) {
     }
 

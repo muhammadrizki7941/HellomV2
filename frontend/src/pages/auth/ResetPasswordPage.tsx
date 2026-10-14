@@ -4,11 +4,15 @@ import { CheckCircle2, Loader2 } from 'lucide-react';
 import { resetPassword } from '@/lib/hellomApi';
 import { AuthAlert, AuthShell, PasswordField, authPrimaryButton } from '@/components/auth/AuthShell';
 
-/** /reset-password?token=…&email=… (link from the reset email): choose a new password. */
+/**
+ * /reset-password?token=…&email=… (link from the reset email): choose a new password.
+ * &setup=1 = "Buat kata sandi sendiri" from the product access email (account made at checkout).
+ */
 export default function ResetPasswordPage() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token') ?? '';
   const email = searchParams.get('email') ?? '';
+  const setup = searchParams.get('setup') === '1';
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
@@ -16,8 +20,8 @@ export default function ResetPasswordPage() {
   const [next, setNext] = useState<string | null>(null);
 
   useEffect(() => {
-    document.title = 'Buat kata sandi baru | Hellom';
-  }, []);
+    document.title = setup ? 'Buat kata sandi | Hellom' : 'Buat kata sandi baru | Hellom';
+  }, [setup]);
 
   const mismatch = confirm !== '' && confirm !== password;
   const strength = password.length === 0 ? 0 : password.length < 8 ? 1 : /[A-Za-z]/.test(password) && /\d/.test(password) && password.length >= 10 ? 3 : 2;
@@ -28,7 +32,7 @@ export default function ResetPasswordPage() {
     setBusy(true);
     setError(null);
     try {
-      const result = await resetPassword({ email, token, password, password_confirmation: confirm });
+      const result = await resetPassword({ email, token, password, password_confirmation: confirm, ...(setup ? { setup: true } : {}) });
       setNext(result.next === '/login/kasir' ? '/login/kasir' : '/login');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Kata sandi belum bisa diubah. Coba lagi.');
@@ -52,14 +56,19 @@ export default function ResetPasswordPage() {
       {next ? (
         <div>
           <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-300"><CheckCircle2 className="h-6 w-6" /></span>
-          <h1 className="mt-5 text-2xl font-bold">Kata sandi baru tersimpan</h1>
-          <p className="mt-2 text-sm text-white/60">Demi keamanan, semua perangkat yang tadinya masuk sudah dikeluarkan. Masuk lagi dengan kata sandi baru.</p>
+          <h1 className="mt-5 text-2xl font-bold">{setup ? 'Kata sandi kamu tersimpan' : 'Kata sandi baru tersimpan'}</h1>
+          <p className="mt-2 text-sm text-white/60">
+            {setup ? 'Kata sandi bawaan dari email sudah tidak berlaku. ' : ''}Demi keamanan, semua perangkat yang tadinya masuk sudah dikeluarkan. Masuk lagi dengan kata sandi baru.
+          </p>
           <Link to={next} className={`${authPrimaryButton} mt-6`}>{next === '/login/kasir' ? 'Masuk sebagai kasir' : 'Masuk'}</Link>
         </div>
       ) : (
         <>
-          <h1 className="text-2xl font-bold">Buat kata sandi baru</h1>
-          <p className="mt-2 text-sm text-white/60">Untuk akun <strong className="text-white">{email}</strong>.</p>
+          <h1 className="text-2xl font-bold">{setup ? 'Buat kata sandi kamu' : 'Buat kata sandi baru'}</h1>
+          <p className="mt-2 text-sm text-white/60">
+            Untuk akun <strong className="text-white">{email}</strong>.
+            {setup && ' Setelah disimpan, kata sandi bawaan dari email tidak berlaku lagi.'}
+          </p>
           <form className="mt-6 space-y-4" onSubmit={submit}>
             <div>
               <PasswordField id="new-password" label="Kata sandi baru" autoComplete="new-password" required minLength={8} autoFocus
