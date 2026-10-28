@@ -27,6 +27,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        \App\Models\CheckoutIntent::observe(\App\Observers\MarketingCheckoutObserver::class);
+        \App\Models\ProductPurchase::observe(\App\Observers\MarketingProductObserver::class);
+        \App\Models\User::created(function ($user) {
+            if (!request()->is('api/v1/hellom/auth/register')) return;
+            $marketing = app(\App\Services\PlatformMarketing::class);
+            $marketing->record('CompleteRegistration', 'registration_' . $user->id, $marketing->context(), user: $user);
+        });
         // ─── API rate limits (routes/api/public.php) ───
         // Auth: brute-force protection per email + IP.
         RateLimiter::for('hellom-auth', function (Request $request) {

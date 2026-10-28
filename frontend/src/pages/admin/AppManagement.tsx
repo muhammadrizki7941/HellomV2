@@ -847,7 +847,7 @@ export default function AppManagement() {
                   </select>
                 </label>
                 <label className="space-y-2 text-sm">
-                  <span className="font-medium text-zinc-700">Harga (IDR)</span>
+                  <span className="font-medium text-zinc-700">Harga total paket (IDR)</span>
                   <input
                     type="number"
                     min="0"

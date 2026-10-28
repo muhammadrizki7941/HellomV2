@@ -26,6 +26,9 @@ import {
   validatePromoCode,
 } from '@/lib/hellomApi';
 import GatewayPaymentFrame from '@/components/GatewayPaymentFrame';
+import OnPagePayment from '@/components/checkout/OnPagePayment';
+import type { PaymentInstructions } from '@/lib/hellomApi';
+import { getSubscriptionCheckoutHistory } from '@/services/api/billing';
 
 interface SubscriptionModalProps {
   isOpen: boolean;
@@ -80,6 +83,7 @@ type ManualPaymentMethod = {
 };
 
 type GatewayStatus = {
+  direct_channels?: Array<{ key: string; label: string; type: string }>;
   provider: string;
   active_provider: 'xendit' | 'ipaymu' | 'doku';
   mode: 'sandbox' | 'production';
@@ -106,6 +110,7 @@ type PricingMatrixResponse = {
 type CheckoutStartResponse = {
   checkout_intent: { intent_token: string };
   payment: {
+    instructions?: PaymentInstructions & { amount: number; expires_at: string | null };
     checkout_mode: 'manual_confirmation' | 'gateway_automatic' | 'wallet_instant';
     invoice_number?: string | null;
     payment_url?: string | null;
@@ -164,10 +169,8 @@ function billingCycleForPlan(plan: MatrixPlan | undefined, planSlug: string): 'm
 function resolvePeriod(plan: MatrixPlan) {
   if (plan.type === 'free') return '/lifetime';
   if (plan.type === 'lifetime') return '/lifetime';
-  if (plan.billing_cycles?.includes('yearly') || plan.slug.includes('yearly')) return '/year';
-  if (plan.duration_days && plan.duration_days >= 365) return '/year';
   if (plan.duration_days && plan.duration_days > 0 && plan.duration_days !== 30) return `/${plan.duration_days} hari`;
-  return '/month';
+  return billingCycleForPlan(plan, plan.slug) === 'yearly' ? '/tahun' : '/bulan';
 }
 
 function planMeta(plan: MatrixPlan, index: number, hasConfiguredRecommendation: boolean, isPos = false) {
@@ -218,10 +221,45 @@ export default function SubscriptionModal({ isOpen, onClose, appName, appSlug, a
   const [gatewayPaymentUrl, setGatewayPaymentUrl] = useState<string | null>(null);
   const [gatewayPollSlug, setGatewayPollSlug] = useState<string | null>(null);
   const [gatewayIntentToken, setGatewayIntentToken] = useState<string | null>(null);
+  const [gatewayChannel, setGatewayChannel] = useState('');
+  const [directPayment, setDirectPayment] = useState<CheckoutStartResponse['payment']['instructions'] | null>(null);
+
+  useEffect(() => {
+    if (!isOpen || !directPayment || !gatewayIntentToken) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const check = async () => {
+      if (directPayment.expires_at && new Date(directPayment.expires_at).getTime() <= Date.now()) {
+        setDirectPayment(null);
+        setErrorMessage('Kode pembayaran kedaluwarsa. Silakan pilih paket kembali.');
+        return;
+      }
+      try {
+        const result = await reconcileCheckout(gatewayIntentToken);
+        if (cancelled) return;
+        if (result.active) {
+          setDirectPayment(null);
+          setSuccessMessage('Pembayaran berhasil. Langganan Anda sudah aktif.');
+          onSuccess?.();
+          return;
+        }
+        if (['expired', 'failed', 'cancelled'].includes(result.status)) {
+          setDirectPayment(null);
+          setErrorMessage('Pembayaran berakhir. Silakan pilih paket untuk mencoba kembali.');
+          return;
+        }
+      } catch { /* Retry transient status errors without creating another charge. */ }
+      if (!cancelled) timer = setTimeout(check, 5000);
+    };
+    void check();
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [isOpen, directPayment, gatewayIntentToken, onSuccess]);
 
   useEffect(() => {
     if (!isOpen) {
       setPlans([]);
+      setDirectPayment(null);
+      setGatewayChannel('');
       setResolvedAppId(null);
       setErrorMessage(null);
       setSuccessMessage(null);
@@ -248,9 +286,10 @@ export default function SubscriptionModal({ isOpen, onClose, appName, appSlug, a
       setSuccessMessage(null);
 
       try {
-        const [matrix, gateway] = await Promise.all([
+        const [matrix, gateway, history] = await Promise.all([
           getPricingMatrix() as Promise<PricingMatrixResponse>,
           getPaymentGatewayStatus().catch(() => null) as Promise<GatewayStatus | null>,
+          getSubscriptionCheckoutHistory().catch(() => ({ checkout_intents: [] })),
         ]);
         const item = matrix.items.find((entry) => entry.app.slug === slugHint)
           || matrix.items.find((entry) => entry.app.name.toLowerCase() === appName.toLowerCase());
@@ -264,12 +303,21 @@ export default function SubscriptionModal({ isOpen, onClose, appName, appSlug, a
           setResolvedSlug(item.app.slug);
           setPlans(item.plans || []);
           setGatewayStatus(gateway);
+          setGatewayChannel(gateway?.direct_channels?.[0]?.key || '');
           setPaymentFlow(gateway?.member_wallet_enabled ? 'wallet' : 'direct');
           const firstManualMethod = gateway?.manual_payment?.methods?.[0]?.key;
           if (firstManualMethod) {
             setManualPaymentMethod(firstManualMethod);
           }
           setCheckoutStep('plan');
+          const pending = history.checkout_intents.find((intent) => intent.app_slug === item.app.slug && intent.payment_instructions
+            && (!intent.payment_instructions.expires_at || new Date(intent.payment_instructions.expires_at).getTime() > Date.now()));
+          if (pending?.payment_instructions) {
+            setDirectPayment(pending.payment_instructions);
+            setGatewayIntentToken(pending.intent_token);
+            setSelectedPlanSlug(pending.plan_slug);
+            setCheckoutStep('result');
+          }
         }
       } catch (error) {
         if (!cancelled) {
@@ -370,6 +418,7 @@ export default function SubscriptionModal({ isOpen, onClose, appName, appSlug, a
           app_slug: resolvedSlug,
           plan_slug: planSlug,
           payment_flow: 'wallet',
+          expected_amount: selectedFinalPrice,
           billing_cycle: billingCycle,
         }) as CheckoutStartResponse;
 
@@ -387,8 +436,10 @@ export default function SubscriptionModal({ isOpen, onClose, appName, appSlug, a
           app_slug: resolvedSlug,
           plan_slug: planSlug,
           payment_flow: 'direct',
+          expected_amount: selectedFinalPrice,
           billing_cycle: billingCycle,
           manual_payment_method: manualPaymentMethod,
+          gateway_channel: gatewayStatus?.active_provider === 'ipaymu' ? gatewayChannel || undefined : undefined,
         }) as CheckoutStartResponse;
 
         if (checkout.payment.checkout_mode === 'manual_confirmation') {
@@ -402,6 +453,10 @@ export default function SubscriptionModal({ isOpen, onClose, appName, appSlug, a
           // Don't auto-close when showing receipt modal
           onSuccess?.();
           return;
+        } else if (checkout.payment.instructions) {
+          setDirectPayment(checkout.payment.instructions);
+          setGatewayIntentToken(checkout.checkout_intent.intent_token);
+          setCheckoutStep('result');
         } else if (checkout.payment.payment_url) {
           setGatewayPaymentUrl(checkout.payment.payment_url);
           setGatewayPollSlug(resolvedSlug);
@@ -565,11 +620,11 @@ export default function SubscriptionModal({ isOpen, onClose, appName, appSlug, a
                 <p className="mt-1 text-xs text-zinc-500">
                   {usesManual
                     ? gatewayStatus?.checkout_mode === 'gateway_automatic'
-                      ? `${providerLabel} belum siap - sementara lewat konfirmasi manual owner`
+                      ? 'Konfirmasi pembayaran oleh pengelola'
                       : 'Masuk antrean konfirmasi owner'
                     : gatewayStatus?.is_ready
-                        ? `${providerLabel} ${gatewayStatus.mode} aktif`
-                        : `${providerLabel} belum siap penuh`}
+                        ? 'Konfirmasi otomatis setelah pembayaran'
+                        : 'Pembayaran otomatis belum tersedia'}
                 </p>
               </button>
             </div>
@@ -580,6 +635,15 @@ export default function SubscriptionModal({ isOpen, onClose, appName, appSlug, a
               </div>
             )}
 
+            {paymentFlow === 'direct' && !usesManual && gatewayStatus?.active_provider === 'ipaymu' && !!gatewayStatus.direct_channels?.length && (
+              <label className="mt-4 block text-sm font-semibold text-zinc-900">
+                Metode pembayaran
+                <select value={gatewayChannel} onChange={(event) => setGatewayChannel(event.target.value)} className="mt-2 w-full rounded-2xl border border-zinc-200 bg-white p-3">
+                  {gatewayStatus.direct_channels.map((channel) => <option key={channel.key} value={channel.key}>{channel.label}</option>)}
+                </select>
+                <span className="mt-2 block text-xs font-normal text-zinc-500">Bayar langsung di Hellomspace. Status pembayaran diperiksa otomatis.</span>
+              </label>
+            )}
             {paymentFlow === 'direct' && usesManual && gatewayStatus?.manual_payment?.methods?.length ? (
               <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-4">
                 <p className="text-sm font-semibold text-zinc-950">Pilih metode pembayaran</p>
@@ -621,14 +685,14 @@ export default function SubscriptionModal({ isOpen, onClose, appName, appSlug, a
                       ? 'Wallet menjadi jalur tercepat untuk aktivasi.'
                       : usesManual
                         ? 'Owner saat ini memakai konfirmasi manual untuk pembayaran langsung.'
-                        : `Owner saat ini memakai mode pembayaran otomatis berbasis ${providerLabel}.`}
+                        : 'Pembayaran aman dengan konfirmasi otomatis.'}
                   </p>
                   <p className="mt-1">
                     {paymentFlow === 'direct' && isDirectAutoDisabled
                       ? `Mode otomatis dipilih owner, tetapi kredensial ${providerLabel} belum lengkap di backend.`
                       : paymentFlow === 'direct' && usesManual
                         ? 'Instruksi pembayaran manual akan dikirim ke email pembeli dan owner menerima notifikasi untuk proses konfirmasi.'
-                        : 'Flow ini memakai jalur billing Hellom yang sama dengan dashboard owner.'}
+                        : 'Langganan aktif setelah pembayaran berhasil diverifikasi.'}
                   </p>
                 </div>
               </div>
@@ -763,7 +827,13 @@ export default function SubscriptionModal({ isOpen, onClose, appName, appSlug, a
           </div>
           )}
 
-          {checkoutStep !== 'plan' && selectedPlan && (
+          {directPayment && gatewayIntentToken && (
+            <div className="mx-auto mt-6 max-w-3xl rounded-3xl border border-zinc-200 bg-white p-5">
+              <h3 className="mb-4 text-lg font-bold">Pembayaran Hellomspace</h3>
+              <OnPagePayment payment={directPayment} amount={directPayment.amount} expiresAt={directPayment.expires_at} reference={gatewayIntentToken} />
+            </div>
+          )}
+          {checkoutStep !== 'plan' && selectedPlan && !directPayment && (
             <div className="mx-auto mt-6 max-w-3xl rounded-3xl border border-zinc-200 bg-white p-5">
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
@@ -804,7 +874,7 @@ export default function SubscriptionModal({ isOpen, onClose, appName, appSlug, a
                       ? 'Saldo wallet akan dipakai untuk aktivasi langsung jika saldo mencukupi.'
                       : adjustedCheckoutMode === 'manual_confirmation'
                         ? `Checkout akan dibuat sebagai pembayaran manual via ${manualPaymentMethod}.`
-                        : `Anda akan diarahkan ke payment page ${providerLabel}.`}
+                        : gatewayChannel ? 'Kode pembayaran akan ditampilkan di halaman ini.' : 'Lanjutkan ke halaman pembayaran yang aman.'}
                   </p>
                   <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:justify-end">
                     <button
@@ -826,7 +896,7 @@ export default function SubscriptionModal({ isOpen, onClose, appName, appSlug, a
                           ? 'Bayar wallet'
                           : adjustedCheckoutMode === 'manual_confirmation'
                             ? 'Buat pembayaran manual'
-                            : `Bayar via ${providerLabel}`}
+                            : 'Bayar sekarang'}
                     </button>
                   </div>
                 </div>
@@ -842,7 +912,7 @@ export default function SubscriptionModal({ isOpen, onClose, appName, appSlug, a
 
           <div className="mt-8 flex items-start justify-center gap-2 text-xs text-zinc-500">
             <Sparkles className="mt-0.5 h-4 w-4 text-amber-600" />
-            <p>Modal ini sekarang dipakai juga saat user klik POS yang terkunci di sidebar, jadi tidak lagi memakai modal lama yang bikin overlay gelap dan redirect mentah.</p>
+            <p>Pembayaran diverifikasi otomatis sebelum akses langganan diaktifkan.</p>
           </div>
         </div>
       </div>

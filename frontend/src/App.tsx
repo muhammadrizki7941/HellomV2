@@ -1,6 +1,8 @@
 import { lazy, Suspense } from 'react';
 import { Navigate, Routes, Route, useParams } from 'react-router-dom';
 import useBrand from '@/hooks/useBrand';
+import PlatformTracking from '@/components/PlatformTracking';
+const MarketingAnalytics = lazy(() => import('@/pages/admin/MarketingAnalytics'));
 import {
   AplikasiDetailPage,
   AplikasiPage,
@@ -103,6 +105,7 @@ export default function App() {
 
   return (
     <Suspense fallback={<RouteFallback />}>
+      <PlatformTracking />
       <Routes>
         {/* Public site: persistent navbar/footer, curtain transitions between pages */}
         <Route element={<PublicLayout />}>
@@ -208,6 +211,7 @@ export default function App() {
           <Route path="users" element={<UserManagement />} />
           <Route path="organizations" element={<OrganizationManagement />} />
           <Route path="apps" element={<AppManagement />} />
+          <Route path="marketing" element={<MarketingAnalytics />} />
           <Route path="products" element={<AdminProducts />} />
           <Route path="products/new" element={<AdminProductEdit />} />
           <Route path="products/:id/edit" element={<AdminProductEdit />} />

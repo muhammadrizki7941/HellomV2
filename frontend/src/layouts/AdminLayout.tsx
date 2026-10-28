@@ -122,6 +122,7 @@ export default function AdminLayout() {
 
   const menuItems = [
     { icon: LayoutDashboard, label: 'Ringkasan', path: '/admin' },
+    { icon: Activity, label: 'Analitik & Iklan', path: '/admin/marketing' },
     { icon: Bell, label: 'Notifikasi', path: '/admin/notifications', badge: notificationState.unreadCount },
     { icon: Users, label: 'Pengguna', path: '/admin/users' },
     { icon: Building2, label: 'Organisasi', path: '/admin/organizations' },

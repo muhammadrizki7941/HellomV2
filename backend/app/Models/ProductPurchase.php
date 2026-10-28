@@ -32,10 +32,12 @@ class ProductPurchase extends Model
     ];
 
     protected $hidden = [
+        'marketing_context',
         'guest_token_hash',
     ];
 
     protected $casts = [
+        'marketing_context' => 'encrypted:array',
         'payment_instructions' => 'array',
         'paid_at' => 'datetime',
         'access_email_sent_at' => 'datetime',

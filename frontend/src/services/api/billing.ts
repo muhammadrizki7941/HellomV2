@@ -88,6 +88,15 @@ export function checkoutStart(payload: Record<string, unknown>) {
   });
 }
 
+export function getSubscriptionCheckoutHistory() {
+  return apiRequest<{ checkout_intents: Array<{
+    intent_token: string;
+    app_slug: string;
+    plan_slug: string;
+    payment_instructions?: import('./landingStore').PaymentInstructions & { amount: number; expires_at: string | null };
+  }> }>('/billing/history');
+}
+
 /**
  * Confirm a gateway checkout without waiting for the inbound webhook — the server
  * verifies the payment with iPaymu and activates access. Returns { active, status }.

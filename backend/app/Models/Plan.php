@@ -115,16 +115,7 @@ class Plan extends Model
 
     public function getEffectivePrice(string $billingCycle = self::BILLING_MONTHLY): int
     {
-        // For one_time yearly plans, return the yearly price directly
-        if ($this->type === self::TYPE_ONE_TIME && $billingCycle === self::BILLING_YEARLY) {
-            return $this->price;
-        }
-
-        // For subscription plans with yearly billing, apply discount (e.g., 10 months for 12 months)
-        if ($this->type === self::TYPE_SUBSCRIPTION && $billingCycle === self::BILLING_YEARLY) {
-            return $this->price * 10; // 2 months free
-        }
-
+        // Admin price is the total package price; the cycle determines access duration.
         return $this->price;
     }
 }

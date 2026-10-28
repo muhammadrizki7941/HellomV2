@@ -56,8 +56,11 @@ export function loadSellerPixels(raw: Record<string, string> | null | undefined,
     fbq.push = fbq; fbq.loaded = true; fbq.version = '2.0'; fbq.queue = [];
     w.fbq = fbq; w._fbq = fbq;
     script('https://connect.facebook.net/en_US/fbevents.js');
+  }
+  if (ids.meta_pixel_id && w.fbq) {
+    w.fbq('set', 'autoConfig', false, ids.meta_pixel_id);
     w.fbq!('init', ids.meta_pixel_id);
-    w.fbq!('track', 'PageView');
+    w.fbq!('trackSingle', ids.meta_pixel_id, 'PageView');
   }
   const gid = ids.ga4_id || ids.google_ads_id;
   if (gid && !w.gtag) {
@@ -87,7 +90,7 @@ export function trackSellerEvent(name: 'InitiateCheckout' | 'AddPaymentInfo' | '
   const w = window as W;
   const ids = loaded ?? {};
   const payload = { value: data.value, currency: data.currency ?? 'IDR', content_ids: data.content_ids, content_name: data.content_name, content_type: 'product' };
-  if (ids.meta_pixel_id && w.fbq) w.fbq('track', name, payload, data.event_id ? { eventID: data.event_id } : undefined);
+  if (ids.meta_pixel_id && w.fbq) w.fbq('trackSingle', ids.meta_pixel_id, name, payload, data.event_id ? { eventID: data.event_id } : undefined);
   if (w.gtag) {
     const ga = { InitiateCheckout: 'begin_checkout', AddPaymentInfo: 'add_payment_info', Purchase: 'purchase' }[name];
     w.gtag('event', ga, { value: data.value, currency: 'IDR', transaction_id: data.event_id, items: (data.content_ids ?? []).map((id) => ({ item_id: id, item_name: data.content_name })) });

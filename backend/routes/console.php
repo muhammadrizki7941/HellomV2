@@ -1,5 +1,11 @@
 <?php
 
+\Illuminate\Support\Facades\Schedule::call(function () {
+    \App\Models\PlatformMarketingEvent::whereIn('delivery_status', ['pending', 'failed'])->where('attempts', '<', 5)
+        ->where('created_at', '>', now()->subDays(7))->where('updated_at', '<', now()->subMinutes(5))
+        ->orderBy('id')->limit(20)->pluck('id')->each(fn ($id) => app(\App\Services\PlatformMarketing::class)->deliver($id));
+})->everyFiveMinutes()->name('platform-meta-retry')->withoutOverlapping();
+
 use Illuminate\Foundation\Inspiring;
 use App\Http\Controllers\HealthController;
 use Illuminate\Support\Facades\Artisan;

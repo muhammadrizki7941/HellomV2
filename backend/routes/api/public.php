@@ -29,6 +29,9 @@ use App\Http\Controllers\Api\V1\Public\GuestProductCheckoutController;
 use App\Http\Controllers\Api\V1\Public\ProductController as PublicProductController;
 use Illuminate\Support\Facades\Route;
 
+Route::get('/public/marketing/config', [\App\Http\Controllers\Api\V1\Hellom\PlatformMarketingController::class, 'publicConfig'])->name('marketing.config');
+Route::post('/public/marketing/events', [\App\Http\Controllers\Api\V1\Hellom\PlatformMarketingController::class, 'track'])->middleware('throttle:60,1')->name('marketing.events');
+
 // ─── PUBLIC — no auth ───
 Route::get('/public/landing/domain/{domain}', [LandingBuilderController::class, 'publicShowByDomain'])
     ->name('public.landing.show_by_domain');

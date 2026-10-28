@@ -1,4 +1,5 @@
 // HTTP client, session/token storage, active outlet, image URLs.
+import { marketingContext } from '@/lib/platformMarketing';
 // Part of the Hellom API client; import from '@/lib/hellomApi' or '@/services/api'.
 
 export const HELLOM_API_BASE =
@@ -171,7 +172,9 @@ export async function apiRequest<T>(
       ...(options?.headers ?? {}),
     },
     body: options?.body !== undefined
-      ? (isFormData ? (options.body as BodyInit) : JSON.stringify(options.body))
+      ? (isFormData ? (options.body as BodyInit) : JSON.stringify(
+        (['/auth/register', '/billing/checkout-start'].includes(path) || /^\/consumer\/products\/[^/]+\/purchase$/.test(path)) && typeof options.body === 'object'
+          ? { ...options.body, marketing: marketingContext() } : options.body))
       : undefined,
   });
 
@@ -238,7 +241,9 @@ export async function publicApiRequest<T>(
       ...(!isFormData && options?.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
     },
     body: options?.body !== undefined
-      ? (isFormData ? (options.body as BodyInit) : JSON.stringify(options.body))
+      ? (isFormData ? (options.body as BodyInit) : JSON.stringify(
+        /^\/public\/products\/[^/]+\/checkout$/.test(path) && typeof options.body === 'object'
+          ? { ...options.body, marketing: marketingContext() } : options.body))
       : undefined,
   });
 

@@ -54,6 +54,8 @@ class BillingController extends BaseApiController
             'payment_flow' => ['required', 'in:wallet,direct'],
             'billing_cycle' => ['nullable', 'in:monthly,yearly,lifetime'],
             'manual_payment_method' => ['nullable', 'in:bank_transfer,gopay,dana,qris'],
+            'gateway_channel' => ['nullable', 'string', 'max:30'],
+            'expected_amount' => ['nullable', 'integer', 'min:0'],
         ]);
 
         $app = AppCatalog::query()
@@ -81,6 +83,10 @@ class BillingController extends BaseApiController
         $billingCycle = $this->resolveBillingCycle($plan, isset($validated['billing_cycle']) ? (string) $validated['billing_cycle'] : null);
         if ($billingCycle === null) {
             return $this->fail('Billing cycle tidak valid untuk plan ini.', ['code' => 'INVALID_BILLING_CYCLE'], 422);
+        }
+
+        if (isset($validated['expected_amount']) && (int) $validated['expected_amount'] !== $this->resolvePlanAmount($plan, $billingCycle)) {
+            return $this->fail('Nominal checkout berbeda dari harga paket yang berlaku. Muat ulang paket sebelum melanjutkan pembayaran.', ['code' => 'PRICE_CHANGED'], 422);
         }
 
         $paymentFlow = (string) $validated['payment_flow'];
@@ -208,16 +214,56 @@ class BillingController extends BaseApiController
         /** @var Invoice|null $invoice */
         $invoice = $result['invoice'];
 
+        $paymentInstructions = null;
         $paymentUrl = null;
         $paymentSessionId = null;
 
         if ($paymentFlow === 'direct' && $checkoutMode === 'gateway_automatic') {
             try {
-                if ($gatewayProvider === 'ipaymu') {
+                if ($gatewayProvider === 'ipaymu' && !empty($validated['gateway_channel'])) {
+                    $channel = (string) $validated['gateway_channel'];
+                    if (!isset($this->ipaymuSettings()->enabledDirectChannels()[$channel])) {
+                        throw new \RuntimeException('Metode pembayaran tidak tersedia. Silakan pilih kembali.');
+                    }
+                    $context = [
+                        'purpose' => 'subscription_checkout',
+                        'organization_id' => $organizationId,
+                        'subscription_id' => (int) $subscription->id,
+                        'checkout_intent_id' => (int) $intent->id,
+                        'invoice_id' => (int) ($invoice?->id ?? 0),
+                        'reference_id' => (string) $intent->intent_token,
+                    ];
+                    $charge = app(\App\Services\Payments\Gateways\IpaymuGateway::class)->createCharge(new \App\Services\Payments\ChargeRequest(
+                        reference: (string) $intent->intent_token,
+                        amount: (int) $intent->amount,
+                        productName: "{$app->name} - {$plan->name}",
+                        buyerName: (string) $user->name,
+                        buyerEmail: (string) $user->email,
+                        buyerPhone: $user->phone,
+                        returnUrl: $this->checkoutReturnUrl($request, (string) $intent->intent_token),
+                        notifyContext: [...$context, 'sig' => IpaymuPaymentVerifier::sign($context)],
+                        preferredMethod: $channel,
+                    ));
+                    $paymentSessionId = $charge->gatewayRef;
+                    $paymentInstructions = [
+                        'mode' => $charge->mode,
+                        'payment_url' => null,
+                        'provider' => 'ipaymu',
+                        'amount' => (int) $intent->amount,
+                        'va_number' => $charge->vaNumber,
+                        'qr_string' => $charge->qrString,
+                        'qr_image_url' => $charge->qrImageUrl,
+                        'channel_label' => $charge->channelLabel,
+                        'expires_at' => $charge->expiresAt,
+                    ];
+                    $metadata = ['payment_session_id' => $paymentSessionId, 'transaction_id' => $charge->transactionId, 'payment_instructions' => $paymentInstructions];
+                    $intent->forceFill(['metadata' => [...($intent->metadata ?? []), 'ipaymu' => $metadata]])->save();
+                    $invoice?->forceFill(['status' => 'issued', 'metadata' => [...($invoice->metadata ?? []), 'ipaymu' => $metadata]])->save();
+                } elseif ($gatewayProvider === 'ipaymu') {
                     $session = $this->ipaymu()->createRedirectPayment([
                         'product' => ["{$app->name} - {$plan->name}"],
                         'qty' => [1],
-                        // The intent amount (yearly = price x 10) is what grants the period.
+                        // Use the saved package total without a billing-cycle multiplier.
                         'price' => [(int) $intent->amount],
                         'paymentMethod' => $this->ipaymuSettings()->enabledPaymentMethods(),
                         'referenceId' => (string) $intent->intent_token,
@@ -420,6 +466,7 @@ class BillingController extends BaseApiController
             ],
             'payment' => [
                 'flow' => $paymentFlow,
+                'instructions' => $paymentInstructions,
                 'checkout_mode' => $checkoutMode,
                 'requires_manual_confirmation' => $paymentFlow === 'direct' && $checkoutMode === 'manual_confirmation',
                 'provider' => $paymentFlow === 'wallet' ? 'wallet' : ($checkoutMode === 'manual_confirmation' ? 'manual_confirmation' : $gatewayProvider),
@@ -730,8 +777,10 @@ class BillingController extends BaseApiController
                     'plan_slug' => (string) ($subscription->plan->slug ?? ''),
                 ];
             })->values(),
-            'checkout_intents' => $checkoutIntents->map(function (CheckoutIntent $intent): array {
+            'checkout_intents' => $checkoutIntents->map(function (CheckoutIntent $intent) use ($user): array {
                 return [
+                    'payment_instructions' => (int) $intent->user_id === (int) $user->id && $intent->status === 'gateway_pending'
+                        ? data_get($intent->metadata, 'ipaymu.payment_instructions') : null,
                     'id' => $intent->id,
                     'intent_token' => (string) $intent->intent_token,
                     'status' => (string) $intent->status,
