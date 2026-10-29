@@ -30,7 +30,7 @@ class ProductAccessMailer
      */
     public function sendForPaidPurchase(ProductPurchase $purchase): bool
     {
-        if (!$purchase->isGuestCheckout() || $purchase->payment_status !== 'paid') {
+        if ($purchase->payment_status !== 'paid') {
             return false;
         }
 
@@ -43,7 +43,12 @@ class ProductAccessMailer
             return false;
         }
 
-        return $this->deliver($purchase, releaseClaimOnFailure: true);
+        try {
+            return $this->deliver($purchase, releaseClaimOnFailure: true);
+        } catch (\Throwable $exception) {
+            ProductPurchase::query()->whereKey($purchase->id)->update(['access_email_sent_at' => null]);
+            throw $exception;
+        }
     }
 
     /**
@@ -64,7 +69,34 @@ class ProductAccessMailer
         $user = $purchase->user;
         $product = $purchase->product;
         if (!$user || !$product) {
+            if ($releaseClaimOnFailure) {
+                ProductPurchase::query()->whereKey($purchase->id)->update(['access_email_sent_at' => null]);
+            }
             return false;
+        }
+
+        if (!$purchase->isGuestCheckout()) {
+            $result = $this->mail->sendTo((string) $user->email, new \App\Mail\HellomCheckoutStatusMail(
+                'Pembelian berhasil — ' . $product->name,
+                [
+                    'headline' => 'Terima kasih atas pembelian Anda',
+                    'intro' => 'Halo ' . $user->name . ', pembayaran telah diterima. ' . $product->name . ' sudah tersedia di akun Anda.',
+                    'details' => [
+                        'Produk' => (string) $product->name,
+                        'Nomor transaksi' => (string) $purchase->transaction_code,
+                        'Total pembayaran' => 'Rp ' . number_format((int) $purchase->amount_paid, 0, ',', '.'),
+                        'Masa akses' => $purchase->expires_at ? 'Sampai ' . $purchase->expires_at->timezone('Asia/Jakarta')->format('d M Y') : 'Selamanya (sekali beli)',
+                    ],
+                    'cta_url' => FrontendUrl::to('/dashboard/products/' . $product->slug),
+                    'cta_label' => 'Buka produk saya',
+                    'closing' => 'Masuk dengan akun yang digunakan saat membeli. Baca panduan produk sebelum mulai dan simpan email ini sebagai bukti transaksi. Butuh bantuan? Balas email ini.',
+                ],
+            ));
+            if (empty($result['sent']) && $releaseClaimOnFailure) {
+                ProductPurchase::query()->whereKey($purchase->id)->update(['access_email_sent_at' => null]);
+            }
+
+            return (bool) ($result['sent'] ?? false);
         }
 
         $password = null;

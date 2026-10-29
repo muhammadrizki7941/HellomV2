@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { getPosTables, getPosProducts, getPosCategories, createPosOrder, searchPosMembers, createPosMember, calculateLoyaltyPoints, applyReward, previewPosOrder } from '@/lib/hellomApi';
 import { getImageUrl } from '@/lib/hellomApi';
 import type { PosOrderDraft, PosOrderTotals } from '@/lib/hellomApi';
+import HellomLoading from '@/components/HellomLoading';
 
 type Table = {
   id: number;
@@ -80,6 +81,7 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   const [showTableSelector, setShowTableSelector] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadingLabel, setLoadingLabel] = useState('Memuat menu dan meja...');
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [priceSort, setPriceSort] = useState<'none' | 'asc' | 'desc'>('none');
@@ -132,6 +134,7 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
   const loadData = async () => {
     try {
       setLoading(true);
+      setLoadingLabel('Memuat menu dan meja...');
       const [tablesRes, productsRes, categoriesRes] = await Promise.all([
         getPosTables(),
         getPosProducts(),
@@ -504,6 +507,7 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
 
     try {
       setLoading(true);
+      setLoadingLabel('Menyimpan pesanan...');
       setError(null);
       await createPosOrder(buildDraft());
 
@@ -520,6 +524,7 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-white md:items-center md:justify-center md:bg-white/20 md:backdrop-blur-md">
+      {loading && <HellomLoading mode="overlay" label={loadingLabel} />}
       <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-white md:h-[90vh] md:w-[90vw] md:max-w-6xl md:rounded-2xl">
         {/* Header */}
         <div className="flex flex-shrink-0 items-center justify-between border-b border-gray-200 p-4 md:p-6">

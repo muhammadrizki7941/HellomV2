@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Loader2, MailCheck } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
+import HellomMascot from '@/components/HellomMascot';
 import { forgotPassword } from '@/lib/hellomApi';
-import { AuthAlert, AuthField, AuthShell, authPrimaryButton } from '@/components/auth/AuthShell';
+import { LightAuthAlert as AuthAlert, LightAuthField as AuthField, LightAuthLayout as AuthShell, lightAuthButton as authPrimaryButton } from '@/components/auth/LightAuthLayout';
 
 /**
  * "Lupa kata sandi": we email a link to /reset-password. Same answer whether or not the email
@@ -35,28 +36,28 @@ export default function ForgotPassword() {
   };
 
   return (
-    <AuthShell>
+    <AuthShell variant="recovery">
       {sentTo ? (
         <div>
-          <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#F6B400]/15 text-[#F6B400]"><MailCheck className="h-6 w-6" /></span>
+          <HellomMascot mood="success" className="!w-24" />
           <h1 className="mt-5 text-2xl font-bold">Cek email kamu</h1>
-          <p className="mt-2 text-sm leading-relaxed text-white/65">
-            Kalau <strong className="text-white">{sentTo}</strong> terdaftar di Hellom, kami sudah mengirim link untuk membuat kata sandi baru.
+          <p className="mt-2 text-sm leading-relaxed text-zinc-600">
+            Kalau <strong className="text-zinc-900">{sentTo}</strong> terdaftar di Hellom, kami sudah mengirim link untuk membuat kata sandi baru.
             Link berlaku 60 menit. Tidak ada di kotak masuk? Cek folder Spam atau Promosi.
           </p>
           {error && <div className="mt-4"><AuthAlert>{error}</AuthAlert></div>}
           <div className="mt-6 space-y-3">
             <button type="button" onClick={() => void submit()} disabled={busy}
-              className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-white/[0.14] text-sm font-semibold text-white hover:border-[#F6B400] disabled:opacity-60">
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-zinc-200 text-sm font-semibold text-zinc-900 hover:border-[#F6B400] disabled:opacity-60">
               {busy && <Loader2 className="h-4 w-4 animate-spin" />} Kirim ulang link
             </button>
-            <button type="button" onClick={() => setSentTo(null)} className="flex min-h-11 w-full items-center justify-center text-sm text-white/55 hover:text-white">Pakai email lain</button>
+            <button type="button" onClick={() => setSentTo(null)} className="flex min-h-11 w-full items-center justify-center text-sm text-zinc-600 hover:text-zinc-950">Pakai email lain</button>
           </div>
         </div>
       ) : (
         <>
           <h1 className="text-2xl font-bold">Lupa kata sandi?</h1>
-          <p className="mt-2 text-sm leading-relaxed text-white/60">Masukkan email akun kamu. Kami kirim link untuk membuat kata sandi baru — berlaku juga untuk kasir & staf toko.</p>
+          <p className="mt-2 text-sm leading-relaxed text-zinc-600">Masukkan email akun kamu. Kami kirim link untuk membuat kata sandi baru — berlaku juga untuk kasir & staf toko.</p>
           <form className="mt-6 space-y-4" onSubmit={submit}>
             <AuthField id="forgot-email" label="Email" type="email" inputMode="email" autoComplete="email" required autoFocus
               value={email} onChange={(e) => setEmail(e.target.value)} placeholder="nama@email.com" />
@@ -68,8 +69,8 @@ export default function ForgotPassword() {
         </>
       )}
       <div className="mt-8 flex flex-wrap items-center justify-between gap-2 text-sm">
-        <Link to="/login" className="inline-flex min-h-11 items-center text-white/60 hover:text-white">Masuk pemilik</Link>
-        <Link to="/login/kasir" className="inline-flex min-h-11 items-center font-semibold text-[#F6B400] hover:underline">Masuk kasir & staf</Link>
+        <Link to="/login" className="inline-flex min-h-11 items-center text-zinc-600 hover:text-zinc-950">Masuk pemilik</Link>
+        <Link to="/login/kasir" className="inline-flex min-h-11 items-center font-semibold text-amber-700 hover:underline">Masuk kasir & staf</Link>
       </div>
     </AuthShell>
   );

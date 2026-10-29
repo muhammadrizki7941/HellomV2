@@ -1,0 +1,26 @@
+.hellom-mascot { display: inline-block; flex-shrink: 0; width: 148px; aspect-ratio: 1; vertical-align: middle; }
+.hellom-mascot img { width: 100%; height: 100%; object-fit: contain; }
+.hellom-mascot__pose { display: block; width: 100%; height: 100%; border-radius: 22%; background-image: url('/images/mascot/statuses.webp'); background-size: 300% 200%; background-repeat: no-repeat; }
+.hellom-mascot--welcome .hellom-mascot__pose { background-position: 0 0; background-size: 275% 200%; }
+.hellom-mascot--loading .hellom-mascot__pose { background-position: 50% 0; clip-path: inset(0 0 0 9%); }
+.hellom-mascot--maintenance .hellom-mascot__pose { background-position: 100% 0; }
+.hellom-mascot--error .hellom-mascot__pose { background-position: 25% 100%; clip-path: inset(1.6% 0 0); }
+.hellom-mascot--success .hellom-mascot__pose { background-position: 75% 100%; clip-path: inset(1.6% 0 0); }
+.hellom-journey { position: fixed; right: 20px; bottom: 24px; z-index: 90; pointer-events: none; display: flex; align-items: center; gap: 8px; max-width: calc(100vw - 40px); padding: 6px 16px 6px 8px; border: 1px solid #f3db9c; border-radius: 22px; color: #574521; background: #fffdf5; box-shadow: 0 10px 32px #33210015; font: 500 12px/1.4 var(--font-family-body), sans-serif; }
+.hellom-journey .hellom-mascot { width: 65px; }
+.hellom-connection { position: fixed; inset: auto 16px 16px auto; z-index: 110; display: flex; align-items: center; gap: 12px; max-width: min(400px, calc(100vw - 32px)); border: 1px solid #f6d88b; border-radius: 20px; padding: 14px; background: #fffdf5; color: #443c2e; box-shadow: 0 12px 40px #0002; font-size: 13px; }
+.hellom-connection .hellom-mascot { width: 65px; }
+.hellom-connection button { align-self: flex-start; min-width: 32px; min-height: 32px; border-radius: 8px; }
+.hellom-mascot-road { position: relative; width: 240px; max-width: 100%; overflow: hidden; text-align: center; border-bottom: 2px dashed #e6d7b4; }
+@keyframes hellom-cart-bounce { 0%,100% { transform: translateY(0) rotate(-1deg); } 50% { transform: translateY(-4px) rotate(1deg); } }
+@keyframes hellom-cart-cross { from { transform: translateX(-20px); } to { transform: translateX(20px); } }
+@keyframes hellom-journey-pass { 0% { opacity: 0; transform: translateX(-35px); } 20%,75% { opacity: 1; } 100% { opacity: 0; transform: translateX(25px); } }
+@keyframes hellom-pose-breathe { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@media (prefers-reduced-motion: no-preference) {
+  .hellom-mascot--trolley img { animation: hellom-cart-bounce .55s ease-in-out infinite; }
+  .hellom-mascot-road .hellom-mascot--trolley { animation: hellom-cart-cross 1.5s ease-in-out infinite alternate; }
+  .hellom-mascot--loading { animation: hellom-pose-breathe 1.8s ease-in-out infinite; }
+  .hellom-journey { animation: hellom-journey-pass 1.2s ease-in-out both; }
+  .hellom-journey .hellom-mascot img { animation-iteration-count: 2; }
+}
+@media (prefers-reduced-motion: reduce) { .hellom-journey { display: none; } }

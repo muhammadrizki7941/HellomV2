@@ -1,6 +1,6 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { LayoutDashboard, ShoppingCart, Users, BarChart3, Utensils, Settings, LogOut, Square, X, Menu, User, Ticket, Store, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Users, BarChart3, Utensils, Settings, LogOut, Square, X, Menu, User, Ticket, Store, ShieldCheck, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import BottomNav from '@/components/pos/BottomNav';
 import OutletSwitcher from '@/components/pos/OutletSwitcher';
@@ -8,6 +8,7 @@ import { OwnerPinSetupDialog } from '@/components/pos/OwnerPin';
 import { getActiveOutletEventName, getAuthMe, getPosMyAccess, getPosOwnerPinStatus, getPosOrders, getPosRealtimeToken, getSessionEventName, getSessionUser, getSessionPosAccess, getToken, setSession, setSessionPosAccess, clearSession, POS_PERMISSION_DENIED_EVENT } from '@/lib/hellomApi';
 import { playOrderChime, setPosRealtimeConnected, subscribeRealtime } from '@/lib/realtime';
 import { usePWAInstall } from '@/hooks/usePWAInstall';
+import { BRAND_LOGO_PATH } from '@/lib/branding';
 import type { PosOwnerPinStatus } from '@/lib/hellomApi';
 import {
   getPosOrderListResetAt,
@@ -61,12 +62,27 @@ const countActiveOrders = (orders: Array<{ status: string; created_at?: string }
 
 export default function PosLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try {
+      return window.localStorage.getItem('hellom-pos-sidebar-collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [showIosGuide, setShowIosGuide] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('');
   const [activeOrdersCount, setActiveOrdersCount] = useState(0);
   const { state: installState, install } = usePWAInstall();
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('hellom-pos-sidebar-collapsed', String(sidebarCollapsed));
+    } catch {
+      // Sidebar preference remains usable for this session when storage is unavailable.
+    }
+  }, [sidebarCollapsed]);
 
   // Re-render when the session (and with it pos_access) changes.
   const [, setAccessVersion] = useState(0);
@@ -308,62 +324,105 @@ export default function PosLayout() {
   return (
     <div className="min-h-screen bg-[#fffdf5]">
       {/* Desktop Sidebar */}
-      <div className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:block lg:w-64">
+      <div className={cn(
+        'fixed inset-y-0 left-0 z-30 hidden transition-[width] duration-200 ease-in-out lg:block',
+        sidebarCollapsed ? 'w-[72px]' : 'w-64'
+      )}>
         <div className="flex h-full flex-col border-r border-[#eadfbe] bg-white shadow-[0_12px_40px_rgba(17,17,17,0.08)]">
-          <div className="flex h-16 items-center border-b border-[#f1e7c9] px-4">
-            <h2 className="text-lg font-semibold text-[#111111]">POS System</h2>
+          <div className={cn('flex h-16 items-center border-b border-[#f1e7c9]', sidebarCollapsed ? 'justify-center px-2' : 'justify-between px-4')}>
+            {!sidebarCollapsed && (
+              <div className="flex min-w-0 items-center gap-2">
+                <img src={BRAND_LOGO_PATH} alt="" className="h-9 w-9 shrink-0 rounded-lg object-contain" />
+                <div className="min-w-0">
+                  <h2 className="text-lg font-semibold text-[#111111]">Hellom</h2>
+                  <p className="text-[10px] leading-none text-[#8a7d63]">POS System</p>
+                </div>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
+              aria-label={sidebarCollapsed ? 'Perluas sidebar' : 'Ciutkan sidebar'}
+              aria-expanded={!sidebarCollapsed}
+              title={sidebarCollapsed ? 'Perluas sidebar' : 'Ciutkan sidebar'}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[#6b7280] transition hover:bg-[#fff7db] hover:text-[#111111]"
+            >
+              {sidebarCollapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
+            </button>
           </div>
-          <div className="px-4 pt-4">
-            {isCashier ? (
+          <div className={cn('pt-4', sidebarCollapsed ? 'flex justify-center px-2' : 'px-4')}>
+            {sidebarCollapsed ? (
+              <div
+                title={`Outlet aktif: ${isCashier ? (posAccess?.outlet_name || 'Outlet kamu') : 'Pilih outlet'}`}
+                aria-label={`Outlet aktif: ${isCashier ? (posAccess?.outlet_name || 'Outlet kamu') : 'Pilih outlet'}`}
+                className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#eadfbe] bg-[#fffdf5] text-[#8a7d63]"
+              >
+                <Store className="h-5 w-5" />
+              </div>
+            ) : isCashier ? (
               <div className="rounded-md border border-[#eadfbe] bg-[#fffdf5] px-3 py-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-[#8a7d63]">Outlet</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-[#8a7d63]">Outlet aktif</p>
                 <p className="truncate text-sm font-semibold text-[#111111]">{posAccess?.outlet_name || 'Outlet kamu'}</p>
               </div>
             ) : (
               <OutletSwitcher />
             )}
           </div>
-          <nav className="mt-4 flex-1 px-4">
+          <nav className={cn('mt-4 flex-1', sidebarCollapsed ? 'px-2' : 'px-4')}>
             {navItems.map((item) => (
               <Link
                 key={item.name}
                 to={item.href}
+                title={sidebarCollapsed ? item.name : undefined}
+                aria-label={item.name}
                 className={cn(
-                  'mb-1 flex items-center rounded-md px-3 py-2 text-sm font-medium',
-                  location.pathname === item.href
+                  'relative mb-1 flex min-h-11 items-center rounded-md text-sm font-medium transition-colors',
+                  sidebarCollapsed ? 'justify-center px-2' : 'px-3',
+                  location.pathname === item.href || location.pathname.startsWith(`${item.href}/`)
                     ? 'bg-amber-300 text-[#111111]'
                     : 'text-[#4b5563] hover:bg-[#fff7db] hover:text-[#111111]'
                 )}
               >
-                <item.icon className="mr-3 h-5 w-5" />
-                <span>{item.name}</span>
+                <item.icon className={cn('h-5 w-5 shrink-0', sidebarCollapsed ? '' : 'mr-3')} />
+                {!sidebarCollapsed && <span className="truncate">{item.name}</span>}
                 {item.hasBadge && activeOrdersCount > 0 && (
-                  <span className="ml-auto inline-flex min-w-[22px] items-center justify-center rounded-full bg-red-500 px-2 py-0.5 text-xs font-semibold text-white">
+                  <span className={cn(
+                    'inline-flex min-w-[22px] items-center justify-center rounded-full bg-red-500 px-2 py-0.5 text-xs font-semibold text-white',
+                    sidebarCollapsed ? 'absolute -right-1 -top-1 min-w-[18px] px-1 text-[10px]' : 'ml-auto'
+                  )}>
                     {activeOrdersCount > 99 ? '99+' : activeOrdersCount}
                   </span>
                 )}
               </Link>
             ))}
           </nav>
-          <div className="border-t border-[#f1e7c9] p-4">
+          <div className={cn('border-t border-[#f1e7c9]', sidebarCollapsed ? 'p-2' : 'p-4')}>
             <button
               type="button"
               onClick={isCashier ? handleLogout : handleGoToDashboard}
-              className="flex items-center rounded-md px-3 py-2 text-sm font-medium text-[#4b5563] hover:bg-[#fff7db] hover:text-[#111111]"
+              title={sidebarCollapsed ? (isCashier ? 'Keluar' : 'Ke Dashboard Hellom') : undefined}
+              aria-label={isCashier ? 'Keluar' : 'Ke Dashboard Hellom'}
+              className={cn('flex min-h-11 w-full items-center rounded-md py-2 text-sm font-medium text-[#4b5563] hover:bg-[#fff7db] hover:text-[#111111]', sidebarCollapsed ? 'justify-center px-2' : 'px-3')}
             >
-              <LogOut className="mr-3 h-5 w-5" />
-              {isCashier ? 'Keluar' : 'Ke Dashboard Hellom'}
+              <LogOut className={cn('h-5 w-5 shrink-0', sidebarCollapsed ? '' : 'mr-3')} />
+              {!sidebarCollapsed && (isCashier ? 'Keluar' : 'Ke Dashboard Hellom')}
             </button>
           </div>
         </div>
       </div>
 
       {/* Mobile/Tablet Layout */}
-      <div className={cn('flex flex-col min-h-screen lg:pl-64')}>
+      <div className={cn('flex min-h-screen flex-col transition-[padding] duration-200 ease-in-out', sidebarCollapsed ? 'lg:pl-[72px]' : 'lg:pl-64')}>
         {/* Top Header - Mobile/Tablet */}
         <div className="sticky top-0 z-40 lg:hidden">
           <div className="flex h-16 items-center justify-between border-b border-[#f1e7c9] bg-white/95 px-4 shadow-sm backdrop-blur">
-            <button onClick={() => setSidebarOpen(true)} className="text-[#8a7d63] hover:text-[#111111]">
+            <button
+              type="button"
+              onClick={() => setSidebarOpen((open) => !open)}
+              aria-label={sidebarOpen ? 'Tutup menu' : 'Buka menu'}
+              aria-expanded={sidebarOpen}
+              className="flex h-11 w-11 items-center justify-center rounded-lg text-[#8a7d63] hover:bg-[#fff7db] hover:text-[#111111]"
+            >
               <Menu className="h-6 w-6" />
             </button>
             <h1 className="text-lg font-semibold text-[#111111]">POS System</h1>

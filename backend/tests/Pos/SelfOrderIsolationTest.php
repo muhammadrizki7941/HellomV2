@@ -98,4 +98,5 @@ class SelfOrderIsolationTest extends PosTestCase
             ->assertJsonPath('error.problems.0.old_price', 10000)
             ->assertJsonPath('error.problems.0.new_price', 12000);
     }
+
 }

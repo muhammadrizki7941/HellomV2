@@ -361,6 +361,7 @@ class ProductCheckoutService
                 'transaction_code' => $existing->transaction_code ?: 'PUR-' . strtoupper(Str::random(10)),
                 'payment_status' => 'pending',
                 'paid_at' => null,
+                'access_email_sent_at' => null,
             ])->save();
             $this->applyContext($existing, $context);
 

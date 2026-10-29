@@ -67,6 +67,32 @@ class EmailDeliverabilityTest extends PosTestCase
         ]);
     }
 
+    public function test_log_mailer_cannot_report_a_delivered_email(): void
+    {
+        config(['mail.default' => 'log']);
+        $user = $this->user();
+        $result = app(PlatformMailService::class)->sendTo($user->email, $this->receipt());
+        $this->assertFalse($result['sent']);
+        $log = EmailLog::where('to_email', $user->email)->sole();
+        $this->assertSame('failed', $log->status);
+        $this->assertNotNull($log->payload);
+    }
+
+    public function test_matching_gmail_sender_does_not_require_custom_domain_dns(): void
+    {
+        $check = new MailDomainCheck(function () { $this->fail('Gmail domain is managed by Google'); });
+        $result = $check->check('owner@gmail.com', 'smtp.gmail.com', 'owner@gmail.com');
+        $this->assertTrue($result['ok']);
+        $this->assertFalse($check->check('alias@gmail.com', 'smtp.gmail.com', 'owner@gmail.com')['ok']);
+    }
+
+    public function test_gmail_app_password_spaces_are_removed_for_existing_settings(): void
+    {
+        SystemSetting::set('hellom_mail_host', 'smtp.gmail.com');
+        SystemSetting::set('hellom_mail_password_encrypted', \Illuminate\Support\Facades\Crypt::encryptString('abcd efgh ijkl mnop'));
+        $this->assertSame('abcdefghijklmnop', app(PlatformMailService::class)->getSettings()['password']);
+    }
+
     public function test_every_email_gets_text_part_reply_to_and_auto_submitted_and_is_logged(): void
     {
         $user = $this->user();

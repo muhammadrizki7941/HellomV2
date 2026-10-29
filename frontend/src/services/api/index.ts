@@ -56,6 +56,7 @@ export {
 } from './member';
 export {
   approvePayoutProfile,
+  cancelSubscriptionCheckout,
   checkoutConfirmMock,
   checkoutConfirmWallet,
   checkoutIntentMock,
@@ -233,8 +234,11 @@ export {
   getPosOutlets,
   getPosProducts,
   getPosReportDaily,
+  getPosReportMargin,
   getPosReportProducts,
+  getPosReportShifts,
   getPosReportSummary,
+  getPosReportTransactions,
   getPosTables,
   getPublicOrganizationOutlets,
   lookupPublicPosMember,
@@ -261,6 +265,9 @@ export type {
   PosExperienceSpaceItem,
   PosOutlet,
   PosOutletListResponse,
+  PosReportMargin,
+  PosReportShift,
+  PosReportTransactions,
   PosTableRecord,
 } from './pos';
 export {

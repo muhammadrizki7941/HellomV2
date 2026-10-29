@@ -60,6 +60,17 @@ class MailDomainCheck
         $provider = $providerKey ? self::PROVIDERS[$providerKey] : null;
         $checks = [];
 
+        if ($providerKey === 'gmail' && in_array($domain, ['gmail.com', 'googlemail.com'], true)) {
+            $matches = strcasecmp(trim($fromAddress), trim($smtpUsername)) === 0;
+            return ['domain' => $domain, 'provider' => $providerKey, 'provider_label' => $provider['label'], 'ok' => $matches, 'checks' => [[
+                'key' => 'alignment', 'label' => 'Pengirim Gmail', 'status' => $matches ? 'ok' : 'warn',
+                'detail' => $matches
+                    ? 'Alamat pengirim sama dengan akun SMTP Gmail. SPF, DKIM, dan DMARC gmail.com dikelola Google. Ini pemeriksaan konfigurasi, bukan bukti email masuk inbox.'
+                    : 'Alamat pengirim berbeda dari akun SMTP Gmail. Alias perlu diverifikasi; pemeriksaan ini belum dapat membuktikan izin alias.',
+                'fix' => $matches ? null : 'Gunakan alamat Gmail yang sama dengan username SMTP, atau verifikasi alias melalui pengaturan Gmail.',
+            ]]];
+        }
+
         if ($domain === '') {
             return ['domain' => '', 'provider' => $providerKey, 'provider_label' => $provider['label'] ?? null, 'ok' => false, 'checks' => [[
                 'key' => 'from', 'label' => 'Alamat pengirim', 'status' => 'fail', 'detail' => 'Alamat "From" belum diisi.', 'fix' => 'Isi alamat pengirim, mis. noreply@hellomspace.com.',

@@ -213,6 +213,7 @@ class AutoRenewSubscriptionsWalletCommand extends Command
 
             // Create notification for successful auto-renewal
             $this->notificationService->createSubscriptionRenewalNotif($subscription, $amount, 'auto_wallet');
+            app(\App\Services\Billing\CheckoutNotifier::class)->sendSubscriptionBillingNotification((int) $subscription->id, 'Perpanjangan otomatis berhasil');
 
             return 'renewed';
         });

@@ -1,0 +1,9 @@
+.light-auth a, .light-auth button { -webkit-tap-highlight-color: transparent; }
+.light-auth h1, .light-auth h2 { font-family: var(--font-family-body), sans-serif; }
+.light-auth a:focus-visible { outline: 2px solid #d97706; outline-offset: 4px; border-radius: 4px; }
+@keyframes auth-enter { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: no-preference) { .auth-form-enter { animation: auth-enter .4s ease-out both; } }
+@media (max-width: 1023px) {
+  .auth-illustration { display: none; }
+  .light-auth main { padding-top: 8px; }
+}

@@ -3,12 +3,12 @@
 namespace App\Observers;
 
 use App\Models\ProductPurchase;
-use App\Services\DigitalProducts\ProductAccessMailer;
+
 
 /**
  * Every "paid" transition (iPaymu/Xendit/DOKU webhooks, iPaymu status sync, manual
- * approval by the super admin) passes through here, so guest buyers always get
- * their access email. Runs after the surrounding transaction commits.
+ * approval by the super admin) passes through here, so buyers get
+ * their access email, with queue retries. Runs after the surrounding transaction commits.
  */
 class ProductPurchaseObserver
 {
@@ -20,12 +20,12 @@ class ProductPurchaseObserver
             return;
         }
 
-        if ($purchase->payment_status !== 'paid' || !$purchase->isGuestCheckout()) {
+        if ($purchase->payment_status !== 'paid') {
             return;
         }
 
         try {
-            app(ProductAccessMailer::class)->sendForPaidPurchase($purchase);
+            \App\Jobs\SendProductReceipt::dispatch((int) $purchase->id)->afterCommit();
         } catch (\Throwable $exception) {
             // Never break the webhook/approval that marked the purchase paid.
             report($exception);

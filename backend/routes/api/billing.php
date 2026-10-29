@@ -27,6 +27,7 @@ Route::get('/billing/history', [BillingController::class, 'history'])->name('bil
 Route::get('/billing/gateway-status', [PaymentGatewayConfigController::class, 'gatewayStatus'])->name('billing.gateway_status');
 Route::get('/billing/runtime-config', [PaymentGatewayConfigController::class, 'checkoutRuntimeConfig'])->name('billing.runtime_config');
 Route::post('/billing/checkout-start', [BillingController::class, 'checkoutStart'])->name('billing.checkout_start');
+Route::post('/billing/checkout-cancel', [BillingController::class, 'cancelCheckout'])->name('billing.checkout_cancel');
 Route::post('/billing/checkout-reconcile', [BillingController::class, 'reconcileCheckout'])->name('billing.checkout_reconcile');
 Route::post('/billing/subscriptions/{subscriptionId}/renew-mock', [BillingMockController::class, 'renewSubscriptionMock'])->middleware('billing.mock')->name('billing.subscriptions.renew_mock');
 Route::post('/billing/subscriptions/{subscriptionId}/renew-wallet', [SubscriptionWalletController::class, 'renewSubscriptionWallet'])->name('billing.subscriptions.renew_wallet');

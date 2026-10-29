@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Search, Clock, CheckCircle, XCircle, ShoppingCart, RotateCcw, Info, Wifi, WifiOff, Receipt } from 'lucide-react';
+import { Search, Clock, CheckCircle, XCircle, CirclePlus, RotateCcw, Info, Wifi, WifiOff, Receipt, LayoutGrid, List, PanelRight, UserRound, MapPin, CalendarDays, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   POS_ORDER_STATUS_LABELS,
@@ -13,6 +13,7 @@ import {
 } from '@/lib/hellomApi';
 import type { PosOrderListItem, PosOrderStatus, PosTableBill } from '@/lib/hellomApi';
 import NewOrderModal from '@/components/pos/NewOrderModal';
+import HellomLoading from '@/components/HellomLoading';
 import ReceiptModal from '@/components/pos/ReceiptModal';
 import PaymentModal from '@/components/pos/PaymentModal';
 import CashDrawerButton from '@/components/pos/CashDrawerButton';
@@ -45,11 +46,13 @@ const NEXT_ACTION: Partial<Record<PosOrderStatus, string>> = {
 const rupiah = (value: number) => `Rp ${Math.round(value || 0).toLocaleString('id-ID')}`;
 
 export default function PosOrders() {
+  const [viewMode, setViewMode] = useState<'grid' | 'list' | 'split'>('split');
   const [orders, setOrders] = useState<PosOrderListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [live, setLive] = useState(isPosRealtimeConnected());
   const [showNewOrderModal, setShowNewOrderModal] = useState(false);
@@ -201,6 +204,13 @@ export default function PosOrders() {
   });
 
   const unfinishedOrdersCount = visibleOrders.filter((order) => ACTIVE_ORDER_STATUSES.includes(order.status)).length;
+  const selectedOrder = filteredOrders.find((order) => order.id === selectedOrderId) ?? filteredOrders[0] ?? null;
+
+  useEffect(() => {
+    if (selectedOrder?.id !== selectedOrderId) {
+      setSelectedOrderId(selectedOrder?.id ?? null);
+    }
+  }, [selectedOrder, selectedOrderId]);
 
   const resetTimeLabel = listResetAt.toLocaleString('id-ID', {
     day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
@@ -259,30 +269,185 @@ export default function PosOrders() {
 
   const openBills = bills.filter((bill) => bill.status === 'open' && bill.unpaid_amount > 0);
 
+  const renderOrderActions = (order: PosOrderListItem) => {
+    const allowed = order.allowed_next ?? [];
+    const forward = allowed.filter((status) => status !== 'cancelled');
+    const nextStep = forward[0] as PosOrderStatus | undefined;
+    const isPaid = order.payment_status === 'paid';
+    const busy = busyOrderId === order.id;
+
+    return (
+      <div className="flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3">
+        {!isPaid && order.payment_status !== 'refunded' && order.status !== 'cancelled' && (
+          <button
+            type="button"
+            onClick={() => {
+              setCurrentPaymentOrder(order);
+              setShowPaymentModal(true);
+            }}
+            className="flex min-h-9 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-emerald-700"
+          >
+            Bayar
+          </button>
+        )}
+        {nextStep && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => handleStatusUpdate(order, nextStep)}
+            className="min-h-9 rounded-lg bg-amber-400 px-3 py-2 text-xs font-bold text-[#111111] transition hover:bg-amber-500 disabled:opacity-50"
+          >
+            {busy ? 'Memproses...' : NEXT_ACTION[nextStep] ?? POS_ORDER_STATUS_LABELS[nextStep]}
+          </button>
+        )}
+        {!isPaid && order.payment_status !== 'refunded' && order.status !== 'cancelled' && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => setManaging(order)}
+            data-manage-order={order.id}
+            className="min-h-9 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          >
+            Atur
+          </button>
+        )}
+        {isPaid && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => setMethodOrder(order)}
+            data-change-method={order.id}
+            className="min-h-9 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+          >
+            Ganti metode bayar
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            setReceiptOrderId(order.id);
+            setShowReceiptModal(true);
+          }}
+          title="Cetak kwitansi"
+          aria-label={`Cetak kwitansi ${order.order_number}`}
+          className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-100 text-sm transition hover:bg-gray-200"
+        >
+          🖨️
+        </button>
+        {forward.length > 1 && (
+          <select
+            aria-label={`Ubah status ${order.order_number}`}
+            value=""
+            disabled={busy}
+            onChange={(event) => event.target.value && handleStatusUpdate(order, event.target.value)}
+            className="min-h-9 rounded-lg border border-gray-200 bg-white py-1 pl-2 pr-6 text-xs text-gray-900"
+          >
+            <option value="">Lompat ke...</option>
+            {forward.slice(1).map((status) => (
+              <option key={status} value={status}>{POS_ORDER_STATUS_LABELS[status as PosOrderStatus] ?? status}</option>
+            ))}
+          </select>
+        )}
+        {allowed.includes('cancelled') && !isPaid && canPos('order_cancel') && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => handleStatusUpdate(order, 'cancelled')}
+            data-cancel-order={order.id}
+            className="min-h-9 rounded-lg border border-red-200 px-2.5 py-2 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+          >
+            Batalkan
+          </button>
+        )}
+        {isPaid && canPos('order_refund') && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => handleRefund(order)}
+            data-refund-order={order.id}
+            className="min-h-9 rounded-lg border border-gray-200 px-2.5 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+          >
+            Refund
+          </button>
+        )}
+      </div>
+    );
+  };
+
+  const renderOrderSummary = (order: PosOrderListItem, compact = false) => (
+    <>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-mono text-xs font-semibold text-gray-500">#{order.order_number}</span>
+            {order.order_source === 'public_customer' && (
+              <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700">Self-order</span>
+            )}
+          </div>
+          <p className="mt-1 truncate text-sm font-bold text-gray-900">{order.customer_name || 'Walk-in'}</p>
+        </div>
+        <span className={cn('shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold', getStatusColor(order.status))}>
+          {statusLabel(order)}
+        </span>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+        <span className="inline-flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />{order.table_label || order.service_type || 'Takeaway'}</span>
+        <span className="inline-flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" />{new Date(order.created_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+        <span>{order.items_count} item</span>
+      </div>
+      {!compact && (
+        <div className="mt-3 space-y-2 border-t border-gray-100 pt-3">
+          {order.items.slice(0, 3).map((item) => (
+            <div key={item.id} className="flex items-center justify-between gap-3 text-xs">
+              <span className="min-w-0 truncate text-gray-700">{item.quantity}× {item.product_name}</span>
+              <span className="shrink-0 font-medium text-gray-600">{rupiah(item.line_total)}</span>
+            </div>
+          ))}
+          {order.items.length > 3 && (
+            <p className="text-[11px] text-gray-400">+{order.items.length - 3} item lainnya</p>
+          )}
+        </div>
+      )}
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+        <PaymentBadge method={order.payment_method} status={order.payment_status} />
+        <span className="text-base font-bold text-gray-900">{rupiah(order.final_amount ?? order.total_amount)}</span>
+      </div>
+      {order.cancel_reason && <p className="mt-2 text-xs text-red-600">Alasan batal: {order.cancel_reason}</p>}
+    </>
+  );
+
   return (
     <div className="min-h-screen bg-gray-50 p-2 sm:p-4 lg:p-6">
-      <div className="mx-auto max-w-7xl space-y-4 sm:space-y-6">
-        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-          <div>
+      <div className="w-full space-y-4 sm:space-y-6">
+        <div className="flex flex-col justify-between gap-4 xl:flex-row xl:items-center">
+          <div className="min-w-0">
             <h1 className="text-2xl font-bold text-gray-900">Daftar Pesanan</h1>
             <p className="mt-1 flex items-center gap-1.5 text-gray-600">
               {live ? <Wifi className="h-4 w-4 text-green-600" /> : <WifiOff className="h-4 w-4 text-gray-400" />}
               {live ? 'Live — pesanan baru masuk otomatis' : `Menyegarkan tiap ${POLL_FALLBACK_MS / 1000} detik`}
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:flex-wrap xl:w-auto xl:justify-end">
+            <button
+              type="button"
+              onClick={() => setShowNewOrderModal(true)}
+              className="order-first col-span-2 flex min-h-12 items-center justify-center gap-2 rounded-xl bg-amber-400 px-5 py-3 text-base font-bold text-[#111111] shadow-sm transition hover:bg-amber-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 sm:order-last sm:col-span-1 sm:min-h-11 sm:px-5"
+            >
+              <CirclePlus className="h-5 w-5" />
+              Tambah Pesanan
+            </button>
             <CashDrawerButton />
             <button
               onClick={() => void loadOrders()}
-              className="rounded-lg bg-gray-100 px-3 py-1.5 text-sm text-gray-700 transition-colors hover:bg-gray-200"
+              className="min-h-11 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
             >
               Refresh
             </button>
             <button
               onClick={() => setAutoRefresh(!autoRefresh)}
               className={cn(
-                'rounded-lg px-3 py-1.5 text-sm transition-colors',
-                autoRefresh ? 'bg-amber-100 text-amber-900 hover:bg-amber-200' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                'min-h-11 rounded-lg border px-3 py-2 text-sm font-medium transition-colors',
+                autoRefresh ? 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50' : 'border-gray-200 bg-gray-100 text-gray-700 hover:bg-gray-200'
               )}
             >
               Auto: {autoRefresh ? 'ON' : 'OFF'}
@@ -290,23 +455,16 @@ export default function PosOrders() {
             <button
               onClick={() => setShowBills(!showBills)}
               className={cn(
-                'flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors',
-                showBills ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                'flex min-h-11 items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors',
+                showBills ? 'border-gray-300 bg-gray-100 text-gray-900' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
               )}
             >
               <Receipt className="h-4 w-4" />
               Tagihan Meja{openBills.length > 0 ? ` (${openBills.length})` : ''}
             </button>
             <button
-              onClick={() => setShowNewOrderModal(true)}
-              className="flex items-center gap-1.5 rounded-lg bg-amber-400 px-3 py-1.5 text-sm text-[#111111] transition-colors hover:bg-amber-500"
-            >
-              <ShoppingCart className="h-4 w-4" />
-              Tambah Pesanan
-            </button>
-            <button
               onClick={handleResetOrderList}
-              className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 transition-colors hover:bg-gray-50"
+              className="flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
               title="Bersihkan list order di tampilan frontend"
             >
               <RotateCcw className="h-4 w-4" />
@@ -376,27 +534,49 @@ export default function PosOrders() {
           </div>
         )}
 
-        <div className="flex flex-col gap-4 sm:flex-row">
-          <div className="relative flex-1">
+        <div className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center">
+          <div className="relative min-w-0 flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-gray-400" />
             <input
               type="text"
               placeholder="Cari berdasarkan nomor atau nama..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-10 pr-4 text-gray-900 placeholder-gray-400 focus:border-amber-300 focus:ring-2 focus:ring-amber-300"
+              className="min-h-11 w-full rounded-xl border border-gray-200 bg-gray-50 py-2 pl-10 pr-4 text-gray-900 placeholder-gray-400 focus:border-amber-300 focus:bg-white focus:ring-2 focus:ring-amber-300"
             />
           </div>
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-gray-900 focus:border-amber-300 focus:ring-2 focus:ring-amber-300"
+            onChange={(event) => setStatusFilter(event.target.value)}
+            aria-label="Filter status pesanan"
+            className="min-h-11 rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-700 focus:border-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-200"
           >
             <option value="all">Semua status</option>
             {(Object.keys(POS_ORDER_STATUS_LABELS) as PosOrderStatus[]).map((status) => (
               <option key={status} value={status}>{POS_ORDER_STATUS_LABELS[status]}</option>
             ))}
           </select>
+          <div className="flex min-h-11 items-center gap-1 overflow-x-auto rounded-xl bg-gray-100 p-1" role="group" aria-label="Tampilan pesanan">
+            {([
+              ['grid', 'Kartu', LayoutGrid],
+              ['list', 'Daftar', List],
+              ['split', 'Detail', PanelRight],
+            ] as const).map(([mode, label, Icon]) => (
+              <button
+                key={mode}
+                type="button"
+                aria-pressed={viewMode === mode}
+                onClick={() => setViewMode(mode)}
+                className={cn(
+                  'flex min-h-9 shrink-0 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition',
+                  viewMode === mode ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-900'
+                )}
+              >
+                <Icon className="h-4 w-4" />
+                <span>{label}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
         {error && (
@@ -408,28 +588,105 @@ export default function PosOrders() {
           </div>
         )}
 
-        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        {viewMode === 'grid' ? (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
+            {loading && (
+              <div className="col-span-full rounded-2xl border border-gray-200 bg-white">
+                <HellomLoading mode="inline" label="Memuat pesanan..." />
+              </div>
+            )}
+            {filteredOrders.map((order) => (
+              <article
+                key={order.id}
+                className="flex min-w-0 flex-col rounded-2xl border border-gray-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-amber-300 hover:shadow-md"
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedOrderId(order.id);
+                    setViewMode('split');
+                  }}
+                  className="min-w-0 rounded-xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                  aria-label={`Lihat detail pesanan ${order.order_number}`}
+                >
+                  {renderOrderSummary(order)}
+                </button>
+                <div className="mt-4">{renderOrderActions(order)}</div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className={cn(
+            'grid min-w-0 gap-4',
+            viewMode === 'list' ? 'lg:grid-cols-[220px_minmax(0,1fr)]' : 'xl:grid-cols-[minmax(0,1fr)_340px]'
+          )}>
+            {viewMode === 'list' && (
+              <aside className="h-fit rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                <h2 className="mb-3 text-sm font-bold text-gray-900">Filter Pesanan</h2>
+                <nav className="flex gap-2 overflow-x-auto lg:flex-col lg:overflow-visible" aria-label="Filter status pesanan">
+                  <button
+                    type="button"
+                    onClick={() => setStatusFilter('all')}
+                    aria-pressed={statusFilter === 'all'}
+                    className={cn(
+                      'flex min-h-10 shrink-0 items-center justify-between gap-3 rounded-xl px-3 text-left text-sm font-medium',
+                      statusFilter === 'all' ? 'bg-amber-100 text-amber-950' : 'text-gray-600 hover:bg-gray-50'
+                    )}
+                  >
+                    <span>Semua Pesanan</span>
+                  </button>
+                  {(Object.keys(POS_ORDER_STATUS_LABELS) as PosOrderStatus[]).map((status) => (
+                    <button
+                      key={status}
+                      type="button"
+                      onClick={() => setStatusFilter(status)}
+                      aria-pressed={statusFilter === status}
+                      className={cn(
+                        'flex min-h-10 shrink-0 items-center justify-between gap-3 rounded-xl px-3 text-left text-sm font-medium',
+                        statusFilter === status ? 'bg-amber-100 text-amber-950' : 'text-gray-600 hover:bg-gray-50'
+                      )}
+                    >
+                      <span>{POS_ORDER_STATUS_LABELS[status]}</span>
+                    </button>
+                  ))}
+                </nav>
+              </aside>
+            )}
+            <div className="min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
           <div className="border-b border-gray-100 bg-gray-50 px-4 py-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Daftar Pesanan</span>
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+              {viewMode === 'split' ? 'Pesanan · pilih untuk melihat detail' : 'Daftar Pesanan'}
+            </span>
           </div>
 
           {loading && (
-            <div className="p-8 text-center">
-              <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-b-2 border-amber-400" />
-              <p className="text-gray-600">Memuat pesanan...</p>
-            </div>
+            <HellomLoading mode="inline" label="Memuat pesanan..." />
           )}
 
           <div className="divide-y divide-gray-100">
             {filteredOrders.map((order) => {
-              const allowed = order.allowed_next ?? [];
-              const forward = allowed.filter((s) => s !== 'cancelled');
-              const nextStep = forward[0] as PosOrderStatus | undefined;
-              const isPaid = order.payment_status === 'paid';
-              const busy = busyOrderId === order.id;
-
               return (
-                <div key={order.id} className={cn('px-4 py-3 transition-colors hover:bg-gray-50/60', getRowBackgroundColor(order.status))}>
+                <div
+                  key={order.id}
+                  className={cn(
+                    'px-4 py-3 transition-colors hover:bg-gray-50/60',
+                    getRowBackgroundColor(order.status),
+                    viewMode === 'split' && selectedOrder?.id === order.id && 'bg-amber-50/70 ring-1 ring-inset ring-amber-300'
+                  )}
+                >
+                  {viewMode === 'split' && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedOrderId(order.id)}
+                      aria-pressed={selectedOrder?.id === order.id}
+                      className="mb-2 flex min-h-8 w-full items-center justify-between gap-2 text-left"
+                    >
+                      <span className="text-[11px] font-semibold text-amber-800">
+                        {selectedOrder?.id === order.id ? 'Detail pesanan dipilih' : 'Pilih untuk lihat detail'}
+                      </span>
+                      <ChevronRight className="h-4 w-4 text-gray-400" />
+                    </button>
+                  )}
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-baseline gap-1.5">
@@ -474,100 +731,65 @@ export default function PosOrders() {
                     {order.split_from_order_id && <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[11px] text-gray-500">Pisahan bill</span>}
                   </div>
 
-                  <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-2.5">
-                    {!isPaid && order.payment_status !== 'refunded' && order.status !== 'cancelled' && (
-                      <button
-                        onClick={() => {
-                          setCurrentPaymentOrder(order);
-                          setShowPaymentModal(true);
-                        }}
-                        className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-green-700"
-                      >
-                        💳 Bayar
-                      </button>
-                    )}
-                    {nextStep && (
-                      <button
-                        disabled={busy}
-                        onClick={() => handleStatusUpdate(order, nextStep)}
-                        className="rounded-lg bg-amber-400 px-3 py-1.5 text-xs font-bold text-[#111111] transition hover:bg-amber-500 disabled:opacity-50"
-                      >
-                        {NEXT_ACTION[nextStep] ?? POS_ORDER_STATUS_LABELS[nextStep]}
-                      </button>
-                    )}
-
-                    {!isPaid && order.payment_status !== 'refunded' && order.status !== 'cancelled' && (
-                      <button
-                        disabled={busy}
-                        onClick={() => setManaging(order)}
-                        data-manage-order={order.id}
-                        className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                      >
-                        Atur pesanan
-                      </button>
-                    )}
-                    {isPaid && (
-                      <button
-                        disabled={busy}
-                        onClick={() => setMethodOrder(order)}
-                        data-change-method={order.id}
-                        className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
-                      >
-                        Ganti metode bayar
-                      </button>
-                    )}
-
-                    <div className="ml-auto flex items-center gap-1.5">
-                      <button
-                        onClick={() => {
-                          setReceiptOrderId(order.id);
-                          setShowReceiptModal(true);
-                        }}
-                        title="Cetak kwitansi"
-                        className="flex h-7 w-7 items-center justify-center rounded-lg bg-gray-100 text-sm transition hover:bg-gray-200"
-                      >
-                        🖨️
-                      </button>
-                      {forward.length > 1 && (
-                        <select
-                          value=""
-                          disabled={busy}
-                          onChange={(e) => e.target.value && handleStatusUpdate(order, e.target.value)}
-                          className="rounded-lg border border-gray-200 bg-white py-1 pl-2 pr-6 text-xs text-gray-900"
-                        >
-                          <option value="">Lompat ke…</option>
-                          {forward.slice(1).map((s) => (
-                            <option key={s} value={s}>{POS_ORDER_STATUS_LABELS[s as PosOrderStatus] ?? s}</option>
-                          ))}
-                        </select>
-                      )}
-                      {allowed.includes('cancelled') && !isPaid && canPos('order_cancel') && (
-                        <button
-                          disabled={busy}
-                          onClick={() => handleStatusUpdate(order, 'cancelled')}
-                          data-cancel-order={order.id}
-                          className="rounded-lg border border-red-200 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
-                        >
-                          Batalkan
-                        </button>
-                      )}
-                      {isPaid && canPos('order_refund') && (
-                        <button
-                          disabled={busy}
-                          onClick={() => handleRefund(order)}
-                          data-refund-order={order.id}
-                          className="rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
-                        >
-                          Refund
-                        </button>
-                      )}
-                    </div>
-                  </div>
+                  <div className="mt-3">{renderOrderActions(order)}</div>
                 </div>
               );
             })}
           </div>
         </div>
+            {viewMode === 'split' && selectedOrder && (
+              <aside className="h-fit min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm xl:sticky xl:top-6">
+                <div className="flex items-start justify-between gap-3 border-b border-gray-100 p-4">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Detail Pesanan</p>
+                    <h2 className="mt-1 break-all font-mono text-sm font-bold text-gray-900">#{selectedOrder.order_number}</h2>
+                  </div>
+                  <span className={cn('shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold', getStatusColor(selectedOrder.status))}>
+                    {statusLabel(selectedOrder)}
+                  </span>
+                </div>
+                <div className="space-y-4 p-4">
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="min-w-0">
+                      <p className="text-xs text-gray-400">Pelanggan</p>
+                      <p className="mt-1 flex items-center gap-1.5 truncate font-semibold text-gray-800"><UserRound className="h-4 w-4 shrink-0 text-gray-400" />{selectedOrder.customer_name || 'Walk-in'}</p>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs text-gray-400">Meja / layanan</p>
+                      <p className="mt-1 flex items-center gap-1.5 truncate font-semibold text-gray-800"><MapPin className="h-4 w-4 shrink-0 text-gray-400" />{selectedOrder.table_label || selectedOrder.service_type || 'Takeaway'}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                    <h3 className="text-sm font-bold text-gray-900">Item Pesanan</h3>
+                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">{selectedOrder.items_count}</span>
+                  </div>
+                  <div className="max-h-64 space-y-3 overflow-y-auto">
+                    {selectedOrder.items.map((item) => (
+                      <div key={item.id} className="flex items-start justify-between gap-3 text-sm">
+                        <div className="min-w-0">
+                          <p className="break-words font-medium text-gray-800">{item.product_name}</p>
+                          <p className="text-xs text-gray-400">{item.quantity} × {rupiah(item.unit_price)}</p>
+                          {item.options?.map((option) => <p key={option} className="text-xs text-gray-400">{option}</p>)}
+                        </div>
+                        <span className="shrink-0 font-semibold text-gray-700">{rupiah(item.line_total)}</span>
+                      </div>
+                    ))}
+                    {selectedOrder.items.length === 0 && <p className="text-sm text-gray-500">Rincian item tidak tersedia.</p>}
+                  </div>
+                  <div className="space-y-2 border-t border-gray-100 pt-3 text-sm">
+                    <div className="flex justify-between text-gray-500"><span>Subtotal</span><span>{rupiah(selectedOrder.subtotal_amount ?? selectedOrder.total_amount)}</span></div>
+                    {(selectedOrder.discount_amount ?? 0) > 0 && <div className="flex justify-between text-gray-500"><span>Diskon</span><span>-{rupiah(selectedOrder.discount_amount)}</span></div>}
+                    {(selectedOrder.service_amount ?? 0) > 0 && <div className="flex justify-between text-gray-500"><span>Service</span><span>{rupiah(selectedOrder.service_amount ?? 0)}</span></div>}
+                    {(selectedOrder.tax_amount ?? 0) > 0 && <div className="flex justify-between text-gray-500"><span>Pajak</span><span>{rupiah(selectedOrder.tax_amount ?? 0)}</span></div>}
+                    <div className="flex justify-between border-t border-gray-100 pt-2 text-base font-bold text-gray-900"><span>Total</span><span>{rupiah(selectedOrder.final_amount ?? selectedOrder.total_amount)}</span></div>
+                  </div>
+                  <PaymentBadge method={selectedOrder.payment_method} status={selectedOrder.payment_status} />
+                  {renderOrderActions(selectedOrder)}
+                </div>
+              </aside>
+            )}
+          </div>
+        )}
 
         {!loading && filteredOrders.length === 0 && (
           <div className="py-12 text-center">

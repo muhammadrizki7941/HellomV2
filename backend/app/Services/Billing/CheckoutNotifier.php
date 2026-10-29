@@ -63,7 +63,12 @@ class CheckoutNotifier
         }
 
         $manualMethods = $this->resolveSelectedManualMethods((string) data_get($intent->metadata, 'manual_payment_method', ''));
-        $details = $this->buildCheckoutEmailDetails($intent, $invoice, $paymentUrl);
+        $gatewayInstructions = data_get($intent->metadata, 'ipaymu.payment_instructions');
+        $gatewayInstructions = is_array($gatewayInstructions) ? $gatewayInstructions : [];
+        $details = $this->buildCheckoutEmailDetails($intent, $invoice);
+        $statusUrl = \App\Support\FrontendUrl::to(
+            '/dashboard/payments?checkout=' . rawurlencode((string) $intent->app?->slug)
+        );
 
         foreach ($this->ownerBillingRecipients($subscription) as $email) {
             $this->platformMailService->queue($email, new HellomCheckoutStatusMail(
@@ -72,6 +77,10 @@ class CheckoutNotifier
                     'headline' => 'Ada checkout aplikasi baru di Hellom',
                     'intro' => 'Seorang pembeli baru saja memulai pembayaran aplikasi. Silakan cek detail di dashboard untuk memantau atau mengonfirmasi pembayaran.',
                     'details' => $details,
+                    'cta_url' => $statusUrl,
+                    'cta_label' => 'Cek status pembayaran',
+                    'status_url' => $statusUrl,
+                    'status_label' => 'Cek status pembayaran',
                     'closing' => 'Anda bisa membuka akses aplikasi secara manual setelah pembayaran terverifikasi.',
                 ]
             ));
@@ -83,11 +92,18 @@ class CheckoutNotifier
                 payload: [
                     'headline' => 'Checkout aplikasi Anda sudah dibuat',
                     'intro' => $paymentUrl
-                        ? 'Silakan lanjutkan pembayaran menggunakan link gateway yang sudah disiapkan.'
-                        : 'Silakan lakukan pembayaran menggunakan metode manual yang dipilih, lalu tunggu konfirmasi owner.',
+                        ? 'Silakan lanjutkan pembayaran melalui gateway menggunakan tombol di bawah. Pembayaran harus diselesaikan sebelum batas waktu.'
+                        : 'Ikuti instruksi metode pembayaran di bawah ini. Pembayaran harus diselesaikan sebelum batas waktu, lalu statusnya bisa dipantau melalui dashboard.',
                     'details' => $details,
                     'manual_methods' => $manualMethods,
-                    'closing' => $paymentUrl ? 'Link pembayaran tersedia di detail di atas.' : 'Setelah owner memverifikasi pembayaran, akses aplikasi akan dibuka.',
+                    'gateway_instructions' => $gatewayInstructions,
+                    'cta_url' => $paymentUrl ?: $statusUrl,
+                    'cta_label' => $paymentUrl ? 'Bayar sekarang' : 'Cek status pembayaran',
+                    'status_url' => $statusUrl,
+                    'status_label' => 'Cek status pembayaran',
+                    'closing' => $paymentUrl
+                        ? 'Gunakan tombol “Bayar sekarang” untuk membuka halaman pembayaran. Setelah membayar, tombol “Cek status pembayaran” akan membawa Anda ke dashboard.'
+                        : 'Status pembayaran dan konfirmasi dapat dipantau dari dashboard. Setelah pembayaran terverifikasi, akses aplikasi akan dibuka.',
                 ]
             ));
         }
@@ -95,12 +111,16 @@ class CheckoutNotifier
 
     public function sendCheckoutDecisionNotifications(CheckoutIntent $intent, bool $approved): void
     {
+        if ($approved) {
+            $this->sendPaymentReceipt($intent);
+            return;
+        }
         $subscription = $intent->subscription?->loadMissing(['organization.users', 'app', 'plan']);
         if (!$subscription instanceof Subscription || !$subscription->organization) {
             return;
         }
 
-        $details = $this->buildCheckoutEmailDetails($intent, null, null);
+        $details = $this->buildCheckoutEmailDetails($intent, null);
         $subject = $approved ? 'Pembayaran aplikasi berhasil dikonfirmasi' : 'Pembayaran aplikasi ditolak';
         $headline = $approved ? 'Pembayaran aplikasi sudah dikonfirmasi' : 'Checkout aplikasi belum bisa diproses';
         $intro = $approved
@@ -130,6 +150,35 @@ class CheckoutNotifier
         }
     }
 
+    /** One receipt per distinct buyer/organization recipient, also used by reconciliation. */
+    public function sendPaymentReceipt(CheckoutIntent $intent): void
+    {
+        $intent->loadMissing(['subscription.organization.users', 'app', 'plan', 'user']);
+        $subscription = $intent->subscription;
+        $recipients = $subscription?->organization ? $this->ownerBillingRecipients($subscription) : [];
+        $recipients[] = (string) $intent->user?->email;
+        $recipients = array_unique(array_filter(array_map(fn ($email) => strtolower(trim($email)), $recipients)));
+        foreach ($recipients as $email) {
+            $this->platformMailService->queue($email, new HellomCheckoutStatusMail(
+                'Pembayaran berhasil — ' . ($intent->app?->name ?? 'Aplikasi Hellom'),
+                [
+                    'headline' => 'Terima kasih, aplikasi Anda sudah aktif',
+                    'intro' => 'Pembayaran telah diterima. Silakan buka dashboard untuk mulai menggunakan paket yang Anda pilih.',
+                    'details' => [
+                        'Aplikasi' => (string) ($intent->app?->name ?? 'Aplikasi'),
+                        'Paket' => (string) ($intent->plan?->name ?? '-'),
+                        'Nomor transaksi' => (string) $intent->intent_token,
+                        'Total pembayaran' => 'Rp ' . number_format((int) $intent->amount, 0, ',', '.'),
+                        'Masa akses' => $subscription?->ends_at?->timezone('Asia/Jakarta')->format('d M Y') ?? 'Tanpa batas waktu',
+                    ],
+                    'cta_url' => \App\Support\FrontendUrl::to('/dashboard'),
+                    'cta_label' => 'Buka aplikasi saya',
+                    'closing' => 'Mulai dengan melengkapi profil usaha dan pengaturan aplikasi. Untuk POS Kasir, tambahkan produk dan periksa harga sebelum mencatat transaksi pertama. Simpan email ini sebagai bukti pembayaran. Butuh bantuan? Balas email ini.',
+                ],
+            ));
+        }
+    }
+
     /**
      * @return array<int,string>
      */
@@ -148,19 +197,37 @@ class CheckoutNotifier
     /**
      * @return array<string,string>
      */
-    private function buildCheckoutEmailDetails(CheckoutIntent $intent, ?Invoice $invoice, ?string $paymentUrl): array
+    private function buildCheckoutEmailDetails(CheckoutIntent $intent, ?Invoice $invoice): array
     {
-        return [
+        $statusLabel = match ((string) $intent->status) {
+            'confirmed', 'paid' => 'Pembayaran berhasil',
+            'gateway_pending', 'pending_payment' => 'Menunggu pembayaran',
+            'manual_review' => 'Menunggu konfirmasi pembayaran',
+            'expired' => 'Kedaluwarsa',
+            'cancelled' => 'Dibatalkan',
+            default => (string) $intent->status,
+        };
+        $details = [
             'Organisasi' => (string) ($intent->organization?->name ?? $intent->subscription?->organization?->name ?? '-'),
             'Aplikasi' => (string) ($intent->app?->name ?? '-'),
             'Plan' => (string) ($intent->plan?->name ?? '-'),
             'Billing cycle' => (string) data_get($intent->metadata, 'billing_cycle', $intent->subscription?->billing_cycle ?? '-'),
             'Nominal' => 'Rp ' . number_format((int) $intent->amount, 0, ',', '.'),
-            'Status checkout' => (string) $intent->status,
+            'Status checkout' => $statusLabel,
             'Invoice' => (string) ($invoice?->invoice_number ?? ''),
-            'Metode manual' => (string) data_get($intent->metadata, 'manual_payment_method', ''),
-            'Payment URL' => (string) ($paymentUrl ?? ''),
+            'Referensi pembayaran' => (string) $intent->intent_token,
         ];
+
+        $method = data_get($intent->metadata, 'ipaymu.payment_instructions.channel_label')
+            ?: data_get($intent->metadata, 'manual_payment_method');
+        if ($method) {
+            $details['Metode pembayaran'] = (string) $method;
+        }
+        if ($intent->expires_at) {
+            $details['Batas pembayaran'] = $intent->expires_at->timezone('Asia/Jakarta')->format('d M Y, H:i') . ' WIB';
+        }
+
+        return $details;
     }
 
     /**

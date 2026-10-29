@@ -1,7 +1,9 @@
 import { lazy, Suspense } from 'react';
-import { Navigate, Routes, Route, useParams } from 'react-router-dom';
+import { Navigate, Routes, Route, useParams, useLocation } from 'react-router-dom';
 import useBrand from '@/hooks/useBrand';
 import PlatformTracking from '@/components/PlatformTracking';
+import HellomLoading from '@/components/HellomLoading';
+import { RouteJourney, ConnectionNotice, PageErrorBoundary, ServiceNotice } from '@/components/MascotFeedback';
 const MarketingAnalytics = lazy(() => import('@/pages/admin/MarketingAnalytics'));
 import {
   AplikasiDetailPage,
@@ -93,17 +95,19 @@ function InsightRedirect() {
 }
 
 function RouteFallback() {
-  return (
-    <div className="flex min-h-screen items-center justify-center" role="status" aria-label="Memuat">
-      <div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-900" />
-    </div>
-  );
+  const { pathname } = useLocation();
+  return <HellomLoading label={pathname.startsWith('/pos') ? 'Memuat POS...' : 'Menyiapkan halaman...'} />;
 }
 
 export default function App() {
   useBrand();
 
   return (
+    <>
+    <RouteJourney />
+    <ConnectionNotice />
+    <ServiceNotice />
+    <PageErrorBoundary>
     <Suspense fallback={<RouteFallback />}>
       <PlatformTracking />
       <Routes>
@@ -231,5 +235,7 @@ export default function App() {
         </Route>
       </Routes>
     </Suspense>
+    </PageErrorBoundary>
+    </>
   );
 }

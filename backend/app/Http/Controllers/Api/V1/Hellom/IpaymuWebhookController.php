@@ -8,10 +8,8 @@ use App\Models\OrganizationWalletTransaction;
 use App\Models\PaymentEvent;
 use App\Models\ProductPurchase;
 use App\Models\Subscription;
-use App\Mail\HellomCheckoutStatusMail;
 use App\Services\Hellom\IpaymuSettingsService;
 use App\Services\SellerFinance\LandingPaymentService;
-use App\Services\Hellom\PlatformMailService;
 use App\Services\Hellom\SubscriptionCheckoutActivationService;
 use App\Services\Payments\IpaymuPaymentVerifier;
 use App\Services\Payments\PaymentStatus;
@@ -164,10 +162,6 @@ class IpaymuWebhookController extends BaseApiController
             'transaction_id' => (string) ($check['status']->transactionId ?: $transactionId),
             'invoice_id' => (int) ($metadata['invoice_id'] ?? 0),
         ], 'iPaymu');
-
-        if ($newlyConfirmed) {
-            $this->sendCheckoutEmails($intent->loadMissing(['subscription.organization.users', 'app', 'plan', 'user']));
-        }
 
         return $newlyConfirmed ? 'processed' : 'duplicate';
     }
@@ -361,52 +355,7 @@ class IpaymuWebhookController extends BaseApiController
             ->first();
     }
 
-    private function sendCheckoutEmails(CheckoutIntent $intent): void
-    {
-        $subscription = $intent->subscription?->loadMissing(['organization.users']);
-        if (!$subscription instanceof Subscription || !$subscription->organization) {
-            return;
-        }
 
-        $details = [
-            'Organisasi' => (string) $subscription->organization->name,
-            'Aplikasi' => (string) ($intent->app?->name ?? '-'),
-            'Plan' => (string) ($intent->plan?->name ?? '-'),
-            'Nominal' => 'Rp ' . number_format((int) $intent->amount, 0, ',', '.'),
-            'Status' => 'paid',
-            'Provider' => 'iPaymu',
-        ];
-
-        $mailer = app(PlatformMailService::class);
-        $recipients = $subscription->organization->users
-            ->filter(fn ($member) => in_array((string) ($member->pivot->role ?? ''), ['owner', 'admin', 'super_admin'], true))
-            ->pluck('email')
-            ->filter()
-            ->unique()
-            ->values();
-
-        foreach ($recipients as $email) {
-            $mailer->queue((string) $email, new HellomCheckoutStatusMail(
-                subjectLine: 'Pembayaran aplikasi berhasil via iPaymu',
-                payload: [
-                    'headline' => 'Pembayaran gateway berhasil diterima',
-                    'intro' => 'Checkout aplikasi telah dibayar melalui iPaymu dan akses aplikasi sudah diaktifkan.',
-                    'details' => $details,
-                ]
-            ));
-        }
-
-        if ($intent->user?->email) {
-            $mailer->queue((string) $intent->user->email, new HellomCheckoutStatusMail(
-                subjectLine: 'Pembayaran aplikasi Anda berhasil',
-                payload: [
-                    'headline' => 'Pembayaran berhasil',
-                    'intro' => 'Pembayaran aplikasi Anda via iPaymu berhasil diproses.',
-                    'details' => $details,
-                ]
-            ));
-        }
-    }
 
     private function resolveSubscriptionIntent(array $metadata): ?CheckoutIntent
     {

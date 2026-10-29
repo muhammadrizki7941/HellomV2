@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { CheckCircle2, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
+import HellomMascot from '@/components/HellomMascot';
 import { resetPassword } from '@/lib/hellomApi';
-import { AuthAlert, AuthShell, PasswordField, authPrimaryButton } from '@/components/auth/AuthShell';
+import { LightAuthAlert as AuthAlert, LightAuthLayout as AuthShell, LightPasswordField as PasswordField, lightAuthButton as authPrimaryButton } from '@/components/auth/LightAuthLayout';
 
 /**
  * /reset-password?token=…&email=… (link from the reset email): choose a new password.
@@ -43,21 +44,21 @@ export default function ResetPasswordPage() {
 
   if (!token || !email) {
     return (
-      <AuthShell>
+      <AuthShell variant="recovery">
         <h1 className="text-2xl font-bold">Link tidak lengkap</h1>
-        <p className="mt-2 text-sm text-white/60">Buka lagi tombol di email, atau minta link baru.</p>
+        <p className="mt-2 text-sm text-zinc-600">Buka lagi tombol di email, atau minta link baru.</p>
         <Link to="/forgot-password" className={`${authPrimaryButton} mt-6`}>Minta link baru</Link>
       </AuthShell>
     );
   }
 
   return (
-    <AuthShell>
+    <AuthShell variant="recovery">
       {next ? (
         <div>
-          <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-300"><CheckCircle2 className="h-6 w-6" /></span>
+          <HellomMascot mood="success" className="!w-24" />
           <h1 className="mt-5 text-2xl font-bold">{setup ? 'Kata sandi kamu tersimpan' : 'Kata sandi baru tersimpan'}</h1>
-          <p className="mt-2 text-sm text-white/60">
+          <p className="mt-2 text-sm text-zinc-600">
             {setup ? 'Kata sandi bawaan dari email sudah tidak berlaku. ' : ''}Demi keamanan, semua perangkat yang tadinya masuk sudah dikeluarkan. Masuk lagi dengan kata sandi baru.
           </p>
           <Link to={next} className={`${authPrimaryButton} mt-6`}>{next === '/login/kasir' ? 'Masuk sebagai kasir' : 'Masuk'}</Link>
@@ -65,8 +66,8 @@ export default function ResetPasswordPage() {
       ) : (
         <>
           <h1 className="text-2xl font-bold">{setup ? 'Buat kata sandi kamu' : 'Buat kata sandi baru'}</h1>
-          <p className="mt-2 text-sm text-white/60">
-            Untuk akun <strong className="text-white">{email}</strong>.
+          <p className="mt-2 text-sm text-zinc-600">
+            Untuk akun <strong className="text-zinc-900">{email}</strong>.
             {setup && ' Setelah disimpan, kata sandi bawaan dari email tidak berlaku lagi.'}
           </p>
           <form className="mt-6 space-y-4" onSubmit={submit}>
@@ -75,10 +76,10 @@ export default function ResetPasswordPage() {
                 value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Minimal 8 karakter" />
               <div className="mt-2 flex gap-1" aria-hidden="true">
                 {[1, 2, 3].map((i) => (
-                  <span key={i} className={`h-1 flex-1 rounded-full transition-colors ${strength >= i ? (strength === 1 ? 'bg-rose-400' : strength === 2 ? 'bg-[#F6B400]' : 'bg-emerald-400') : 'bg-white/10'}`} />
+                  <span key={i} className={`h-1 flex-1 rounded-full transition-colors ${strength >= i ? (strength === 1 ? 'bg-rose-400' : strength === 2 ? 'bg-[#F6B400]' : 'bg-emerald-400') : 'bg-zinc-100'}`} />
                 ))}
               </div>
-              <p className="mt-1.5 text-xs text-white/45">{strength <= 1 ? 'Minimal 8 karakter.' : strength === 2 ? 'Cukup. Tambah angka & huruf agar lebih kuat.' : 'Kuat.'}</p>
+              <p className="mt-1.5 text-xs text-zinc-500">{strength <= 1 ? 'Minimal 8 karakter.' : strength === 2 ? 'Cukup. Tambah angka & huruf agar lebih kuat.' : 'Kuat.'}</p>
             </div>
             <PasswordField id="confirm-password" label="Ulangi kata sandi" autoComplete="new-password" required value={confirm}
               onChange={(e) => setConfirm(e.target.value)} error={mismatch ? 'Belum sama dengan kata sandi di atas.' : null} />

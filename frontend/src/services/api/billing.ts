@@ -88,11 +88,21 @@ export function checkoutStart(payload: Record<string, unknown>) {
   });
 }
 
+export function cancelSubscriptionCheckout(intentToken: string) {
+  return apiRequest<{ intent_token: string; status: 'cancelled' | 'expired' }>(
+    '/billing/checkout-cancel',
+    { method: 'POST', body: { intent_token: intentToken } }
+  );
+}
+
 export function getSubscriptionCheckoutHistory() {
   return apiRequest<{ checkout_intents: Array<{
     intent_token: string;
     app_slug: string;
     plan_slug: string;
+    status: string;
+    expires_at?: string | null;
+    payment_url?: string | null;
     payment_instructions?: import('./landingStore').PaymentInstructions & { amount: number; expires_at: string | null };
   }> }>('/billing/history');
 }

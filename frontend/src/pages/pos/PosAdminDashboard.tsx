@@ -37,8 +37,8 @@ type DashboardSummary = {
   total_orders: number;
   avg_order_value: number;
   total_items_sold: number;
-  revenue_change: number;
-  orders_change: number;
+  revenue_change: number | null;
+  orders_change: number | null;
 };
 
 type DailyPoint = {
@@ -121,7 +121,7 @@ const formatDate = (value: string) =>
   new Intl.DateTimeFormat('id-ID', {
     day: 'numeric',
     month: 'short',
-  }).format(new Date(value));
+  }).format(new Date(`${value.slice(0, 10)}T12:00:00`));
 
 const formatTime = (value: string) =>
   new Intl.DateTimeFormat('id-ID', {
@@ -134,11 +134,13 @@ const startOfMonth = () => {
   return new Date(date.getFullYear(), date.getMonth(), 1);
 };
 
-const toInputDate = (value: Date) => value.toISOString().split('T')[0];
+const toInputDate = (value: Date) =>
+  `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
 
 const today = toInputDate(new Date());
 const monthStart = toInputDate(startOfMonth());
 const last7DaysStart = toInputDate(new Date(Date.now() - 6 * 24 * 60 * 60 * 1000));
+const reportTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Jakarta';
 
 function statusLabel(status: string) {
   switch (status) {
@@ -199,23 +201,25 @@ export default function PosAdminDashboard() {
         todayReport,
         monthReport,
         trendReport,
+        todayDailyReport,
         topProductsReport,
         ordersResponse,
         productsResponse,
         tablesResponse,
       ] = await Promise.all([
-        getPosReportSummary({ start_date: today, end_date: today, scope }),
-        getPosReportSummary({ start_date: monthStart, end_date: today, scope }),
-        getPosReportDaily({ start_date: last7DaysStart, end_date: today, scope }),
-        getPosReportProducts({ start_date: monthStart, end_date: today, limit: 5, scope }),
+        getPosReportSummary({ start_date: today, end_date: today, timezone: reportTimezone, scope }),
+        getPosReportSummary({ start_date: monthStart, end_date: today, timezone: reportTimezone, scope }),
+        getPosReportDaily({ start_date: last7DaysStart, end_date: today, timezone: reportTimezone, scope }),
+        getPosReportDaily({ start_date: today, end_date: today, timezone: reportTimezone, scope }),
+        getPosReportProducts({ start_date: monthStart, end_date: today, timezone: reportTimezone, limit: 5, scope }),
         getPosOrders(),
         getPosProducts(),
         getPosTables(),
       ]);
 
-      setIsOwner(Boolean((monthReport as any).is_owner));
+      setIsOwner(Boolean(monthReport.is_owner));
       setOutletBreakdown(
-        Array.isArray((monthReport as any).outlet_breakdown) ? (monthReport as any).outlet_breakdown : []
+        Array.isArray(monthReport.outlet_breakdown) ? monthReport.outlet_breakdown : []
       );
 
       setDashboard({
@@ -224,7 +228,7 @@ export default function PosAdminDashboard() {
         trend: trendReport.daily,
         topProducts: topProductsReport.top_products,
         paymentBreakdown: todayReport.payment_breakdown,
-        peakHours: todayReport.peak_hours,
+        peakHours: todayDailyReport.peak_hours,
         orders: ordersResponse.orders,
         productsCount: productsResponse.products.length,
         activeProductsCount: productsResponse.products.filter((product) => product.is_available).length,
@@ -346,8 +350,9 @@ export default function PosAdminDashboard() {
                 <p className="text-xs uppercase tracking-[0.18em] text-zinc-400">Pendapatan Hari Ini</p>
                 <p className="mt-3 text-2xl font-semibold">{formatCurrency(dashboard.todaySummary.total_revenue)}</p>
                 <p className="mt-2 text-xs text-amber-200">
-                  {dashboard.todaySummary.revenue_change >= 0 ? '+' : ''}
-                  {dashboard.todaySummary.revenue_change}% dibanding periode sebelumnya
+                  {dashboard.todaySummary.revenue_change === null
+                    ? 'Belum ada data periode sebelumnya'
+                    : `${dashboard.todaySummary.revenue_change >= 0 ? '+' : ''}${dashboard.todaySummary.revenue_change}% dibanding periode sebelumnya`}
                 </p>
               </div>
 

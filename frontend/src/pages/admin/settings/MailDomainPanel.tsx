@@ -35,7 +35,7 @@ export default function MailDomainPanel() {
           </div>
           <div>
             <h3 className="font-bold text-zinc-900">Cek domain pengirim (anti-spam)</h3>
-            <p className="text-sm text-zinc-500">Gmail & Outlook hanya percaya email dengan SPF, DKIM, dan DMARC yang benar.</p>
+            <p className="text-sm text-zinc-500">Periksa kecocokan pengirim dan autentikasi domain. Hasil ini bukan jaminan masuk inbox.</p>
           </div>
         </div>
         <button

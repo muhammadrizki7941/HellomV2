@@ -28,6 +28,10 @@ class PlatformMailService
         $port = (int) SystemSetting::get('hellom_mail_port', 587);
         $username = trim((string) SystemSetting::get('hellom_mail_username', ''));
         $host = $this->normalizeHost((string) SystemSetting::get('hellom_mail_host', ''), $username);
+        $password = $this->getDecryptedPassword();
+        if ($host === 'smtp.gmail.com') {
+            $password = preg_replace('/\s+/', '', $password);
+        }
         $fromAddress = (string) SystemSetting::get('hellom_mail_from_address', $brand->support_email ?: 'hello@example.com');
         $fromName = (string) SystemSetting::get('hellom_mail_from_name', $brand->app_name ?: $brand->business_name ?: 'Hellom');
 
@@ -36,8 +40,8 @@ class PlatformMailService
             'host' => $host,
             'port' => $port > 0 ? $port : 587,
             'username' => $username,
-            'password' => $this->getDecryptedPassword(),
-            'password_masked' => $this->maskedSecret($this->getDecryptedPassword()),
+            'password' => $password,
+            'password_masked' => $this->maskedSecret($password),
             'encryption' => (string) SystemSetting::get('hellom_mail_encryption', 'tls'),
             'from_address' => $fromAddress,
             'from_name' => $fromName,
@@ -88,6 +92,9 @@ class PlatformMailService
         }
 
         $password = trim((string) ($settings['password'] ?? ''));
+        if (($settings['host'] ?? '') === 'smtp.gmail.com') {
+            $password = preg_replace('/\s+/', '', $password);
+        }
         if ($password !== '') {
             SystemSetting::set('hellom_mail_password_encrypted', Crypt::encryptString($password));
         }
@@ -182,6 +189,10 @@ class PlatformMailService
 
         try {
             $mailer = $this->configureMailer();
+            $transport = (string) config("mail.mailers.{$mailer}.transport", $mailer);
+            if ($transport === 'log' || ($transport === 'array' && !app()->environment('testing'))) {
+                throw new \RuntimeException('Email belum dikirim: aktifkan SMTP di Pengaturan Email. Mailer log/array hanya menyimpan simulasi.');
+            }
             $sent = Mail::mailer($mailer)->to($recipients)->send($mailable);
             $meta['message_id'] = $sent?->getMessageId();
             $this->log($recipients, $mailable, $category, EmailLog::STATUS_SENT, $meta);
@@ -352,6 +363,9 @@ class PlatformMailService
         config([
             'mail.default' => 'smtp',
             'mail.mailers.smtp.transport' => 'smtp',
+            'mail.mailers.smtp.url' => null,
+            'mail.mailers.smtp.scheme' => $settings['encryption'] === 'ssl' ? 'smtps' : 'smtp',
+            'mail.mailers.smtp.timeout' => 20,
             'mail.mailers.smtp.host' => $settings['host'],
             'mail.mailers.smtp.port' => $settings['port'],
             'mail.mailers.smtp.encryption' => $settings['encryption'] !== '' ? $settings['encryption'] : null,

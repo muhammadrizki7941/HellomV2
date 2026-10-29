@@ -3,6 +3,7 @@
 @php
     $details = $payload['details'] ?? [];
     $manualMethods = $payload['manual_methods'] ?? [];
+    $gatewayInstructions = $payload['gateway_instructions'] ?? [];
 @endphp
 
 @section('preheader'){{ \Illuminate\Support\Str::limit((string) ($payload['intro'] ?? $payload['headline'] ?? ''), 140) }}@endsection
@@ -36,8 +37,34 @@
         @endforeach
     @endif
 
+    @if (!empty($gatewayInstructions))
+        <p style="margin:0 0 10px;font-size:15px;font-weight:700;color:#18181b;">Instruksi pembayaran</p>
+        <div style="margin:0 0 16px;padding:14px;border:1px solid #e4e4e7;border-radius:12px;font-size:14px;color:#18181b;">
+            @if (!empty($gatewayInstructions['channel_label']))
+                <div style="font-weight:700;">{{ $gatewayInstructions['channel_label'] }}</div>
+            @endif
+            @if (!empty($gatewayInstructions['va_number']))
+                <div style="margin-top:8px;">Nomor pembayaran: <strong>{{ $gatewayInstructions['va_number'] }}</strong></div>
+            @endif
+            @if (!empty($gatewayInstructions['qr_image_url']))
+                <div style="margin-top:10px;">
+                    <a href="{{ $gatewayInstructions['qr_image_url'] }}" style="color:#3f3f46;">Buka gambar QR pembayaran</a>
+                </div>
+                <img src="{{ $gatewayInstructions['qr_image_url'] }}" alt="QR pembayaran" width="220" style="display:block;width:220px;max-width:100%;height:auto;margin-top:10px;border:1px solid #e4e4e7;border-radius:8px;">
+            @elseif (!empty($gatewayInstructions['qr_string']))
+                <div style="margin-top:8px;color:#52525b;">Kode QR tersedia di dashboard pembayaran. Gunakan tombol di bawah untuk melihat status dan instruksi lengkap.</div>
+            @endif
+            @if (!empty($gatewayInstructions['expires_at']))
+                <div style="margin-top:10px;color:#52525b;">Berlaku sampai {{ \Illuminate\Support\Carbon::parse($gatewayInstructions['expires_at'])->timezone('Asia/Jakarta')->format('d M Y, H:i') }} WIB.</div>
+            @endif
+        </div>
+    @endif
+
     @if (!empty($payload['cta_url']))
         @include('emails.partials.button', ['url' => $payload['cta_url'], 'label' => $payload['cta_label'] ?? 'Buka'])
+    @endif
+    @if (!empty($payload['status_url']) && $payload['status_url'] !== ($payload['cta_url'] ?? null))
+        @include('emails.partials.button', ['url' => $payload['status_url'], 'label' => $payload['status_label'] ?? 'Cek status pembayaran'])
     @endif
 
     @if (!empty($payload['closing']))

@@ -134,6 +134,9 @@ export class ApiError extends Error {
 }
 
 function toApiError(response: Response, payload: ApiEnvelope<unknown> | null): ApiError {
+  if (response.status === 503 && typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('hellom-service-unavailable'));
+  }
   const errors = (payload as { errors?: unknown } | null)?.errors;
   const fieldErrors = errors && typeof errors === 'object' ? (errors as Record<string, string[]>) : {};
   // Laravel's 422 message is "first error (and N more errors)": show the first error only.

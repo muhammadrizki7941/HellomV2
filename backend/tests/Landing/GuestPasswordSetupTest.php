@@ -41,8 +41,8 @@ class GuestPasswordSetupTest extends PosTestCase
         $product = DigitalProduct::query()->create(['slug' => 'ebook-' . Str::lower(Str::random(6)), 'name' => 'Ebook Resep', 'category' => 'ebook', 'type' => 'paid',
             'price' => 50000, 'currency' => 'IDR', 'is_published' => true]);
         $purchase = ProductPurchase::query()->create(['user_id' => $user->id, 'product_id' => $product->id, 'transaction_code' => 'PUR-' . Str::upper(Str::random(8)),
-            'amount_paid' => 50000, 'payment_method' => 'qris', 'payment_status' => 'paid', 'payment_gateway' => 'ipaymu', 'paid_at' => now()]);
-        $purchase->forceFill(['guest_token_hash' => hash('sha256', Str::random(20))])->save();
+            'amount_paid' => 50000, 'payment_method' => 'qris', 'payment_status' => 'pending', 'payment_gateway' => 'ipaymu', 'paid_at' => now()]);
+        $purchase->forceFill(['guest_token_hash' => hash('sha256', Str::random(20)), 'payment_status' => 'paid'])->save();
 
         return [$user, $purchase];
     }

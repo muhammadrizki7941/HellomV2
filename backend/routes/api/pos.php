@@ -120,6 +120,9 @@ Route::middleware(['canUseApp:pos', 'App\Http\Middleware\Api\InjectPosContext'])
         Route::get('/summary', [PosReportController::class, 'summary'])->middleware('posPermission:reports');
         Route::get('/products', [PosReportController::class, 'products'])->middleware('posPermission:reports');
         Route::get('/daily', [PosReportController::class, 'daily'])->middleware('posPermission:reports');
+        Route::get('/shifts', [PosReportController::class, 'shifts'])->middleware('posPermission:reports');
+        Route::get('/transactions', [PosReportController::class, 'transactions'])->middleware('posPermission:reports');
+        Route::get('/margin', [PosReportController::class, 'margin'])->middleware('posPermission:reports');
         Route::get('/export', [PosReportController::class, 'export'])->middleware('posPermission:reports');
     });
 

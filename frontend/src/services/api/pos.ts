@@ -123,7 +123,13 @@ export type PosOrderListItem = {
   items: Array<{ id: number; product_name: string; quantity: number; unit_price: number; line_total: number; options?: string[] }>;
 };
 
-export type PosReportPeriod = { start: string; end: string; days?: number };
+export type PosReportPeriod = {
+  start: string;
+  end: string;
+  days?: number;
+  timezone?: string;
+  date_basis?: 'paid_at' | 'created_at';
+};
 
 export type PosReportSummary = {
   scope: 'all_outlets' | 'single_outlet';
@@ -131,20 +137,33 @@ export type PosReportSummary = {
   period: PosReportPeriod;
   summary: {
     total_revenue: number;
+    net_collected: number;
+    gross_sales: number;
+    discount_total: number;
+    net_sales: number;
+    service_total: number;
+    tax_total: number;
+    rounding_total: number;
+    refunded_total: number;
     total_orders: number;
+    settled_orders: number;
+    refunded_orders: number;
+    unpaid_orders: number;
+    cancelled_orders: number;
     avg_order_value: number;
     total_items_sold: number;
-    revenue_change: number;
-    orders_change: number;
+    revenue_change: number | null;
+    orders_change: number | null;
   };
   payment_breakdown: Array<{ payment_method: string; count: number; total: number }>;
-  service_breakdown: Array<Record<string, unknown>>;
-  peak_hours: Array<{ hour: number; count: number; total: number }>;
-  outlet_breakdown: Array<Record<string, unknown>>;
+  service_breakdown: Array<{ service_type: string | null; count: number; total: number }>;
+  outlet_breakdown: Array<{ outlet_id: number; name: string; is_primary: boolean; total_orders: number; total_revenue: number }>;
+  generated_at: string;
 };
 
 export type PosReportDaily = {
   daily: Array<{ date: string; total_orders: number; total_revenue: number; avg_order: number }>;
+  peak_hours: Array<{ hour: number; count: number; total: number }>;
 };
 
 export type PosReportProducts = {
@@ -158,6 +177,79 @@ export type PosReportProducts = {
   }>;
   top_categories: Array<{ category_name: string; total_qty: number; total_revenue: number }>;
   period: PosReportPeriod;
+};
+
+export type PosReportShift = {
+  summary: {
+    closed_shifts: number;
+    open_shifts: number;
+    opening_cash: number;
+    cash_sales: number;
+    expected_cash: number;
+    closing_cash: number;
+    difference_cash: number;
+    transactions: number;
+  };
+  shifts: Array<{
+    id: number;
+    staff_name: string;
+    outlet_name: string | null;
+    shift_title: string | null;
+    status: 'open' | 'closed';
+    opening_cash: number;
+    cash_sales: number;
+    expected_cash: number | null;
+    closing_cash: number | null;
+    difference_cash: number | null;
+    transactions: number;
+    started_at: string | null;
+    closed_at: string | null;
+    notes: string | null;
+  }>;
+  pagination: { current_page: number; last_page: number; per_page: number; total: number };
+};
+
+export type PosReportTransactions = {
+  transactions: Array<{
+    id: number;
+    order_number: string;
+    customer_name: string;
+    payment_status: string;
+    payment_method: string;
+    service_type: string;
+    created_at: string | null;
+    paid_at: string | null;
+    report_at: string | null;
+    subtotal_amount: number;
+    discount_amount: number;
+    service_amount: number;
+    tax_amount: number;
+    final_amount: number;
+    refund_amount: number;
+    net_collected: number;
+    items: Array<{ product_name: string; quantity: number; unit_price: number; line_total: number }>;
+  }>;
+  pagination: { current_page: number; last_page: number; per_page: number; total: number };
+};
+
+export type PosReportMargin = {
+  coverage_pct: number;
+  tracked_units: number;
+  total_units: number;
+  net_product_sales?: number;
+  estimated_cost?: number;
+  estimated_profit: number | null;
+  gross_margin_pct: number | null;
+  products: Array<{
+    product_name: string;
+    quantity: number;
+    tracked_quantity: number;
+    net_product_sales: number;
+    estimated_cost: number;
+    estimated_profit: number;
+    estimated_margin_pct: number | null;
+  }>;
+  disclaimer?: string;
 };
 
 // A dining table as returned by PosTableController (dining_tables row).
@@ -666,6 +758,18 @@ export function getPosReportProducts(params?: ReportParams) {
 
 export function getPosReportDaily(params?: ReportParams) {
   return apiRequest<PosReportDaily>(`/pos/reports/daily${toReportQuery(params)}`);
+}
+
+export function getPosReportShifts(params?: ReportParams) {
+  return apiRequest<PosReportShift>(`/pos/reports/shifts${toReportQuery(params)}`);
+}
+
+export function getPosReportTransactions(params?: ReportParams) {
+  return apiRequest<PosReportTransactions>(`/pos/reports/transactions${toReportQuery(params)}`);
+}
+
+export function getPosReportMargin(params?: ReportParams) {
+  return apiRequest<PosReportMargin>(`/pos/reports/margin${toReportQuery(params)}`);
 }
 
 // Excel (.xlsx) export for the given period; returns the file as a Blob.

@@ -431,7 +431,7 @@ export default function EmailSetting() {
         <p className="font-semibold text-zinc-900">Catatan keamanan</p>
         <div className="mt-2 space-y-2">
           <p>Kredensial SMTP disimpan terenkripsi di database. Password tidak pernah dikirim ke frontend.</p>
-          <p>Rekomendasi: kirim lewat Brevo (smtp-relay.brevo.com, port 587) dengan domain sendiri yang sudah diverifikasi — Gmail SMTP yang mengirim atas nama domain lain akan masuk spam. Panduan: docs/EMAIL.md.</p>
+          <p>Gmail: gunakan smtp.gmail.com, port 587 dengan TLS atau 465 dengan SSL, username alamat Gmail lengkap, dan App Password. Gunakan alamat pengirim yang sama dengan akun Gmail; nama pengirim boleh “Hellomspace”. Untuk alamat @hellomspace.com, gunakan layanan yang sudah memverifikasi domain tersebut. SPF, DKIM, dan DMARC gmail.com dikelola Google. Status terkirim berarti diterima server pengirim, bukan jaminan masuk inbox.</p>
           <p>Test email akan dikirim dari konfigurasi yang sudah tersimpan.</p>
         </div>
       </div>

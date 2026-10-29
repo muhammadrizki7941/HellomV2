@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
-import { Check, Copy, Loader2 } from 'lucide-react';
+import { AlertCircle, Check, Copy, Loader2, XCircle } from 'lucide-react';
 import type { PaymentInstructions } from '@/lib/hellomApi';
 
 // Hellom Page buyers pay on the shop's own checkout (no redirect to the gateway):
@@ -29,11 +29,13 @@ function CopyButton({ value }: { value: string }) {
   );
 }
 
-export default function OnPagePayment({ payment, amount, expiresAt, reference }: {
+export default function OnPagePayment({ payment, amount, expiresAt, reference, onCancel, isCancelling = false }: {
   payment: PaymentInstructions;
   amount: number;
   expiresAt: string | null;
   reference: string;
+  onCancel?: () => void;
+  isCancelling?: boolean;
 }) {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const qrString = payment.mode === 'qris' ? payment.qr_string || '' : '';
@@ -61,6 +63,23 @@ export default function OnPagePayment({ payment, amount, expiresAt, reference }:
         <p className="mt-1 text-sm text-zinc-500">
           Bayar sebelum {new Date(expiresAt).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}
         </p>
+      )}
+      {onCancel && (
+        <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-2 text-sm text-red-800">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>Berubah pikiran? Checkout ini bisa dibatalkan kapan saja sebelum pembayaran.</span>
+          </div>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isCancelling}
+            className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-red-300 bg-white px-4 py-2 text-sm font-bold text-red-700 shadow-sm transition hover:border-red-400 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <XCircle className="h-4 w-4" />
+            {isCancelling ? 'Membatalkan...' : 'Batalkan pembayaran'}
+          </button>
+        </div>
       )}
 
       {payment.mode === 'qris' && (

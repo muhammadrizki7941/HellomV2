@@ -33,6 +33,7 @@ class BillingController extends BaseApiController
     public function __construct(
         private readonly CheckoutNotifier $checkoutNotifier,
         private readonly NotificationService $notificationService,
+        private readonly SubscriptionCheckoutActivationService $activation,
     ) {
     }
 
@@ -127,7 +128,8 @@ class BillingController extends BaseApiController
             ], 422);
         }
 
-        $result = DB::transaction(function () use ($organizationId, $user, $app, $plan, $paymentFlow, $checkoutMode, $gatewayProvider, $billingCycle, $manualPaymentMethod) {
+        $expiresAt = $paymentFlow === 'direct' ? now()->addHour() : null;
+        $result = DB::transaction(function () use ($organizationId, $user, $app, $plan, $paymentFlow, $checkoutMode, $gatewayProvider, $billingCycle, $manualPaymentMethod, $expiresAt) {
             $amount = $this->resolvePlanAmount($plan, $billingCycle);
             $subscriptionStatus = $paymentFlow === 'wallet' ? 'draft' : 'pending_payment';
             $intentStatus = match ($paymentFlow) {
@@ -164,6 +166,7 @@ class BillingController extends BaseApiController
                 'status' => $intentStatus,
                 'amount' => $amount,
                 'currency' => 'IDR',
+                'expires_at' => $expiresAt,
                 'metadata' => [
                     'checkout_mode' => $checkoutMode,
                     'payment_flow' => $paymentFlow,
@@ -193,7 +196,7 @@ class BillingController extends BaseApiController
                         ],
                     ],
                     'issued_at' => now(),
-                    'due_at' => now()->addDay(),
+                    'due_at' => $expiresAt,
                     'paid_at' => null,
                     'metadata' => [
                         'provider' => $checkoutMode === 'manual_confirmation' ? 'manual_confirmation' : $gatewayProvider,
@@ -254,7 +257,7 @@ class BillingController extends BaseApiController
                         'qr_string' => $charge->qrString,
                         'qr_image_url' => $charge->qrImageUrl,
                         'channel_label' => $charge->channelLabel,
-                        'expires_at' => $charge->expiresAt,
+                        'expires_at' => $expiresAt?->toIso8601String(),
                     ];
                     $metadata = ['payment_session_id' => $paymentSessionId, 'transaction_id' => $charge->transactionId, 'payment_instructions' => $paymentInstructions];
                     $intent->forceFill(['metadata' => [...($intent->metadata ?? []), 'ipaymu' => $metadata]])->save();
@@ -326,7 +329,7 @@ class BillingController extends BaseApiController
                             ],
                         ],
                         'payment' => [
-                            'payment_due_date' => 1440,
+                            'payment_due_date' => 60,
                             'payment_method_types' => $this->dokuSettings()->getConfig()['payment_method_types'],
                         ],
                         'customer' => [
@@ -371,6 +374,7 @@ class BillingController extends BaseApiController
                         'locale' => 'id',
                         'capture_method' => 'AUTOMATIC',
                         'allow_save_payment_method' => 'DISABLED',
+                        'expires_at' => $expiresAt?->toIso8601String(),
                         'success_return_url' => FrontendUrl::to('/dashboard/payments'),
                         'cancel_return_url' => FrontendUrl::to('/dashboard/payments'),
                         'description' => "Aktivasi {$app->name} - {$plan->name}",
@@ -455,6 +459,7 @@ class BillingController extends BaseApiController
                 'status' => (string) $intent->status,
                 'amount' => (int) $intent->amount,
                 'currency' => (string) $intent->currency,
+                'expires_at' => optional($intent->expires_at)?->toIso8601String(),
             ],
             'subscription_draft' => [
                 'id' => (int) $subscription->id,
@@ -467,6 +472,7 @@ class BillingController extends BaseApiController
             'payment' => [
                 'flow' => $paymentFlow,
                 'instructions' => $paymentInstructions,
+                'expires_at' => optional($intent->expires_at)?->toIso8601String(),
                 'checkout_mode' => $checkoutMode,
                 'requires_manual_confirmation' => $paymentFlow === 'direct' && $checkoutMode === 'manual_confirmation',
                 'provider' => $paymentFlow === 'wallet' ? 'wallet' : ($checkoutMode === 'manual_confirmation' ? 'manual_confirmation' : $gatewayProvider),
@@ -778,9 +784,16 @@ class BillingController extends BaseApiController
                 ];
             })->values(),
             'checkout_intents' => $checkoutIntents->map(function (CheckoutIntent $intent) use ($user): array {
+                $isBuyer = (int) $intent->user_id === (int) $user->id;
+                $isPending = $intent->status === 'gateway_pending';
+                $paymentUrl = collect(['ipaymu', 'doku', 'xendit'])
+                    ->map(fn (string $provider) => data_get($intent->metadata, $provider . '.payment_url'))
+                    ->first(fn ($url) => is_string($url) && $url !== '');
+
                 return [
-                    'payment_instructions' => (int) $intent->user_id === (int) $user->id && $intent->status === 'gateway_pending'
+                    'payment_instructions' => $isBuyer && $isPending
                         ? data_get($intent->metadata, 'ipaymu.payment_instructions') : null,
+                    'payment_url' => $isBuyer && $isPending ? $paymentUrl : null,
                     'id' => $intent->id,
                     'intent_token' => (string) $intent->intent_token,
                     'status' => (string) $intent->status,
@@ -788,6 +801,7 @@ class BillingController extends BaseApiController
                     'currency' => (string) $intent->currency,
                     'created_at' => $intent->created_at,
                     'updated_at' => $intent->updated_at,
+                    'expires_at' => optional($intent->expires_at)?->toIso8601String(),
                     'app_slug' => (string) ($intent->app->slug ?? ''),
                     'plan_slug' => (string) ($intent->plan->slug ?? ''),
                 ];
@@ -821,10 +835,13 @@ class BillingController extends BaseApiController
             return $this->fail('Tidak diizinkan.', ['code' => 'FORBIDDEN'], 403);
         }
 
-        $activator = app(SubscriptionCheckoutActivationService::class);
+        $intent = $this->activation->expireIfPast($intent);
+        if (in_array((string) $intent->status, ['cancelled', 'expired', 'rejected'], true)) {
+            return $this->ok(['active' => false, 'status' => (string) $intent->status], 'Checkout sudah tidak aktif.');
+        }
 
         if (in_array((string) $intent->status, ['confirmed', 'paid'], true)) {
-            $activator->ensureActiveAccessForConfirmedCheckout($intent);
+            $this->activation->ensureActiveAccessForConfirmedCheckout($intent);
 
             return $this->ok(['active' => true, 'status' => 'confirmed'], 'Akses sudah aktif.');
         }
@@ -844,7 +861,7 @@ class BillingController extends BaseApiController
             $check = app(IpaymuPaymentVerifier::class)->verify((string) $intent->intent_token, (int) $intent->amount, $transactionId, $storedTransactionId !== '');
 
             if ($check['ok']) {
-                $activator->confirmGatewayCheckout($intent, [
+                $this->activation->confirmGatewayCheckout($intent, [
                     'transaction_id' => (string) ($check['status']->transactionId ?: $transactionId),
                     'invoice_id' => (int) ($meta['invoice_id'] ?? 0),
                     'reconciled' => true,
@@ -857,5 +874,70 @@ class BillingController extends BaseApiController
         }
 
         return $this->ok(['active' => false, 'status' => 'pending'], 'Menunggu konfirmasi pembayaran.');
+    }
+
+    public function cancelCheckout(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user instanceof User) {
+            return $this->fail('Unauthorized', ['code' => 'UNAUTHORIZED'], 401);
+        }
+
+        $organizationId = (int) ($user->current_organization_id ?? 0);
+        if ($organizationId <= 0) {
+            return $this->fail('No active organization', ['code' => 'NO_ACTIVE_ORGANIZATION'], 403);
+        }
+
+        $validated = $request->validate([
+            'intent_token' => ['required', 'string', 'max:100'],
+        ]);
+        $intent = CheckoutIntent::query()
+            ->where('intent_token', (string) $validated['intent_token'])
+            ->where('organization_id', $organizationId)
+            ->where('user_id', $user->id)
+            ->first();
+
+        if (!$intent instanceof CheckoutIntent) {
+            return $this->fail('Checkout tidak ditemukan.', ['code' => 'NOT_FOUND'], 404);
+        }
+
+        $intent = $this->activation->expireIfPast($intent);
+        if (in_array((string) $intent->status, ['confirmed', 'paid'], true)) {
+            return $this->fail('Pembayaran sudah berhasil dan tidak dapat dibatalkan.', ['code' => 'CHECKOUT_ALREADY_PAID'], 422);
+        }
+
+        if (in_array((string) $intent->status, ['cancelled', 'expired', 'rejected'], true)) {
+            return $this->ok([
+                'intent_token' => (string) $intent->intent_token,
+                'status' => (string) $intent->status,
+            ], 'Checkout sudah tidak aktif.');
+        }
+
+        $intent = DB::transaction(function () use ($intent) {
+            $locked = CheckoutIntent::query()->with('subscription')->lockForUpdate()->findOrFail($intent->id);
+            if (!in_array((string) $locked->status, ['gateway_pending', 'manual_review', 'awaiting_manual_review', 'pending'], true)) {
+                return $locked;
+            }
+
+            $locked->forceFill(['status' => 'cancelled'])->save();
+            if ($locked->subscription && in_array((string) $locked->subscription->status, ['pending_payment', 'draft'], true)) {
+                $locked->subscription->forceFill(['status' => 'cancelled'])->save();
+            }
+            Invoice::query()
+                ->where('subscription_id', $locked->subscription_id)
+                ->whereIn('status', ['draft', 'issued'])
+                ->update(['status' => 'cancelled']);
+
+            return $locked->fresh();
+        }, 3);
+
+        if ((string) $intent->status !== 'cancelled') {
+            return $this->fail('Checkout ini sudah tidak dapat dibatalkan.', ['code' => 'CHECKOUT_NOT_CANCELLABLE'], 422);
+        }
+
+        return $this->ok([
+            'intent_token' => (string) $intent->intent_token,
+            'status' => (string) $intent->status,
+        ], 'Checkout berhasil dibatalkan.');
     }
 }

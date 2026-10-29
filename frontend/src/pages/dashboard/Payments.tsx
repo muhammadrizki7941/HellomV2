@@ -136,6 +136,16 @@ export default function Payments() {
     void loadPage();
   }, []);
 
+  useEffect(() => {
+    const checkoutSlug = searchParams.get('checkout');
+    if (!checkoutSlug || selectedApp) return;
+
+    const app = catalogApps.find((item) => item.app.slug === checkoutSlug)?.app;
+    if (app) {
+      setSelectedApp({ name: app.name, slug: app.slug });
+    }
+  }, [catalogApps, searchParams, selectedApp]);
+
   // Handle the browser return from an iPaymu gateway redirect: verify + activate
   // without relying on the inbound webhook (which can't reach local/sandbox servers).
   useEffect(() => {

@@ -7,12 +7,10 @@ use App\Models\Invoice;
 use App\Models\PaymentEvent;
 use App\Models\ProductPurchase;
 use App\Models\Subscription;
-use App\Mail\HellomCheckoutStatusMail;
 use App\Services\Hellom\DokuSettingsService;
 use App\Services\Payments\Gateways\DokuGateway;
 use App\Services\Payments\PaymentStatus;
 use App\Services\SellerFinance\LandingPaymentService;
-use App\Services\Hellom\PlatformMailService;
 use App\Services\Hellom\SubscriptionCheckoutActivationService;
 use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
@@ -179,9 +177,6 @@ class DokuWebhookController extends BaseApiController
                 'invoice_number' => $invoiceNumber,
                 'invoice_id' => (int) ($invoice?->id ?? 0),
             ], 'DOKU');
-            if ($newlyConfirmed) {
-                $this->sendSuccessEmails($intent->fresh(['subscription.organization.users', 'app', 'plan', 'user']));
-            }
 
             return $newlyConfirmed ? 'processed' : 'duplicate';
         }
@@ -248,51 +243,5 @@ class DokuWebhookController extends BaseApiController
             : $this->notificationService->notifyConsumerPaymentFailed($intent->user, $intent, $productName);
     }
 
-    /** Emails; the in-app notifications come from SubscriptionCheckoutActivationService. */
-    private function sendSuccessEmails(?CheckoutIntent $intent): void
-    {
-        $subscription = $intent?->subscription;
-        if (!$subscription instanceof Subscription || !$subscription->organization) {
-            return;
-        }
 
-        $details = [
-            'Organisasi' => (string) $subscription->organization->name,
-            'Aplikasi' => (string) ($intent->app?->name ?? '-'),
-            'Plan' => (string) ($intent->plan?->name ?? '-'),
-            'Nominal' => 'Rp ' . number_format((int) $intent->amount, 0, ',', '.'),
-            'Status' => 'paid',
-            'Provider' => 'DOKU',
-        ];
-
-        $mailer = app(PlatformMailService::class);
-        $recipients = $subscription->organization->users
-            ->filter(fn ($member) => in_array((string) ($member->pivot->role ?? ''), ['owner', 'admin', 'super_admin'], true))
-            ->pluck('email')
-            ->filter()
-            ->unique()
-            ->values();
-
-        foreach ($recipients as $email) {
-            $mailer->queue((string) $email, new HellomCheckoutStatusMail(
-                subjectLine: 'Pembayaran aplikasi berhasil via DOKU',
-                payload: [
-                    'headline' => 'Pembayaran gateway berhasil diterima',
-                    'intro' => 'Checkout aplikasi telah dibayar melalui DOKU dan akses aplikasi sudah diaktifkan.',
-                    'details' => $details,
-                ]
-            ));
-        }
-
-        if ($intent->user?->email) {
-            $mailer->queue((string) $intent->user->email, new HellomCheckoutStatusMail(
-                subjectLine: 'Pembayaran aplikasi Anda berhasil',
-                payload: [
-                    'headline' => 'Pembayaran berhasil',
-                    'intro' => 'Pembayaran aplikasi Anda via DOKU berhasil diproses.',
-                    'details' => $details,
-                ]
-            ));
-        }
-    }
 }

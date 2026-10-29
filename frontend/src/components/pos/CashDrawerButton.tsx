@@ -44,7 +44,7 @@ export default function CashDrawerButton() {
         onClick={() => { void load(); setOpen(true); }}
         className={cn(
           'flex min-h-9 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors',
-          isOpen ? 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100' : 'border-amber-300 bg-amber-400 text-gray-900 hover:bg-amber-500'
+          isOpen ? 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
         )}
       >
         <Wallet className="h-4 w-4" />

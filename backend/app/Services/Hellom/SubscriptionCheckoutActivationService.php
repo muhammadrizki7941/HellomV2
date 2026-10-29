@@ -45,12 +45,25 @@ class SubscriptionCheckoutActivationService
 
         // Webhook, return URL and reconcile can arrive together: the row lock makes sure
         // only one of them activates (one revenue entry, one invoice update).
-        $activated = DB::transaction(function () use ($intent, $meta, $providerKey, $providerLabel): bool {
+        $result = DB::transaction(function () use ($intent, $meta, $providerKey, $providerLabel): string {
             $locked = CheckoutIntent::query()->lockForUpdate()->find((int) $intent->id);
-            if (!$locked instanceof CheckoutIntent || in_array((string) $locked->status, ['confirmed', 'paid'], true)) {
-                return false;
+            if (!$locked instanceof CheckoutIntent) {
+                return 'inactive';
+            }
+            if (in_array((string) $locked->status, ['confirmed', 'paid'], true)) {
+                return 'already_confirmed';
+            }
+            if (!$this->isAwaitingPayment($locked)) {
+                return 'inactive';
+            }
+            if ($locked->expires_at && $locked->expires_at->isPast()) {
+                $this->markExpired($locked);
+
+                return 'expired';
             }
             $intent->setRawAttributes($locked->getAttributes(), true);
+            $intent->unsetRelation('subscription');
+            $intent->loadMissing(['subscription.plan', 'app', 'plan', 'user']);
             $now = now();
 
             $intentMeta = is_array($intent->metadata) ? $intent->metadata : [];
@@ -97,16 +110,20 @@ class SubscriptionCheckoutActivationService
 
             $this->ensurePosProvisioning($intent);
 
-            return true;
+            return 'activated';
         }, 3);
 
-        if (!$activated) {
-            $this->ensureActiveAccessForConfirmedCheckout($intent->refresh());
+        if ($result !== 'activated') {
+            $freshIntent = $intent->refresh();
+            if ($result === 'already_confirmed') {
+                $this->ensureActiveAccessForConfirmedCheckout($freshIntent);
+            }
 
             return false;
         }
 
         // In-app notifications: owner success + consumer activation.
+        app(\App\Services\Billing\CheckoutNotifier::class)->sendPaymentReceipt($intent->refresh());
         $this->notificationService->createGatewayPaymentSuccessNotif($intent, $providerLabel);
         if ($intent->user instanceof User) {
             $productName = (string) ($intent->app?->name ?? 'Aplikasi');
@@ -126,8 +143,9 @@ class SubscriptionCheckoutActivationService
     public function approveManualCheckout(CheckoutIntent $intent, ?bool &$approvedNow = null): CheckoutIntent
     {
         $approvedNow = false;
+        $expired = false;
 
-        return DB::transaction(function () use ($intent, &$approvedNow): CheckoutIntent {
+        $result = DB::transaction(function () use ($intent, &$approvedNow, &$expired): CheckoutIntent {
             $lockedIntent = CheckoutIntent::query()
                 ->with(['subscription.plan', 'app', 'plan'])
                 ->lockForUpdate()
@@ -135,6 +153,13 @@ class SubscriptionCheckoutActivationService
 
             if (in_array((string) $lockedIntent->status, ['confirmed', 'paid'], true)) {
                 $this->ensureActiveAccessForConfirmedCheckout($lockedIntent);
+
+                return $lockedIntent->fresh(['subscription', 'app', 'plan']) ?? $lockedIntent;
+            }
+
+            if ($lockedIntent->expires_at && $lockedIntent->expires_at->isPast()) {
+                $this->markExpired($lockedIntent);
+                $expired = true;
 
                 return $lockedIntent->fresh(['subscription', 'app', 'plan']) ?? $lockedIntent;
             }
@@ -196,6 +221,43 @@ class SubscriptionCheckoutActivationService
 
             return $lockedIntent->fresh(['subscription', 'app', 'plan']) ?? $lockedIntent;
         }, 3);
+
+        if ($expired) {
+            throw new \DomainException('Checkout intent has expired.');
+        }
+
+        return $result;
+    }
+
+    public function expireIfPast(CheckoutIntent $intent): CheckoutIntent
+    {
+        return DB::transaction(function () use ($intent): CheckoutIntent {
+            $locked = CheckoutIntent::query()->lockForUpdate()->findOrFail((int) $intent->id);
+            if ($locked->expires_at && $locked->expires_at->isPast() && $this->isAwaitingPayment($locked)) {
+                $this->markExpired($locked);
+            }
+
+            return $locked->fresh(['subscription', 'app', 'plan', 'user']) ?? $locked;
+        }, 3);
+    }
+
+    private function isAwaitingPayment(CheckoutIntent $intent): bool
+    {
+        return in_array((string) $intent->status, ['gateway_pending', 'manual_review', 'awaiting_manual_review', 'pending'], true);
+    }
+
+    private function markExpired(CheckoutIntent $intent): void
+    {
+        $intent->forceFill(['status' => 'expired'])->save();
+
+        if ($intent->subscription && in_array((string) $intent->subscription->status, ['pending_payment', 'draft'], true)) {
+            $intent->subscription->forceFill(['status' => 'cancelled'])->save();
+        }
+
+        \App\Models\Invoice::query()
+            ->where('subscription_id', $intent->subscription_id)
+            ->whereIn('status', ['draft', 'issued'])
+            ->update(['status' => 'expired']);
     }
 
     public function ensureActiveAccessForConfirmedCheckout(CheckoutIntent $intent): void

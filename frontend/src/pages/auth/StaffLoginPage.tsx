@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Loader2, Store } from 'lucide-react';
 import { ApiError, setActiveOutletId, setSession, staffLogin } from '@/lib/hellomApi';
 import type { StaffStoreChoice } from '@/lib/hellomApi';
+import HellomLoading from '@/components/HellomLoading';
 
 /**
  * Staff / cashier login (/login/kasir). After the password check the backend switches the
@@ -48,6 +49,7 @@ export default function StaffLoginPage() {
 
   return (
     <div className="flex min-h-[100svh] flex-col bg-[#050505] text-[#F5F5F2]">
+      {loading !== null && <HellomLoading mode="overlay" label="Memeriksa akses kasir dan outlet..." />}
       <header className="px-6 py-6">
         <Link to="/" className="inline-flex min-h-11 items-center text-xl font-black">
           Hell<span className="text-[#F6B400]">om</span> <span className="ml-2 text-sm font-semibold text-white/60">POS</span>

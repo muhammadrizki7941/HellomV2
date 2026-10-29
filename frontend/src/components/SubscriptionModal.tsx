@@ -6,6 +6,7 @@ import {
   Crown,
   CreditCard,
   Download,
+  Clock3,
   ShieldCheck,
   Sparkles,
   Star,
@@ -18,6 +19,7 @@ import { cn } from '@/lib/utils';
 import {
   checkoutConfirmWallet,
   checkoutStart,
+  cancelSubscriptionCheckout,
   getImageUrl,
   getPaymentGatewayStatus,
   getPricingMatrix,
@@ -108,14 +110,22 @@ type PricingMatrixResponse = {
 };
 
 type CheckoutStartResponse = {
-  checkout_intent: { intent_token: string };
+  checkout_intent: { intent_token: string; expires_at?: string | null };
   payment: {
     instructions?: PaymentInstructions & { amount: number; expires_at: string | null };
     checkout_mode: 'manual_confirmation' | 'gateway_automatic' | 'wallet_instant';
     invoice_number?: string | null;
     payment_url?: string | null;
+    expires_at?: string | null;
   };
 };
+
+function formatCountdown(seconds: number) {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainingSeconds = seconds % 60;
+  return [hours, minutes, remainingSeconds].map((value) => String(value).padStart(2, '0')).join(':');
+}
 
 function resolveAppSlug(appName: string, explicitSlug?: string): string | null {
   if (explicitSlug) return explicitSlug;
@@ -223,6 +233,9 @@ export default function SubscriptionModal({ isOpen, onClose, appName, appSlug, a
   const [gatewayIntentToken, setGatewayIntentToken] = useState<string | null>(null);
   const [gatewayChannel, setGatewayChannel] = useState('');
   const [directPayment, setDirectPayment] = useState<CheckoutStartResponse['payment']['instructions'] | null>(null);
+  const [checkoutExpiresAt, setCheckoutExpiresAt] = useState<string | null>(null);
+  const [checkoutSecondsRemaining, setCheckoutSecondsRemaining] = useState(0);
+  const [isCancellingCheckout, setIsCancellingCheckout] = useState(false);
 
   useEffect(() => {
     if (!isOpen || !directPayment || !gatewayIntentToken) return;
@@ -239,13 +252,17 @@ export default function SubscriptionModal({ isOpen, onClose, appName, appSlug, a
         if (cancelled) return;
         if (result.active) {
           setDirectPayment(null);
+          setCheckoutExpiresAt(null);
+          setGatewayIntentToken(null);
           setSuccessMessage('Pembayaran berhasil. Langganan Anda sudah aktif.');
           onSuccess?.();
           return;
         }
         if (['expired', 'failed', 'cancelled'].includes(result.status)) {
           setDirectPayment(null);
-          setErrorMessage('Pembayaran berakhir. Silakan pilih paket untuk mencoba kembali.');
+          setGatewayPaymentUrl(null);
+          setCheckoutExpiresAt(null);
+          setSuccessMessage(result.status === 'cancelled' ? 'Pembayaran berhasil dibatalkan.' : 'Waktu pembayaran telah berakhir. Silakan mulai checkout kembali.');
           return;
         }
       } catch { /* Retry transient status errors without creating another charge. */ }
@@ -256,9 +273,42 @@ export default function SubscriptionModal({ isOpen, onClose, appName, appSlug, a
   }, [isOpen, directPayment, gatewayIntentToken, onSuccess]);
 
   useEffect(() => {
+    if (!isOpen || !checkoutExpiresAt) return undefined;
+    const expiresAt = new Date(checkoutExpiresAt).getTime();
+    if (!Number.isFinite(expiresAt)) return undefined;
+    let expiryHandled = false;
+
+    const updateCountdown = () => {
+      const remaining = Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
+      setCheckoutSecondsRemaining(remaining);
+      if (remaining === 0 && !expiryHandled) {
+        expiryHandled = true;
+        if (gatewayIntentToken) {
+          void cancelSubscriptionCheckout(gatewayIntentToken).catch((error) => {
+            setErrorMessage(error instanceof Error ? error.message : 'Checkout kedaluwarsa, tetapi statusnya gagal diperbarui.');
+          });
+        }
+        setDirectPayment(null);
+        setGatewayPaymentUrl(null);
+        setShowReceiptModal(false);
+        setCheckoutExpiresAt(null);
+        setSuccessMessage('Batas waktu pembayaran 1 jam telah berakhir. Silakan mulai checkout kembali.');
+      }
+    };
+
+    updateCountdown();
+    const interval = window.setInterval(updateCountdown, 1000);
+    return () => window.clearInterval(interval);
+  }, [checkoutExpiresAt, gatewayIntentToken, isOpen]);
+
+  useEffect(() => {
     if (!isOpen) {
       setPlans([]);
       setDirectPayment(null);
+      setGatewayPaymentUrl(null);
+      setGatewayIntentToken(null);
+      setCheckoutExpiresAt(null);
+      setCheckoutSecondsRemaining(0);
       setGatewayChannel('');
       setResolvedAppId(null);
       setErrorMessage(null);
@@ -310,13 +360,32 @@ export default function SubscriptionModal({ isOpen, onClose, appName, appSlug, a
             setManualPaymentMethod(firstManualMethod);
           }
           setCheckoutStep('plan');
-          const pending = history.checkout_intents.find((intent) => intent.app_slug === item.app.slug && intent.payment_instructions
-            && (!intent.payment_instructions.expires_at || new Date(intent.payment_instructions.expires_at).getTime() > Date.now()));
+          const pending = history.checkout_intents.find((intent) => {
+            const expiresAt = intent.expires_at || intent.payment_instructions?.expires_at;
+            return intent.app_slug === item.app.slug
+              && ['gateway_pending', 'manual_review', 'pending_payment'].includes(intent.status)
+              && (!expiresAt || new Date(expiresAt).getTime() > Date.now());
+          });
           if (pending?.payment_instructions) {
             setDirectPayment(pending.payment_instructions);
             setGatewayIntentToken(pending.intent_token);
+            setCheckoutExpiresAt(pending.expires_at || pending.payment_instructions.expires_at);
             setSelectedPlanSlug(pending.plan_slug);
+            setSuccessMessage('Pembayaran masih menunggu konfirmasi. Anda dapat melanjutkan pembayaran di panel ini atau memeriksa statusnya kembali nanti.');
             setCheckoutStep('result');
+          } else if (pending) {
+            setGatewayIntentToken(pending.intent_token);
+            setCheckoutExpiresAt(pending.expires_at || null);
+            setSelectedPlanSlug(pending.plan_slug);
+            setSuccessMessage(
+              pending.payment_url
+                ? 'Checkout masih menunggu pembayaran. Halaman pembayaran akan dibuka kembali.'
+                : 'Pembayaran masih menunggu konfirmasi. Periksa kembali statusnya setelah pembayaran diproses.'
+            );
+            setCheckoutStep('result');
+            if (pending.payment_url) {
+              setGatewayPaymentUrl(pending.payment_url);
+            }
           }
         }
       } catch (error) {
@@ -400,6 +469,36 @@ export default function SubscriptionModal({ isOpen, onClose, appName, appSlug, a
     }
   };
 
+  const cancelCheckoutRequest = async () => {
+    if (!gatewayIntentToken) return;
+    setIsCancellingCheckout(true);
+    setErrorMessage(null);
+    try {
+      const result = await cancelSubscriptionCheckout(gatewayIntentToken);
+      setGatewayPaymentUrl(null);
+      setDirectPayment(null);
+      setShowReceiptModal(false);
+      setCheckoutExpiresAt(null);
+      setSuccessMessage(result.status === 'expired'
+        ? 'Batas waktu pembayaran telah berakhir. Silakan mulai checkout kembali.'
+        : 'Pembayaran berhasil dibatalkan. Anda dapat memilih paket lain kapan saja.');
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Pembayaran gagal dibatalkan. Silakan coba lagi.');
+      throw error;
+    } finally {
+      setIsCancellingCheckout(false);
+    }
+  };
+
+  const handleCancelCheckout = async () => {
+    if (!window.confirm('Batalkan pembayaran ini? Checkout ini tidak dapat dilanjutkan setelah dibatalkan.')) return;
+    try {
+      await cancelCheckoutRequest();
+    } catch {
+      // The error is shown in the checkout dialog.
+    }
+  };
+
   const handleSubscribe = async (planSlug: string) => {
     if (!resolvedSlug) {
       setErrorMessage('Slug aplikasi tidak ditemukan untuk checkout.');
@@ -443,6 +542,8 @@ export default function SubscriptionModal({ isOpen, onClose, appName, appSlug, a
         }) as CheckoutStartResponse;
 
         if (checkout.payment.checkout_mode === 'manual_confirmation') {
+          setGatewayIntentToken(checkout.checkout_intent.intent_token);
+          setCheckoutExpiresAt(checkout.payment.expires_at || checkout.checkout_intent.expires_at || null);
           setSuccessMessage(`Permintaan berlangganan terkirim. Invoice ${checkout.payment.invoice_number || '-'} sedang menunggu konfirmasi owner via ${manualPaymentMethod}.`);
           setCheckoutStep('result');
           const method = gatewayStatus?.manual_payment?.methods.find(m => m.key === manualPaymentMethod);
@@ -454,13 +555,16 @@ export default function SubscriptionModal({ isOpen, onClose, appName, appSlug, a
           onSuccess?.();
           return;
         } else if (checkout.payment.instructions) {
-          setDirectPayment(checkout.payment.instructions);
+          const expiresAt = checkout.payment.expires_at || checkout.checkout_intent.expires_at || checkout.payment.instructions.expires_at;
+          setDirectPayment({ ...checkout.payment.instructions, expires_at: expiresAt || null });
+          setCheckoutExpiresAt(expiresAt || null);
           setGatewayIntentToken(checkout.checkout_intent.intent_token);
           setCheckoutStep('result');
         } else if (checkout.payment.payment_url) {
           setGatewayPaymentUrl(checkout.payment.payment_url);
           setGatewayPollSlug(resolvedSlug);
-          setGatewayIntentToken((checkout as any).checkout_intent?.intent_token || null);
+          setGatewayIntentToken(checkout.checkout_intent.intent_token);
+          setCheckoutExpiresAt(checkout.payment.expires_at || checkout.checkout_intent.expires_at || null);
           onSuccess?.();
         } else {
           setSuccessMessage(`Checkout langsung sudah dibuat dan menunggu aktivasi link payment ${providerLabel}.`);
@@ -828,9 +932,39 @@ export default function SubscriptionModal({ isOpen, onClose, appName, appSlug, a
           )}
 
           {directPayment && gatewayIntentToken && (
-            <div className="mx-auto mt-6 max-w-3xl rounded-3xl border border-zinc-200 bg-white p-5">
-              <h3 className="mb-4 text-lg font-bold">Pembayaran Hellomspace</h3>
-              <OnPagePayment payment={directPayment} amount={directPayment.amount} expiresAt={directPayment.expires_at} reference={gatewayIntentToken} />
+            <div className="mx-auto mt-6 max-w-3xl overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm">
+              <div className="flex flex-col gap-4 bg-gradient-to-r from-zinc-950 to-zinc-800 p-5 text-white sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10">
+                    <CreditCard className="h-5 w-5 text-amber-300" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold">Selesaikan pembayaran</h3>
+                    <p className="mt-1 text-xs text-zinc-300">Akses POS aktif otomatis setelah pembayaran terverifikasi.</p>
+                  </div>
+                </div>
+                <div className="inline-flex items-center gap-2 self-start rounded-full bg-white/10 px-3 py-2 text-sm font-semibold tabular-nums sm:self-auto">
+                  <Clock3 className="h-4 w-4 text-amber-300" />
+                  {checkoutExpiresAt
+                    ? formatCountdown(Math.max(0, Math.ceil((new Date(checkoutExpiresAt).getTime() - Date.now()) / 1000)))
+                    : '—'}
+                </div>
+              </div>
+              <div className="p-5 sm:p-6">
+                <OnPagePayment
+                  payment={directPayment}
+                  amount={directPayment.amount}
+                  expiresAt={checkoutExpiresAt || directPayment.expires_at}
+                  reference={gatewayIntentToken}
+                  onCancel={() => void handleCancelCheckout()}
+                  isCancelling={isCancellingCheckout}
+                />
+                <div className="mt-5 flex flex-col gap-3 border-t border-zinc-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-xs leading-5 text-zinc-500">
+                    Pembayaran aman. Jangan tutup halaman sebelum status pembayaran berubah.
+                  </p>
+                </div>
+              </div>
             </div>
           )}
           {checkoutStep !== 'plan' && selectedPlan && !directPayment && (
@@ -935,8 +1069,12 @@ export default function SubscriptionModal({ isOpen, onClose, appName, appSlug, a
             </button>
 
             <div className="text-center mb-4">
-              <h3 className="text-lg font-bold text-zinc-950">Kwitansi Pembayaran</h3>
-              <p className="text-sm text-zinc-600">Lakukan pembayaran segera dalam 1x24 jam</p>
+              <p className="mx-auto mb-3 inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800">
+                <Clock3 className="h-4 w-4" />
+                Selesaikan dalam {formatCountdown(checkoutSecondsRemaining)}
+              </p>
+              <h3 className="text-lg font-bold text-zinc-950">Instruksi pembayaran</h3>
+              <p className="mt-1 text-sm text-zinc-600">Selesaikan pembayaran dalam 1 jam agar langganan POS dapat diproses.</p>
             </div>
 
             <div className="space-y-4">
@@ -982,8 +1120,17 @@ export default function SubscriptionModal({ isOpen, onClose, appName, appSlug, a
               </div>
 
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-                <p>Periksa email Anda untuk detail pembayaran dan konfirmasi status.</p>
+                <p>Setelah pembayaran, konfirmasi akan diproses oleh tim kami. Status juga dikirim melalui email.</p>
               </div>
+
+              <button
+                type="button"
+                onClick={() => void handleCancelCheckout()}
+                disabled={isCancellingCheckout}
+                className="flex min-h-11 w-full items-center justify-center rounded-2xl border border-red-200 px-4 py-3 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:opacity-60"
+              >
+                {isCancellingCheckout ? 'Membatalkan...' : 'Batalkan pembayaran'}
+              </button>
 
               <button
                 type="button"
@@ -1007,8 +1154,12 @@ export default function SubscriptionModal({ isOpen, onClose, appName, appSlug, a
           paymentUrl={gatewayPaymentUrl}
           title={`Pembayaran ${providerLabel}`}
           onClose={() => setGatewayPaymentUrl(null)}
+          onCancel={cancelCheckoutRequest}
+          expiresAt={checkoutExpiresAt}
           onPaid={() => {
             setGatewayPaymentUrl(null);
+            setCheckoutExpiresAt(null);
+            setGatewayIntentToken(null);
             setSuccessMessage('Pembayaran berhasil dikonfirmasi! Akses langganan kamu sudah aktif.');
             setCheckoutStep('result');
             onSuccess?.();
@@ -1022,9 +1173,9 @@ export default function SubscriptionModal({ isOpen, onClose, appName, appSlug, a
                     const res = await reconcileCheckout(gatewayIntentToken);
                     if (res.active) return true;
                   } catch {
-                    // ignore and fall back to entitlement check
+                    // Retry checkout reconciliation after temporary network failures.
                   }
-                  return gatewayPollSlug ? pollAppEntitlement(gatewayPollSlug) : false;
+                  return false;
                 }
               : gatewayPollSlug
                 ? () => pollAppEntitlement(gatewayPollSlug)

@@ -10,10 +10,8 @@ use App\Models\PaymentEvent;
 use App\Models\ProductPurchase;
 use App\Models\Subscription;
 use App\Models\WalletWithdrawalRequest;
-use App\Mail\HellomCheckoutStatusMail;
 use App\Services\Billing\EntitlementService;
 use App\Services\SellerFinance\LandingPaymentService;
-use App\Services\Hellom\PlatformMailService;
 use App\Services\Hellom\PosProvisioningService;
 use App\Services\Hellom\SubscriptionCheckoutActivationService;
 use App\Services\Hellom\XenditSettingsService;
@@ -780,49 +778,7 @@ class XenditWebhookController extends BaseApiController
             }
         }
 
-        $subscription = $intent->subscription?->loadMissing(['organization.users']);
-        if (!$subscription instanceof Subscription || !$subscription->organization) {
-            return;
-        }
-
-        $details = [
-            'Organisasi' => (string) $subscription->organization->name,
-            'Aplikasi' => (string) ($intent->app?->name ?? '-'),
-            'Plan' => (string) ($intent->plan?->name ?? '-'),
-            'Nominal' => 'Rp ' . number_format((int) $intent->amount, 0, ',', '.'),
-            'Status' => 'paid',
-            'Provider' => 'Xendit',
-        ];
-
-        $mailer = app(PlatformMailService::class);
-        $recipients = $subscription->organization->users
-            ->filter(fn ($member) => in_array((string) ($member->pivot->role ?? ''), ['owner', 'admin', 'super_admin'], true))
-            ->pluck('email')
-            ->filter()
-            ->unique()
-            ->values();
-
-        foreach ($recipients as $email) {
-            $mailer->queue((string) $email, new HellomCheckoutStatusMail(
-                subjectLine: 'Pembayaran aplikasi berhasil via Xendit',
-                payload: [
-                    'headline' => 'Pembayaran gateway berhasil diterima',
-                    'intro' => 'Checkout aplikasi telah dibayar melalui Xendit dan akses aplikasi sudah diaktifkan.',
-                    'details' => $details,
-                ]
-            ));
-        }
-
-        if ($intent->user?->email) {
-            $mailer->queue((string) $intent->user->email, new HellomCheckoutStatusMail(
-                subjectLine: 'Pembayaran aplikasi Anda berhasil',
-                payload: [
-                    'headline' => 'Pembayaran berhasil',
-                    'intro' => 'Pembayaran aplikasi Anda via Xendit berhasil diproses.',
-                    'details' => $details,
-                ]
-            ));
-        }
+        app(\App\Services\Billing\CheckoutNotifier::class)->sendPaymentReceipt($intent);
     }
 
     private function sendPendingNotifications(array $payload, array $metadata): void

@@ -20,6 +20,7 @@ class CheckoutIntent extends Model
         'status',
         'amount',
         'currency',
+        'expires_at',
         'metadata',
     ];
 
@@ -28,6 +29,7 @@ class CheckoutIntent extends Model
         return [
             'metadata' => 'array',
             'amount' => 'integer',
+            'expires_at' => 'datetime',
         ];
     }
 

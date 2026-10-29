@@ -47,6 +47,19 @@ class IpaymuBillingWebhookTest extends SellerFinanceTestCase
         return $this->post('/api/v1/hellom/webhooks/ipaymu?' . http_build_query($query), $body, ['Accept' => 'application/json']);
     }
 
+    public function test_reconciliation_sends_one_receipt_when_buyer_is_also_owner(): void
+    {
+        $mail = new \Tests\Support\NoopPlatformMailService();
+        $this->app->instance(\App\Services\Hellom\PlatformMailService::class, $mail);
+        ['intent' => $intent, 'user' => $user] = $this->pendingCheckout(48000);
+        $activation = app(\App\Services\Hellom\SubscriptionCheckoutActivationService::class);
+        $this->assertTrue($activation->confirmGatewayCheckout($intent, ['transaction_id' => 'receipt-test'], 'iPaymu'));
+        $this->assertFalse($activation->confirmGatewayCheckout($intent->fresh(), ['transaction_id' => 'receipt-test'], 'iPaymu'));
+        $receipts = array_values(array_filter($mail->sent, fn ($entry) => in_array($user->email, (array) $entry['to'], true) && $entry['mailable'] instanceof \App\Mail\HellomCheckoutStatusMail));
+        $this->assertCount(1, $receipts);
+        $this->assertStringContainsString('Rp 48.000', $receipts[0]['mailable']->render());
+    }
+
     private function subscriptionParams(CheckoutIntent $intent): array
     {
         return ['purpose' => 'subscription_checkout', 'organization_id' => $intent->organization_id, 'subscription_id' => $intent->subscription_id,

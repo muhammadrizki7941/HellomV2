@@ -195,7 +195,7 @@ class SubscriptionWalletController extends BaseApiController
 
         /** @var CheckoutIntent $confirmedIntent */
         $confirmedIntent = $result['intent'];
-        $this->checkoutNotifier->sendSubscriptionBillingNotification((int) ($confirmedIntent->subscription?->id ?? 0), 'Pembayaran wallet berhasil');
+        $this->checkoutNotifier->sendPaymentReceipt($confirmedIntent);
         $planName = (string) ($confirmedIntent->plan?->name ?? 'Paket');
         $notifier = app(\App\Services\Notifications\Notifier::class);
         $notifier->admin('subscription', 'Langganan dibayar dari saldo · ' . $planName,
