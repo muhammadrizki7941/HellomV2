@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle, Download, Lock, ShoppingBag } from 'lucide-react';
+import { CheckCircle, Download, Lock, ShoppingBag, Search } from 'lucide-react';
+import DashboardApps from '@/components/consumer/DashboardApps';
 import { getConsumerProducts, getImageUrl, purchaseProduct } from '@/lib/hellomApi';
 
 type Product = {
@@ -33,6 +34,7 @@ export default function ConsumerProductCatalog() {
   const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
   const [activeFilter, setActiveFilter] = useState('all');
+  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,9 +56,8 @@ export default function ConsumerProductCatalog() {
   }, []);
 
   const filteredProducts = useMemo(() => {
-    if (activeFilter === 'all') return products;
-    return products.filter((product) => product.category === activeFilter);
-  }, [activeFilter, products]);
+    return products.filter(product => (activeFilter === 'all' || product.category === activeFilter) && `${product.name} ${product.tagline || ''}`.toLowerCase().includes(search.toLowerCase()));
+  }, [activeFilter, products, search]);
 
   const handlePurchase = async (product: Product) => {
     if (product.is_purchased) {
@@ -81,11 +82,14 @@ export default function ConsumerProductCatalog() {
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-900">Katalog Produk</h1>
-          <p className="text-sm text-zinc-600">Temukan produk digital terbaik untuk bisnis kamu.</p>
+          <div className="flex flex-wrap items-center gap-3"><h1 className="text-2xl font-bold text-zinc-900">Jelajah Aplikasi</h1><span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800">App Store</span></div>
+          <p className="mt-1 text-sm text-zinc-600">Temukan aplikasi dan produk digital untuk mengembangkan bisnis Anda.</p>
         </div>
       </div>
 
+      <label className="flex min-h-12 items-center gap-3 rounded-2xl border border-zinc-200 bg-white px-4"><Search className="h-5 w-5 shrink-0 text-zinc-400" /><input aria-label="Cari aplikasi dan produk digital" placeholder="Cari aplikasi, template, atau produk digital..." value={search} onChange={e => setSearch(e.target.value)} className="min-w-0 flex-1 bg-transparent py-3 text-base text-zinc-900 outline-none" /></label>
+      <DashboardApps search={search} />
+      <h2 className="text-lg font-bold text-zinc-900">Produk Digital</h2>
       <div className="flex flex-wrap gap-2">
         {categoryFilters.map((filter) => (
           <button
@@ -93,7 +97,7 @@ export default function ConsumerProductCatalog() {
             onClick={() => setActiveFilter(filter.value)}
             className={`px-4 py-2 rounded-full text-xs font-semibold border transition ${
               activeFilter === filter.value
-                ? 'bg-zinc-900 text-white border-zinc-900'
+                ? 'bg-amber-400 text-black border-amber-400'
                 : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-300'
             }`}
           >

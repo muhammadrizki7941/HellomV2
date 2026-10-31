@@ -820,6 +820,7 @@ export default function UserManagement() {
                     <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">User</p>
                     <p className="mt-2 text-lg font-bold text-zinc-950">{selectedUserDetail.name}</p>
                     <p className="text-sm text-zinc-500">{selectedUserDetail.email}</p>
+                    <p className="mt-2 text-xs text-zinc-500">Nomor HP: <span className="font-medium text-zinc-700">{selectedUserDetail.phone || 'Belum diisi'}</span></p>
                   </div>
                   <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-4">
                     <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Daftar</p>

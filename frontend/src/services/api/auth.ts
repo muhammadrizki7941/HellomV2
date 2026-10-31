@@ -61,6 +61,7 @@ export type HellomUser = {
   name: string;
   email: string;
   role: string;
+  phone: string | null;
   current_organization: { id: number; name: string; slug: string; status: string } | null;
   organizations: Array<{ id: number; name: string; slug: string; status: string; role: string }>;
   pos_access?: PosAccess;

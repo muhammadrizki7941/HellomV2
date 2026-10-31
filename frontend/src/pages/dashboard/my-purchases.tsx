@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getMyPurchases, getPaymentGatewayStatus } from '@/lib/hellomApi';
 import useBrand from '@/hooks/useBrand';
+import DashboardApps from '@/components/consumer/DashboardApps';
 
 type PurchaseStatus = 'paid' | 'pending' | 'failed' | 'refunded';
 
@@ -176,9 +177,12 @@ export default function MyPurchases() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-zinc-900">Produk Saya</h1>
-        <p className="text-sm text-zinc-500">Riwayat pembelian dan akses produk digital kamu.</p>
+        <h1 className="text-2xl font-bold text-zinc-900">Aplikasi Saya</h1>
+        <p className="mt-1 text-sm text-zinc-500">Aplikasi aktif, langganan, dan produk digital yang Anda miliki.</p>
       </div>
+      <DashboardApps owned />
+      <Link to="/dashboard/products" className="block rounded-2xl border border-dashed border-amber-300 bg-amber-50 p-5"><p className="font-bold text-zinc-900">Ingin menambahkan aplikasi lain?</p><p className="mt-1 text-sm text-zinc-600">Temukan alat yang sesuai untuk bisnis Anda.</p><span className="mt-3 inline-block font-semibold text-amber-800">Jelajah Aplikasi →</span></Link>
+      <h2 className="text-lg font-bold text-zinc-900">Pembelian Produk Digital</h2>
 
       {error && (
         <div className="rounded-lg border border-red-100 bg-red-50 p-3 text-sm text-red-600">
@@ -195,7 +199,7 @@ export default function MyPurchases() {
             to="/dashboard/products"
             className="mt-3 inline-block text-sm font-semibold text-zinc-900 underline underline-offset-4 hover:text-zinc-700"
           >
-            Lihat katalog produk
+            Jelajah Aplikasi
           </Link>
         </div>
       ) : (

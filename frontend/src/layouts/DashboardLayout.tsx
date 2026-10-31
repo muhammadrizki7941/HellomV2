@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Outlet, NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Layout, Calculator, ShoppingCart, LogOut, User, CreditCard, Menu, X, Lock, Settings, Sparkles, ArrowRight, Grid, Package, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { LayoutDashboard, Layout, Calculator, ShoppingCart, LogOut, User, CreditCard, Menu, X, Lock, Settings, Sparkles, ArrowRight, Grid, Package, PanelLeftClose, PanelLeftOpen, House, Compass, Grid2X2, ReceiptText, CircleUserRound } from 'lucide-react';
 import { ColorSchemeToggle, useDashboardColorScheme } from '@/lib/colorScheme';
 import { cn } from '@/lib/utils';
 import { clearSession, getAuthMe, getMemberDashboardCards, getPaymentGatewayStatus, getSessionEventName, getSessionUser, getToken, logout, setSession } from '@/lib/hellomApi';
@@ -11,6 +11,7 @@ import NotificationBell from '@/components/consumer/NotificationBell';
 import LiveToasts from '@/components/notifications/LiveToasts';
 import { useConsumerNotifications } from '@/hooks/useConsumerNotifications';
 import { EditorChromeContext } from '@/contexts/editorChrome';
+import ProfileReminder from '@/components/consumer/ProfileReminder';
 
 type DashboardApp = {
   id: string;
@@ -265,7 +266,7 @@ export default function DashboardLayout() {
             )}
           >
             <LayoutDashboard className="w-5 h-5" />
-            Dashboard
+            Beranda
           </NavLink>
 
           <NavLink 
@@ -279,7 +280,7 @@ export default function DashboardLayout() {
             )}
           >
             <Settings className="w-5 h-5" />
-            Pengaturan Akun
+            Profile
           </NavLink>
 
           <NavLink 
@@ -293,7 +294,7 @@ export default function DashboardLayout() {
             )}
           >
             <Grid className="w-5 h-5" />
-            Katalog Produk
+            Jelajah Aplikasi
           </NavLink>
 
           <NavLink 
@@ -307,10 +308,10 @@ export default function DashboardLayout() {
             )}
           >
             <Package className="w-5 h-5" />
-            Produk Saya
+            Aplikasi Saya
           </NavLink>
 
-          {memberWalletEnabled && (
+          {(
             <NavLink 
               to="/dashboard/payments" 
               onClick={() => setIsSidebarOpen(false)}
@@ -322,7 +323,7 @@ export default function DashboardLayout() {
               )}
             >
               <CreditCard className="w-5 h-5" />
-              Payments
+              Tagihan
             </NavLink>
           )}
           
@@ -381,7 +382,7 @@ export default function DashboardLayout() {
       {/* Main Content */}
       <main className={cn(
         "flex-1 min-w-0 overflow-x-clip p-4 lg:p-8 lg:pt-8 transition-all duration-300",
-        chromeHidden ? "pt-0" : "pt-20",
+        chromeHidden ? "pt-0" : "pt-20 pb-28 lg:pb-8",
         isDesktopCollapsed ? "lg:ml-0" : "lg:ml-64"
       )}>
         <div className={cn("mx-auto transition-all duration-300", isDesktopCollapsed ? "max-w-none" : "max-w-7xl")}>
@@ -407,9 +408,13 @@ export default function DashboardLayout() {
               </div>
             </div>
           </div>
+          {!chromeHidden && <ProfileReminder />}
           <Outlet />
         </div>
       </main>
+      {!chromeHidden && <nav aria-label="Navigasi utama" className="fixed inset-x-3 bottom-[max(0.5rem,env(safe-area-inset-bottom))] z-30 grid grid-cols-5 gap-1 rounded-2xl border border-amber-300/70 bg-[#F6B400] p-1.5 shadow-[0_8px_28px_rgba(24,18,0,0.28)] lg:hidden">
+        {[{ to: '/dashboard', label: 'Beranda', icon: House }, { to: '/dashboard/products', label: 'Jelajah', icon: Compass }, { to: '/dashboard/my-purchases', label: 'Aplikasi', icon: Grid2X2 }, { to: '/dashboard/payments', label: 'Tagihan', icon: ReceiptText }, { to: '/dashboard/profile', label: 'Profile', icon: CircleUserRound }].map(item => <NavLink key={item.to} to={item.to} end={item.to === '/dashboard'} onClick={() => setIsSidebarOpen(false)} className={({ isActive }) => cn('flex min-h-11 min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl text-[9px] font-semibold transition-[background-color,color,transform] duration-200', isActive ? 'scale-[1.02] bg-zinc-950 text-amber-300 shadow-sm' : 'text-zinc-950/75 hover:bg-amber-300/60 hover:text-zinc-950')}><item.icon className="h-[18px] w-[18px]" strokeWidth={1.9} />{item.label}</NavLink>)}
+      </nav>}
       <LiveToasts />
 
       {lockedAppPrompt && (

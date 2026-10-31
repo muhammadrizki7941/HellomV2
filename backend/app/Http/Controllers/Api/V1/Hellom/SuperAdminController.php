@@ -266,6 +266,7 @@ class SuperAdminController extends BaseApiController
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
+                'phone' => $user->phone,
                 'role' => $user->role,
                 'created_at' => $user->created_at,
                 'current_organization' => $user->currentOrganization ? [

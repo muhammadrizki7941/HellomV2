@@ -133,12 +133,25 @@ class AuthControllerTest extends TestCase
 
         $response = $this->putJson('/api/v1/hellom/auth/profile', [
             'name' => 'New Name',
+            'phone' => '+628123456789',
         ], $this->hellomHeaders($token));
 
         $response->assertOk()
-            ->assertJsonPath('data.name', 'New Name');
+            ->assertJsonPath('data.name', 'New Name')
+            ->assertJsonPath('data.phone', '+628123456789');
 
-        $this->assertDatabaseHas('users', ['id' => $user->id, 'name' => 'New Name']);
+        $this->assertDatabaseHas('users', ['id' => $user->id, 'name' => 'New Name', 'phone' => '+628123456789']);
+    }
+
+    public function test_update_profile_rejects_invalid_phone(): void
+    {
+        [, $token] = $this->createHellomUser();
+
+        $this->putJson('/api/v1/hellom/auth/profile', [
+            'phone' => 'not-a-phone',
+        ], $this->hellomHeaders($token))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['phone']);
     }
 
     // ─── Change Password ───

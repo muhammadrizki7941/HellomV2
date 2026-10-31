@@ -49,6 +49,19 @@ export function getLandingPageCustomers(pageId?: string | number) {
   return apiRequest<Record<string, unknown>>(`/apps/landing-builder/customers${qs}`);
 }
 
+export type PublicBanner = {
+  id: number;
+  title: string;
+  subtitle: string | null;
+  cta_text: string | null;
+  badge: string | null;
+  image_url: string | null;
+  link: string | null;
+  background_from: string | null;
+  background_to: string | null;
+  position: string;
+};
+
 export function getPublicBanners(params?: Record<string, string | number | boolean | undefined>) {
   const qs = params ? new URLSearchParams(
     Object.entries(params)
@@ -56,7 +69,7 @@ export function getPublicBanners(params?: Record<string, string | number | boole
       .map(([key, value]) => [key, String(value)])
   ).toString() : '';
 
-  return publicApiRequest<{ items: Record<string, unknown>[] }>(`/public/banners${qs ? `?${qs}` : ''}`)
+  return publicApiRequest<{ items: PublicBanner[] }>(`/public/banners${qs ? `?${qs}` : ''}`)
     .then((payload) => payload.items || []);
 }
 

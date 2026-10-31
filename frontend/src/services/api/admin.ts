@@ -24,6 +24,7 @@ export type AdminUserDetail = {
   id: number;
   name: string;
   email: string;
+  phone: string | null;
   role: string;
   created_at: string;
   current_organization: { id: number; name: string; slug: string; status: string } | null;
