@@ -8,6 +8,7 @@ import { SectionLabel, usePageMeta } from '@/components/site/PageHero';
 import { Reveal, RevealText } from '@/components/site/Reveal';
 import useSiteData from '@/components/site/useSiteData';
 import useFlagshipApps from '@/components/site/useFlagshipApps';
+import PublicBannerSlot from '@/components/site/PublicBannerSlot';
 
 // Short teaser for every inner page; each row links to the full page.
 const INDEX_ROWS = [
@@ -39,6 +40,9 @@ export default function BerandaPage() {
     <>
       {/* Intro: full-screen background video with clickable content on top */}
       <IntroVideo nextSectionId="sorotan" />
+      <div className="px-5 pt-6 md:px-10 lg:px-16">
+        <PublicBannerSlot position="hero" />
+      </div>
 
       {/* Hero (now the section after the intro, so it reveals on scroll) */}
       <section id="sorotan" className="relative scroll-mt-20 border-b border-white/[0.08] px-5 py-20 md:px-10 md:py-28 lg:px-16">

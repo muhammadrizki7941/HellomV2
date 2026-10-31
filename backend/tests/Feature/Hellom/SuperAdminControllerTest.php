@@ -98,6 +98,16 @@ class SuperAdminControllerTest extends TestCase
         $response->assertOk();
     }
 
+    public function test_super_admin_can_view_a_users_phone_number(): void
+    {
+        [, $token] = $this->createAdminWithToken();
+        $member = User::factory()->create(['phone' => '081234567890']);
+
+        $this->getJson("/api/v1/hellom/admin/users/{$member->id}", $this->hellomHeaders($token))
+            ->assertOk()
+            ->assertJsonPath('data.user.phone', '081234567890');
+    }
+
     public function test_suspend_and_reactivate_user(): void
     {
         [$admin, $token] = $this->createAdminWithToken();

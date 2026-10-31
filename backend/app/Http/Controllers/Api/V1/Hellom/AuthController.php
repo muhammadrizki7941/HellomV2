@@ -535,7 +535,7 @@ class AuthController extends BaseApiController
         $validated = $request->validate([
             'name' => ['sometimes', 'string', 'max:255'],
             'email' => ['sometimes', 'email', 'max:255', 'unique:users,email,' . $user->id],
-            'phone' => ['sometimes', 'nullable', 'string', 'max:30'],
+            'phone' => ['sometimes', 'nullable', 'string', 'max:30', 'regex:/^\+?[0-9]{8,15}$/'],
         ]);
 
         if (isset($validated['email'])) {
@@ -601,6 +601,7 @@ class AuthController extends BaseApiController
             'id' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
+            'phone' => $user->phone,
             'role' => $user->role,
             'current_organization' => $user->currentOrganization ? [
                 'id' => $user->currentOrganization->id,

@@ -115,7 +115,7 @@ class BannerController extends BaseApiController
             'background_to' => ['nullable', 'string', 'max:20'],
             'link' => ['nullable', 'string', 'max:500'],
             'is_active' => ['nullable', 'boolean'],
-            'position' => ['nullable', Rule::in(['header', 'hero', 'sidebar'])],
+            'position' => ['nullable', Rule::in(['header', 'hero', 'sidebar', 'dashboard'])],
             'order' => ['nullable', 'integer', 'min:0'],
             'starts_at' => ['nullable', 'date'],
             'ends_at' => ['nullable', 'date', 'after_or_equal:starts_at'],

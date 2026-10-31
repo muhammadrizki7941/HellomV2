@@ -6,6 +6,7 @@ import useBrand from '@/hooks/useBrand';
 import { getSessionUser, getToken } from '@/lib/hellomApi';
 import { SITE_PAGES } from '@/data/siteNav';
 import { EASE_CURTAIN, EASE_REVEAL } from './motion';
+import PublicBannerSlot from './PublicBannerSlot';
 
 export function BrandMark({ className = 'h-8' }: { className?: string }) {
   const { brand, logoSrc } = useBrand();
@@ -103,6 +104,9 @@ export default function SiteNavbar() {
               {open ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
             </button>
           </div>
+        </div>
+        <div className="px-3 pb-2 md:px-5">
+          <PublicBannerSlot position="header" compact />
         </div>
       </header>
 

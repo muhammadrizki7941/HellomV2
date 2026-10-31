@@ -46,7 +46,7 @@ const ecosystemItems = [
 ];
 
 export const AuthLeftPanel = ({ brand, logoSrc, variant }: AuthLeftPanelProps) => {
-  const { items } = usePromoBanners('header');
+  const { items } = usePromoBanners('sidebar');
 
   return (
     <div className="space-y-6">

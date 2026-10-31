@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Loader2, Save, Upload } from 'lucide-react';
 import { getToken, HELLOM_API_BASE, getAdminMailSettings, sendAdminMailTest, updateAdminMailSettings } from '@/lib/hellomApi';
 import { DEFAULT_BRAND, resetBrandCache, fetchBrand, type BrandSettings } from '@/hooks/useBrand';
+import { toDateTimeIso, toDateTimeLocal } from '@/lib/banner';
 
 type Notice = { type: 'success' | 'error'; text: string } | null;
 type BannerItem = {
@@ -18,7 +19,7 @@ type BannerItem = {
   video_url?: string | null;
   link: string | null;
   is_active: boolean;
-  position: 'header' | 'hero' | 'sidebar';
+  position: 'header' | 'hero' | 'sidebar' | 'dashboard';
   order: number;
   starts_at: string | null;
   ends_at: string | null;
@@ -58,7 +59,7 @@ export default function BrandSettingsPage() {
     cta_text: '',
     badge: '',
     link: '',
-    position: 'header' as 'header' | 'hero' | 'sidebar',
+    position: 'header' as 'header' | 'hero' | 'sidebar' | 'dashboard',
     media_type: 'image' as 'image' | 'video',
     video_url: '',
     background_from: '#111111',
@@ -358,8 +359,8 @@ export default function BrandSettingsPage() {
       background_to: banner.background_to || '#0B0B0C',
       order: banner.order || 0,
       is_active: banner.is_active,
-      starts_at: banner.starts_at ? banner.starts_at.slice(0, 16) : '',
-      ends_at: banner.ends_at ? banner.ends_at.slice(0, 16) : '',
+      starts_at: toDateTimeLocal(banner.starts_at),
+      ends_at: toDateTimeLocal(banner.ends_at),
       remove_image: false,
     });
   };
@@ -388,8 +389,8 @@ export default function BrandSettingsPage() {
       formData.append('background_to', bannerForm.background_to);
       formData.append('order', String(bannerForm.order || 0));
       formData.append('is_active', bannerForm.is_active ? '1' : '0');
-      if (bannerForm.starts_at) formData.append('starts_at', bannerForm.starts_at);
-      if (bannerForm.ends_at) formData.append('ends_at', bannerForm.ends_at);
+      formData.append('starts_at', toDateTimeIso(bannerForm.starts_at));
+      formData.append('ends_at', toDateTimeIso(bannerForm.ends_at));
       if (bannerForm.remove_image) formData.append('remove_image', '1');
       if (bannerImageFile) formData.append('image', bannerImageFile);
 
@@ -670,8 +671,8 @@ export default function BrandSettingsPage() {
           <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-slate-900">Banner Landing Publik</h2>
-                <p className="text-sm text-slate-500">Banner ini tampil di header atau area hero landing publik (React).</p>
+                <h2 className="text-lg font-semibold text-slate-900">Banner & Promosi</h2>
+                <p className="text-sm text-slate-500">Kelola banner landing publik dan banner yang tampil di dashboard pengguna.</p>
               </div>
               <button type="button" onClick={resetBannerForm} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700">
                 Banner Baru
@@ -684,10 +685,11 @@ export default function BrandSettingsPage() {
               <input value={bannerForm.cta_text} onChange={(event) => setBannerForm((current) => ({ ...current, cta_text: event.target.value }))} className={textInputClassName} placeholder="Teks tombol CTA (opsional)" />
               <input value={bannerForm.badge} onChange={(event) => setBannerForm((current) => ({ ...current, badge: event.target.value }))} className={textInputClassName} placeholder="Badge (contoh: Promo Terbatas)" />
               <input value={bannerForm.link} onChange={(event) => setBannerForm((current) => ({ ...current, link: event.target.value }))} className={textInputClassName} placeholder="Link tujuan (opsional)" />
-              <select value={bannerForm.position} onChange={(event) => setBannerForm((current) => ({ ...current, position: event.target.value as 'header' | 'hero' | 'sidebar' }))} className={textInputClassName}>
-                <option value="header">Header</option>
-                <option value="hero">Hero</option>
-                <option value="sidebar">Sidebar</option>
+              <select value={bannerForm.position} onChange={(event) => setBannerForm((current) => ({ ...current, position: event.target.value as BannerItem['position'] }))} className={textInputClassName}>
+                <option value="header">Header situs &amp; halaman masuk</option>
+                <option value="hero">Hero beranda</option>
+                <option value="sidebar">Panel samping halaman masuk</option>
+                <option value="dashboard">Dashboard pengguna</option>
               </select>
               <select value={bannerForm.media_type} onChange={(event) => setBannerForm((current) => ({ ...current, media_type: event.target.value as 'image' | 'video' }))} className={textInputClassName}>
                 <option value="image">Media: Gambar</option>
@@ -719,8 +721,13 @@ export default function BrandSettingsPage() {
                 <input type="checkbox" checked={bannerForm.is_active} onChange={(event) => setBannerForm((current) => ({ ...current, is_active: event.target.checked }))} />
                 Banner aktif
               </label>
-              <input type="datetime-local" value={bannerForm.starts_at} onChange={(event) => setBannerForm((current) => ({ ...current, starts_at: event.target.value }))} className={textInputClassName} />
-              <input type="datetime-local" value={bannerForm.ends_at} onChange={(event) => setBannerForm((current) => ({ ...current, ends_at: event.target.value }))} className={textInputClassName} />
+              <label className="block text-sm text-slate-600">Mulai ditampilkan (waktu lokal perangkat)
+                <input type="datetime-local" value={bannerForm.starts_at} onChange={(event) => setBannerForm((current) => ({ ...current, starts_at: event.target.value }))} className={`${textInputClassName} mt-1`} />
+              </label>
+              <label className="block text-sm text-slate-600">Berakhir ditampilkan (waktu lokal perangkat)
+                <input type="datetime-local" value={bannerForm.ends_at} onChange={(event) => setBannerForm((current) => ({ ...current, ends_at: event.target.value }))} className={`${textInputClassName} mt-1`} />
+              </label>
+              <p className="text-xs leading-5 text-slate-500 md:col-span-2">Kosongkan tanggal mulai dan berakhir agar banner langsung tampil terus-menerus selama statusnya aktif.</p>
             </div>
 
             <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4">
@@ -756,7 +763,7 @@ export default function BrandSettingsPage() {
             <div className="mt-6 space-y-4">
               {banners.length === 0 ? (
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
-                  Belum ada banner publik. Tambahkan banner agar tampil di landing page Blade.
+                  Belum ada banner. Pilih posisi Dashboard pengguna agar banner tampil di beranda pengguna.
                 </div>
               ) : (
                 banners.map((banner) => (
