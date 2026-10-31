@@ -18,6 +18,7 @@ final class ChargeRequest
         public readonly string $returnUrl,
         public readonly array $notifyContext = [],
         public readonly ?string $preferredMethod = null,
+        public readonly ?string $notifyUrlOverride = null,
     ) {
     }
 }

@@ -11,7 +11,7 @@ import {
   Sparkles,
   Wallet,
 } from 'lucide-react';
-import SubscriptionModal from '@/components/SubscriptionModal';
+import CheckoutModal from '@/components/CheckoutModal';
 import GatewayPaymentFrame from '@/components/GatewayPaymentFrame';
 import {
   createWalletTopupSession,
@@ -629,11 +629,12 @@ export default function Payments() {
       )}
 
       {selectedApp && (
-        <SubscriptionModal
+        <CheckoutModal
           isOpen={Boolean(selectedApp)}
           onClose={() => setSelectedApp(null)}
           appName={selectedApp.name}
           appSlug={selectedApp.slug}
+          context="member"
           onSuccess={() => {
             void loadPage();
             setSelectedApp(null);

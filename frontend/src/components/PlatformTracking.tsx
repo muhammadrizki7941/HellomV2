@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { apiRequest, getSessionUser } from '@/services/api/client';
-import { marketingConsent, marketingContext, platformPublicPath, setMarketingConsent } from '@/lib/platformMarketing';
+import { flushQueuedPlatformMetaEvents, marketingConsent, marketingContext, platformPublicPath, setMarketingConsent } from '@/lib/platformMarketing';
 
 type PixelFn = ((...args: unknown[]) => void) & { callMethod?: (...args: unknown[]) => void; queue: unknown[][]; push?: PixelFn; loaded: boolean; version: string };
 const w = window as Window & { fbq?: PixelFn; _fbq?: PixelFn };
@@ -22,8 +22,19 @@ export default function PlatformTracking() {
   const [consent, setConsent] = useState(marketingConsent);
   const [preferences, setPreferences] = useState(false);
   const [config, setConfig] = useState<{ enabled: boolean; pixel_id: string } | null>(null);
-  const eligible = platformPublicPath(location.pathname) && getSessionUser<{ role: string }>()?.role !== 'super_admin';
+  const [checkoutActive, setCheckoutActive] = useState(false);
+  const eligible = (platformPublicPath(location.pathname) || checkoutActive) && getSessionUser<{ role: string }>()?.role !== 'super_admin';
   useEffect(() => { apiRequest<{ enabled: boolean; pixel_id: string }>('/public/marketing/config', { token: null }).then(setConfig).catch(() => {}); }, []);
+  useEffect(() => {
+    const open = () => setCheckoutActive(true);
+    const close = () => setCheckoutActive(false);
+    window.addEventListener('hellom-checkout-open', open);
+    window.addEventListener('hellom-checkout-close', close);
+    return () => {
+      window.removeEventListener('hellom-checkout-open', open);
+      window.removeEventListener('hellom-checkout-close', close);
+    };
+  }, []);
   useEffect(() => {
     const update = () => {
       setConsent(marketingConsent());
@@ -42,8 +53,13 @@ export default function PlatformTracking() {
     const timer = setTimeout(() => {
       const context = marketingContext();
       if (!context) return;
-      if (config.pixel_id) loadPixel(config.pixel_id);
-      const names = /^\/(aplikasi|produk)\/.+/.test(location.pathname) ? ['PageView', 'ViewContent'] : ['PageView'];
+      if (config.pixel_id) {
+        loadPixel(config.pixel_id);
+        flushQueuedPlatformMetaEvents();
+      }
+      const names = /^\/(aplikasi|produk)\/.+/.test(location.pathname) || location.pathname === '/' || location.pathname === '/checkout-pos'
+        ? ['PageView', 'ViewContent']
+        : ['PageView'];
       for (const event_name of names) {
         const event_id = crypto.randomUUID();
         void apiRequest('/public/marketing/events', { method: 'POST', token: null, body: { event_name, event_id, marketing: context } }).catch(() => {});

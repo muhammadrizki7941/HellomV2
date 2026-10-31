@@ -272,7 +272,10 @@ class PosReportsTest extends PosTestCase
 
     private function createOrder(string $tenant, array $attributes): Order
     {
-        return Order::withoutGlobalScope('tenant')->create(array_merge([
+        // Historical timestamps are deliberately guarded on Order; set them explicitly
+        // in this fixture so date-range assertions do not depend on today's date.
+        $order = new Order();
+        $order->forceFill(array_merge([
             'tenant_id' => $tenant,
             'order_number' => 'REPORT-' . Str::upper(Str::random(12)),
             'status' => 'completed',
@@ -291,5 +294,8 @@ class PosReportsTest extends PosTestCase
             'created_at' => now(),
             'updated_at' => now(),
         ], $attributes));
+        $order->save();
+
+        return $order;
     }
 }

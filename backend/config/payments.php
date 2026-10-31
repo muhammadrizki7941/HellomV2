@@ -90,7 +90,11 @@ return [
             'va' => env('IPAYMU_VA', ''),
             'api_key' => env('IPAYMU_API_KEY', ''),
             'callback_token' => env('IPAYMU_CALLBACK_TOKEN', ''),
-            'is_production' => (bool) env('IPAYMU_IS_PRODUCTION', false),
+            'environment' => env('IPAYMU_ENV', env('IPAYMU_IS_PRODUCTION', false) ? 'production' : 'sandbox'),
+            'notify_url' => env('IPAYMU_NOTIFY_URL', ''),
+            'is_production' => env('IPAYMU_ENV')
+                ? env('IPAYMU_ENV') === 'production'
+                : (bool) env('IPAYMU_IS_PRODUCTION', false),
         ],
 
         'doku' => [

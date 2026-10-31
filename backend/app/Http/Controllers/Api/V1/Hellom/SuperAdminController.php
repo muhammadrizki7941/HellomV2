@@ -16,6 +16,8 @@ use App\Services\Hellom\PosProvisioningService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class SuperAdminController extends BaseApiController
 {
@@ -572,13 +574,38 @@ class SuperAdminController extends BaseApiController
             'name' => ['sometimes', 'string', 'max:255'],
             'description' => ['sometimes', 'nullable', 'string', 'max:2000'],
             'is_active' => ['sometimes', 'boolean'],
+            'icon' => ['sometimes', 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+            'remove_icon' => ['sometimes', 'boolean'],
         ]);
 
-        $app->update($validated);
+        $changes = collect($validated)->except(['icon', 'remove_icon'])->all();
+        $oldIconPath = $app->icon_path;
+        $newIconPath = null;
+        if ($request->boolean('remove_icon') && $oldIconPath) {
+            $changes['icon_path'] = null;
+        }
+        if ($request->hasFile('icon')) {
+            $newIconPath = $request->file('icon')->storeAs(
+                'app-icons',
+                Str::uuid() . '.' . $request->file('icon')->guessExtension(),
+                'public'
+            );
+            if (!is_string($newIconPath) || $newIconPath === '') {
+                throw new \RuntimeException('Ikon aplikasi gagal disimpan.');
+            }
+            $changes['icon_path'] = $newIconPath;
+        }
+        $app->update($changes);
+        if ($oldIconPath && ($request->boolean('remove_icon') || $newIconPath)) {
+            Storage::disk('public')->delete($oldIconPath);
+        }
 
-        $this->audit($request, 'app.update', 'AppCatalog', $appId, null, $validated);
+        $this->audit($request, 'app.update', 'AppCatalog', $appId, null, [
+            ...collect($validated)->except(['icon'])->all(),
+            ...($request->hasFile('icon') ? ['icon_path' => $app->icon_path] : []),
+        ]);
 
-        return $this->ok($app->fresh(), __('hellom.app_updated'));
+        return $this->ok($app->fresh()->append('icon_url'), __('hellom.app_updated'));
     }
 
     // ─── Plan Management ───

@@ -133,6 +133,7 @@ class SubscriptionWalletController extends BaseApiController
                 'status' => 'confirmed',
                 'metadata' => $intentMeta,
             ])->save();
+            app(\App\Services\Billing\PromoCheckoutService::class)->reserveAndRedeem($intent);
 
             if ($intent->subscription) {
                 $subMeta = is_array($intent->subscription->metadata) ? $intent->subscription->metadata : [];
@@ -175,8 +176,8 @@ class SubscriptionWalletController extends BaseApiController
                 InvoiceController::generateFromCheckout(
                     organizationId: (int) $intent->organization_id,
                     subscriptionId: (int) $intent->subscription->id,
-                    amount: $amount,
-                    discount: 0,
+                    amount: (int) data_get($intent->metadata, 'base_amount', $amount),
+                    discount: (int) data_get($intent->metadata, 'discount_amount', 0),
                     appSlug: (string) ($intent->app?->slug ?? ''),
                     planSlug: (string) ($intent->plan?->slug ?? ''),
                     paymentMethod: 'wallet',
@@ -196,6 +197,18 @@ class SubscriptionWalletController extends BaseApiController
         /** @var CheckoutIntent $confirmedIntent */
         $confirmedIntent = $result['intent'];
         $this->checkoutNotifier->sendPaymentReceipt($confirmedIntent);
+        $marketing = data_get($confirmedIntent->metadata, 'marketing');
+        $purchaseEventId = (string) data_get($confirmedIntent->metadata, 'purchase_event_id', '');
+        if ($confirmedIntent->app?->slug === 'pos' && is_array($marketing) && $purchaseEventId !== '') {
+            app(\App\Services\PlatformMarketing::class)->record(
+                'Purchase',
+                $purchaseEventId,
+                $marketing,
+                (int) $confirmedIntent->amount,
+                'pos',
+                $confirmedIntent->user,
+            );
+        }
         $planName = (string) ($confirmedIntent->plan?->name ?? 'Paket');
         $notifier = app(\App\Services\Notifications\Notifier::class);
         $notifier->admin('subscription', 'Langganan dibayar dari saldo · ' . $planName,

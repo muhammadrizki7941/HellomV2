@@ -89,6 +89,15 @@ class AppServiceProvider extends ServiceProvider
                 Limit::perMinute(20)->by('ip:' . $request->ip()),
             ];
         });
+        RateLimiter::for('hellom-support', function (Request $request) {
+            return Limit::perMinute(60)->by('support:' . ($request->user()?->id ?? $request->ip()));
+        });
+        RateLimiter::for('hellom-support-ai', function (Request $request) {
+            return [
+                Limit::perMinute(3)->by('support-ai-minute:' . ($request->user()?->id ?? $request->ip())),
+                Limit::perDay((int) config('support.ai_daily_limit', 20))->by('support-ai-day:' . ($request->user()?->id ?? $request->ip())),
+            ];
+        });
 
         // ─── POS order side effects (stock, points, socket, audit, fraud) ───
         Event::subscribe(\App\Listeners\Pos\OrderStockSubscriber::class);

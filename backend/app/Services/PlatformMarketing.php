@@ -15,9 +15,19 @@ class PlatformMarketing
     public function config(bool $secret = false): array
     {
         $config = json_decode(SystemSetting::get('platform_marketing', '{}'), true) ?: [];
-        $token = SystemSetting::get('platform_marketing_token', '');
+        $token = (string) config('services.meta.access_token')
+            ?: SystemSetting::get('platform_marketing_token', '');
+        $pixelId = (string) config('services.meta.pixel_id')
+            ?: (string) ($config['pixel_id'] ?? '');
+        $apiVersion = (string) config('services.meta.api_version')
+            ?: (string) ($config['api_version'] ?? 'v25.0');
         return [...['enabled' => true, 'meta_enabled' => false, 'pixel_id' => '', 'api_version' => 'v25.0', 'test_event_code' => ''], ...$config,
-            'token_configured' => $token !== '', ...($secret ? ['token' => $token ? Crypt::decryptString($token) : ''] : [])];
+            'pixel_id' => $pixelId,
+            'api_version' => $apiVersion,
+            'token_configured' => $token !== '',
+            ...($secret ? ['token' => $token
+                ? (config('services.meta.access_token') ? $token : Crypt::decryptString($token))
+                : ''] : [])];
     }
 
     public function save(array $data): array
@@ -34,8 +44,8 @@ class PlatformMarketing
         $input = request()->input('marketing', []);
         if (!is_array($input) || ($input['consent'] ?? '') !== 'granted') return [];
         $result = ['consent' => 'granted'];
-        foreach (['visitor_id', 'session_id', 'source', 'campaign', 'app_slug', 'fbp', 'fbc'] as $key) {
-            if (isset($input[$key]) && is_string($input[$key])) $result[$key] = mb_substr($input[$key], 0, in_array($key, ['fbp', 'fbc']) ? 255 : 120);
+        foreach (['visitor_id', 'session_id', 'source', 'medium', 'campaign', 'content', 'fbclid', 'app_slug', 'fbp', 'fbc'] as $key) {
+            if (isset($input[$key]) && is_string($input[$key])) $result[$key] = mb_substr($input[$key], 0, in_array($key, ['fbp', 'fbc', 'fbclid']) ? 255 : 120);
         }
         foreach (['visitor_id', 'session_id'] as $key) {
             if (!preg_match('/^[a-zA-Z0-9-]{8,64}$/', $result[$key] ?? '')) return [];
@@ -49,7 +59,9 @@ class PlatformMarketing
 
     public function safePath(string $path): string
     {
-        return preg_match('#^/(?:aplikasi(?:/[a-zA-Z0-9_-]+)?|produk(?:/[a-zA-Z0-9_-]+)?|layanan|tentang|kontak|wawasan(?:/[a-zA-Z0-9_-]+)?|register|login)?/?$#', $path) ? mb_substr($path, 0, 255) : '/';
+        return preg_match('#^/(?:aplikasi(?:/[a-zA-Z0-9_-]+)?|produk(?:/[a-zA-Z0-9_-]+)?|layanan|tentang|kontak|wawasan(?:/[a-zA-Z0-9_-]+)?|register|login|checkout-pos|pembayaran(?:/[a-zA-Z0-9_-]+)?)?/?$#', $path)
+            ? (str_starts_with($path, '/pembayaran/') ? '/pembayaran' : mb_substr($path, 0, 255))
+            : '/';
     }
 
     // Observers must never interrupt checkout or registration when analytics is unavailable.

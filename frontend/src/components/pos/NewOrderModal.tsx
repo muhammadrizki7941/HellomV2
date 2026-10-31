@@ -657,14 +657,14 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
 
         {/* Notification */}
         {notification?.visible && (
-          <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 animate-in slide-in-from-top-2 fade-in duration-300">
-            <div className="bg-green-600 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 min-w-max border border-green-500">
-              <div className="w-5 h-5 flex items-center justify-center bg-green-700 rounded-full">
+          <div className="absolute top-4 left-1/2 w-max max-w-[calc(100%-2rem)] transform -translate-x-1/2 z-50 animate-in slide-in-from-top-2 fade-in duration-300">
+            <div className="bg-green-600 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 border border-green-500">
+              <div className="w-5 h-5 shrink-0 flex items-center justify-center bg-green-700 rounded-full">
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               </div>
-              <span className="text-sm font-medium">{notification.message}</span>
+              <span className="min-w-0 text-sm font-medium [overflow-wrap:anywhere]">{notification.message}</span>
             </div>
           </div>
         )}

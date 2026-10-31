@@ -12,7 +12,7 @@ import {
   simulateHpp,
 } from '@/lib/hellomApi';
 import type { HppIngredient, HppOutletPrices, HppPro, HppSimulationRow, HppVariance } from '@/lib/hellomApi';
-import SubscriptionModal from '@/components/SubscriptionModal';
+import CheckoutModal from '@/components/CheckoutModal';
 import { Field, MarginText, PrimaryButton, errorsFrom, inputClass, pct, rupiah, rupiahUnit, toDecimal } from './shared';
 
 // Kalkulator HPP Pro (Tahap 4). Free for POS Kasir subscribers, or its own subscription. Locked →
@@ -81,7 +81,7 @@ function Upsell({ pro, onChanged }: { pro: HppPro; onChanged: () => void }) {
           <PrimaryButton type="button" onClick={() => setSubscribing(true)} disabled={!cheapest} className="mt-3 w-full" data-subscribe-pro>Berlangganan Pro</PrimaryButton>
         </div>
       </div>
-      <SubscriptionModal isOpen={subscribing} onClose={() => setSubscribing(false)} appName="Kalkulator HPP" appSlug="hpp" appIcon={Calculator} onSuccess={() => { setSubscribing(false); onChanged(); }} />
+      <CheckoutModal isOpen={subscribing} onClose={() => setSubscribing(false)} appName="Kalkulator HPP" appSlug="hpp" appIcon={Calculator} context="member" onSuccess={() => { setSubscribing(false); onChanged(); }} />
     </section>
   );
 }

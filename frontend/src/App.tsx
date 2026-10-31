@@ -1,7 +1,8 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Navigate, Routes, Route, useParams, useLocation } from 'react-router-dom';
 import useBrand from '@/hooks/useBrand';
 import PlatformTracking from '@/components/PlatformTracking';
+import CheckoutQueryLauncher from '@/components/CheckoutQueryLauncher';
 import HellomLoading from '@/components/HellomLoading';
 import { RouteJourney, ConnectionNotice, PageErrorBoundary, ServiceNotice } from '@/components/MascotFeedback';
 const MarketingAnalytics = lazy(() => import('@/pages/admin/MarketingAnalytics'));
@@ -28,6 +29,8 @@ const InvitationAcceptPage = lazy(() => import('@/pages/public/InvitationAcceptP
 const AdminInvitationPage = lazy(() => import('@/pages/public/AdminInvitationPage'));
 const UnsubscribePage = lazy(() => import('@/pages/public/UnsubscribePage'));
 const PosPinResetPage = lazy(() => import('@/pages/public/PosPinResetPage'));
+const PosPaymentStatusPage = lazy(() => import('@/pages/public/PosPaymentStatusPage'));
+const PosCheckoutRoute = lazy(() => import('@/pages/public/PosCheckoutRoute'));
 const LoginPage = lazy(() => import('@/pages/auth/LoginPage'));
 const StaffLoginPage = lazy(() => import('@/pages/auth/StaffLoginPage'));
 const RegisterPage = lazy(() => import('@/pages/auth/RegisterPage'));
@@ -42,6 +45,8 @@ const TermsPage = lazy(() => import('@/pages/public/TermsPage'));
 const DashboardLayout = lazy(() => import('@/layouts/DashboardLayout'));
 const DashboardHome = lazy(() => import('@/pages/member/DashboardHome'));
 const MemberProfile = lazy(() => import('@/pages/member/MemberProfile'));
+const UserSupportPage = lazy(() => import('@/pages/support/UserSupportPage'));
+const SupportAgentConsole = lazy(() => import('@/pages/support/SupportAgentConsole'));
 const LandingBuilder = lazy(() => import('@/pages/apps/LandingBuilder'));
 const PosAccess = lazy(() => import('@/pages/apps/PosAccess'));
 const HppApp = lazy(() => import('@/pages/apps/hpp/HppApp'));
@@ -96,6 +101,14 @@ function InsightRedirect() {
 
 function RouteFallback() {
   const { pathname } = useLocation();
+  const [showLoader, setShowLoader] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setShowLoader(true), 500);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  if (!showLoader) return null;
   return <HellomLoading label={pathname.startsWith('/pos') ? 'Memuat POS...' : 'Menyiapkan halaman...'} />;
 }
 
@@ -110,6 +123,7 @@ export default function App() {
     <PageErrorBoundary>
     <Suspense fallback={<RouteFallback />}>
       <PlatformTracking />
+      <CheckoutQueryLauncher />
       <Routes>
         {/* Public site: persistent navbar/footer, curtain transitions between pages */}
         <Route element={<PublicLayout />}>
@@ -128,6 +142,8 @@ export default function App() {
         {/* Other public routes */}
         {/* Buyer thank-you / order status (payment return URL). */}
         <Route path="/pesanan/:reference" element={<OrderStatusPage />} />
+        <Route path="/checkout-pos" element={<PosCheckoutRoute />} />
+        <Route path="/pembayaran/:token" element={<PosPaymentStatusPage />} />
         {/* Hellom Page selling: checkout, buyer access page, order lookup, policies. */}
         <Route path="/beli/:productId" element={<CheckoutPage />} />
         <Route path="/akses/:token" element={<AccessPage />} />
@@ -177,6 +193,7 @@ export default function App() {
         <Route path="/dashboard" element={<DashboardLayout />}>
           <Route index element={<DashboardHome />} />
           <Route path="profile" element={<MemberProfile />} />
+          <Route path="support" element={<UserSupportPage />} />
           <Route path="payments" element={<Payments />} />
           <Route path="billing" element={<Payments />} />
           <Route path="billing/renew" element={<Payments />} />
@@ -190,6 +207,7 @@ export default function App() {
           <Route path="apps/pos" element={<PosAccess />} />
           <Route path="apps/pos/customer" element={<PosCustomerHub />} />
         </Route>
+        <Route path="/support/agent" element={<SupportAgentConsole />} />
 
         {/* POS Routes */}
         <Route path="/pos" element={<PosLayout />}>
@@ -229,6 +247,7 @@ export default function App() {
           <Route path="settings" element={<AdminSettings />} />
           <Route path="settings/email" element={<EmailSetting />} />
           <Route path="notifications" element={<Notifications />} />
+          <Route path="support" element={<SupportAgentConsole />} />
           <Route path="system" element={<SystemHealth />} />
           <Route path="audit-log" element={<AdminAuditLog />} />
           <Route path="invoices" element={<AdminInvoices />} />

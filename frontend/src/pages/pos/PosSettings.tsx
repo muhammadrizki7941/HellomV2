@@ -471,7 +471,7 @@ export default function PosSettings() {
       </div>
 
       {/* Tab Navigation */}
-      <div className="flex border-b border-gray-200 mb-6">
+      <div className="mb-6 flex min-w-0 overflow-x-auto border-b border-gray-200 [&>button]:shrink-0">
         <button
           onClick={() => setActiveTab('identity')}
           className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${

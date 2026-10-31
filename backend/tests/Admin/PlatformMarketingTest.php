@@ -3,9 +3,13 @@
 namespace Tests\Admin;
 
 use App\Models\PlatformMarketingEvent;
+use App\Models\AppCatalog;
+use App\Models\Entitlement;
+use App\Models\Organization;
 use App\Models\SystemSetting;
 use App\Services\PlatformMarketing;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class PlatformMarketingTest extends AdminTestCase
@@ -72,6 +76,49 @@ class PlatformMarketingTest extends AdminTestCase
         $this->assertNotSame('private-token', SystemSetting::get('platform_marketing_token'));
         $this->getJson('/api/v1/hellom/public/marketing/config')->assertOk()->assertJsonMissing(['token' => 'private-token']);
         $this->api($admin, 'GET', '/admin/marketing/settings')->assertJsonMissing(['token' => 'private-token']);
+    }
+
+    public function test_super_admin_can_choose_dashboard_promotions_and_members_only_see_unowned_apps(): void
+    {
+        $app = AppCatalog::query()->updateOrCreate(['slug' => 'pos'], ['name' => 'POS', 'is_active' => true]);
+        $otherApp = AppCatalog::query()->updateOrCreate(['slug' => 'landing_builder'], ['name' => 'Landing Builder', 'is_active' => true]);
+        $admin = $this->superAdmin();
+        $member = $this->makeUser('member');
+        $organizationId = DB::table('organizations')->insertGetId([
+            'name' => 'Promo shop',
+            'slug' => 'promo-shop-' . Str::lower(Str::random(8)),
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $organization = Organization::query()->findOrFail($organizationId);
+        $member->update(['current_organization_id' => $organization->id]);
+        $organization->users()->attach($member->id, ['role' => 'owner']);
+
+        $this->api($member, 'GET', '/admin/marketing/dashboard-promotions')->assertForbidden();
+        $this->api($admin, 'PUT', '/admin/marketing/dashboard-promotions', ['app_slugs' => [$app->slug], 'product_ids' => []])
+            ->assertOk()->assertJsonPath('data.selected_slugs.0', 'pos');
+        $saved = json_decode((string) SystemSetting::get('dashboard_promoted_app_slugs'), true);
+        $this->assertSame([$app->slug], $saved['apps']);
+        $this->assertSame([], $saved['products']);
+
+        $this->api($member, 'GET', '/member/dashboard/cards')
+            ->assertOk()
+            ->assertJsonPath('data.promoted_cards.0.app.slug', 'pos');
+
+        Entitlement::query()->create([
+            'organization_id' => $organization->id,
+            'app_id' => $app->id,
+            'status' => 'active',
+            'starts_at' => now()->subDay(),
+            'ends_at' => now()->addMonth(),
+        ]);
+        $this->api($member, 'GET', '/member/dashboard/cards')
+            ->assertOk()
+            ->assertJsonCount(0, 'data.promoted_cards');
+
+        $this->api($admin, 'PUT', '/admin/marketing/dashboard-promotions', ['app_slugs' => [$otherApp->slug, 'unknown-app']])
+            ->assertStatus(422);
     }
 
     public function test_meta_payload_uses_real_amount_and_id_and_retries_idempotently(): void

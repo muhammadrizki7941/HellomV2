@@ -5,6 +5,7 @@ namespace App\Services\Hellom;
 use App\Http\Controllers\Api\V1\Hellom\InvoiceController;
 use App\Models\CheckoutIntent;
 use App\Models\Invoice;
+use App\Models\Organization;
 use App\Models\PlatformFinanceLedger;
 use App\Models\Subscription;
 use App\Models\User;
@@ -56,7 +57,7 @@ class SubscriptionCheckoutActivationService
             if (!$this->isAwaitingPayment($locked)) {
                 return 'inactive';
             }
-            if ($locked->expires_at && $locked->expires_at->isPast()) {
+            if ($locked->expires_at && $locked->expires_at->isPast() && empty($meta['verified_gateway_payment'])) {
                 $this->markExpired($locked);
 
                 return 'expired';
@@ -86,6 +87,7 @@ class SubscriptionCheckoutActivationService
             }
 
             $this->upsertActiveEntitlement($intent, $now);
+            app(\App\Services\Billing\PromoCheckoutService::class)->reserveAndRedeem($intent);
 
             $invoiceId = (int) ($meta['invoice_id'] ?? 0);
             if ($invoiceId > 0) {
@@ -106,6 +108,11 @@ class SubscriptionCheckoutActivationService
                     (int) $intent->id,
                     'Subscription payment confirmed via ' . $providerLabel
                 );
+            }
+
+            $organization = Organization::query()->lockForUpdate()->find((int) $intent->organization_id);
+            if ($organization instanceof Organization && $organization->status === 'pending') {
+                $organization->forceFill(['status' => 'active'])->save();
             }
 
             $this->ensurePosProvisioning($intent);
@@ -131,6 +138,18 @@ class SubscriptionCheckoutActivationService
             if ($intent->subscription instanceof Subscription) {
                 $this->notificationService->notifyConsumerAccessActivated($intent->user, $intent->subscription, $productName);
             }
+        }
+        $marketing = data_get($intent->metadata, 'marketing');
+        $purchaseEventId = (string) data_get($intent->metadata, 'purchase_event_id', '');
+        if (is_array($marketing) && $purchaseEventId !== '') {
+            app(\App\Services\PlatformMarketing::class)->record(
+                'Purchase',
+                $purchaseEventId,
+                $marketing,
+                (int) $intent->amount,
+                (string) ($intent->app?->slug ?? ''),
+                $intent->user,
+            );
         }
 
         return true;

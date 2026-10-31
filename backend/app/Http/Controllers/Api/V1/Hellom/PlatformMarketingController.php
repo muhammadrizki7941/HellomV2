@@ -3,6 +3,9 @@
 namespace App\Http\Controllers\Api\V1\Hellom;
 
 use App\Models\PlatformMarketingEvent;
+use App\Models\AppCatalog;
+use App\Models\DigitalProduct;
+use App\Models\SystemSetting;
 use App\Services\PlatformMarketing;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -24,6 +27,77 @@ class PlatformMarketingController extends BaseApiController
     }
 
     public function settings(PlatformMarketing $marketing) { return $this->ok($marketing->config()); }
+
+    public function dashboardPromotions()
+    {
+        $selected = json_decode((string) SystemSetting::get('dashboard_promoted_app_slugs', '[]'), true);
+        $selectedApps = is_array($selected) && array_is_list($selected)
+            ? $selected
+            : (is_array($selected) ? ($selected['apps'] ?? []) : []);
+        $selectedProducts = is_array($selected) && !array_is_list($selected)
+            ? ($selected['products'] ?? [])
+            : [];
+
+        return $this->ok([
+            'apps' => AppCatalog::query()->where('is_active', true)->orderBy('name')->get(['slug', 'name']),
+            'products' => DigitalProduct::query()
+                ->published()
+                ->where('is_flagship', true)
+                ->where('type', 'paid')
+                ->where('price', '>', 0)
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get(['id', 'slug', 'name', 'price', 'type', 'thumbnail_url', 'flagship_app']),
+            'selected_slugs' => array_values(array_unique(array_filter($selectedApps, 'is_string'))),
+            'selected_product_ids' => array_values(array_unique(array_filter($selectedProducts, 'is_numeric'))),
+        ]);
+    }
+
+    public function saveDashboardPromotions(Request $request)
+    {
+        $data = $request->validate([
+            'app_slugs' => ['present', 'array', 'max:20'],
+            'app_slugs.*' => ['required', 'string', 'max:100', 'distinct'],
+            'product_ids' => ['sometimes', 'array', 'max:20'],
+            'product_ids.*' => ['required', 'integer', 'distinct'],
+        ]);
+        $requested = $data['app_slugs'];
+        $requestedProductIds = array_map('intval', $data['product_ids'] ?? []);
+        $activeSlugs = AppCatalog::query()
+            ->where('is_active', true)
+            ->whereIn('slug', $requested)
+            ->pluck('slug')
+            ->all();
+        $publishableProductIds = $requestedProductIds === []
+            ? []
+            : DigitalProduct::query()
+                ->published()
+                ->where('is_flagship', true)
+                ->where('type', 'paid')
+                ->where('price', '>', 0)
+                ->whereIn('id', $requestedProductIds)
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+
+        if (count($activeSlugs) !== count($requested) || count($publishableProductIds) !== count($requestedProductIds)) {
+            return $this->fail('Pilih aplikasi yang masih aktif saja.', ['code' => 'INVALID_PROMOTED_APPS'], 422);
+        }
+
+        SystemSetting::set('dashboard_promoted_app_slugs', json_encode([
+            'apps' => array_values($requested),
+            'products' => array_values($requestedProductIds),
+        ]));
+        $this->adminAudit($request, 'admin.marketing.dashboard_promotions', 'system_setting', null, [
+            'app_slugs' => $requested,
+            'product_ids' => $requestedProductIds,
+        ]);
+
+        return $this->ok([
+            'selected_slugs' => array_values($requested),
+            'selected_product_ids' => array_values($requestedProductIds),
+        ], 'Promosi aplikasi dashboard berhasil disimpan.');
+    }
 
     public function save(Request $request, PlatformMarketing $marketing)
     {

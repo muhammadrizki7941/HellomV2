@@ -9,7 +9,6 @@ use App\Models\Plan;
 use App\Mail\HellomCheckoutStatusMail;
 use App\Services\Hellom\IpaymuSettingsService;
 use App\Services\Hellom\PaymentGatewaySettingsService;
-use App\Services\Payments\IpaymuPaymentVerifier;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Contracts\Mail\Mailable;
 use Illuminate\Support\Facades\Http;
@@ -20,9 +19,9 @@ class SubscriptionCheckoutPriceTest extends SellerFinanceTestCase
 {
     use DatabaseTransactions;
 
-    public function test_admin_package_price_matches_invoice_and_hosted_gateway(): void
+    public function test_pos_package_price_matches_invoice_and_direct_gateway(): void
     {
-        $this->checkout(false);
+        $this->checkout(true, 'bni');
     }
 
     public function test_direct_checkout_returns_instructions_and_keeps_the_same_price(): void
@@ -71,6 +70,7 @@ class SubscriptionCheckoutPriceTest extends SellerFinanceTestCase
             'plan_slug' => $plan->slug,
             'payment_flow' => 'direct',
             'gateway_channel' => 'qris',
+            'terms_accepted' => true,
         ])->assertOk();
 
         $buyerMail = collect($mail->queued)->first(fn (array $entry) =>
@@ -83,7 +83,7 @@ class SubscriptionCheckoutPriceTest extends SellerFinanceTestCase
         $this->assertSame('https://payments.example.test/qr.png', data_get($payload, 'gateway_instructions.qr_image_url'));
         $this->assertSame('test-qr-payload', data_get($payload, 'gateway_instructions.qr_string'));
         $this->assertSame('Cek status pembayaran', $payload['status_label']);
-        $this->assertStringEndsWith('/dashboard/payments?checkout=pos', $payload['status_url']);
+        $this->assertStringContainsString('/pembayaran/', $payload['status_url']);
         $this->assertArrayHasKey('Batas pembayaran', $payload['details']);
         $rendered = $buyerMail['mailable']->render();
         $this->assertStringContainsString('https://payments.example.test/qr.png', $rendered);
@@ -104,7 +104,7 @@ class SubscriptionCheckoutPriceTest extends SellerFinanceTestCase
         );
         $this->assertNotNull($hostedPaymentMail);
         $this->assertSame('Bayar sekarang', $hostedPaymentMail['mailable']->payload['cta_label']);
-        $this->assertSame($payload['status_url'], $hostedPaymentMail['mailable']->payload['status_url']);
+        $this->assertStringEndsWith('/dashboard/payments?checkout=pos', $hostedPaymentMail['mailable']->payload['status_url']);
     }
 
     public function test_direct_pos_checkout_expires_after_one_hour_and_can_be_cancelled(): void
@@ -132,6 +132,7 @@ class SubscriptionCheckoutPriceTest extends SellerFinanceTestCase
             'plan_slug' => $plan->slug,
             'payment_flow' => 'direct',
             'gateway_channel' => 'qris',
+            'terms_accepted' => true,
         ])->assertOk();
 
         $intentToken = (string) $response->json('data.checkout_intent.intent_token');
@@ -177,6 +178,7 @@ class SubscriptionCheckoutPriceTest extends SellerFinanceTestCase
             'plan_slug' => $plan->slug,
             'payment_flow' => 'direct',
             'gateway_channel' => 'qris',
+            'terms_accepted' => true,
         ])->assertOk();
         $intent = CheckoutIntent::query()
             ->where('intent_token', $response->json('data.checkout_intent.intent_token'))
@@ -213,6 +215,7 @@ class SubscriptionCheckoutPriceTest extends SellerFinanceTestCase
         $response = $this->withToken($seller['token'])->postJson('/api/v1/hellom/billing/checkout-start', [
             'marketing' => ['consent' => 'granted', 'visitor_id' => 'visitor-price-test', 'session_id' => 'session-price-test', 'source' => 'instagram', 'campaign' => 'pos-launch', 'path' => '/aplikasi/pos'],
             'app_slug' => 'pos', 'plan_slug' => $plan->slug, 'payment_flow' => 'direct', 'billing_cycle' => 'yearly',
+            'terms_accepted' => true,
             ...($direct ? ['gateway_channel' => $channel] : []),
         ])->assertOk()->assertJsonPath('data.checkout_intent.amount', 48000)->assertJsonPath('data.subscription_draft.amount', 48000);
 
@@ -226,11 +229,10 @@ class SubscriptionCheckoutPriceTest extends SellerFinanceTestCase
         $this->assertSame(1, \App\Models\PlatformMarketingEvent::where('event_id', 'purchase_' . $intent->intent_token)->count());
         $intent->update(['status' => $originalStatus]);
         $this->assertSame(48000, (int) Invoice::query()->where('subscription_id', $intent->subscription_id)->value('total'));
-        Http::assertSent(function ($request) use ($direct, $intent) {
-            parse_str(parse_url($request['notifyUrl'], PHP_URL_QUERY), $query);
-            $this->assertTrue(IpaymuPaymentVerifier::signatureValid($query));
-            return ($direct ? $request['amount'] : $request['price'][0]) === 48000
-                && $request['referenceId'] === $intent->intent_token;
+        Http::assertSent(function ($request) use ($intent) {
+            return (int) $request['amount'] === 48000
+                && $request['referenceId'] === Invoice::query()->where('subscription_id', $intent->subscription_id)->value('invoice_number')
+                && str_ends_with((string) $request['notifyUrl'], '/api/v1/hellom/public/pos-checkout/ipaymu/callback');
         });
         if ($direct) {
             $response->assertJsonPath('data.payment.payment_url', null)
