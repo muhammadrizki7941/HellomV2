@@ -220,6 +220,8 @@ class SubscriptionCheckoutPriceTest extends SellerFinanceTestCase
         ])->assertOk()->assertJsonPath('data.checkout_intent.amount', 48000)->assertJsonPath('data.subscription_draft.amount', 48000);
 
         $intent = CheckoutIntent::query()->where('intent_token', $response->json('data.checkout_intent.intent_token'))->firstOrFail();
+        $this->assertSame('yearly', $intent->subscription->billing_cycle);
+        $this->assertSame('yearly', $intent->metadata['billing_cycle']);
         $this->assertDatabaseHas('platform_marketing_events', ['event_id' => 'initiatecheckout_' . $intent->intent_token, 'amount' => 48000]);
         $this->assertDatabaseMissing('platform_marketing_events', ['event_id' => 'purchase_' . $intent->intent_token]);
         // Only a server-confirmed transition can create a Purchase. Repeated saves remain one event.

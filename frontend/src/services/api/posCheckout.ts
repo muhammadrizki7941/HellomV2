@@ -7,7 +7,10 @@ export type PosCheckoutPlan = {
   price: number;
   description: string;
   features: unknown;
-  billing_cycle: 'monthly';
+  billing_cycle: 'monthly' | 'yearly' | 'lifetime';
+  billing_cycles: string[];
+  type: string;
+  duration_days: number | null;
   is_recommended: boolean;
   max_outlets: number;
 };
@@ -68,10 +71,10 @@ export function getPosCheckoutOptions() {
   return publicApiRequest<PosCheckoutOptions>('/public/pos-checkout/options');
 }
 
-export function previewPosCheckoutPromo(planSlug: string, code: string) {
+export function previewPosCheckoutPromo(planSlug: string, code: string, billingCycle?: string) {
   return publicApiRequest<PosPromoPreview>('/public/pos-checkout/promo', {
     method: 'POST',
-    body: { plan_slug: planSlug, code },
+    body: { plan_slug: planSlug, code, billing_cycle: billingCycle },
   });
 }
 
@@ -81,6 +84,7 @@ export function startGuestPosCheckout(payload: {
   phone: string;
   business_name: string;
   plan_slug: string;
+  billing_cycle?: string;
   payment_channel: string;
   promo_code?: string;
   website: string;

@@ -52,6 +52,7 @@ class PosGuestCheckoutTest extends SellerFinanceTestCase
     public function test_public_promo_preview_accepts_valid_code_and_rejects_invalid_code(): void
     {
         $plan = $this->posPlan(48000);
+        $plan->update(['billing_cycles' => ['yearly']]);
         $app = AppCatalog::query()->where('slug', 'pos')->firstOrFail();
         PromoCampaign::query()->create([
             'code' => 'POS25' . random_int(10, 99),
@@ -146,6 +147,59 @@ class PosGuestCheckoutTest extends SellerFinanceTestCase
             ->where('organization_id', $intent->organization_id)
             ->where('app_id', $intent->app_id)
             ->count());
+    }
+
+    public function test_options_include_yearly_and_lifetime_but_hide_unavailable_plans(): void
+    {
+        $yearly = $this->posPlan(48000);
+        $yearly->update(['billing_cycles' => ['yearly']]);
+        $lifetime = $this->posPlan();
+        $lifetime->update(['type' => 'lifetime', 'billing_cycles' => []]);
+        $hidden = $this->posPlan();
+        $hidden->update(['is_visible' => false]);
+        $inactive = $this->posPlan();
+        $inactive->update(['is_active' => false]);
+        $plans = collect($this->getJson('/api/v1/hellom/public/pos-checkout/options')->assertOk()->json('data.plans'));
+        $this->assertSame('yearly', $plans->firstWhere('id', $yearly->id)['billing_cycle']);
+        $this->assertSame(48000, $plans->firstWhere('id', $yearly->id)['price']);
+        $this->assertSame(['yearly'], $plans->firstWhere('id', $yearly->id)['billing_cycles']);
+        $this->assertSame('lifetime', $plans->firstWhere('id', $lifetime->id)['billing_cycle']);
+        $this->assertFalse($plans->contains('id', $hidden->id));
+        $this->assertFalse($plans->contains('id', $inactive->id));
+    }
+
+    public function test_yearly_guest_checkout_preserves_price_and_period_through_paid_activation(): void
+    {
+        $plan = $this->posPlan(48000);
+        $plan->update(['billing_cycles' => ['yearly']]);
+        $this->fakeDirectPayments(['trx-yearly']);
+        $response = $this->startGuest($plan)->assertCreated();
+        $intent = CheckoutIntent::query()->where('status_token_hash', hash('sha256', $response->json('data.status_token')))->firstOrFail();
+        $this->assertSame('yearly', $intent->subscription->billing_cycle);
+        $this->assertSame('yearly', $intent->metadata['billing_cycle']);
+        $invoice = Invoice::query()->where('subscription_id', $intent->subscription_id)->firstOrFail();
+        $this->assertSame('yearly', $invoice->metadata['billing_cycle']);
+        $this->assertSame(48000, (int) $invoice->total);
+        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/api/v2/payment/direct') && (int) $request['amount'] === 48000);
+        $attempt = $intent->payments()->firstOrFail();
+        $this->fakeIpaymuTransaction($attempt->transaction_id, $attempt->reference_id, 48000);
+        $callback = $this->callbackFor($attempt);
+        $this->postJson('/api/v1/hellom/public/pos-checkout/ipaymu/callback', $callback['body'], ['X-Signature' => $callback['signature']])->assertOk();
+        $subscription = $intent->subscription->fresh();
+        $this->assertSame('active', $subscription->status);
+        $this->assertTrue($subscription->ends_at->equalTo($subscription->starts_at->copy()->addYear()));
+    }
+
+    public function test_guest_can_select_yearly_on_dual_cycle_plan_and_rejects_unavailable_cycle(): void
+    {
+        $plan = $this->posPlan();
+        $this->fakeDirectPayments(['trx-dual']);
+        $this->startGuest($plan, ['billing_cycle' => 'yearly'])->assertUnprocessable();
+        Http::assertNothingSent();
+        $plan->update(['billing_cycles' => ['monthly', 'yearly']]);
+        $response = $this->startGuest($plan, ['billing_cycle' => 'yearly'])->assertCreated();
+        $intent = CheckoutIntent::query()->where('status_token_hash', hash('sha256', $response->json('data.status_token')))->firstOrFail();
+        $this->assertSame('yearly', $intent->subscription->billing_cycle);
     }
 
     private function posPlan(int $price = 35000): Plan

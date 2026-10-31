@@ -262,7 +262,7 @@ class SubscriptionCheckoutActivationService
 
     private function isAwaitingPayment(CheckoutIntent $intent): bool
     {
-        return in_array((string) $intent->status, ['gateway_pending', 'manual_review', 'awaiting_manual_review', 'pending'], true);
+        return in_array((string) $intent->status, ['gateway_pending', 'manual_review', 'awaiting_manual_review', 'pending', 'pending_payment'], true);
     }
 
     private function markExpired(CheckoutIntent $intent): void

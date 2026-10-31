@@ -54,7 +54,7 @@ class PosCheckoutController extends BaseApiController
             ->orderBy('sort_order')
             ->orderBy('price')
             ->get()
-            ->filter(fn (Plan $plan) => in_array('monthly', $plan->billing_cycles ?? [], true))
+            ->filter(fn (Plan $plan) => $this->resolveBillingCycle($plan, null) !== null)
             ->map(fn (Plan $plan) => [
                 'id' => (int) $plan->id,
                 'slug' => (string) $plan->slug,
@@ -62,7 +62,10 @@ class PosCheckoutController extends BaseApiController
                 'price' => (int) $plan->price,
                 'description' => (string) ($plan->description ?? ''),
                 'features' => $plan->features ?? [],
-                'billing_cycle' => 'monthly',
+                'billing_cycle' => $this->resolveBillingCycle($plan, null),
+                'billing_cycles' => $plan->billing_cycles ?? [],
+                'type' => $plan->type,
+                'duration_days' => $plan->duration_days,
                 'is_recommended' => (bool) $plan->is_recommended,
                 'max_outlets' => (int) ($plan->max_outlets ?? 1),
             ])
@@ -91,6 +94,7 @@ class PosCheckoutController extends BaseApiController
     {
         $data = $request->validate([
             'plan_slug' => ['required', 'string', 'max:100'],
+            'billing_cycle' => ['nullable', 'in:monthly,yearly,lifetime'],
             'code' => ['required', 'string', 'max:50'],
         ]);
         $plan = $this->findPlan((string) $data['plan_slug']);
@@ -103,7 +107,7 @@ class PosCheckoutController extends BaseApiController
             strtoupper(trim((string) $data['code'])),
             (int) $app->id,
             (int) $plan->id,
-            $this->resolvePlanAmount($plan, 'monthly')
+            $this->resolvePlanAmount($plan, $this->checkoutCycle($plan, $data['billing_cycle'] ?? null))
         );
         if (!$preview) {
             return $this->fail('Kode promo tidak berlaku untuk paket ini atau sudah mencapai batas pemakaian.', [
@@ -122,6 +126,7 @@ class PosCheckoutController extends BaseApiController
             'phone' => ['required', 'string', 'regex:/^\+?[0-9\s\-]{8,20}$/'],
             'business_name' => ['required', 'string', 'max:160'],
             'plan_slug' => ['required', 'string', 'max:100'],
+            'billing_cycle' => ['nullable', 'in:monthly,yearly,lifetime'],
             'payment_channel' => ['required', 'string', 'max:30'],
             'promo_code' => ['nullable', 'string', 'max:50'],
             'website' => ['nullable', 'string', 'max:0'],
@@ -152,7 +157,8 @@ class PosCheckoutController extends BaseApiController
             return $this->fail('Paket POS tidak tersedia.', ['code' => 'PLAN_NOT_AVAILABLE'], 422);
         }
 
-        $baseAmount = $this->resolvePlanAmount($plan, 'monthly');
+        $billingCycle = $this->checkoutCycle($plan, $data['billing_cycle'] ?? null);
+        $baseAmount = $this->resolvePlanAmount($plan, $billingCycle);
         $promo = null;
         if (trim((string) ($data['promo_code'] ?? '')) !== '') {
             $promo = $this->promos->preview(
@@ -192,7 +198,7 @@ class PosCheckoutController extends BaseApiController
 
         $marketing = $this->sanitizeMarketing($data['marketing'] ?? []);
         $plainStatusToken = Str::random(48);
-        $result = DB::transaction(function () use ($data, $email, $user, $app, $plan, $promo, $baseAmount, $marketing, $plainStatusToken): array {
+        $result = DB::transaction(function () use ($data, $email, $user, $app, $plan, $promo, $baseAmount, $billingCycle, $marketing, $plainStatusToken): array {
             if (!$user instanceof User) {
                 $user = User::query()->create([
                     'name' => trim((string) $data['name']),
@@ -239,7 +245,7 @@ class PosCheckoutController extends BaseApiController
                 'status' => 'pending_payment',
                 'amount' => $amount,
                 'currency' => 'IDR',
-                'billing_cycle' => 'monthly',
+                'billing_cycle' => $billingCycle,
                 'metadata' => [
                     'created_by_user_id' => (int) $user->id,
                     'payment_flow' => 'direct',
@@ -264,7 +270,7 @@ class PosCheckoutController extends BaseApiController
                     'guest_checkout' => true,
                     'app_slug' => 'pos',
                     'plan_slug' => (string) $plan->slug,
-                    'billing_cycle' => 'monthly',
+                    'billing_cycle' => $billingCycle,
                     'base_amount' => $baseAmount,
                     'discount_amount' => $discount,
                     'promo' => $promo,
@@ -282,7 +288,7 @@ class PosCheckoutController extends BaseApiController
                 'total' => $amount,
                 'currency' => 'IDR',
                 'line_items' => [[
-                    'description' => $app->name . ' - ' . $plan->name . ' (Bulanan)',
+                    'description' => $app->name . ' - ' . $plan->name . ' (' . match ($billingCycle) { 'yearly' => 'Tahunan', 'monthly' => 'Bulanan', default => 'Sekali bayar' } . ')',
                     'amount' => $baseAmount,
                     'discount' => $discount,
                 ]],
@@ -291,7 +297,7 @@ class PosCheckoutController extends BaseApiController
                 'metadata' => [
                     'provider' => 'ipaymu',
                     'intent_token' => $intent->intent_token,
-                    'billing_cycle' => 'monthly',
+                    'billing_cycle' => $billingCycle,
                     'promo' => $promo,
                     'marketing_attribution' => $marketing,
                 ],
@@ -802,8 +808,18 @@ class PosCheckoutController extends BaseApiController
             ->where('is_active', true)
             ->where('is_visible', true)
             ->where('slug', 'like', 'pos\_%')
-            ->whereJsonContains('billing_cycles', 'monthly')
             ->first();
+    }
+
+    private function checkoutCycle(Plan $plan, ?string $requested): string
+    {
+        $cycle = $this->resolveBillingCycle($plan, $requested);
+        if ($cycle === null || ($requested !== null && $requested !== $cycle)) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'billing_cycle' => 'Periode pembayaran tidak tersedia untuk paket ini.',
+            ]);
+        }
+        return $cycle;
     }
 
     private function sanitizeMarketing(array $input): array

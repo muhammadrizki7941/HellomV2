@@ -36,7 +36,7 @@ type Props = {
   initialPromo?: string;
 };
 
-type Plan = Pick<PosCheckoutPlan, 'id' | 'slug' | 'name' | 'price' | 'description' | 'features' | 'is_recommended' | 'max_outlets'>;
+type Plan = Pick<PosCheckoutPlan, 'id' | 'slug' | 'name' | 'price' | 'description' | 'features' | 'is_recommended' | 'max_outlets' | 'billing_cycles' | 'type' | 'duration_days'>;
 type GuestFields = { name: string; email: string; phone: string; business_name: string };
 type PaymentFlow = 'wallet' | 'direct';
 
@@ -57,6 +57,9 @@ function featureList(value: unknown): string[] {
 
 function normalizedPlan(plan: PosCheckoutPlan | PricingMatrixPlan): Plan {
   return {
+    billing_cycles: plan.billing_cycles ?? [],
+    type: plan.type,
+    duration_days: plan.duration_days,
     id: plan.id,
     slug: plan.slug,
     name: plan.name,
@@ -66,6 +69,17 @@ function normalizedPlan(plan: PosCheckoutPlan | PricingMatrixPlan): Plan {
     is_recommended: Boolean(plan.is_recommended),
     max_outlets: Number(plan.max_outlets ?? 1),
   };
+}
+
+function planCycles(plan: Plan): string[] {
+  if (plan.type === 'free' || plan.type === 'lifetime') return ['lifetime'];
+  const cycles = plan.billing_cycles.filter((cycle) => cycle === 'monthly' || cycle === 'yearly');
+  return cycles.length ? cycles : [plan.duration_days && plan.duration_days >= 365 ? 'yearly' : 'lifetime'];
+}
+
+function periodLabel(plan: Plan, cycle: string): string {
+  if (plan.duration_days && plan.type !== 'lifetime' && plan.type !== 'free') return ` / ${plan.duration_days} hari`;
+  return cycle === 'yearly' ? ' / tahun' : cycle === 'monthly' ? ' / bulan' : ' · sekali bayar';
 }
 
 function newEventId(): string {
@@ -98,6 +112,7 @@ export default function CheckoutModal({
   const [walletBalance, setWalletBalance] = useState(0);
   const [walletAvailable, setWalletAvailable] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState('');
+  const [preferredCycle, setPreferredCycle] = useState('');
   const [paymentFlow, setPaymentFlow] = useState<PaymentFlow>('direct');
   const [channel, setChannel] = useState('');
   const [promoInput, setPromoInput] = useState(initialPromo || searchParams.get('promo') || '');
@@ -113,6 +128,8 @@ export default function CheckoutModal({
   const [gatewayUrl, setGatewayUrl] = useState('');
 
   const plan = plans.find((item) => item.slug === selectedPlan) || null;
+  const cycles = plan ? planCycles(plan) : [];
+  const billingCycle = cycles.includes(preferredCycle) ? preferredCycle : cycles[0];
   const total = promo?.final_amount ?? plan?.price ?? 0;
   const walletCoversTotal = walletAvailable && walletBalance >= total;
   const directChannels = channels;
@@ -251,7 +268,7 @@ export default function CheckoutModal({
     setLoading(true);
     setError('');
     try {
-      const result = await previewPosCheckoutPromo(plan.slug, promoInput.trim());
+      const result = await previewPosCheckoutPromo(plan.slug, promoInput.trim(), billingCycle);
       setPromo({
         code: result.code,
         discount_amount: Number(result.discount_amount),
@@ -304,6 +321,7 @@ export default function CheckoutModal({
         const result = await startGuestPosCheckout({
           ...guestFields,
           plan_slug: plan.slug,
+          billing_cycle: billingCycle,
           payment_channel: channel,
           ...(promo ? { promo_code: promo.code } : {}),
           website: honeypot,
@@ -322,7 +340,7 @@ export default function CheckoutModal({
         plan_slug: plan.slug,
         payment_flow: paymentFlow,
         expected_amount: plan.price,
-        billing_cycle: 'monthly',
+        billing_cycle: billingCycle,
         ...(promo ? { promo_code: promo.code } : {}),
         ...(paymentFlow === 'direct' && appSlug === 'pos' ? { gateway_channel: channel } : {}),
         ...(paymentFlow === 'direct' && appSlug !== 'pos' && manualMode ? { manual_payment_method: manualMethod } : {}),
@@ -429,8 +447,16 @@ export default function CheckoutModal({
               <section>
                 <div className="mb-3 flex items-center justify-between">
                   <h3 className="text-base font-extrabold text-zinc-900">Pilih Paket</h3>
-                  {plan && <span className="text-xs text-zinc-500">Harga per bulan</span>}
+                  {plan && <span className="text-xs text-zinc-500">Harga sesuai periode paket</span>}
                 </div>
+                {cycles.length > 1 && (
+                  <label className="mb-4 flex items-center gap-3 text-sm font-medium text-zinc-700">
+                    Periode pembayaran
+                    <select aria-label="Periode pembayaran" value={billingCycle} disabled={busy} onChange={(event) => { setPreferredCycle(event.target.value); setPromo(null); }} className="rounded-lg border border-zinc-200 bg-white px-3 py-2">
+                      {cycles.map((cycle) => <option key={cycle} value={cycle}>{cycle === 'yearly' ? 'Tahunan' : 'Bulanan'}</option>)}
+                    </select>
+                  </label>
+                )}
                 {plans.length ? (
                   <div className="grid gap-3 md:grid-cols-3">
                     {plans.map((item) => {
@@ -446,7 +472,7 @@ export default function CheckoutModal({
                               {chosen && <Check className="h-3 w-3" />}
                             </span>
                           </span>
-                          <span className="mt-2 block text-xl font-black text-zinc-950">{rupiah(item.price)}<span className="text-xs font-medium text-zinc-500"> / bulan</span></span>
+                          <span className="mt-2 block text-xl font-black text-zinc-950">{rupiah(item.price)}<span className="text-xs font-medium text-zinc-500">{periodLabel(item, planCycles(item).includes(preferredCycle) ? preferredCycle : planCycles(item)[0])}</span></span>
                           {item.description && <span className="mt-1 block line-clamp-2 text-xs leading-relaxed text-zinc-500">{item.description}</span>}
                           <span className="mt-3 grid gap-1.5">
                             {itemFeatures.map((feature) => <span key={feature} className="flex items-start gap-1.5 text-xs text-zinc-600"><Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />{feature}</span>)}
@@ -547,8 +573,8 @@ export default function CheckoutModal({
                       </div>
                       <dl className="mt-5 space-y-3 text-sm">
                         <div className="flex justify-between gap-3"><dt className="text-zinc-500">Paket</dt><dd className="font-semibold text-zinc-900">{plan?.name}</dd></div>
-                        <div className="flex justify-between gap-3"><dt className="text-zinc-500">Durasi</dt><dd className="font-semibold text-zinc-900">Bulanan</dd></div>
-                        <div className="flex justify-between gap-3"><dt className="text-zinc-500">Harga</dt><dd className="font-semibold text-zinc-900">{rupiah(plan?.price ?? 0)}</dd></div>
+                        <div className="flex justify-between gap-3"><dt className="text-zinc-500">Durasi</dt><dd className="font-semibold text-zinc-900">{plan?.duration_days && plan.type !== 'lifetime' && plan.type !== 'free' ? `${plan.duration_days} hari` : billingCycle === 'yearly' ? 'Tahunan' : billingCycle === 'monthly' ? 'Bulanan' : 'Sekali bayar'}</dd></div>
+                        <div className="flex justify-between gap-3"><dt className="text-zinc-500">Harga</dt><dd className="font-semibold text-zinc-900">{rupiah(plan?.price ?? 0)}{plan && periodLabel(plan, billingCycle)}</dd></div>
                         {promo && <div className="flex justify-between gap-3 text-emerald-700"><dt>Diskon ({promo.code})</dt><dd className="font-bold">− {rupiah(promo.discount_amount)}</dd></div>}
                         <div className="flex justify-between gap-3"><dt className="text-zinc-500">Metode pembayaran</dt><dd className="text-right font-semibold text-zinc-900">{paymentFlow === 'wallet' ? 'Wallet Hellom' : appSlug !== 'pos' && manualMode ? manualMethods.find((item) => item.key === manualMethod)?.label : chosenChannel?.label}</dd></div>
                       </dl>
