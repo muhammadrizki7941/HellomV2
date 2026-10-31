@@ -374,9 +374,9 @@ export function getAdminApps() {
   return apiRequest<Record<string, unknown>>('/admin/apps');
 }
 
-export function updateAdminApp(appId: number, payload: Record<string, unknown>) {
+export function updateAdminApp(appId: number, payload: Record<string, unknown> | FormData) {
   return apiRequest<Record<string, unknown>>(`/admin/apps/${appId}`, {
-    method: 'PUT',
+    method: payload instanceof FormData ? 'POST' : 'PUT',
     body: payload,
   });
 }

@@ -19,6 +19,7 @@ import {
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getImageUrl } from '@/services/api/client';
 import {
   createAdminPlan,
   createAdminPromo,
@@ -38,6 +39,7 @@ type AppCatalogItem = {
   name: string;
   is_active: boolean;
   active_count: number;
+  icon_url?: string | null;
 };
 
 type AdminPlanItem = {
@@ -201,6 +203,7 @@ export default function AppManagement() {
   const [promos, setPromos] = useState<PromoItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [uploadingIconId, setUploadingIconId] = useState<number | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [planModalOpen, setPlanModalOpen] = useState(false);
@@ -393,6 +396,25 @@ export default function AppManagement() {
       setErrorMessage(error instanceof Error ? error.message : 'Gagal menghapus plan');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleAppIconUpload = async (app: AppCatalogItem, file?: File) => {
+    if (!file) return;
+    setUploadingIconId(app.id);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    try {
+      const payload = new FormData();
+      payload.append('icon', file);
+      payload.append('_method', 'PUT');
+      await updateAdminApp(app.id, payload);
+      setSuccessMessage(`Ikon ${app.name} berhasil diperbarui.`);
+      await loadData();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Gagal mengunggah ikon aplikasi.');
+    } finally {
+      setUploadingIconId(null);
     }
   };
 
@@ -753,8 +775,8 @@ export default function AppManagement() {
             <article key={app.id} className="rounded-3xl border border-zinc-200 bg-zinc-50/70 p-5">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-950 text-white">
-                    {app.slug.includes('landing') ? <LayoutTemplate className="h-5 w-5" /> : <Package className="h-5 w-5" />}
+                  <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-zinc-950 text-white">
+                    {app.icon_url ? <img src={getImageUrl(app.icon_url)} alt={`Ikon ${app.name}`} className="h-full w-full object-cover" /> : app.slug.includes('landing') ? <LayoutTemplate className="h-5 w-5" /> : <Package className="h-5 w-5" />}
                   </div>
                   <div>
                     <h3 className="text-lg font-bold text-zinc-950">{app.name}</h3>
@@ -773,6 +795,23 @@ export default function AppManagement() {
                 <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Pengguna aktif</p>
                 <p className="mt-2 text-2xl font-bold text-zinc-950">{app.active_count.toLocaleString('id-ID')}</p>
               </div>
+
+              <label className={cn(
+                'mt-3 inline-flex min-h-10 w-full cursor-pointer items-center justify-center rounded-xl border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-700 hover:bg-zinc-50',
+                uploadingIconId === app.id && 'cursor-wait opacity-60'
+              )}>
+                {uploadingIconId === app.id ? 'Mengunggah ikon…' : app.icon_url ? 'Ganti ikon aplikasi' : 'Tambahkan ikon aplikasi'}
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="sr-only"
+                  disabled={uploadingIconId === app.id}
+                  onChange={(event) => {
+                    void handleAppIconUpload(app, event.currentTarget.files?.[0]);
+                    event.currentTarget.value = '';
+                  }}
+                />
+              </label>
 
               <button
                 onClick={() => void toggleAppStatus(app)}

@@ -16,6 +16,7 @@ class AppCatalog extends Model
         'slug',
         'name',
         'is_active',
+        'icon_path',
     ];
 
     protected function casts(): array
@@ -23,6 +24,13 @@ class AppCatalog extends Model
         return [
             'is_active' => 'boolean',
         ];
+    }
+
+    protected $appends = ['icon_url'];
+
+    public function getIconUrlAttribute(): ?string
+    {
+        return $this->icon_path ? \Illuminate\Support\Facades\Storage::disk('public')->url($this->icon_path) : null;
     }
 
     public function entitlements(): HasMany

@@ -6,12 +6,44 @@
         ->orderBy('id')->limit(20)->pluck('id')->each(fn ($id) => app(\App\Services\PlatformMarketing::class)->deliver($id));
 })->everyFiveMinutes()->name('platform-meta-retry')->withoutOverlapping();
 
+Schedule::call(function () {
+    \App\Models\CheckoutIntent::query()
+        ->whereNotNull('status_token_hash')
+        ->whereIn('status', ['gateway_pending', 'pending'])
+        ->whereNotNull('expires_at')
+        ->where('expires_at', '<=', now())
+        ->orderBy('id')
+        ->limit(100)
+        ->get()
+        ->each(function (\App\Models\CheckoutIntent $intent): void {
+            \Illuminate\Support\Facades\DB::transaction(function () use ($intent): void {
+                $locked = \App\Models\CheckoutIntent::query()->lockForUpdate()->find($intent->id);
+                if (!$locked || !in_array((string) $locked->status, ['gateway_pending', 'pending'], true) || !$locked->expires_at?->isPast()) {
+                    return;
+                }
+                $locked->forceFill(['status' => 'expired'])->save();
+                $locked->payments()->where('status', 'pending')->update(['status' => 'expired']);
+                $locked->subscription?->forceFill(['status' => 'expired'])->save();
+                \App\Models\Invoice::query()
+                    ->whereKey((int) data_get($locked->metadata, 'invoice_id'))
+                    ->where('status', 'issued')
+                    ->update(['status' => 'void']);
+                \Illuminate\Support\Facades\Log::info('Expired POS checkout payment', [
+                    'checkout_intent_id' => $locked->id,
+                    'invoice_id' => data_get($locked->metadata, 'invoice_id'),
+                ]);
+            }, 3);
+        });
+})->everyFiveMinutes()->name('pos-checkout-expiry')->withoutOverlapping();
+
 use Illuminate\Foundation\Inspiring;
 use App\Http\Controllers\HealthController;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\Facades\Schema;
 use App\Models\Tenant;
@@ -21,6 +53,87 @@ use Carbon\CarbonImmutable;
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
+
+Artisan::command('hellom:billing:simulate-pos-checkout {intent} {--status=paid : paid, pending, failed, or expired}', function () {
+    if (!app()->environment(['local', 'testing'])
+        || (string) config('payments.providers.ipaymu.environment') !== 'sandbox'
+        || !config('payments.mock.enabled')) {
+        $this->error('Simulasi hanya tersedia di environment local/testing dengan IPAYMU_ENV=sandbox dan BILLING_MOCK_ENABLED=true.');
+        return 1;
+    }
+
+    $intent = \App\Models\CheckoutIntent::query()
+        ->with('payments')
+        ->where('intent_token', (string) $this->argument('intent'))
+        ->first();
+    $attempt = $intent?->payments()->latest('id')->first();
+    if (!$intent || !$attempt || !$attempt->transaction_id) {
+        $this->error('Checkout POS atau transaksi iPaymu tidak ditemukan.');
+        return 1;
+    }
+    if ($attempt->status === 'paid' || $intent->status === 'confirmed') {
+        $this->warn('Pembayaran checkout ini sudah dikonfirmasi.');
+        return 0;
+    }
+
+    $statusCode = match (strtolower((string) $this->option('status'))) {
+        'paid' => 1,
+        'pending' => 0,
+        'failed' => 5,
+        'expired' => -2,
+        default => null,
+    };
+    if ($statusCode === null) {
+        $this->error('Status harus paid, pending, failed, atau expired.');
+        return 1;
+    }
+
+    $config = app(\App\Services\Hellom\IpaymuSettingsService::class)->getConfig();
+    if ($config['va'] === '' || $config['api_key'] === '') {
+        $this->error('Kredensial iPaymu sandbox belum dikonfigurasi.');
+        return 1;
+    }
+
+    Http::fake([
+        '*' => Http::response([
+            'Status' => 200,
+            'Data' => [
+                'TransactionId' => $attempt->transaction_id,
+                'ReferenceId' => $attempt->reference_id,
+                'Amount' => (int) $attempt->amount,
+                'Status' => $statusCode,
+            ],
+        ], 200),
+    ]);
+
+    $payload = [
+        'trx_id' => (string) $attempt->transaction_id,
+        'reference_id' => (string) $attempt->reference_id,
+        'status_code' => $statusCode,
+        'transaction_status_code' => $statusCode,
+        'paid_off' => $statusCode === 1,
+        'is_escrow' => false,
+        'additional_info' => [],
+    ];
+    $signature = app(\App\Services\Payments\IpaymuCallbackSignature::class)->sign($payload, (string) $config['va']);
+    $request = \Illuminate\Http\Request::create('/api/v1/hellom/public/pos-checkout/ipaymu/callback', 'POST', $payload);
+    $request->headers->set('X-Signature', $signature);
+    $response = app(\App\Http\Controllers\Api\V1\Hellom\PosCheckoutController::class)
+        ->notify($request, app(\App\Services\Payments\IpaymuCallbackSignature::class));
+    $responseData = $response->getData(true);
+    if ($response->getStatusCode() >= 400) {
+        $this->error('Simulasi callback gagal: ' . (string) ($responseData['status'] ?? 'unknown'));
+        return 1;
+    }
+
+    Log::info('POS iPaymu callback simulated', [
+        'checkout_intent_id' => $intent->id,
+        'payment_id' => $attempt->id,
+        'simulated_status' => $this->option('status'),
+    ]);
+    $this->info('Callback sandbox simulasi selesai: ' . (string) ($responseData['status'] ?? 'ok'));
+    return 0;
+})->purpose('Simulate a signed iPaymu POS callback using a mocked sandbox transaction check');
 
 Artisan::command('app:setup', function () {
     $connection = (string) config('database.default');

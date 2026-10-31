@@ -10,8 +10,10 @@ use App\Models\CheckoutIntent;
 use App\Models\Invoice;
 use App\Models\Plan;
 use App\Models\Subscription;
+use App\Models\SubscriptionCheckoutPayment;
 use App\Models\User;
 use App\Services\Billing\CheckoutNotifier;
+use App\Services\Billing\PromoCheckoutService;
 use App\Services\Hellom\SubscriptionCheckoutActivationService;
 use App\Services\NotificationService;
 use App\Services\Billing\PaymentPolicy;
@@ -57,6 +59,10 @@ class BillingController extends BaseApiController
             'manual_payment_method' => ['nullable', 'in:bank_transfer,gopay,dana,qris'],
             'gateway_channel' => ['nullable', 'string', 'max:30'],
             'expected_amount' => ['nullable', 'integer', 'min:0'],
+            'promo_code' => ['nullable', 'string', 'max:50'],
+            'marketing' => ['nullable', 'array'],
+            'purchase_event_id' => ['nullable', 'uuid'],
+            'terms_accepted' => ['sometimes', 'accepted'],
         ]);
 
         $app = AppCatalog::query()
@@ -86,11 +92,36 @@ class BillingController extends BaseApiController
             return $this->fail('Billing cycle tidak valid untuk plan ini.', ['code' => 'INVALID_BILLING_CYCLE'], 422);
         }
 
-        if (isset($validated['expected_amount']) && (int) $validated['expected_amount'] !== $this->resolvePlanAmount($plan, $billingCycle)) {
+        $baseAmount = $this->resolvePlanAmount($plan, $billingCycle);
+        if (isset($validated['expected_amount']) && (int) $validated['expected_amount'] !== $baseAmount) {
             return $this->fail('Nominal checkout berbeda dari harga paket yang berlaku. Muat ulang paket sebelum melanjutkan pembayaran.', ['code' => 'PRICE_CHANGED'], 422);
         }
 
         $paymentFlow = (string) $validated['payment_flow'];
+        $promo = null;
+        if (trim((string) ($validated['promo_code'] ?? '')) !== '') {
+            $promo = app(PromoCheckoutService::class)->preview(
+                strtoupper(trim((string) $validated['promo_code'])),
+                (int) $app->id,
+                (int) $plan->id,
+                $baseAmount,
+                $organizationId
+            );
+            if (!$promo) {
+                return $this->fail('Kode promo tidak berlaku untuk paket ini atau sudah mencapai batas pemakaian.', [
+                    'code' => 'PROMO_INVALID',
+                ], 422);
+            }
+        }
+        $amount = max(0, $baseAmount - (int) ($promo['discount_amount'] ?? 0));
+        $marketing = $this->checkoutMarketing($validated['marketing'] ?? []);
+        $purchaseEventId = (string) ($validated['purchase_event_id'] ?? Str::uuid());
+        if ($marketing !== []) {
+            $user->forceFill([
+                'marketing_attribution' => $user->marketing_attribution ?: $marketing,
+            ])->save();
+        }
+
         if ($paymentFlow === 'wallet' && !$this->memberWalletEnabled()) {
             return $this->fail('Fitur wallet/e-wallet untuk member sedang dimatikan oleh owner.', [
                 'code' => 'MEMBER_WALLET_DISABLED',
@@ -112,6 +143,29 @@ class BillingController extends BaseApiController
             }
         }
 
+        if ($app->slug === 'pos' && $paymentFlow === 'direct') {
+            $ipaymuConfig = app(\App\Services\Hellom\IpaymuSettingsService::class)->getConfig();
+            $gatewayProvider = 'ipaymu';
+            $gatewayReady = $ipaymuConfig['va'] !== '' && $ipaymuConfig['api_key'] !== '';
+            $checkoutMode = 'gateway_automatic';
+            if (!$gatewayReady || $this->ipaymuSettings()->enabledDirectChannels() === []) {
+                return $this->fail('Pembayaran belum tersedia. Silakan coba lagi nanti atau hubungi Hellom.', [
+                    'code' => 'PAYMENT_UNAVAILABLE',
+                ], 503);
+            }
+            $selectedChannel = (string) ($validated['gateway_channel'] ?? '');
+            if (!isset($this->ipaymuSettings()->enabledDirectChannels()[$selectedChannel])) {
+                return $this->fail('Pilih metode pembayaran langsung yang tersedia.', [
+                    'code' => 'PAYMENT_CHANNEL_REQUIRED',
+                ], 422);
+            }
+        }
+        if ($app->slug === 'pos' && !($validated['terms_accepted'] ?? false)) {
+            return $this->fail('Setujui syarat berlangganan sebelum melanjutkan pembayaran.', [
+                'code' => 'TERMS_NOT_ACCEPTED',
+            ], 422);
+        }
+
         if ($paymentFlow === 'direct' && $checkoutMode === 'manual_confirmation') {
             if (!$manualPaymentOptions['enabled'] || count($manualPaymentOptions['methods']) === 0) {
                 return $this->fail('Manual payment belum dikonfigurasi owner.', ['code' => 'MANUAL_PAYMENT_NOT_READY'], 422);
@@ -129,8 +183,8 @@ class BillingController extends BaseApiController
         }
 
         $expiresAt = $paymentFlow === 'direct' ? now()->addHour() : null;
-        $result = DB::transaction(function () use ($organizationId, $user, $app, $plan, $paymentFlow, $checkoutMode, $gatewayProvider, $billingCycle, $manualPaymentMethod, $expiresAt) {
-            $amount = $this->resolvePlanAmount($plan, $billingCycle);
+        $plainStatusToken = $paymentFlow === 'direct' && $app->slug === 'pos' ? Str::random(48) : null;
+        $result = DB::transaction(function () use ($organizationId, $user, $app, $plan, $paymentFlow, $checkoutMode, $gatewayProvider, $billingCycle, $manualPaymentMethod, $expiresAt, $amount, $baseAmount, $promo, $marketing, $purchaseEventId, $plainStatusToken) {
             $subscriptionStatus = $paymentFlow === 'wallet' ? 'draft' : 'pending_payment';
             $intentStatus = match ($paymentFlow) {
                 'wallet' => 'pending',
@@ -152,6 +206,9 @@ class BillingController extends BaseApiController
                     'payment_flow' => $paymentFlow,
                     'created_by_user_id' => (int) $user->id,
                     'manual_payment_method' => $manualPaymentMethod,
+                    'base_amount' => $baseAmount,
+                    'discount_amount' => (int) ($promo['discount_amount'] ?? 0),
+                    'promo' => $promo,
                 ],
             ]);
 
@@ -174,7 +231,13 @@ class BillingController extends BaseApiController
                     'plan_slug' => $plan->slug,
                     'billing_cycle' => $billingCycle,
                     'manual_payment_method' => $manualPaymentMethod,
+                    'base_amount' => $baseAmount,
+                    'discount_amount' => (int) ($promo['discount_amount'] ?? 0),
+                    'promo' => $promo,
+                    'marketing' => $marketing,
+                    'purchase_event_id' => $purchaseEventId,
                 ],
+                'status_token_hash' => $plainStatusToken ? hash('sha256', $plainStatusToken) : null,
             ]);
 
             $invoice = null;
@@ -184,17 +247,19 @@ class BillingController extends BaseApiController
                     'subscription_id' => $subscription->id,
                     'invoice_number' => 'INV-' . strtoupper(date('Ymd')) . '-' . strtoupper(Str::random(6)),
                     'status' => $checkoutMode === 'manual_confirmation' ? 'issued' : 'draft',
-                    'amount' => $amount,
+                    'amount' => $baseAmount,
                     'tax' => 0,
                     'total' => $amount,
                     'currency' => 'IDR',
                     'line_items' => [
                         [
                             'description' => "{$app->name} - {$plan->name} ({$billingCycle})",
-                            'amount' => $amount,
-                            'discount' => 0,
+                            'amount' => $baseAmount,
+                            'discount' => (int) ($promo['discount_amount'] ?? 0),
                         ],
                     ],
+                    'amount' => $baseAmount,
+                    'total' => $amount,
                     'issued_at' => now(),
                     'due_at' => $expiresAt,
                     'paid_at' => null,
@@ -203,6 +268,8 @@ class BillingController extends BaseApiController
                         'intent_token' => $intentToken,
                         'manual_payment_method' => $manualPaymentMethod,
                         'billing_cycle' => $billingCycle,
+                        'promo' => $promo,
+                        'marketing_attribution' => $marketing,
                     ],
                 ]);
             }
@@ -234,10 +301,12 @@ class BillingController extends BaseApiController
                         'subscription_id' => (int) $subscription->id,
                         'checkout_intent_id' => (int) $intent->id,
                         'invoice_id' => (int) ($invoice?->id ?? 0),
-                        'reference_id' => (string) $intent->intent_token,
+                        'reference_id' => (string) ($invoice?->invoice_number ?? $intent->intent_token),
                     ];
+                    $callbackUrl = (string) config('payments.providers.ipaymu.notify_url')
+                        ?: url('/api/v1/hellom/public/pos-checkout/ipaymu/callback');
                     $charge = app(\App\Services\Payments\Gateways\IpaymuGateway::class)->createCharge(new \App\Services\Payments\ChargeRequest(
-                        reference: (string) $intent->intent_token,
+                        reference: (string) ($invoice?->invoice_number ?? $intent->intent_token),
                         amount: (int) $intent->amount,
                         productName: "{$app->name} - {$plan->name}",
                         buyerName: (string) $user->name,
@@ -246,6 +315,7 @@ class BillingController extends BaseApiController
                         returnUrl: $this->checkoutReturnUrl($request, (string) $intent->intent_token),
                         notifyContext: [...$context, 'sig' => IpaymuPaymentVerifier::sign($context)],
                         preferredMethod: $channel,
+                        notifyUrlOverride: $app->slug === 'pos' ? $callbackUrl : null,
                     ));
                     $paymentSessionId = $charge->gatewayRef;
                     $paymentInstructions = [
@@ -262,6 +332,31 @@ class BillingController extends BaseApiController
                     $metadata = ['payment_session_id' => $paymentSessionId, 'transaction_id' => $charge->transactionId, 'payment_instructions' => $paymentInstructions];
                     $intent->forceFill(['metadata' => [...($intent->metadata ?? []), 'ipaymu' => $metadata]])->save();
                     $invoice?->forceFill(['status' => 'issued', 'metadata' => [...($invoice->metadata ?? []), 'ipaymu' => $metadata]])->save();
+                    if ($app->slug === 'pos' && $invoice) {
+                        $attempt = SubscriptionCheckoutPayment::query()->create([
+                            'checkout_intent_id' => (int) $intent->id,
+                            'invoice_id' => (int) $invoice->id,
+                            'provider' => 'ipaymu',
+                            'reference_id' => (string) $invoice->invoice_number,
+                            'transaction_id' => $charge->transactionId,
+                            'session_id' => $charge->gatewayRef,
+                            'method' => $charge->mode,
+                            'channel' => $channel,
+                            'channel_label' => $charge->channelLabel,
+                            'status' => 'pending',
+                            'amount' => (int) $intent->amount,
+                            'payment_number' => $charge->vaNumber,
+                            'qr_string' => $charge->qrString,
+                            'qr_image_url' => $charge->qrImageUrl,
+                            'expires_at' => $charge->expiresAt ? \Illuminate\Support\Carbon::parse($charge->expiresAt) : $expiresAt,
+                        ]);
+                        $intent->forceFill(['metadata' => [
+                            ...($intent->metadata ?? []),
+                            'invoice_id' => (int) $invoice->id,
+                            'invoice_number' => (string) $invoice->invoice_number,
+                            'latest_payment_id' => (int) $attempt->id,
+                        ]])->save();
+                    }
                 } elseif ($gatewayProvider === 'ipaymu') {
                     $session = $this->ipaymu()->createRedirectPayment([
                         'product' => ["{$app->name} - {$plan->name}"],
@@ -443,7 +538,14 @@ class BillingController extends BaseApiController
         if ($paymentFlow === 'direct') {
             $freshIntent = $intent->fresh(['subscription.organization.users', 'app', 'plan', 'user']);
             if ($freshIntent instanceof CheckoutIntent) {
-                $this->checkoutNotifier->sendCheckoutStartedNotifications($freshIntent, $invoice, $paymentUrl);
+                $this->checkoutNotifier->sendCheckoutStartedNotifications(
+                    $freshIntent,
+                    $invoice,
+                    $paymentUrl,
+                    $plainStatusToken
+                        ? \App\Support\FrontendUrl::to('/pembayaran/' . rawurlencode($plainStatusToken))
+                        : null,
+                );
             }
 
             // Create notification for manual confirmation checkouts
@@ -487,6 +589,8 @@ class BillingController extends BaseApiController
                     ? $this->manualPaymentSettings()->publicOptions()
                     : null,
             ],
+            'status_token' => $plainStatusToken,
+            'status_url' => $plainStatusToken ? \App\Support\FrontendUrl::to('/pembayaran/' . rawurlencode($plainStatusToken)) : null,
             'next_step' => [
                 'action' => $paymentFlow === 'wallet'
                     ? 'confirm_wallet'
@@ -939,5 +1043,34 @@ class BillingController extends BaseApiController
             'intent_token' => (string) $intent->intent_token,
             'status' => (string) $intent->status,
         ], 'Checkout berhasil dibatalkan.');
+    }
+
+    /**
+     * Marketing identifiers are optional and accepted only with the visitor's
+     * consent. Server-derived IP and user agent are added by PlatformMarketing.
+     *
+     * @param array<string,mixed> $input
+     * @return array<string,string>
+     */
+    private function checkoutMarketing(array $input): array
+    {
+        if (($input['consent'] ?? '') !== 'granted') {
+            return [];
+        }
+
+        $allowed = [];
+        foreach (['consent', 'visitor_id', 'session_id', 'source', 'medium', 'campaign', 'content', 'fbclid', 'fbp', 'fbc', 'path'] as $key) {
+            if (isset($input[$key]) && is_string($input[$key])) {
+                $allowed[$key] = mb_substr($input[$key], 0, in_array($key, ['fbp', 'fbc', 'fbclid'], true) ? 255 : 120);
+            }
+        }
+        if (!preg_match('/^[a-zA-Z0-9-]{8,64}$/', $allowed['visitor_id'] ?? '')
+            || !preg_match('/^[a-zA-Z0-9-]{8,64}$/', $allowed['session_id'] ?? '')) {
+            return [];
+        }
+
+        $allowed['ip'] = request()->ip();
+        $allowed['ua'] = mb_substr((string) request()->userAgent(), 0, 500);
+        return $allowed;
     }
 }

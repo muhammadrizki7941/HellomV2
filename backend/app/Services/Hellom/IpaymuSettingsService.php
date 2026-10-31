@@ -29,7 +29,7 @@ class IpaymuSettingsService
      * AVAILABLE_METHODS, so a channel is offered only when its group is enabled too.
      */
     public const DIRECT_CHANNELS = [
-        'qris' => ['qris', 'qris', 'QRIS', 'qris'],
+        'qris' => ['qris', 'mpm', 'QRIS', 'qris'],
         'bca' => ['va', 'bca', 'BCA Virtual Account', 'va'],
         'bni' => ['va', 'bni', 'BNI Virtual Account', 'va'],
         'bri' => ['va', 'bri', 'BRI Virtual Account', 'va'],
@@ -60,8 +60,9 @@ class IpaymuSettingsService
         if ($callbackToken === 'dev_ipaymu_callback_token') {
             $callbackToken = '';
         }
+        $environment = (string) config('payments.providers.ipaymu.environment', 'sandbox');
         $isProduction = filter_var(
-            SystemSetting::get(self::IS_PRODUCTION, config('payments.providers.ipaymu.is_production', false)),
+            SystemSetting::get(self::IS_PRODUCTION, $environment === 'production'),
             FILTER_VALIDATE_BOOLEAN
         );
 

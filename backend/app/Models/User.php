@@ -25,6 +25,7 @@ class User extends Authenticatable
         'email',
         'current_organization_id',
         'phone',
+        'marketing_attribution',
         'password',
         'role',
         'points_balance',
@@ -54,6 +55,7 @@ class User extends Authenticatable
             'pending_guest_credentials' => 'boolean',
             'builder_tour_done_at' => 'datetime',
             'email_preferences' => 'array',
+            'marketing_attribution' => 'array',
             'lifecycle_emails' => 'array',
         ];
     }

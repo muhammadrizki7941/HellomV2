@@ -463,7 +463,7 @@ const ReceiptModal = ({ isOpen, onClose, orderId }: ReceiptProps) => {
         {receipt && !loading && !error && (
           <div className="border-t border-gray-200 bg-gray-50 px-4 py-3">
             {printNote && <p role="status" data-print-note className="mb-2 rounded-lg bg-white px-3 py-2 text-xs text-gray-600">{printNote}</p>}
-            <div className="grid grid-cols-5 gap-2">
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
               <button
                 onClick={() => void handlePrint()}
                 disabled={printing}

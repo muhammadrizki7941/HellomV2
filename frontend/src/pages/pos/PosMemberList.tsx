@@ -153,7 +153,7 @@ export default function PosMemberList() {
   const pageSpent = members.reduce((s, m) => s + m.total_spent, 0);
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen min-w-0 bg-gray-50 p-2 sm:p-6">
       <div className="mx-auto max-w-7xl space-y-6">
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div>
@@ -174,12 +174,12 @@ export default function PosMemberList() {
           </div>
         </div>
 
-        <div className="flex gap-1 border-b border-gray-200">
+        <div className="flex min-w-0 gap-1 overflow-x-auto border-b border-gray-200">
           {([['members', 'Member', Users], ['duplicates', 'Nomor ganda', Users], ['fraud', 'Sinyal kecurangan', ShieldAlert]] as const).filter(([key]) => key === 'members' || canPos('member_points')).map(([key, label, Icon]) => (
             <button
               key={key}
               onClick={() => setTab(key)}
-              className={cn('flex items-center gap-1.5 border-b-2 px-4 py-2 text-sm font-medium', tab === key ? 'border-amber-400 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700')}
+              className={cn('flex shrink-0 items-center gap-1.5 border-b-2 px-4 py-2 text-sm font-medium', tab === key ? 'border-amber-400 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700')}
             >
               <Icon className="h-4 w-4" />
               {label}
@@ -199,10 +199,10 @@ export default function PosMemberList() {
                 { label: 'Pesanan (halaman ini)', value: pageOrders, icon: <ShoppingBag className="h-5 w-5 text-purple-600" />, bg: 'bg-purple-100' },
                 { label: 'Belanja (halaman ini)', value: formatCurrency(pageSpent), icon: <TrendingUp className="h-5 w-5 text-amber-600" />, bg: 'bg-amber-100' },
               ].map((stat) => (
-                <div key={stat.label} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                  <div className="flex items-center gap-3">
-                    <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', stat.bg)}>{stat.icon}</div>
-                    <div>
+                <div key={stat.label} className="min-w-0 rounded-xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
+                  <div className="flex flex-col items-start gap-3 xl:flex-row xl:items-center">
+                    <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-lg', stat.bg)}>{stat.icon}</div>
+                    <div className="min-w-0 [overflow-wrap:anywhere]">
                       <p className="text-xs text-gray-500">{stat.label}</p>
                       <p className="text-lg font-bold text-gray-900">{stat.value}</p>
                     </div>

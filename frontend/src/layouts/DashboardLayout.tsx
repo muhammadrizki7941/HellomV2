@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Outlet, NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Layout, Calculator, ShoppingCart, LogOut, User, CreditCard, Menu, X, Lock, Settings, Sparkles, ArrowRight, Grid, Package, PanelLeftClose, PanelLeftOpen, House, Compass, Grid2X2, ReceiptText, CircleUserRound } from 'lucide-react';
+import { LayoutDashboard, Layout, Calculator, ShoppingCart, User, CreditCard, Menu, X, Lock, Settings, Sparkles, ArrowRight, Grid, Package, PanelLeftClose, PanelLeftOpen, House, Compass, Grid2X2, ReceiptText, CircleUserRound, LifeBuoy } from 'lucide-react';
 import { ColorSchemeToggle, useDashboardColorScheme } from '@/lib/colorScheme';
 import { cn } from '@/lib/utils';
-import { clearSession, getAuthMe, getMemberDashboardCards, getPaymentGatewayStatus, getSessionEventName, getSessionUser, getToken, logout, setSession } from '@/lib/hellomApi';
+import { getAuthMe, getMemberDashboardCards, getPaymentGatewayStatus, getSessionEventName, getSessionUser, getToken, setSession } from '@/lib/hellomApi';
 import { BRAND_LOGO_PATH, BRAND_NAME, getBrandLogo } from '@/lib/branding';
 import { fetchBrand, BrandSettings } from '@/hooks/useBrand';
-import SubscriptionModal from '@/components/SubscriptionModal';
+import CheckoutModal from '@/components/CheckoutModal';
 import NotificationBell from '@/components/consumer/NotificationBell';
 import LiveToasts from '@/components/notifications/LiveToasts';
 import { useConsumerNotifications } from '@/hooks/useConsumerNotifications';
@@ -195,16 +195,6 @@ export default function DashboardLayout() {
     setSubscriptionApp(posApp);
   }, [apps, location.pathname, location.search]);
 
-  const handleLogout = async () => {
-    try {
-      await logout();
-    } catch {
-    } finally {
-      clearSession();
-      navigate('/login', { replace: true });
-    }
-  };
-
   return (
     <EditorChromeContext.Provider value={{ chromeHidden, setChromeHidden }}>
     <div className="min-h-screen bg-zinc-50 flex font-sans text-zinc-900 selection:bg-yellow-400 selection:text-black">
@@ -326,6 +316,20 @@ export default function DashboardLayout() {
               Tagihan
             </NavLink>
           )}
+
+          <NavLink
+            to="/dashboard/support"
+            onClick={() => setIsSidebarOpen(false)}
+            className={({ isActive }) => cn(
+              "flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors",
+              isActive
+                ? "bg-black text-white shadow-md shadow-black/10"
+                : "text-zinc-600 hover:bg-zinc-50 hover:text-black"
+            )}
+          >
+            <LifeBuoy className="w-5 h-5" />
+            Pusat Bantuan
+          </NavLink>
           
           <div className="pt-4 pb-2 px-4 text-xs font-bold text-zinc-400 uppercase tracking-wider">
             Aplikasi
@@ -362,7 +366,7 @@ export default function DashboardLayout() {
 
         <div className="p-4 border-t border-zinc-100">
           <ColorSchemeToggle className="mb-2" />
-          <div className="flex items-center gap-2 px-4 py-3">
+          <div className="flex items-center px-4 py-3">
             <Link to="/dashboard/profile" className="flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-lg transition-colors group hover:bg-zinc-50">
               <div className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-500 border border-zinc-200 group-hover:border-yellow-400 group-hover:text-yellow-600 transition-colors">
                 <User className="w-4 h-4" />
@@ -372,9 +376,6 @@ export default function DashboardLayout() {
                 <p className="text-xs text-zinc-500 truncate">{userEmail}</p>
               </div>
             </Link>
-            <button onClick={() => void handleLogout()} className="flex h-11 w-11 items-center justify-center text-zinc-400 hover:text-red-600 transition-colors" title="Keluar" aria-label="Keluar">
-              <LogOut className="w-4 h-4" />
-            </button>
           </div>
         </div>
       </aside>
@@ -412,8 +413,8 @@ export default function DashboardLayout() {
           <Outlet />
         </div>
       </main>
-      {!chromeHidden && <nav aria-label="Navigasi utama" className="fixed inset-x-3 bottom-[max(0.5rem,env(safe-area-inset-bottom))] z-30 grid grid-cols-5 gap-1 rounded-2xl border border-amber-300/70 bg-[#F6B400] p-1.5 shadow-[0_8px_28px_rgba(24,18,0,0.28)] lg:hidden">
-        {[{ to: '/dashboard', label: 'Beranda', icon: House }, { to: '/dashboard/products', label: 'Jelajah', icon: Compass }, { to: '/dashboard/my-purchases', label: 'Aplikasi', icon: Grid2X2 }, { to: '/dashboard/payments', label: 'Tagihan', icon: ReceiptText }, { to: '/dashboard/profile', label: 'Profile', icon: CircleUserRound }].map(item => <NavLink key={item.to} to={item.to} end={item.to === '/dashboard'} onClick={() => setIsSidebarOpen(false)} className={({ isActive }) => cn('flex min-h-11 min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl text-[9px] font-semibold transition-[background-color,color,transform] duration-200', isActive ? 'scale-[1.02] bg-zinc-950 text-amber-300 shadow-sm' : 'text-zinc-950/75 hover:bg-amber-300/60 hover:text-zinc-950')}><item.icon className="h-[18px] w-[18px]" strokeWidth={1.9} />{item.label}</NavLink>)}
+      {!chromeHidden && <nav aria-label="Navigasi utama" className="fixed inset-x-3 bottom-[max(0.5rem,env(safe-area-inset-bottom))] z-30 grid grid-cols-6 gap-1 rounded-2xl border border-amber-300/70 bg-[#F6B400] p-1.5 shadow-[0_8px_28px_rgba(24,18,0,0.28)] lg:hidden">
+        {[{ to: '/dashboard', label: 'Beranda', icon: House }, { to: '/dashboard/products', label: 'Jelajah', icon: Compass }, { to: '/dashboard/my-purchases', label: 'Aplikasi', icon: Grid2X2 }, { to: '/dashboard/payments', label: 'Tagihan', icon: ReceiptText }, { to: '/dashboard/support', label: 'Bantuan', icon: LifeBuoy }, { to: '/dashboard/profile', label: 'Profile', icon: CircleUserRound }].map(item => <NavLink key={item.to} to={item.to} end={item.to === '/dashboard'} onClick={() => setIsSidebarOpen(false)} className={({ isActive }) => cn('flex min-h-11 min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl text-[9px] font-semibold', isActive ? 'bg-zinc-950 text-amber-300 shadow-sm' : 'text-zinc-950/75 hover:bg-amber-300/60 hover:text-zinc-950')}><item.icon className="h-[18px] w-[18px]" strokeWidth={1.9} />{item.label}</NavLink>)}
       </nav>}
       <LiveToasts />
 
@@ -460,12 +461,13 @@ export default function DashboardLayout() {
       )}
 
       {subscriptionApp && (
-        <SubscriptionModal
+        <CheckoutModal
           isOpen={Boolean(subscriptionApp)}
           onClose={() => setSubscriptionApp(null)}
           appName={subscriptionApp.name}
           appSlug={subscriptionApp.id}
           appIcon={subscriptionApp.icon}
+          context="member"
           onSuccess={() => {
             void loadCards();
           }}

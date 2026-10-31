@@ -412,7 +412,7 @@ export default function PosLayout() {
       </div>
 
       {/* Mobile/Tablet Layout */}
-      <div className={cn('flex min-h-screen flex-col transition-[padding] duration-200 ease-in-out', sidebarCollapsed ? 'lg:pl-[72px]' : 'lg:pl-64')}>
+      <div className={cn('flex min-h-screen min-w-0 flex-col transition-[padding] duration-200 ease-in-out', sidebarCollapsed ? 'lg:pl-[72px]' : 'lg:pl-64')}>
         {/* Top Header - Mobile/Tablet */}
         <div className="sticky top-0 z-40 lg:hidden">
           <div className="flex h-16 items-center justify-between border-b border-[#f1e7c9] bg-white/95 px-4 shadow-sm backdrop-blur">
@@ -425,7 +425,7 @@ export default function PosLayout() {
             >
               <Menu className="h-6 w-6" />
             </button>
-            <h1 className="text-lg font-semibold text-[#111111]">POS System</h1>
+            <h1 className="min-w-0 truncate text-base font-semibold text-[#111111] sm:text-lg">POS System</h1>
             <div className="flex items-center gap-1.5">
               {(installState === 'available' || installState === 'ios') && (
                 <button
@@ -446,16 +446,18 @@ export default function PosLayout() {
               <button
                 type="button"
                 onClick={isCashier ? handleLogout : handleGoToDashboard}
-                className="px-3 py-1.5 text-sm font-medium text-[#4b5563] hover:text-[#111111] hover:bg-[#fff7db] rounded-lg transition-colors"
+                aria-label={isCashier ? 'Keluar' : 'Ke Dashboard Hellom'}
+                className="flex h-11 shrink-0 items-center gap-2 px-3 py-1.5 text-sm font-medium text-[#4b5563] hover:text-[#111111] hover:bg-[#fff7db] rounded-lg transition-colors"
               >
-                {isCashier ? 'Keluar' : 'Ke Dashboard Hellom'}
+                <LogOut className="h-5 w-5 sm:hidden" />
+                <span className="hidden sm:inline">{isCashier ? 'Keluar' : 'Ke Dashboard Hellom'}</span>
               </button>
             </div>
           </div>
         </div>
 
         {/* Main Content */}
-        <main className="flex-1 bg-[#fffdf5] p-3 pb-24 sm:p-5 lg:p-6 lg:pb-6">
+        <main className="min-w-0 flex-1 bg-[#fffdf5] p-3 pb-24 sm:p-5 sm:pb-24 lg:p-6 lg:pb-6">
           <Outlet />
           {ownerPin?.is_owner && !ownerPin.pin_set && (
             <OwnerPinSetupDialog resetEmail={ownerPin.reset_email} onDone={() => setOwnerPin({ ...ownerPin, pin_set: true })} />
@@ -505,7 +507,7 @@ export default function PosLayout() {
         />
         <div
           className={cn(
-            'absolute inset-y-0 left-0 w-64 border-r border-[#eadfbe] bg-white/95 shadow-[0_20px_60px_rgba(17,17,17,0.14)] backdrop-blur-xl transition duration-200',
+            'absolute inset-y-0 left-0 w-64 max-w-full overflow-y-auto overscroll-contain border-r border-[#eadfbe] bg-white/95 shadow-[0_20px_60px_rgba(17,17,17,0.14)] backdrop-blur-xl transition duration-200',
             sidebarOpen ? 'translate-x-0' : '-translate-x-full'
           )}
         >

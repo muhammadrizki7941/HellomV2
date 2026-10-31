@@ -29,6 +29,8 @@ Route::prefix('admin')->name('admin.')->middleware('superAdmin')->group(function
     Route::get('/marketing', [\App\Http\Controllers\Api\V1\Hellom\PlatformMarketingController::class, 'overview'])->name('marketing.overview');
     Route::get('/marketing/settings', [\App\Http\Controllers\Api\V1\Hellom\PlatformMarketingController::class, 'settings'])->name('marketing.settings');
     Route::put('/marketing/settings', [\App\Http\Controllers\Api\V1\Hellom\PlatformMarketingController::class, 'save'])->name('marketing.save');
+    Route::get('/marketing/dashboard-promotions', [\App\Http\Controllers\Api\V1\Hellom\PlatformMarketingController::class, 'dashboardPromotions'])->name('marketing.dashboard_promotions');
+    Route::put('/marketing/dashboard-promotions', [\App\Http\Controllers\Api\V1\Hellom\PlatformMarketingController::class, 'saveDashboardPromotions'])->name('marketing.dashboard_promotions.save');
     Route::post('/marketing/test', [\App\Http\Controllers\Api\V1\Hellom\PlatformMarketingController::class, 'test'])->middleware('throttle:5,1')->name('marketing.test');
     Route::post('/marketing/events/{id}/retry', [\App\Http\Controllers\Api\V1\Hellom\PlatformMarketingController::class, 'retry'])->middleware('throttle:10,1')->name('marketing.retry');
     Route::get('/dashboard-stats', [SuperAdminController::class, 'dashboardStats'])->name('dashboard_stats');

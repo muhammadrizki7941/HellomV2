@@ -55,7 +55,7 @@ class CheckoutNotifier
         }
     }
 
-    public function sendCheckoutStartedNotifications(CheckoutIntent $intent, ?Invoice $invoice, ?string $paymentUrl): void
+    public function sendCheckoutStartedNotifications(CheckoutIntent $intent, ?Invoice $invoice, ?string $paymentUrl, ?string $paymentStatusUrl = null): void
     {
         $subscription = $intent->subscription?->loadMissing(['organization.users', 'app', 'plan']);
         if (!$subscription instanceof Subscription || !$subscription->organization) {
@@ -69,6 +69,7 @@ class CheckoutNotifier
         $statusUrl = \App\Support\FrontendUrl::to(
             '/dashboard/payments?checkout=' . rawurlencode((string) $intent->app?->slug)
         );
+        $buyerStatusUrl = $paymentStatusUrl ?: $statusUrl;
 
         foreach ($this->ownerBillingRecipients($subscription) as $email) {
             $this->platformMailService->queue($email, new HellomCheckoutStatusMail(
@@ -93,17 +94,17 @@ class CheckoutNotifier
                     'headline' => 'Checkout aplikasi Anda sudah dibuat',
                     'intro' => $paymentUrl
                         ? 'Silakan lanjutkan pembayaran melalui gateway menggunakan tombol di bawah. Pembayaran harus diselesaikan sebelum batas waktu.'
-                        : 'Ikuti instruksi metode pembayaran di bawah ini. Pembayaran harus diselesaikan sebelum batas waktu, lalu statusnya bisa dipantau melalui dashboard.',
+                        : 'Ikuti instruksi metode pembayaran di bawah ini. Pembayaran harus diselesaikan sebelum batas waktu, lalu statusnya bisa dipantau melalui tautan berikut.',
                     'details' => $details,
                     'manual_methods' => $manualMethods,
                     'gateway_instructions' => $gatewayInstructions,
-                    'cta_url' => $paymentUrl ?: $statusUrl,
+                    'cta_url' => $paymentUrl ?: $buyerStatusUrl,
                     'cta_label' => $paymentUrl ? 'Bayar sekarang' : 'Cek status pembayaran',
-                    'status_url' => $statusUrl,
+                    'status_url' => $buyerStatusUrl,
                     'status_label' => 'Cek status pembayaran',
                     'closing' => $paymentUrl
-                        ? 'Gunakan tombol “Bayar sekarang” untuk membuka halaman pembayaran. Setelah membayar, tombol “Cek status pembayaran” akan membawa Anda ke dashboard.'
-                        : 'Status pembayaran dan konfirmasi dapat dipantau dari dashboard. Setelah pembayaran terverifikasi, akses aplikasi akan dibuka.',
+                        ? 'Gunakan tombol “Bayar sekarang” untuk membuka halaman pembayaran. Setelah membayar, tombol “Cek status pembayaran” akan membuka halaman status Hellom.'
+                        : 'Status pembayaran dan konfirmasi dapat dipantau melalui tautan status Hellom. Setelah pembayaran terverifikasi, akses aplikasi akan dibuka.',
                 ]
             ));
         }

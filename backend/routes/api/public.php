@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\V1\Hellom\Pos\PosExperienceController;
 use App\Http\Controllers\Api\V1\Hellom\Pos\PosMemberController;
 use App\Http\Controllers\Api\V1\Hellom\Pos\PosPaymentSettingController;
 use App\Http\Controllers\Api\V1\Hellom\PublicStoreController;
+use App\Http\Controllers\Api\V1\Hellom\PosCheckoutController;
 use App\Http\Controllers\Api\V1\Hellom\ShippingController;
 use App\Http\Controllers\Api\V1\Hellom\ShowcaseController;
 use App\Http\Controllers\Api\V1\Hellom\XenditWebhookController;
@@ -31,6 +32,14 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/public/marketing/config', [\App\Http\Controllers\Api\V1\Hellom\PlatformMarketingController::class, 'publicConfig'])->name('marketing.config');
 Route::post('/public/marketing/events', [\App\Http\Controllers\Api\V1\Hellom\PlatformMarketingController::class, 'track'])->middleware('throttle:60,1')->name('marketing.events');
+
+Route::get('/public/pos-checkout/options', [PosCheckoutController::class, 'options'])->middleware('throttle:hellom-public-lookup')->name('public.pos_checkout.options');
+Route::post('/public/pos-checkout/promo', [PosCheckoutController::class, 'promoPreview'])->middleware('throttle:hellom-public-lookup')->name('public.pos_checkout.promo');
+Route::post('/public/pos-checkout', [PosCheckoutController::class, 'startGuest'])->middleware('throttle:hellom-guest-checkout')->name('public.pos_checkout.start');
+Route::get('/public/pos-checkout/ipaymu/callback', [PosCheckoutController::class, 'notify'])->name('public.pos_checkout.ipaymu_callback.get');
+Route::post('/public/pos-checkout/ipaymu/callback', [PosCheckoutController::class, 'notify'])->name('public.pos_checkout.ipaymu_callback');
+Route::get('/public/pos-checkout/{token}', [PosCheckoutController::class, 'status'])->middleware('throttle:hellom-public-lookup')->name('public.pos_checkout.status');
+Route::post('/public/pos-checkout/{token}/payment', [PosCheckoutController::class, 'replacePayment'])->middleware('throttle:10,1')->name('public.pos_checkout.payment.replace');
 
 // ─── PUBLIC — no auth ───
 Route::get('/public/landing/domain/{domain}', [LandingBuilderController::class, 'publicShowByDomain'])

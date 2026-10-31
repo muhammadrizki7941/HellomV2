@@ -1,12 +1,13 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
-import { UserRound, Mail, Phone, Building2, Save, ShieldCheck } from 'lucide-react';
-import { getAuthMe, getSessionUser, getToken, setSession, updateProfile, changePassword } from '@/lib/hellomApi';
+import { Link, useNavigate } from 'react-router-dom';
+import { UserRound, Mail, Phone, Building2, Save, ShieldCheck, LogOut } from 'lucide-react';
+import { clearSession, getAuthMe, getSessionUser, getToken, setSession, updateProfile, changePassword, logout } from '@/lib/hellomApi';
 import { ColorSchemeToggle } from '@/lib/colorScheme';
 import type { HellomUser } from '@/services/api/auth';
 
 const inputClass = 'mt-2 min-h-12 w-full min-w-0 rounded-xl border border-zinc-200 bg-zinc-50 px-4 text-base text-zinc-900 outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100';
 export default function MemberProfile() {
+  const navigate = useNavigate();
   const [user, setUser] = useState<HellomUser | null>(() => getSessionUser<HellomUser>());
   const [form, setForm] = useState({ name: '', email: '', phone: '' });
   const [loading, setLoading] = useState(true);
@@ -44,6 +45,11 @@ export default function MemberProfile() {
     catch (e) { setPasswordMessage(e instanceof Error ? e.message : 'Gagal mengubah password.'); }
     finally { setPasswordBusy(false); }
   };
+  const handleLogout = async () => {
+    try { await logout(); }
+    catch { /* Clear the local session even if the server is unavailable. */ }
+    finally { clearSession(); navigate('/login', { replace: true }); }
+  };
   return <div className="mx-auto max-w-3xl space-y-6">
     <header><h1 className="text-2xl font-bold text-zinc-900">Profile</h1><p className="mt-1 text-sm text-zinc-500">Kelola informasi pribadi dan tampilan aplikasi Anda.</p></header>
     <section className="rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm sm:p-7">
@@ -63,5 +69,14 @@ export default function MemberProfile() {
       </form>
     </section>
     <details className="rounded-2xl border border-zinc-200 bg-white p-5"><summary className="cursor-pointer font-semibold text-zinc-900">Keamanan akun · Ubah password</summary><form onSubmit={submitPassword} className="mt-5 space-y-4">{([{ key: 'current_password', label: 'Password saat ini', auto: 'current-password' }, { key: 'password', label: 'Password baru', auto: 'new-password' }, { key: 'password_confirmation', label: 'Konfirmasi password baru', auto: 'new-password' }] as const).map(field => <label key={field.key} className="block text-sm text-zinc-700">{field.label}<input required type="password" minLength={field.key === 'current_password' ? 1 : 8} autoComplete={field.auto} value={password[field.key]} onChange={e => setPassword({ ...password, [field.key]: e.target.value })} className={inputClass} disabled={passwordBusy} /></label>)}{passwordMessage && <p role="status" className="text-sm text-zinc-700">{passwordMessage}</p>}<button disabled={passwordBusy} className="flex min-h-11 items-center gap-2 rounded-xl bg-zinc-900 px-4 text-sm font-semibold text-white disabled:opacity-50"><ShieldCheck className="h-4 w-4" />{passwordBusy ? 'Menyimpan...' : 'Perbarui password'}</button></form></details>
+    <section className="flex flex-col gap-3 rounded-2xl border border-red-200 bg-white p-5 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <h2 className="font-semibold text-zinc-900">Keluar dari akun</h2>
+        <p className="mt-1 text-sm text-zinc-500">Akhiri sesi Anda di perangkat ini.</p>
+      </div>
+      <button onClick={() => void handleLogout()} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-200 px-4 text-sm font-semibold text-red-700 transition hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300">
+        <LogOut className="h-4 w-4" />Keluar
+      </button>
+    </section>
   </div>;
 }

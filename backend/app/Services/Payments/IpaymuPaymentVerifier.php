@@ -3,6 +3,7 @@
 namespace App\Services\Payments;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * iPaymu notifications are not signed, so subscription, digital product and wallet
@@ -91,8 +92,32 @@ class IpaymuPaymentVerifier
     /** One iPaymu payment pays for exactly one checkout, purchase, top-up or order. */
     private function transactionUsedElsewhere(string $transactionId, string $reference): bool
     {
-        return DB::table('checkout_intents')->where('metadata->ipaymu->transaction_id', $transactionId)->where('intent_token', '!=', $reference)->exists()
-            || DB::table('product_purchases')->where('payment_gateway', 'ipaymu')->where('payment_status', 'paid')->where('gateway_ref', $transactionId)->where('transaction_code', '!=', $reference)->exists()
+        $paymentAttempt = Schema::hasTable('subscription_checkout_payments')
+            ? DB::table('subscription_checkout_payments')
+                ->where('transaction_id', $transactionId)
+                ->first(['reference_id', 'checkout_intent_id'])
+            : null;
+        if ($paymentAttempt && (string) $paymentAttempt->reference_id !== $reference) {
+            return true;
+        }
+
+        $intentTransactions = DB::table('checkout_intents')
+            ->where('metadata->ipaymu->transaction_id', $transactionId)
+            ->get(['id', 'intent_token', 'metadata']);
+        foreach ($intentTransactions as $intent) {
+            if ($paymentAttempt && (int) $paymentAttempt->checkout_intent_id === (int) $intent->id) {
+                continue;
+            }
+            $metadata = json_decode((string) $intent->metadata, true);
+            $sameReference = (string) $intent->intent_token === $reference
+                || (string) data_get($metadata, 'invoice_number', '') === $reference
+                || (string) data_get($metadata, 'ipaymu.reference_id', '') === $reference;
+            if (!$sameReference) {
+                return true;
+            }
+        }
+
+        return DB::table('product_purchases')->where('payment_gateway', 'ipaymu')->where('payment_status', 'paid')->where('gateway_ref', $transactionId)->where('transaction_code', '!=', $reference)->exists()
             || DB::table('organization_wallet_transactions')->where('metadata->transaction_id', $transactionId)->where(fn ($q) => $q->whereNull('external_ref')->orWhere('external_ref', '!=', $reference))->exists()
             || DB::table('landing_page_orders')->where('gateway_trx_id', $transactionId)->exists();
     }

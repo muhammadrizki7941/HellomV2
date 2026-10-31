@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Settings, LogOut,
-  Menu, ShieldAlert, Activity, Package, Wallet, Film, Palette, ShoppingBag, FileText, Building2, ScrollText, Receipt, Bell
+  Menu, ShieldAlert, Activity, Package, Wallet, Film, Palette, ShoppingBag, FileText, Building2, ScrollText, Receipt, Bell, Headset
 } from 'lucide-react';
 import NotificationBell from '@/components/admin/NotificationBell';
 import LiveToasts from '@/components/notifications/LiveToasts';
@@ -124,6 +124,7 @@ export default function AdminLayout() {
     { icon: LayoutDashboard, label: 'Ringkasan', path: '/admin' },
     { icon: Activity, label: 'Analitik & Iklan', path: '/admin/marketing' },
     { icon: Bell, label: 'Notifikasi', path: '/admin/notifications', badge: notificationState.unreadCount },
+    { icon: Headset, label: 'Pusat Bantuan', path: '/admin/support' },
     { icon: Users, label: 'Pengguna', path: '/admin/users' },
     { icon: Building2, label: 'Organisasi', path: '/admin/organizations' },
     { icon: Package, label: 'Aplikasi & Paket', path: '/admin/apps' },

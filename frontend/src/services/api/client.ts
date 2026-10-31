@@ -245,7 +245,7 @@ export async function publicApiRequest<T>(
     },
     body: options?.body !== undefined
       ? (isFormData ? (options.body as BodyInit) : JSON.stringify(
-        /^\/public\/products\/[^/]+\/checkout$/.test(path) && typeof options.body === 'object'
+        (/^\/public\/products\/[^/]+\/checkout$/.test(path) || path === '/public/pos-checkout') && typeof options.body === 'object'
           ? { ...options.body, marketing: marketingContext() } : options.body))
       : undefined,
   });

@@ -113,7 +113,7 @@ export function OrderManageDialog({ order, onClose, onChanged }: { order: PosOrd
     <PosDialogShell titleId={titleId} onClose={onClose} busy={busy}>
       <div data-order-manage>
         <Header id={titleId} title={`Atur pesanan #${order.order_number}`} subtitle={`${order.table_label || order.service_type} · ${rupiah(order.final_amount)}`} onClose={onClose} busy={busy} />
-        <div role="tablist" className="mt-3 grid grid-cols-4 gap-1 rounded-2xl bg-gray-100 p-1">
+        <div role="tablist" className="mt-3 grid grid-cols-2 gap-1 rounded-2xl bg-gray-100 p-1 sm:grid-cols-4">
           {tabs.map(([key, label, icon]) => (
             <button key={key} type="button" role="tab" aria-selected={tab === key} onClick={() => !busy && setTab(key)}
               className={cn('flex min-h-10 flex-col items-center justify-center gap-0.5 rounded-xl text-xs font-semibold sm:flex-row sm:gap-1.5', tab === key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600')}>

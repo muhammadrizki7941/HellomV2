@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class CheckoutIntent extends Model
 {
@@ -22,6 +23,8 @@ class CheckoutIntent extends Model
         'currency',
         'expires_at',
         'metadata',
+        'status_token_hash',
+        'guest_setup_email_sent_at',
     ];
 
     protected function casts(): array
@@ -56,5 +59,10 @@ class CheckoutIntent extends Model
     public function subscription(): BelongsTo
     {
         return $this->belongsTo(Subscription::class);
+    }
+
+    public function payments(): HasMany
+    {
+        return $this->hasMany(SubscriptionCheckoutPayment::class);
     }
 }

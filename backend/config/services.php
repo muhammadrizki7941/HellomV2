@@ -44,6 +44,12 @@ return [
         'model' => env('GEMINI_MODEL', 'gemini-2.0-flash'),
     ],
 
+    'groq' => [
+        'key' => env('GROQ_API_KEY'),
+        'model' => env('GROQ_MODEL', 'openai/gpt-oss-120b'),
+        'base_url' => env('GROQ_BASE_URL', 'https://api.groq.com/openai/v1'),
+    ],
+
     // Cloudflare Turnstile on repeated Hellom Page checkouts; empty = off.
     'turnstile' => [
         'site_key' => env('TURNSTILE_SITE_KEY', ''),
@@ -53,6 +59,12 @@ return [
     // Only used when iPaymu is in sandbox mode (never in production mode).
     'ipaymu' => [
         'sandbox_url' => env('IPAYMU_SANDBOX_URL', 'https://sandbox.ipaymu.com'),
+    ],
+
+    'meta' => [
+        'pixel_id' => env('META_PIXEL_ID', ''),
+        'access_token' => env('META_ACCESS_TOKEN', ''),
+        'api_version' => env('META_API_VERSION', 'v25.0'),
     ],
 
     // Local e2e only (tests/e2e/mocks.mjs): replaces the RajaOngkir base URL. Never set in production.

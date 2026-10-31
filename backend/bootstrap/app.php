@@ -21,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'set.locale' => \App\Http\Middleware\SetLocale::class,
             'canUseApp' => \App\Http\Middleware\Api\EnsureAppEntitlement::class,
             'superAdmin' => \App\Http\Middleware\Api\EnsureSuperAdmin::class,
+            'supportAgent' => \App\Http\Middleware\Api\EnsureSupportAgent::class,
             'shopManager' => \App\Http\Middleware\Api\EnsureShopManager::class,
             'posPermission' => \App\Http\Middleware\Api\EnsurePosPermission::class,
             'injectPosContext' => \App\Http\Middleware\Api\InjectPosContext::class,

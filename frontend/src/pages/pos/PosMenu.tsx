@@ -320,8 +320,8 @@ export default function PosMenu() {
       )}
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="flex-1 relative">
+      <div className="flex flex-col gap-4 md:flex-row md:flex-wrap">
+        <div className="relative min-w-0 flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
           <input
             type="text"
@@ -334,7 +334,7 @@ export default function PosMenu() {
         <select
           value={selectedCategory || ''}
           onChange={(e) => setSelectedCategory(e.target.value ? parseInt(e.target.value) : null)}
-          className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-amber-300 focus:border-amber-300 text-gray-900 bg-white"
+          className="min-w-0 max-w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-amber-300 focus:border-amber-300 text-gray-900 bg-white md:max-w-64"
         >
           <option value="">Semua Kategori</option>
           {categories.map(category => (

@@ -54,7 +54,7 @@ final class IpaymuGateway implements PaymentGateway
 
     public function createCharge(ChargeRequest $request): ChargeResult
     {
-        $notifyUrl = $this->notifyUrl($request->notifyContext);
+        $notifyUrl = $request->notifyUrlOverride ?: $this->notifyUrl($request->notifyContext);
         $channels = $this->settings->enabledDirectChannels();
         $key = (string) ($request->preferredMethod ?? '');
         if (!isset($channels[$key]) && $key !== 'other') {
@@ -113,8 +113,13 @@ final class IpaymuGateway implements PaymentGateway
             'phone' => is_string($phone) && $phone !== '' ? $phone : '081234567890',
             'email' => $request->buyerEmail,
             'amount' => $request->amount,
+            'product' => [$request->productName],
+            'qty' => [1],
+            'price' => [$request->amount],
             'notifyUrl' => $notifyUrl,
             'referenceId' => $request->reference,
+            'expired' => 1,
+            'expiredType' => 'hours',
             'paymentMethod' => $method,
             'paymentChannel' => $channelCode,
             'comments' => 'Pembelian: ' . $request->productName,

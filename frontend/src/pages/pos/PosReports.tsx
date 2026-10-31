@@ -305,12 +305,12 @@ const PosReports = () => {
                 text-sm text-gray-900"
             />
           </div>
-          <label className="flex items-center gap-2 text-sm text-gray-600">
+          <label className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-gray-600">
             Dasar tanggal:
             <select
               value={dateBasis}
               onChange={e => setDateBasis(e.target.value as 'paid_at' | 'created_at')}
-              className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900"
+              className="min-w-0 max-w-full rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900"
             >
               <option value="paid_at">Tanggal pembayaran</option>
               <option value="created_at">Tanggal order dibuat</option>

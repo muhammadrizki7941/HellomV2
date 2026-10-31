@@ -417,7 +417,7 @@ export default function PosOrders() {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 p-2 sm:p-4 lg:p-6">
+    <div className="min-h-screen min-w-0 bg-gray-50 p-2 [overflow-wrap:anywhere] sm:p-4 lg:p-6">
       <div className="w-full space-y-4 sm:space-y-6">
         <div className="flex flex-col justify-between gap-4 xl:flex-row xl:items-center">
           <div className="min-w-0">
@@ -511,7 +511,7 @@ export default function PosOrders() {
                         {bill.orders_count} pesanan · {bill.orders.map((o) => `#${o.order_number}`).join(', ')}
                       </p>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
                       <span className="text-sm font-semibold text-gray-900">{rupiah(bill.unpaid_amount)}</span>
                       <button
                         onClick={() => setMovingBill(bill)}
@@ -534,7 +534,7 @@ export default function PosOrders() {
           </div>
         )}
 
-        <div className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center">
+        <div className="flex min-w-0 flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-3 shadow-sm md:flex-row md:items-center">
           <div className="relative min-w-0 flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-gray-400" />
             <input
@@ -556,7 +556,7 @@ export default function PosOrders() {
               <option key={status} value={status}>{POS_ORDER_STATUS_LABELS[status]}</option>
             ))}
           </select>
-          <div className="flex min-h-11 items-center gap-1 overflow-x-auto rounded-xl bg-gray-100 p-1" role="group" aria-label="Tampilan pesanan">
+          <div className="grid min-h-11 grid-cols-3 items-center gap-1 rounded-xl bg-gray-100 p-1 md:flex" role="group" aria-label="Tampilan pesanan">
             {([
               ['grid', 'Kartu', LayoutGrid],
               ['list', 'Daftar', List],
@@ -568,7 +568,7 @@ export default function PosOrders() {
                 aria-pressed={viewMode === mode}
                 onClick={() => setViewMode(mode)}
                 className={cn(
-                  'flex min-h-9 shrink-0 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition',
+                  'flex min-h-9 min-w-0 items-center justify-center gap-1 rounded-lg px-2 text-xs font-semibold transition md:shrink-0 md:gap-1.5 md:px-3',
                   viewMode === mode ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-900'
                 )}
               >
@@ -617,11 +617,11 @@ export default function PosOrders() {
           </div>
         ) : (
           <div className={cn(
-            'grid min-w-0 gap-4',
+            'grid min-w-0 grid-cols-1 gap-4',
             viewMode === 'list' ? 'lg:grid-cols-[220px_minmax(0,1fr)]' : 'xl:grid-cols-[minmax(0,1fr)_340px]'
           )}>
             {viewMode === 'list' && (
-              <aside className="h-fit rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+              <aside className="h-fit min-w-0 rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
                 <h2 className="mb-3 text-sm font-bold text-gray-900">Filter Pesanan</h2>
                 <nav className="flex gap-2 overflow-x-auto lg:flex-col lg:overflow-visible" aria-label="Filter status pesanan">
                   <button
@@ -687,7 +687,7 @@ export default function PosOrders() {
                       <ChevronRight className="h-4 w-4 text-gray-400" />
                     </button>
                   )}
-                  <div className="flex items-start justify-between gap-2">
+                  <div className="flex flex-col items-start justify-between gap-2 sm:flex-row">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-baseline gap-1.5">
                         <span className="shrink-0 font-mono text-[10px] text-gray-400">#{order.order_number}</span>
@@ -705,7 +705,7 @@ export default function PosOrders() {
                       </p>
                       {order.cancel_reason && <p className="mt-0.5 text-[11px] text-red-600">Alasan batal: {order.cancel_reason}</p>}
                     </div>
-                    <div className="shrink-0 text-right">
+                    <div className="min-w-0 text-left sm:max-w-[45%] sm:text-right">
                       <span className="text-xs font-semibold text-gray-700">{rupiah(order.final_amount ?? order.total_amount)}</span>
                       {((order.tax_amount ?? 0) > 0 || (order.service_amount ?? 0) > 0) && (
                         <p className="text-[10px] text-gray-400">
