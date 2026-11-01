@@ -8,7 +8,7 @@ const ICON = {
   fail: <XCircle className="h-4 w-4 text-red-600" />,
 };
 
-/** Pengaturan Email › Cek domain: SPF / DKIM / DMARC + whether the SMTP may send as the From domain. */
+/** Pengaturan Email › Cek SPF / DKIM / DMARC records used by Resend. */
 export default function MailDomainPanel() {
   const [result, setResult] = useState<MailDomainCheckResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -35,7 +35,7 @@ export default function MailDomainPanel() {
           </div>
           <div>
             <h3 className="font-bold text-zinc-900">Cek domain pengirim (anti-spam)</h3>
-            <p className="text-sm text-zinc-500">Periksa kecocokan pengirim dan autentikasi domain. Hasil ini bukan jaminan masuk inbox.</p>
+            <p className="text-sm text-zinc-500">Periksa DNS SPF, DKIM, dan DMARC. Hasil ini bukan jaminan masuk inbox.</p>
           </div>
         </div>
         <button
@@ -54,9 +54,9 @@ export default function MailDomainPanel() {
         <div className="space-y-3">
           <p className={`rounded-lg p-3 text-sm font-medium ${result.ok ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-900'}`}>
             {result.ok
-              ? `Domain ${result.domain} siap: email dari sini akan lolos pemeriksaan Gmail & Outlook.`
+              ? `Record SPF, DKIM, dan DMARC domain ${result.domain} ditemukan. Tetap verifikasi status domain di dashboard Resend.`
               : `Domain ${result.domain || '(belum diisi)'} belum siap — perbaiki yang bertanda merah atau kuning. Panduan lengkap: docs/EMAIL.md.`}
-            {result.provider_label ? ` Penyedia SMTP: ${result.provider_label}.` : ''}
+            {result.provider_label ? ` Penyedia email: ${result.provider_label}.` : ''}
           </p>
           <ul className="divide-y divide-zinc-100 rounded-lg border border-zinc-200">
             {result.checks.map((item) => (

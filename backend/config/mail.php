@@ -14,7 +14,7 @@ return [
     |
     */
 
-    'default' => env('MAIL_MAILER', 'log'),
+    'default' => env('APP_ENV') === 'testing' ? env('MAIL_MAILER', 'array') : 'resend',
 
     /*
     |--------------------------------------------------------------------------

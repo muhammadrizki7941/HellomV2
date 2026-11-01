@@ -143,7 +143,7 @@ End date is resolved from:
 
 ## Quick smoke checklist
 
-1. Configure SMTP in admin mail settings
+1. Configure Resend and sender identity in admin mail settings
 2. Configure DOKU in admin payment settings
 3. Set runtime provider to `doku`
 4. Set checkout mode to `gateway_automatic`

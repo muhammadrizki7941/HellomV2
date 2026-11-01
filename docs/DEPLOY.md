@@ -53,7 +53,7 @@ Lakukan **sekali** saat pertama kali men-deploy hasil refactor:
    pm2 delete hellom-realtime && pm2 start deploy/ecosystem.config.js && pm2 save
    ```
 5. **Paket composer dihapus** (dbal, breeze, sail). Jika artisan error menyebut `SailServiceProvider`: `rm -f bootstrap/cache/packages.php bootstrap/cache/services.php && php artisan package:discover` (deploy.sh sudah melakukannya).
-6. **Migration baru** (semua aditif): `users.role_before_suspension`; checkout tamu produk digital: kolom `product_purchases.guest_token_hash/buyer_phone/access_email_sent_at`, `users.pending_guest_credentials`, tabel `login_links`. `FRONTEND_URL` **wajib** benar karena link di email akses produk memakainya, dan SMTP (Pengaturan Email super admin) harus aktif agar pembeli tamu menerima aksesnya.
+6. **Migration baru** (semua aditif): `users.role_before_suspension`; checkout tamu produk digital: kolom `product_purchases.guest_token_hash/buyer_phone/access_email_sent_at`, `users.pending_guest_credentials`, tabel `login_links`. `FRONTEND_URL` **wajib** benar karena link di email akses produk memakainya; Resend (`RESEND_API_KEY`) dan Pengaturan Email super admin harus siap agar pembeli tamu menerima aksesnya.
 7. **Masa berlaku langganan lama**: jalankan laporan dulu, putuskan, baru terapkan:
    ```bash
    cd backend
@@ -85,7 +85,7 @@ Urutan sekali jalan setelah `git pull` + `composer install` + `php artisan migra
 
 ### 3c. Produksi (Fase 5): queue, cron, backup, health
 
-1. **Queue worker**: `QUEUE_CONNECTION=database` di `backend/.env`, lalu `pm2 startOrReload deploy/ecosystem.config.js --update-env && pm2 save` (proses `hellom-queue`). Email akses/penjualan/penarikan, email verifikasi, Meta CAPI, dan rekonsiliasi berjalan di sini — webhook tidak menunggu SMTP. `deploy.sh` menjalankan `queue:restart` tiap rilis.
+1. **Queue worker**: `QUEUE_CONNECTION=database` di `backend/.env`, lalu `pm2 startOrReload deploy/ecosystem.config.js --update-env && pm2 save` (proses `hellom-queue`). Email akses/penjualan/penarikan, email verifikasi, Meta CAPI, dan rekonsiliasi berjalan di sini — webhook tidak menunggu Resend API. `deploy.sh` menjalankan `queue:restart` tiap rilis.
 2. **Cron** (`deploy/crontab.example`): `schedule:run` tiap menit **dan** backup harian 02:15 (`deploy/backup.sh`: `mysqldump --single-transaction` + `storage/app`, simpan 14 hari di `BACKUP_DIR` di luar web root, mode 600). Set `BACKUP_RCLONE_REMOTE` untuk salinan di luar VPS. Uji sekali: `bash deploy/backup.sh` lalu `gzip -t` file hasilnya; **coba restore** ke database cadangan minimal sekali.
 3. **Health**: `GET https://hellomspace.com/api/health` → 200 `ok` / 503 `degraded` (database, cache, heartbeat scheduler < 5 menit, antrean tertunda < 10 menit, jumlah job gagal). Pasang di uptime monitor (UptimeRobot/BetterStack). Setelah cron aktif, heartbeat muncul dalam 1 menit.
 4. **Index database** baru: `php artisan migrate --force` (migration `2026_10_04_000001_add_landing_performance_indexes`, hanya menambah index).
