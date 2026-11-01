@@ -1,3 +1,4 @@
+import { useAdminDialog } from '@/components/admin/useAdminDialog';
 import { useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
@@ -208,6 +209,8 @@ export default function AppManagement() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [planModalOpen, setPlanModalOpen] = useState(false);
   const [promoModalOpen, setPromoModalOpen] = useState(false);
+  const planDialogRef = useAdminDialog(planModalOpen, () => { if (!saving) resetPlanModal(); });
+  const promoDialogRef = useAdminDialog(promoModalOpen, () => { if (!saving) resetPromoModal(); });
   const [editingPlanId, setEditingPlanId] = useState<number | null>(null);
   const [editingPromoId, setEditingPromoId] = useState<number | null>(null);
   const [planForm, setPlanForm] = useState<PlanFormState>(INITIAL_PLAN_FORM);
@@ -490,16 +493,16 @@ export default function AppManagement() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-3xl border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-orange-50 p-6 shadow-sm">
+      <div className="admin-page-heading">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-3xl">
-            <div className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">
+            <div className="admin-eyebrow flex items-center gap-2">
               <Sparkles className="h-3.5 w-3.5" />
-              Pricing Control Center
+              Workspace
             </div>
-            <h1 className="mt-4 text-3xl font-bold tracking-tight text-zinc-950">Aplikasi &amp; Paket: harga, promo, dan status penjualan</h1>
+            <h1 className="mt-4 text-3xl font-bold tracking-tight text-zinc-950">Aplikasi &amp; Paket</h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-600">
-              Halaman ini sekarang menjadi pusat setup harga aplikasi, kampanye diskon, dan kesiapan jalur pembayaran sebelum gateway Xendit diaktifkan penuh.
+              Kelola aplikasi, harga paket, promo, dan status penjualan dalam satu tempat.
             </p>
           </div>
 
@@ -509,14 +512,14 @@ export default function AppManagement() {
               className="inline-flex items-center gap-2 rounded-2xl bg-zinc-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-zinc-800"
             >
               <Plus className="h-4 w-4" />
-              Plan Baru
+              Paket baru
             </button>
             <button
               onClick={() => openPromoModal()}
               className="inline-flex items-center gap-2 rounded-2xl border border-amber-300 bg-white px-4 py-3 text-sm font-semibold text-amber-800 transition hover:bg-amber-50"
             >
               <BadgePercent className="h-4 w-4" />
-              Promo Baru
+              Promo baru
             </button>
           </div>
         </div>
@@ -832,13 +835,13 @@ export default function AppManagement() {
 
       {planModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-zinc-200 bg-white shadow-2xl">
+          <div ref={planDialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Pengaturan paket" className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-zinc-200 bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-4">
               <div>
-                <h3 className="text-xl font-bold text-zinc-950">{editingPlanId ? 'Ubah paket' : 'Tambah plan'}</h3>
+                <h3 className="text-xl font-bold text-zinc-950">{editingPlanId ? 'Ubah paket' : 'Tambah paket'}</h3>
                 <p className="text-sm text-zinc-500">Atur harga aplikasi untuk checkout dan auto-renew.</p>
               </div>
-              <button onClick={resetPlanModal} className="rounded-2xl p-2 text-zinc-500 transition hover:bg-zinc-100">
+              <button aria-label="Tutup" onClick={resetPlanModal} className="rounded-2xl p-2 text-zinc-500 transition hover:bg-zinc-100">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -1057,13 +1060,13 @@ export default function AppManagement() {
 
       {promoModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-2xl rounded-3xl border border-zinc-200 bg-white shadow-2xl">
+          <div ref={promoDialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Pengaturan promo" className="w-full max-w-2xl rounded-3xl border border-zinc-200 bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-4">
               <div>
                 <h3 className="text-xl font-bold text-zinc-950">{editingPromoId ? 'Ubah promo' : 'Tambah promo'}</h3>
                 <p className="text-sm text-zinc-500">Promo ini akan dipakai untuk validasi diskon saat checkout subscription.</p>
               </div>
-              <button onClick={resetPromoModal} className="rounded-2xl p-2 text-zinc-500 transition hover:bg-zinc-100">
+              <button aria-label="Tutup" onClick={resetPromoModal} className="rounded-2xl p-2 text-zinc-500 transition hover:bg-zinc-100">
                 <X className="h-5 w-5" />
               </button>
             </div>

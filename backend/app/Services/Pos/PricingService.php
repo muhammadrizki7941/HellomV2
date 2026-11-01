@@ -41,6 +41,18 @@ final class PricingService
                 continue;
             }
 
+            $variant = null;
+            if (!empty($item['product_variant_id'])) {
+                $variant = $product->variants->firstWhere('id', (int) $item['product_variant_id']);
+                if (!$variant || !$variant->is_active) {
+                    $problems[] = ['index' => $index, 'product_id' => $product->id, 'reason' => 'variant', 'message' => 'Varian produk tidak tersedia'];
+                    continue;
+                }
+            } elseif ($product->has_variants) {
+                $problems[] = ['index' => $index, 'product_id' => $product->id, 'reason' => 'variant', 'message' => 'Pilih varian produk'];
+                continue;
+            }
+
             try {
                 [$optionsTotal, $optionRows, $selected] = $this->resolveOptions($product, (array) ($item['options'] ?? []));
             } catch (PricingException $e) {
@@ -49,14 +61,28 @@ final class PricingService
             }
 
             $qty = max(1, (int) $item['quantity']);
-            $unitPrice = (int) $product->price + $optionsTotal;
+            $basePrice = (int) ($variant?->price ?? $product->price);
+            $tier = $product->priceTiers
+                ->filter(fn ($tier) => (int) $tier->min_quantity <= $qty
+                    && ($tier->product_variant_id === null || (int) $tier->product_variant_id === (int) ($variant?->id ?? 0))
+                    && ($tier->customer_type === null || $tier->customer_type === ($item['customer_type'] ?? null)))
+                ->sortByDesc(fn ($tier) => [$tier->product_variant_id !== null, $tier->min_quantity])
+                ->first();
+            if ($tier) {
+                $basePrice = (int) $tier->price;
+            }
+            $unitPrice = $basePrice + $optionsTotal;
             $lineTotal = $unitPrice * $qty;
             $subtotal += $lineTotal;
 
             $lines[] = [
                 'product_id' => $product->id,
-                'product_name' => $product->name,
-                'base_unit_price' => (int) $product->price,
+                'product_name' => $variant ? "{$product->name} - {$variant->name}" : $product->name,
+                'variant_name' => $variant?->name,
+                'product_variant_id' => $variant?->id,
+                'cost_price' => $product->cost_price,
+                'warranty_days' => $product->warranty_days,
+                'base_unit_price' => $basePrice,
                 'options_total' => $optionsTotal,
                 'unit_price' => $unitPrice,
                 'qty' => $qty,
@@ -64,6 +90,7 @@ final class PricingService
                 'selected_options' => $selected,
                 'options' => $optionRows,
                 'notes' => $item['notes'] ?? null,
+                'serial_numbers' => array_values((array) ($item['serial_numbers'] ?? [])),
             ];
         }
 

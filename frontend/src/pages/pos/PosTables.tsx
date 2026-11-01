@@ -23,6 +23,7 @@ export default function PosTables() {
   const [editingTable, setEditingTable] = useState<Table | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [organizationSlug, setOrganizationSlug] = useState<string | null>(null);
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
   const [formData, setFormData] = useState({
     code: '',
     name: '',
@@ -32,6 +33,13 @@ export default function PosTables() {
   useEffect(() => {
     loadTables();
     void loadCurrentOrganization();
+    const updateNetworkState = () => setIsOnline(navigator.onLine);
+    window.addEventListener('online', updateNetworkState);
+    window.addEventListener('offline', updateNetworkState);
+    return () => {
+      window.removeEventListener('online', updateNetworkState);
+      window.removeEventListener('offline', updateNetworkState);
+    };
   }, []);
 
   const loadTables = async () => {
@@ -166,6 +174,7 @@ export default function PosTables() {
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => void handlePrintAll()}
+            disabled={!isOnline}
             className="px-4 py-2 bg-white border border-gray-200 text-gray-800 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
           >
             <Printer className="w-4 h-4" />
@@ -173,6 +182,7 @@ export default function PosTables() {
           </button>
           <button
             onClick={handleCreateTable}
+            disabled={!isOnline}
             className="px-4 py-2 bg-amber-400 text-[#111111] rounded-lg hover:bg-amber-500 transition-colors flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
@@ -180,6 +190,13 @@ export default function PosTables() {
           </button>
         </div>
       </div>
+
+      {!isOnline && (
+        <div role="status" className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <p>Self-order melalui QR memerlukan server yang dapat dijangkau pelanggan. Saat offline, pelanggan tidak dapat membuka menu atau mengirim pesanan lewat QR.</p>
+        </div>
+      )}
 
       {weakCount > 0 && (
         <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
@@ -259,6 +276,7 @@ export default function PosTables() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       <button
                         onClick={() => window.open(generateQRUrl(table), '_blank')}
+                        disabled={!isOnline}
                         className="text-amber-700 hover:text-[#111111] flex items-center gap-1"
                       >
                         <QrCode className="w-4 h-4" />
@@ -266,6 +284,7 @@ export default function PosTables() {
                       </button>
                       <button
                         onClick={() => void handleRegenerate(table)}
+                        disabled={!isOnline}
                         className={cn('mt-1 flex items-center gap-1 text-xs', table.has_weak_token ? 'font-semibold text-red-600' : 'text-gray-500 hover:text-gray-800')}
                         title="Buat token QR baru (QR lama tidak berlaku)"
                       >
@@ -277,12 +296,14 @@ export default function PosTables() {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => handleEditTable(table)}
+                          disabled={!isOnline}
                           className="text-amber-700 hover:text-[#111111]"
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => handleDeleteTable(table.id)}
+                          disabled={!isOnline}
                           className="text-red-600 hover:text-red-900"
                         >
                           <Trash2 className="w-4 h-4" />

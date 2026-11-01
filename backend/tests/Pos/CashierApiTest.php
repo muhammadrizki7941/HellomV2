@@ -94,7 +94,8 @@ class CashierApiTest extends PosTestCase
         $headers = ['Authorization' => "Bearer {$cashierA}", 'X-Outlet-Id' => (string) $outletB->id]; // header ignored for cashiers
 
         $this->withHeaders($headers)->postJson('/api/v1/hellom/pos/orders', ['items' => [['product_id' => $productB->id, 'quantity' => 1]]])
-            ->assertStatus(409)->assertJsonPath('error.problems.0.reason', 'not_found');
+            ->assertForbidden()->assertJsonPath('error.code', 'POS_OUTLET_NOT_ASSIGNED');
+        $headers['X-Outlet-Id'] = (string) $outletA->id;
 
         // Member registered at outlet B is found by the cashier of outlet A (same organization).
         $this->withHeaders($headers)->getJson('/api/v1/hellom/pos/members/search?q=0812-3333')

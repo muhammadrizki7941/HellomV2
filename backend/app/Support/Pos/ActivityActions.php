@@ -19,6 +19,10 @@ final class ActivityActions
     public const PRODUCT_CREATED = 'PRODUCT_CREATED';
     public const PRODUCT_UPDATED = 'PRODUCT_UPDATED';
     public const PRODUCT_DELETED = 'PRODUCT_DELETED';
+    public const STAFF_CREATED = 'STAFF_CREATED';
+    public const STAFF_PROFILE_UPDATED = 'STAFF_PROFILE_UPDATED';
+    public const STAFF_DEACTIVATED = 'STAFF_DEACTIVATED';
+    public const STAFF_PASSWORD_RESET = 'STAFF_PASSWORD_RESET';
     public const STAFF_ACCESS_CHANGED = 'STAFF_ACCESS_CHANGED';
     public const PIN_SET = 'PIN_SET';
     public const PIN_CHANGED = 'PIN_CHANGED';
@@ -50,6 +54,10 @@ final class ActivityActions
         self::PRODUCT_CREATED => ['Produk ditambahkan', 'info'],
         self::PRODUCT_UPDATED => ['Produk diubah', 'info'],
         self::PRODUCT_DELETED => ['Produk dihapus', 'warning'],
+        self::STAFF_CREATED => ['Akun staf dibuat', 'info'],
+        self::STAFF_PROFILE_UPDATED => ['Data staf diubah', 'info'],
+        self::STAFF_DEACTIVATED => ['Akun staf dinonaktifkan', 'warning'],
+        self::STAFF_PASSWORD_RESET => ['Kata sandi staf direset', 'warning'],
         self::STAFF_ACCESS_CHANGED => ['Hak akses staf diubah', 'warning'],
         self::PIN_SET => ['PIN pemilik dibuat', 'info'],
         self::PIN_CHANGED => ['PIN pemilik diganti', 'warning'],

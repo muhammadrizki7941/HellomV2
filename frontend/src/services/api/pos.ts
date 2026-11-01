@@ -29,6 +29,56 @@ export function getPosAccess() {
   return apiRequest<PosAccessInfo>('/apps/pos/access');
 }
 
+export type PosBusinessType = {
+  key: 'fnb' | 'retail' | 'konter_hp' | 'sparepart' | 'jasa';
+  label: string;
+  examples: string;
+};
+
+export type PosModuleKey =
+  | 'tables_selforder'
+  | 'variants'
+  | 'barcode'
+  | 'serial_imei'
+  | 'warranty'
+  | 'price_tiers'
+  | 'suppliers_purchasing'
+  | 'stock_opname'
+  | 'service_tickets';
+
+export type PosModule = {
+  key: PosModuleKey;
+  label: string;
+  description: string;
+  enabled: boolean;
+};
+
+export type PosBusinessProfile = {
+  organization_id: number;
+  business_type: PosBusinessType['key'];
+  business_type_label: string;
+  onboarding_completed: boolean;
+  business_types: PosBusinessType[];
+  module_presets: Record<PosBusinessType['key'], PosModuleKey[]>;
+  enabled_modules: PosModuleKey[];
+  modules: PosModule[];
+};
+
+export function getPosBusinessProfile() {
+  return apiRequest<PosBusinessProfile>('/pos/business-profile');
+}
+
+export function updatePosBusinessProfile(payload: {
+  business_type?: PosBusinessType['key'];
+  enabled_modules?: PosModuleKey[];
+  onboarding_completed?: boolean;
+}) {
+  return apiRequest<PosBusinessProfile>('/pos/business-profile', {
+    method: 'PUT',
+    body: payload,
+  });
+}
+
 // ─── Menu, orders and reports (PosProductController/PosOrderController/PosReportController) ───
 
 export type PosCategoryRecord = {
@@ -74,6 +124,16 @@ export type PosProductRecord = {
   is_available: boolean;
   track_stock: boolean;
   stock: number | null;
+  sku?: string | null;
+  barcode?: string | null;
+  unit?: string;
+  cost_price?: number | null;
+  min_stock?: number;
+  has_variants?: boolean;
+  track_serial?: boolean;
+  warranty_days?: number | null;
+  variants?: PosProductVariantRecord[];
+  price_tiers?: PosProductPriceTierRecord[];
   is_package: boolean;
   show_as_banner: boolean;
   banner_title: string | null;
@@ -87,6 +147,127 @@ export type PosProductRecord = {
   category: PosCategoryRecord;
   options: PosProductOption[];
 };
+
+export type PosProductVariantRecord = {
+  id: number;
+  product_id: number;
+  name: string;
+  attributes: Record<string, string> | null;
+  sku: string | null;
+  barcode: string | null;
+  price: number | null;
+  stock: number | null;
+  track_stock: boolean;
+  is_active: boolean;
+};
+
+export type PosProductPriceTierRecord = {
+  id: number;
+  product_id: number;
+  product_variant_id: number | null;
+  label: string;
+  min_quantity: number;
+  customer_type: string | null;
+  price: number;
+  variant?: { id: number; name: string } | null;
+};
+
+export type PosProductSerialRecord = {
+  id: number;
+  serial_number: string;
+  product_variant_id: number | null;
+};
+
+export type PosWarrantyRecord = {
+  order_number: string;
+  customer_name: string | null;
+  customer_phone: string | null;
+  created_at: string;
+  product_name: string;
+  serial_number: string | null;
+  warranty_expires_at: string | null;
+};
+
+export function getPosProductVariants(productId: number) {
+  return apiRequest<{ variants: PosProductVariantRecord[] }>(`/pos/products/${productId}/variants`);
+}
+
+export function getPosProductPriceTiers(productId: number) {
+  return apiRequest<{ tiers: PosProductPriceTierRecord[] }>(`/pos/products/${productId}/price-tiers`);
+}
+
+export function getAvailablePosProductSerials(productId: number, productVariantId?: number, search?: string) {
+  const params = new URLSearchParams();
+  if (productVariantId) params.set('product_variant_id', String(productVariantId));
+  if (search) params.set('search', search);
+  const suffix = params.size > 0 ? `?${params.toString()}` : '';
+  return apiRequest<{ serials: PosProductSerialRecord[] }>(`/pos/products/${productId}/serials/available${suffix}`);
+}
+
+export function getPosWarrantyLookup(params: {
+  serial_number?: string;
+  order_number?: string;
+  customer_phone?: string;
+}) {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value) query.set(key, value);
+  });
+  return apiRequest<{ warranties: PosWarrantyRecord[] }>(`/pos/warranties/search?${query.toString()}`);
+}
+
+export function createPosProductVariant(productId: number, payload: Record<string, unknown>) {
+  return apiRequest<{ variant: PosProductVariantRecord }>(`/pos/products/${productId}/variants`, { method: 'POST', body: payload });
+}
+
+export function updatePosProductVariant(productId: number, variantId: number, payload: Record<string, unknown>) {
+  return apiRequest<{ variant: PosProductVariantRecord }>(`/pos/products/${productId}/variants/${variantId}`, { method: 'PATCH', body: payload });
+}
+
+export function updatePosProductPriceTiers(productId: number, tiers: Array<Record<string, unknown>>) {
+  return apiRequest<{ tiers: Array<Record<string, unknown>> }>(`/pos/products/${productId}/price-tiers`, { method: 'PUT', body: { tiers } });
+}
+
+export function importPosProducts(file: File) {
+  const body = new FormData();
+  body.append('file', file);
+  return apiRequest<{ created_count: number; error_count: number; errors: Array<{ row: number; message: string }> }>('/pos/products/import', {
+    method: 'POST',
+    body,
+  });
+}
+
+export function downloadPosProductImportTemplate() {
+  return apiRequestBlob('/pos/products/import-template');
+}
+
+export function createPosPurchase(payload: Record<string, unknown>) {
+  return apiRequest<Record<string, unknown>>('/pos/purchases', { method: 'POST', body: payload });
+}
+
+export function getPosSuppliers() {
+  return apiRequest<{ suppliers: Array<{ id: number; name: string; phone: string | null }> }>('/pos/suppliers');
+}
+
+export function createPosSupplier(payload: Record<string, unknown>) {
+  return apiRequest<Record<string, unknown>>('/pos/suppliers', { method: 'POST', body: payload });
+}
+
+export function createPosStocktake(payload: Record<string, unknown>) {
+  return apiRequest<Record<string, unknown>>('/pos/stocktakes', { method: 'POST', body: payload });
+}
+
+export function createPosStockTransfer(payload: Record<string, unknown>) {
+  return apiRequest<Record<string, unknown>>('/pos/stock-transfers', { method: 'POST', body: payload });
+}
+
+export function getPosStockMovements(params: { product_id?: number; per_page?: number } = {}) {
+  const query = new URLSearchParams();
+  if (params.product_id) query.set('product_id', String(params.product_id));
+  if (params.per_page) query.set('per_page', String(params.per_page));
+  const suffix = query.size ? `?${query.toString()}` : '';
+  return apiRequest<{ movements: { data: Array<Record<string, unknown>>; current_page: number; last_page: number } }>(`/pos/stock-movements${suffix}`);
+}
 
 export type PosOrderListItem = {
   id: number;
@@ -121,6 +302,10 @@ export type PosOrderListItem = {
   updated_at: string;
   items_count: number;
   items: Array<{ id: number; product_name: string; quantity: number; unit_price: number; line_total: number; options?: string[] }>;
+  offline_client_uuid?: string;
+  local_invoice_no?: string;
+  sync_status?: 'pending' | 'syncing' | 'synced' | 'failed';
+  paid_manually?: boolean;
 };
 
 export type PosReportPeriod = {
@@ -213,6 +398,7 @@ export type PosReportTransactions = {
   transactions: Array<{
     id: number;
     order_number: string;
+    outlet_name: string;
     customer_name: string;
     payment_status: string;
     payment_method: string;
@@ -250,6 +436,26 @@ export type PosReportMargin = {
     estimated_margin_pct: number | null;
   }>;
   disclaimer?: string;
+};
+
+export type PosReportGrossProfit = {
+  coverage_pct: number;
+  tracked_units: number;
+  total_units: number;
+  net_sales: number;
+  cost: number;
+  gross_profit: number | null;
+  gross_margin_pct: number | null;
+  products: Array<{
+    product_name: string;
+    quantity: number;
+    tracked_quantity: number;
+    net_sales: number;
+    cost: number;
+    gross_profit: number;
+    gross_margin_pct: number | null;
+  }>;
+  disclaimer: string;
 };
 
 // A dining table as returned by PosTableController (dining_tables row).
@@ -436,6 +642,8 @@ export type PosReceipt = {
     quantity: number;
     price: number;
     subtotal: number;
+    serial_number?: string | null;
+    warranty_expires_at?: string | null;
   }>;
   total_amount: number;
   discount_amount?: number;
@@ -452,6 +660,8 @@ export type PosReceipt = {
     note?: string;
     paid_at?: string;
   };
+  offline_created?: boolean;
+  paid_manually?: boolean;
   organization: {
     name: string;
     logo_path?: string;
@@ -770,6 +980,10 @@ export function getPosReportTransactions(params?: ReportParams) {
 
 export function getPosReportMargin(params?: ReportParams) {
   return apiRequest<PosReportMargin>(`/pos/reports/margin${toReportQuery(params)}`);
+}
+
+export function getPosReportGrossProfit(params?: ReportParams) {
+  return apiRequest<PosReportGrossProfit>(`/pos/reports/gross-profit${toReportQuery(params)}`);
 }
 
 // Excel (.xlsx) export for the given period; returns the file as a Blob.

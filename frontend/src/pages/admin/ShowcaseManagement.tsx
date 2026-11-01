@@ -1,3 +1,4 @@
+import { useAdminDialog } from '@/components/admin/useAdminDialog';
 import { useState, useEffect, useCallback } from 'react';
 import {
   Plus, X, Save, AlertCircle, Film, Image, ExternalLink,
@@ -48,6 +49,8 @@ export default function ShowcaseManagement() {
 
   // Client modal
   const [clientModalOpen, setClientModalOpen] = useState(false);
+  const portfolioDialogRef = useAdminDialog(portfolioModalOpen, () => { setPortfolioModalOpen(false); setEditingPortfolioId(null); setPortfolioForm(INITIAL_PORTFOLIO); });
+  const clientDialogRef = useAdminDialog(clientModalOpen, () => { setClientModalOpen(false); setEditingClientId(null); setClientForm(INITIAL_CLIENT); });
   const [editingClientId, setEditingClientId] = useState<number | null>(null);
   const [clientForm, setClientForm] = useState(INITIAL_CLIENT);
   const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -383,10 +386,10 @@ export default function ShowcaseManagement() {
       {/* ─── Portfolio Modal ─── */}
       {portfolioModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <div ref={portfolioDialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Formulir portfolio" className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-zinc-200 flex items-center justify-between sticky top-0 bg-white z-10">
               <h2 className="text-xl font-bold text-zinc-900">{editingPortfolioId ? 'Edit Portfolio' : 'Add Portfolio'}</h2>
-              <button onClick={() => { setPortfolioModalOpen(false); setEditingPortfolioId(null); setPortfolioForm(INITIAL_PORTFOLIO); }} className="p-2 hover:bg-zinc-100 rounded-lg text-zinc-500">
+              <button aria-label="Tutup" onClick={() => { setPortfolioModalOpen(false); setEditingPortfolioId(null); setPortfolioForm(INITIAL_PORTFOLIO); }} className="p-2 hover:bg-zinc-100 rounded-lg text-zinc-500">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -438,7 +441,7 @@ export default function ShowcaseManagement() {
               </div>
 
               {/* Client name + Category */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-zinc-700 mb-1">Nama klien</label>
                   <input type="text" value={portfolioForm.client_name} onChange={e => setPortfolioForm(f => ({ ...f, client_name: e.target.value }))}
@@ -452,7 +455,7 @@ export default function ShowcaseManagement() {
               </div>
 
               {/* Project URL + Year */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-zinc-700 mb-1">
                     <Globe className="w-3.5 h-3.5 inline mr-1" />Website / Project URL
@@ -477,7 +480,7 @@ export default function ShowcaseManagement() {
               </div>
 
               {/* Sort + Publish + Featured */}
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-zinc-700 mb-1">Urutan</label>
                   <input type="number" value={portfolioForm.sort_order} onChange={e => setPortfolioForm(f => ({ ...f, sort_order: parseInt(e.target.value) || 0 }))}
@@ -520,10 +523,10 @@ export default function ShowcaseManagement() {
       {/* ─── Client Modal ─── */}
       {clientModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+          <div ref={clientDialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Formulir klien" className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-zinc-200 flex items-center justify-between sticky top-0 bg-white z-10">
               <h2 className="text-xl font-bold text-zinc-900">{editingClientId ? 'Edit Client' : 'Add Client'}</h2>
-              <button onClick={() => { setClientModalOpen(false); setEditingClientId(null); setClientForm(INITIAL_CLIENT); }} className="p-2 hover:bg-zinc-100 rounded-lg text-zinc-500">
+              <button aria-label="Tutup" onClick={() => { setClientModalOpen(false); setEditingClientId(null); setClientForm(INITIAL_CLIENT); }} className="p-2 hover:bg-zinc-100 rounded-lg text-zinc-500">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -557,7 +560,7 @@ export default function ShowcaseManagement() {
               </div>
 
               {/* Sort + Publish */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-zinc-700 mb-1">Urutan</label>
                   <input type="number" value={clientForm.sort_order} onChange={e => setClientForm(f => ({ ...f, sort_order: parseInt(e.target.value) || 0 }))}

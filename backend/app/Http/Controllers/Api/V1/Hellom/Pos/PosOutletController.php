@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1\Hellom\Pos;
 use App\Http\Controllers\Api\V1\BaseApiController;
 use App\Models\Organization;
 use App\Models\Outlet;
+use App\Models\PosStaff;
 use App\Services\OutletService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -23,8 +24,13 @@ class PosOutletController extends BaseApiController
             return $this->error('POS context not available', 'CONTEXT_MISSING');
         }
 
-        $outlets = Outlet::query()
-            ->where('organization_id', $org->id)
+        $outletQuery = Outlet::query()
+            ->where('organization_id', $org->id);
+        $staff = $request->attributes->get('posStaff');
+        if ($staff instanceof PosStaff) {
+            $outletQuery->whereIn('id', $staff->assignedOutletIds());
+        }
+        $outlets = $outletQuery
             ->orderBy('sort_order')
             ->orderBy('id')
             ->get();

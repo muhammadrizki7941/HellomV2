@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { ExternalLink, Send } from 'lucide-react';
 import { confirmPosOrderPayment } from '@/lib/hellomApi';
+import { saveOfflinePayment } from '@/lib/posOfflineDb';
+import { syncPosOrders } from '@/lib/posSyncEngine';
 
 type PaymentMethod = 'cash' | 'transfer' | 'qris' | 'dana' | 'gopay';
 
@@ -9,6 +11,7 @@ interface PaymentModalOrder {
   order_number: string;
   total_amount: number;
   final_amount?: number;
+  offline_client_uuid?: string;
 }
 
 interface PaymentModalProps {
@@ -38,6 +41,17 @@ const PaymentModal = ({ isOpen, onClose, onSuccess, order }: PaymentModalProps) 
   const [payAmount, setPayAmount] = useState('');
   const [payNote, setPayNote] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+
+  useEffect(() => {
+    const updateNetworkState = () => setIsOnline(navigator.onLine);
+    window.addEventListener('online', updateNetworkState);
+    window.addEventListener('offline', updateNetworkState);
+    return () => {
+      window.removeEventListener('online', updateNetworkState);
+      window.removeEventListener('offline', updateNetworkState);
+    };
+  }, []);
 
   useEffect(() => {
     if (!isOpen || !order) return;
@@ -79,6 +93,20 @@ const PaymentModal = ({ isOpen, onClose, onSuccess, order }: PaymentModalProps) 
   const handleConfirm = async () => {
     setIsProcessing(true);
     try {
+      if (order.offline_client_uuid) {
+        await saveOfflinePayment(order.offline_client_uuid, {
+          method,
+          amount: payAmountNum || totalToPay,
+          note: payNote || null,
+          paidManually: !isOnline && method !== 'cash',
+        });
+        if (isOnline) void syncPosOrders();
+        onSuccess({
+          change_amount: method === 'cash' ? change : 0,
+          order: { id: order.id, offline_client_uuid: order.offline_client_uuid },
+        });
+        return;
+      }
       const res = await confirmPosOrderPayment(order.id, {
         payment_method: method,
         payment_amount: payAmountNum || totalToPay,
@@ -281,6 +309,11 @@ const PaymentModal = ({ isOpen, onClose, onSuccess, order }: PaymentModalProps) 
                 </div>
               </div>
             )}
+            {!isOnline && method !== 'cash' && (
+              <div role="status" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">
+                Koneksi offline. Pembayaran digital tidak diverifikasi otomatis dan akan ditandai <strong>Dibayar manual</strong> untuk diperiksa Admin.
+              </div>
+            )}
           </div>
 
           {/* Confirm Button */}
@@ -294,7 +327,11 @@ const PaymentModal = ({ isOpen, onClose, onSuccess, order }: PaymentModalProps) 
               className="flex w-full items-center justify-center gap-2 rounded-lg bg-amber-400 px-4 py-2.5 text-sm font-semibold text-gray-900 transition hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Send className="h-4 w-4" />
-              {isProcessing ? 'Memproses...' : 'Konfirmasi Pembayaran'}
+              {isProcessing
+                ? 'Menyimpan...'
+                : !isOnline && method !== 'cash'
+                  ? 'Tandai dibayar manual'
+                  : 'Konfirmasi Pembayaran'}
             </button>
           </div>
         </div>

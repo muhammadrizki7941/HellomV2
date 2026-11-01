@@ -9,8 +9,9 @@ import {
   getActiveOutletEventName,
   type PosOutlet,
 } from '@/lib/hellomApi';
+import { confirmPosContextChange } from '@/lib/posOfflineDb';
 
-export default function OutletSwitcher({ compact = false }: { compact?: boolean }) {
+export default function OutletSwitcher({ compact = false, canManageOutlets = true }: { compact?: boolean; canManageOutlets?: boolean }) {
   const navigate = useNavigate();
   const [outlets, setOutlets] = useState<PosOutlet[]>([]);
   const [activeId, setActiveId] = useState<string | null>(getActiveOutletId());
@@ -64,9 +65,10 @@ export default function OutletSwitcher({ compact = false }: { compact?: boolean 
 
   const active = outlets.find((o) => String(o.id) === activeId) || outlets[0];
 
-  const handleSelect = (outlet: PosOutlet) => {
+  const handleSelect = async (outlet: PosOutlet) => {
     setOpen(false);
     if (String(outlet.id) === activeId) return;
+    if (!(await confirmPosContextChange())) return;
     setActiveOutletId(outlet.id);
     // Reload so every page refetches scoped to the newly selected outlet.
     window.location.reload();
@@ -119,13 +121,15 @@ export default function OutletSwitcher({ compact = false }: { compact?: boolean 
               </button>
             ))}
           </div>
-          <button
-            type="button"
-            onClick={() => { setOpen(false); navigate('/pos/outlets'); }}
-            className="flex w-full items-center gap-2 border-t border-[#f1e7c9] px-3 py-2.5 text-sm font-medium text-[#4b5563] hover:bg-[#fff7db]"
-          >
-            <Settings2 className="h-4 w-4" /> Kelola Outlet
-          </button>
+          {canManageOutlets && (
+            <button
+              type="button"
+              onClick={() => { setOpen(false); navigate('/pos/outlets'); }}
+              className="flex w-full items-center gap-2 border-t border-[#f1e7c9] px-3 py-2.5 text-sm font-medium text-[#4b5563] hover:bg-[#fff7db]"
+            >
+              <Settings2 className="h-4 w-4" /> Kelola Outlet
+            </button>
+          )}
         </div>
       )}
     </div>

@@ -2,6 +2,8 @@ import { useRef, useState, useEffect } from 'react';
 import { X, Printer, Copy, MessageCircle } from 'lucide-react';
 import { getPosOrderReceipt, recordPosReceiptPrint, type PosReceipt } from '@/lib/hellomApi';
 import html2canvas from 'html2canvas';
+import { useModule } from '@/hooks/useBusinessProfile';
+import { getOfflineOrderByDisplayId } from '@/lib/posOfflineDb';
 
 interface ReceiptProps {
   isOpen: boolean;
@@ -12,6 +14,9 @@ interface ReceiptProps {
 type ReceiptData = PosReceipt;
 
 const ReceiptModal = ({ isOpen, onClose, orderId }: ReceiptProps) => {
+  const hasTablesSelfOrder = useModule('tables_selforder');
+  const hasSerialImei = useModule('serial_imei');
+  const hasWarranty = useModule('warranty');
   const receiptRef = useRef<HTMLDivElement>(null);
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -36,11 +41,56 @@ const ReceiptModal = ({ isOpen, onClose, orderId }: ReceiptProps) => {
     try {
       setLoading(true);
       setError(null);
+      if (id < 0) {
+        const order = await getOfflineOrderByDisplayId(id);
+        if (!order) throw new Error('Transaksi lokal tidak ditemukan di perangkat ini.');
+        setReceipt({
+          order_number: order.local_invoice_no,
+          created_at: order.created_at_client,
+          status: order.paid_at_client ? 'paid' : 'unpaid',
+          service_type: order.service_type,
+          table_code: order.table_code ?? undefined,
+          customer_name: order.customer_name ?? undefined,
+          customer_phone: order.customer_phone ?? undefined,
+          notes: order.notes ?? undefined,
+          items: order.items.map((item) => ({
+            name: [item.product_name, ...item.options].join(' · '),
+            quantity: item.quantity,
+            price: item.unit_price,
+            subtotal: item.line_total,
+            serial_number: item.serial_numbers.join(', ') || null,
+          })),
+          total_amount: order.subtotal,
+          discount_amount: order.discount_amount,
+          points_discount_amount: order.points_discount_amount,
+          service_amount: order.service_amount,
+          tax_amount: order.tax_amount,
+          rounding_amount: order.rounding_amount,
+          final_amount: order.final_amount,
+          payment: order.payment_method && order.payment_amount !== null
+            ? {
+                method: order.payment_method,
+                amount: order.payment_amount,
+                change: Math.max(0, order.payment_amount - order.final_amount),
+                note: order.payment_note ?? undefined,
+                paid_at: order.paid_at_client ?? undefined,
+              }
+            : undefined,
+          organization: {
+            name: order.organization_name,
+            address: order.organization_address ?? undefined,
+            phone: order.organization_phone ?? undefined,
+          },
+          offline_created: true,
+          paid_manually: order.paid_manually,
+        });
+        return;
+      }
       const response = await getPosOrderReceipt(id);
 
       setReceipt(response.receipt);
     } catch (err) {
-      setError('Gagal memuat kwitansi');
+      setError(err instanceof Error ? err.message : 'Gagal memuat kwitansi.');
       console.error('Failed to fetch receipt:', err);
     } finally {
       setLoading(false);
@@ -59,13 +109,21 @@ const ReceiptModal = ({ isOpen, onClose, orderId }: ReceiptProps) => {
     setPrintNote(null);
     let stamp = '';
     try {
-      const { print_no: printNo, kind } = await recordPosReceiptPrint(orderId);
+      const localOrder = orderId < 0;
+      const { print_no: printNo, kind } = localOrder
+        ? { print_no: 0, kind: 'local' }
+        : await recordPosReceiptPrint(orderId);
       const lines = [
+        localOrder ? 'TRANSAKSI LOKAL - BELUM TERSINKRON' : '',
+        !localOrder && receipt.offline_created ? 'DIBUAT OFFLINE - SUDAH TERSINKRON' : '',
+        receipt.paid_manually ? 'PEMBAYARAN MANUAL - PERLU VERIFIKASI' : '',
         kind === 'draft' ? 'DRAF - BELUM LUNAS<br>Bukan bukti pembayaran' : '',
         printNo > 1 ? `CETAK ULANG ke-${printNo}` : '',
       ].filter(Boolean);
       stamp = lines.length ? `<div class="center stamp">${lines.join('<br>')}</div><div class="divider"></div>` : '';
-      setPrintNote(printNo > 1 ? `Cetak ulang ke-${printNo} tercatat di log audit.` : kind === 'draft' ? 'Struk draf (belum lunas) tercatat di log audit.' : null);
+      setPrintNote(localOrder
+        ? 'Struk transaksi lokal. Simpan perangkat dan jangan hapus data sebelum sinkronisasi.'
+        : printNo > 1 ? `Cetak ulang ke-${printNo} tercatat di log audit.` : kind === 'draft' ? 'Struk draf (belum lunas) tercatat di log audit.' : null);
     } catch (err) {
       printWindow.close();
       setPrintNote(err instanceof Error ? `Struk belum dicetak: ${err.message}` : 'Struk belum dicetak. Coba lagi.');
@@ -189,6 +247,9 @@ const ReceiptModal = ({ isOpen, onClose, orderId }: ReceiptProps) => {
       }
     };
 
+    if (receipt.offline_created) lines.push('TRANSAKSI OFFLINE - BELUM TERSINKRON');
+    if (receipt.paid_manually) lines.push('DIBAYAR MANUAL - PERLU VERIFIKASI ADMIN');
+
     // HEADER
     lines.push(receipt.organization.name);
     if (receipt.organization.address) lines.push(receipt.organization.address);
@@ -199,7 +260,7 @@ const ReceiptModal = ({ isOpen, onClose, orderId }: ReceiptProps) => {
     lines.push(`No    : ${receipt.order_number}`);
     lines.push(`Tgl   : ${formatDate(receipt.created_at)}`);
     lines.push(`Tipe  : ${getServiceTypeLabel(receipt.service_type)}`);
-    if (receipt.table_code) lines.push(`Meja  : ${receipt.table_code}`);
+    if (hasTablesSelfOrder && receipt.table_code) lines.push(`Meja  : ${receipt.table_code}`);
     if (receipt.customer_name) lines.push(`Nama  : ${receipt.customer_name}`);
     if (receipt.customer_phone) lines.push(`HP    : ${receipt.customer_phone}`);
     lines.push(''.padEnd(50, '-'));
@@ -208,6 +269,8 @@ const ReceiptModal = ({ isOpen, onClose, orderId }: ReceiptProps) => {
     receipt.items.forEach((item) => {
       lines.push(item.name);
       lines.push(`${item.quantity} x ${formatRp(item.price)}${' '.repeat(20)}${formatRp(item.subtotal)}`);
+      if (hasSerialImei && item.serial_number) lines.push(`IMEI/Serial: ${item.serial_number}`);
+      if (hasWarranty && item.warranty_expires_at) lines.push(`Garansi sampai: ${formatDate(item.warranty_expires_at)}`);
     });
     lines.push(''.padEnd(50, '-'));
 
@@ -346,6 +409,16 @@ const ReceiptModal = ({ isOpen, onClose, orderId }: ReceiptProps) => {
                 padding: '16px',
               }}
             >
+              {receipt.offline_created && (
+                <div style={{ textAlign: 'center', fontWeight: 'bold', marginBottom: '8px' }}>
+                  TRANSAKSI OFFLINE — BELUM TERSINKRON
+                </div>
+              )}
+              {receipt.paid_manually && (
+                <div style={{ textAlign: 'center', fontWeight: 'bold', marginBottom: '8px' }}>
+                  DIBAYAR MANUAL — PERLU VERIFIKASI ADMIN
+                </div>
+              )}
               {/* HEADER */}
               <div style={{ textAlign: 'center', marginBottom: '8px' }}>
               {(receipt.organization.logo_base64 || receipt.organization.logo_url) && (
@@ -373,7 +446,7 @@ const ReceiptModal = ({ isOpen, onClose, orderId }: ReceiptProps) => {
               <div>No    : {receipt.order_number}</div>
               <div>Tgl   : {formatDate(receipt.created_at)}</div>
               <div>Tipe  : {getServiceTypeLabel(receipt.service_type)}</div>
-              {receipt.table_code && <div>Meja  : {receipt.table_code}</div>}
+              {hasTablesSelfOrder && receipt.table_code && <div>Meja  : {receipt.table_code}</div>}
               {receipt.customer_name && <div>Nama  : {receipt.customer_name}</div>}
               {receipt.customer_phone && <div>HP    : {receipt.customer_phone}</div>}
 
@@ -388,6 +461,8 @@ const ReceiptModal = ({ isOpen, onClose, orderId }: ReceiptProps) => {
                     <span>{item.quantity} x {formatRp(item.price)}</span>
                     <span>{formatRp(item.subtotal)}</span>
                   </div>
+                  {hasSerialImei && item.serial_number && <div>IMEI/Serial: {item.serial_number}</div>}
+                  {hasWarranty && item.warranty_expires_at && <div>Garansi sampai: {formatDate(item.warranty_expires_at)}</div>}
                 </div>
               ))}
 

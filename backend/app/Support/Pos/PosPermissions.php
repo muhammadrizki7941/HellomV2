@@ -37,6 +37,9 @@ final class PosPermissions
         'reports' => ['Laporan', 'Lihat dan export laporan penjualan outlet.', false, true],
         'cash_control' => ['Buka/tutup kas', 'Membuka dan menutup kas shift sendiri.', true, true],
         'outlet_settings' => ['Pengaturan pesanan outlet', 'Jam buka, status buka/tutup, pengaturan pesanan online.', false, true],
+        'staff_management' => ['Kelola kasir outlet', 'Buat dan kelola akun kasir di outlet yang ditugaskan.', false, true],
+        'stock_transfer' => ['Transfer stok antar outlet', 'Transfer stok hanya ke outlet yang juga ditugaskan.', false, true],
+        'inventory_management' => ['Kelola pembelian & stok', 'Catat pembelian, stok opname, dan supplier outlet.', false, true],
     ];
 
     /** Old keys stored before this catalogue existed. */
@@ -45,7 +48,7 @@ final class PosPermissions
     /** @return array<string, bool> */
     public static function defaults(string $role): array
     {
-        $index = self::normalizeRole($role) === 'admin' ? 3 : 2;
+        $index = PosRoles::isOutletAdmin($role) ? 3 : 2;
 
         return array_map(fn (array $def) => (bool) $def[$index], self::CATALOG);
     }
@@ -65,6 +68,10 @@ final class PosPermissions
             }
         }
         $result[self::BASE] = true;
+        $isOutletAdmin = PosRoles::isOutletAdmin($role);
+        $result['staff_management'] = $isOutletAdmin;
+        $result['stock_transfer'] = $isOutletAdmin;
+        $result['inventory_management'] = $isOutletAdmin;
 
         return $result;
     }
@@ -81,6 +88,10 @@ final class PosPermissions
             return false;
         }
 
+        if (in_array($key, ['staff_management', 'stock_transfer', 'inventory_management'], true)) {
+            return PosRoles::isOutletAdmin((string) $staff->role);
+        }
+
         return self::forStaff($staff)[$key] ?? false;
     }
 
@@ -89,15 +100,10 @@ final class PosPermissions
     {
         $items = [];
         foreach (self::CATALOG as $key => [$label, $description, $cashier, $admin]) {
-            $items[] = ['key' => $key, 'label' => $label, 'description' => $description, 'locked' => $key === self::BASE,
+            $items[] = ['key' => $key, 'label' => $label, 'description' => $description, 'locked' => in_array($key, [self::BASE, 'staff_management', 'stock_transfer', 'inventory_management'], true),
                 'default_cashier' => $cashier, 'default_admin' => $admin];
         }
 
         return $items;
-    }
-
-    private static function normalizeRole(string $role): string
-    {
-        return $role === 'owner' ? 'admin' : $role;
     }
 }

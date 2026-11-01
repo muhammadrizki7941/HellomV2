@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Search, Plus, Edit2, Trash2, Upload, Package, Eye, X, Grid, List, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { ApiError, getPosProducts, getPosCategories, createPosCategory, updatePosCategory, createPosProduct, updatePosProduct, deletePosProduct, getImageUrl } from '@/lib/hellomApi';
+import { ApiError, getPosProducts, getPosCategories, createPosCategory, updatePosCategory, createPosProduct, updatePosProduct, deletePosProduct, getImageUrl, importPosProducts, downloadPosProductImportTemplate } from '@/lib/hellomApi';
+import { useBusinessProfile } from '@/hooks/useBusinessProfile';
+import { usePermissions } from '@/hooks/usePermissions';
 
 const MAX_IMAGE_MB = 8;
 /** Readable message for any failed request (Indonesian text from the server when it has one). */
@@ -17,6 +19,14 @@ type Product = {
   is_available: boolean;
   track_stock: boolean;
   stock: number | null;
+  sku?: string | null;
+  barcode?: string | null;
+  unit?: string;
+  cost_price?: number | null;
+  min_stock?: number;
+  has_variants?: boolean;
+  track_serial?: boolean;
+  warranty_days?: number | null;
   category: { id: number; name: string };
   options?: Array<{
     name: string;
@@ -36,6 +46,10 @@ type Category = {
 };
 
 export default function PosMenu() {
+  const { canViewCostPrice } = usePermissions();
+  const { terminology, hasModule } = useBusinessProfile();
+  const hasInventoryModules = hasModule('barcode') || hasModule('variants') || hasModule('serial_imei')
+    || hasModule('warranty') || hasModule('price_tiers') || hasModule('suppliers_purchasing') || hasModule('stock_opname');
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,6 +69,14 @@ export default function PosMenu() {
     is_available: true,
     track_stock: false,
     stock: '',
+    sku: '',
+    barcode: '',
+    unit: 'pcs',
+    cost_price: '',
+    min_stock: '0',
+    has_variants: false,
+    track_serial: false,
+    warranty_days: '',
   });
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -80,6 +102,8 @@ export default function PosMenu() {
   const [confirmDelete, setConfirmDelete] = useState<Product | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [toast, setToast] = useState<{ ok: boolean; text: string } | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importReport, setImportReport] = useState<{ created_count: number; errors: Array<{ row: number; message: string }> } | null>(null);
 
   useEffect(() => {
     if (!toast) return undefined;
@@ -101,7 +125,7 @@ export default function PosMenu() {
       setProducts(productsRes.products || []);
       setCategories(categoriesRes.categories || []);
     } catch (err) {
-      setError(errorMessage(err, 'Menu belum bisa dimuat. Coba muat ulang halaman.'));
+      setError(errorMessage(err, `${terminology.product} belum bisa dimuat. Coba muat ulang halaman.`));
     } finally {
       setLoading(false);
     }
@@ -110,7 +134,9 @@ export default function PosMenu() {
   const filteredProducts = products.filter(product => {
     const matchesCategory = !selectedCategory || product.category?.id === selectedCategory;
     const matchesSearch = (product.name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-                         (product.description?.toLowerCase() || '').includes(searchTerm.toLowerCase());
+                         (product.description?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+                         (product.sku?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+                         (product.barcode?.toLowerCase() || '').includes(searchTerm.toLowerCase());
     return matchesCategory && matchesSearch;
   });
 
@@ -133,6 +159,14 @@ export default function PosMenu() {
       is_available: product.is_available,
       track_stock: Boolean(product.track_stock),
       stock: product.stock === null || product.stock === undefined ? '' : String(product.stock),
+      sku: product.sku ?? '',
+      barcode: product.barcode ?? '',
+      unit: product.unit ?? 'pcs',
+      cost_price: product.cost_price === null || product.cost_price === undefined ? '' : String(product.cost_price),
+      min_stock: String(product.min_stock ?? 0),
+      has_variants: Boolean(product.has_variants),
+      track_serial: Boolean(product.track_serial),
+      warranty_days: product.warranty_days === null || product.warranty_days === undefined ? '' : String(product.warranty_days),
     });
     // Set preview dari gambar existing
     setImagePreview(
@@ -171,9 +205,42 @@ export default function PosMenu() {
       setConfirmDelete(null);
       await loadData();
     } catch (err) {
-      setToast({ ok: false, text: errorMessage(err, 'Produk belum bisa dihapus. Coba lagi.') });
+      setToast({ ok: false, text: errorMessage(err, `${terminology.product} belum bisa dihapus. Coba lagi.`) });
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleProductImport = async (file?: File) => {
+    if (!file) return;
+    setImporting(true);
+    setImportReport(null);
+    try {
+      const report = await importPosProducts(file);
+      setImportReport({ created_count: report.created_count, errors: report.errors });
+      setToast({
+        ok: report.error_count === 0,
+        text: `${report.created_count} ${terminology.product.toLowerCase()} berhasil diimpor; ${report.error_count} baris perlu diperbaiki.`,
+      });
+      await loadData();
+    } catch (reason) {
+      setToast({ ok: false, text: errorMessage(reason, 'File CSV belum dapat diimpor.') });
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const handleDownloadTemplate = async () => {
+    try {
+      const blob = await downloadPosProductImportTemplate();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = 'template-produk-hellom.csv';
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (reason) {
+      setToast({ ok: false, text: errorMessage(reason, 'Template CSV belum dapat diunduh.') });
     }
   };
 
@@ -181,8 +248,8 @@ export default function PosMenu() {
     e.preventDefault();
     if (saving) return;
     const found: Record<string, string> = {};
-    if (!formData.category_id) found.category_id = 'Pilih kategori produk dulu.';
-    if (!formData.name.trim()) found.name = 'Nama produk wajib diisi.';
+    if (!formData.category_id) found.category_id = `Pilih ${terminology.category.toLowerCase()} terlebih dahulu.`;
+    if (!formData.name.trim()) found.name = `Nama ${terminology.product.toLowerCase()} wajib diisi.`;
     if (formData.price === '' || Number(formData.price) < 0) found.price = 'Isi harga (angka, tidak boleh minus).';
     if (formData.track_stock && formData.stock !== '' && Number(formData.stock) < 0) found.stock = 'Stok tidak boleh minus.';
     setFieldErrors(found);
@@ -202,6 +269,16 @@ export default function PosMenu() {
       data.append('price', formData.price);
       data.append('is_available', formData.is_available.toString());
       data.append('track_stock', formData.track_stock.toString());
+      if (hasInventoryModules) {
+        data.append('sku', formData.sku);
+        data.append('barcode', formData.barcode);
+        data.append('unit', formData.unit);
+        if (canViewCostPrice) data.append('cost_price', formData.cost_price);
+        data.append('min_stock', formData.min_stock);
+        data.append('has_variants', formData.has_variants.toString());
+        data.append('track_serial', formData.track_serial.toString());
+        data.append('warranty_days', formData.warranty_days);
+      }
       if (formData.track_stock) {
         data.append('stock', formData.stock || '0');
       }
@@ -238,13 +315,13 @@ export default function PosMenu() {
       const wasEditing = !!editingProduct;
       setShowCreateModal(false);
       resetForm();
-      setToast({ ok: true, text: wasEditing ? `"${savedName}" diperbarui.` : `"${savedName}" ditambahkan ke menu.` });
+      setToast({ ok: true, text: wasEditing ? `"${savedName}" diperbarui.` : `"${savedName}" ditambahkan.` });
       await loadData();
     } catch (err) {
       if (err instanceof ApiError && Object.keys(err.fieldErrors).length > 0) {
         setFieldErrors(Object.fromEntries(Object.entries(err.fieldErrors).map(([key, messages]) => [key.startsWith('options.') ? 'options' : key, messages[0]])));
       }
-      setFormError(errorMessage(err, 'Produk belum tersimpan. Periksa koneksi lalu coba lagi.'));
+      setFormError(errorMessage(err, `${terminology.product} belum tersimpan. Periksa koneksi lalu coba lagi.`));
       focusFirstError();
     } finally {
       setSaving(false);
@@ -260,6 +337,14 @@ export default function PosMenu() {
       is_available: true,
       track_stock: false,
       stock: '',
+      sku: '',
+      barcode: '',
+      unit: 'pcs',
+      cost_price: '',
+      min_stock: '0',
+      has_variants: false,
+      track_serial: false,
+      warranty_days: '',
     });
     setImageFile(null);
     setImagePreview(null);
@@ -301,17 +386,50 @@ export default function PosMenu() {
       <div className="max-w-7xl mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Manage Products</h1>
-          <p className="text-gray-600 mt-1">Atur menu restoran dan kategori produknya ya</p>
+          <h1 className="text-2xl font-bold text-gray-900">{terminology.product} & {terminology.category}</h1>
+          <p className="text-gray-600 mt-1">Kelola {terminology.product.toLowerCase()} dan kategorinya.</p>
         </div>
-          <button
-            onClick={handleCreateProduct}
-            className="px-4 py-2 bg-amber-400 text-[#111111] rounded-lg hover:bg-amber-500 transition-colors flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            Tambah Produk
-          </button>
+          <div className="flex flex-wrap gap-2">
+            {hasInventoryModules && (
+              <>
+                <button type="button" onClick={handleDownloadTemplate} className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                  Unduh template CSV
+                </button>
+                <label className={cn('flex cursor-pointer items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-50', importing && 'pointer-events-none opacity-60')}>
+                  <Upload className="h-4 w-4" />
+                  {importing ? 'Mengimpor...' : 'Impor CSV'}
+                  <input
+                    type="file"
+                    accept=".csv,text/csv"
+                    className="sr-only"
+                    disabled={importing}
+                    onChange={(event) => {
+                      const file = event.currentTarget.files?.[0];
+                      event.currentTarget.value = '';
+                      void handleProductImport(file);
+                    }}
+                  />
+                </label>
+              </>
+            )}
+            <button
+              onClick={handleCreateProduct}
+              className="flex items-center gap-2 rounded-lg bg-amber-400 px-4 py-2 text-[#111111] transition-colors hover:bg-amber-500"
+            >
+              <Plus className="w-4 h-4" />
+              Tambah {terminology.product}
+            </button>
+          </div>
       </div>
+
+      {importReport && importReport.errors.length > 0 && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+          <p className="font-semibold">{importReport.created_count} baris berhasil; {importReport.errors.length} baris perlu diperbaiki.</p>
+          <ul className="mt-2 list-inside list-disc">
+            {importReport.errors.slice(0, 5).map((item) => <li key={`${item.row}-${item.message}`}>Baris {item.row}: {item.message}</li>)}
+          </ul>
+        </div>
+      )}
 
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
@@ -325,7 +443,7 @@ export default function PosMenu() {
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
           <input
             type="text"
-            placeholder="Cari produk..."
+            placeholder={`Cari ${terminology.product.toLowerCase()}...`}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-amber-300 focus:border-amber-300"
@@ -354,7 +472,7 @@ export default function PosMenu() {
             )}
           >
             <Grid className="w-4 h-4 inline mr-1" />
-            Card
+            Kartu
           </button>
           <button
             onClick={() => setViewMode('list')}
@@ -366,14 +484,14 @@ export default function PosMenu() {
             )}
           >
             <List className="w-4 h-4 inline mr-1" />
-            List
+            Daftar
           </button>
         </div>
       </div>
 
       {/* Categories Management */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Product Categories</h2>
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">{terminology.category}</h2>
         <div className="flex flex-wrap gap-2">
           {categories.map(category => (
             <span
@@ -411,7 +529,7 @@ export default function PosMenu() {
         {loading ? (
           <div className="p-8 text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-400 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading menu...</p>
+            <p className="text-gray-600">Memuat {terminology.product.toLowerCase()}...</p>
           </div>
         ) : viewMode === 'card' ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 md:gap-4 p-4 md:p-6">
@@ -543,7 +661,7 @@ export default function PosMenu() {
                       aria-label={`Hapus ${product.name}`}
                       data-delete-product={product.id}
                     className="p-1.5 md:p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded"
-                    title="Delete"
+                    title="Hapus"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -557,7 +675,7 @@ export default function PosMenu() {
       {filteredProducts.length === 0 && !loading && (
         <div className="text-center py-8 md:py-12">
           <Package className="w-8 h-8 md:w-12 md:h-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-500 text-sm md:text-base">No products found matching your criteria.</p>
+          <p className="text-gray-500 text-sm md:text-base">Tidak ada {terminology.product.toLowerCase()} yang sesuai.</p>
         </div>
       )}
 
@@ -568,7 +686,7 @@ export default function PosMenu() {
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
                   <h3 className="text-lg font-semibold text-gray-900">
-                    {editingProduct ? 'Edit Produk' : 'Tambah Produk Baru'}
+                    {editingProduct ? `Edit ${terminology.product}` : `Tambah ${terminology.product} Baru`}
                   </h3>
                 <button
                   onClick={() => {
@@ -591,7 +709,7 @@ export default function PosMenu() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-800 mb-1">
-                      Pilih Kategori *
+                      Pilih {terminology.category} *
                     </label>
                     <select
                       value={formData.category_id}
@@ -599,7 +717,7 @@ export default function PosMenu() {
                       className={cn("w-full px-3 py-2 bg-white border rounded-lg text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-amber-300 focus:border-amber-300", fieldErrors.category_id ? "border-red-400" : "border-gray-300")}
                       aria-invalid={fieldErrors.category_id ? true : undefined}
                     >
-                      <option value="">Pilih kategori dulu ya</option>
+                      <option value="">Pilih {terminology.category.toLowerCase()} terlebih dahulu</option>
                       {categories.map(category => (
                         <option key={category.id} value={category.id}>{category.name}</option>
                       ))}
@@ -610,13 +728,13 @@ export default function PosMenu() {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-800 mb-1">
-                      Nama Produk *
+                      Nama {terminology.product} *
                     </label>
                     <input
                       type="text"
                       value={formData.name}
                       onChange={(e) => { setFormData({ ...formData, name: e.target.value }); setFieldErrors((x) => ({ ...x, name: '' })); }}
-                      placeholder="misalnya: Nasi Goreng Spesial"
+                      placeholder={`Contoh: ${terminology.product} unggulan`}
                       className={cn("w-full px-3 py-2 bg-white border rounded-lg text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-amber-300 focus:border-amber-300", fieldErrors.name ? "border-red-400" : "border-gray-300")}
                       aria-invalid={fieldErrors.name ? true : undefined}
                     />
@@ -626,12 +744,12 @@ export default function PosMenu() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-800 mb-1">
-                    Deskripsi (kalo mau aja)
+                    Deskripsi (opsional)
                   </label>
                   <textarea
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    placeholder="ceritain sedikit tentang produk ini ya..."
+                    placeholder={`Ceritakan sedikit tentang ${terminology.product.toLowerCase()} ini...`}
                     rows={3}
                     className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-amber-300 focus:border-amber-300"
                   />
@@ -664,7 +782,7 @@ export default function PosMenu() {
                       className="h-4 w-4 text-amber-500 focus:ring-amber-300 border-gray-300 rounded"
                     />
                     <label htmlFor="is_available" className="ml-2 text-sm text-gray-700">
-                      Produk lagi ready dijual
+                      {terminology.product} tersedia untuk dijual
                     </label>
                   </div>
                 </div>
@@ -705,9 +823,117 @@ export default function PosMenu() {
                   </div>
                 </div>
 
+                {hasInventoryModules && (
+                  <section className="space-y-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
+                    <h3 className="font-semibold text-gray-900">Data inventori</h3>
+                    {hasModule('barcode') && (
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <label className="block text-sm font-medium text-gray-800">
+                          SKU
+                          <input
+                            value={formData.sku}
+                            onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
+                            maxLength={100}
+                            className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 font-normal text-gray-900"
+                            placeholder="Contoh: BRG-001"
+                          />
+                        </label>
+                        <label className="block text-sm font-medium text-gray-800">
+                          Barcode
+                          <input
+                            value={formData.barcode}
+                            onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
+                            maxLength={100}
+                            className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 font-normal text-gray-900"
+                            placeholder="Pindai atau ketik barcode"
+                          />
+                        </label>
+                      </div>
+                    )}
+                    {(hasModule('suppliers_purchasing') || hasModule('stock_opname') || hasModule('price_tiers')) && (
+                      <div className={`grid grid-cols-1 gap-4 ${canViewCostPrice ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
+                        <label className="block text-sm font-medium text-gray-800">
+                          Satuan
+                          <input
+                            value={formData.unit}
+                            onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+                            maxLength={32}
+                            className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 font-normal text-gray-900"
+                            placeholder="pcs, box, kg"
+                          />
+                        </label>
+                        {canViewCostPrice && (
+                          <label className="block text-sm font-medium text-gray-800">
+                            Harga beli (Rp)
+                            <input
+                              type="number"
+                              min="0"
+                              inputMode="numeric"
+                              value={formData.cost_price}
+                              onChange={(e) => setFormData({ ...formData, cost_price: e.target.value })}
+                              className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 font-normal text-gray-900"
+                              placeholder="Opsional"
+                            />
+                          </label>
+                        )}
+                        <label className="block text-sm font-medium text-gray-800">
+                          Batas stok minimum
+                          <input
+                            type="number"
+                            min="0"
+                            inputMode="numeric"
+                            value={formData.min_stock}
+                            onChange={(e) => setFormData({ ...formData, min_stock: e.target.value })}
+                            className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 font-normal text-gray-900"
+                          />
+                        </label>
+                      </div>
+                    )}
+                    <div className="flex flex-wrap gap-5">
+                      {hasModule('variants') && (
+                        <label className="flex items-center gap-2 text-sm text-gray-700">
+                          <input
+                            type="checkbox"
+                            checked={formData.has_variants}
+                            onChange={(e) => setFormData({ ...formData, has_variants: e.target.checked })}
+                            className="h-4 w-4 rounded border-gray-300 text-lime-600"
+                          />
+                          Produk memiliki varian
+                        </label>
+                      )}
+                      {hasModule('serial_imei') && (
+                        <label className="flex items-center gap-2 text-sm text-gray-700">
+                          <input
+                            type="checkbox"
+                            checked={formData.track_serial}
+                            onChange={(e) => setFormData({ ...formData, track_serial: e.target.checked })}
+                            className="h-4 w-4 rounded border-gray-300 text-lime-600"
+                          />
+                          Wajib catat IMEI/serial
+                        </label>
+                      )}
+                      {hasModule('warranty') && (
+                        <label className="flex items-center gap-2 text-sm font-medium text-gray-800">
+                          Masa garansi (hari)
+                          <input
+                            type="number"
+                            min="0"
+                            max="65535"
+                            inputMode="numeric"
+                            value={formData.warranty_days}
+                            onChange={(e) => setFormData({ ...formData, warranty_days: e.target.value })}
+                            className="w-24 rounded-lg border border-gray-300 bg-white px-3 py-2 font-normal text-gray-900"
+                            placeholder="0"
+                          />
+                        </label>
+                      )}
+                    </div>
+                  </section>
+                )}
+
                 <div>
                   <label className="block text-sm font-medium text-gray-800 mb-1">
-                    Foto Produk (kalo ada)
+                    Foto {terminology.product} (opsional)
                   </label>
                   <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer">
                     <input
@@ -760,7 +986,7 @@ export default function PosMenu() {
                         <div className="text-center space-y-2">
                           <Upload className="w-10 h-10 text-gray-400 mx-auto" />
                           <div>
-                            <p className="text-sm font-medium text-gray-700">Klik untuk upload foto produk</p>
+                            <p className="text-sm font-medium text-gray-700">Pilih foto {terminology.product.toLowerCase()}</p>
                             <p className="text-sm text-gray-400">atau seret & lepas di sini</p>
                             <p className="text-xs text-gray-400 mt-1">PNG, JPG, WEBP maks. 8 MB — otomatis dikompres</p>
                           </div>
@@ -771,7 +997,7 @@ export default function PosMenu() {
                   {fieldErrors.image && <p className="mt-1 text-sm text-red-600">{fieldErrors.image}</p>}
                 </div>
 
-                {/* Product Options */}
+                {/* Opsi produk */}
                 <div className="border-t border-gray-200 pt-4">
                   <div className="flex items-center justify-between mb-4">
                     <h4 className="text-md font-medium text-gray-900">Opsi Tambahan (Add-on)</h4>
@@ -910,7 +1136,7 @@ export default function PosMenu() {
                   {fieldErrors.options && <p className="mt-2 text-sm text-red-600">{fieldErrors.options}</p>}
                   {productOptions.length === 0 && (
                     <p className="text-sm text-gray-500 text-center py-4">
-                      Belum ada opsi tambahan. Klik "Tambah Opsi" untuk buat pilihan custom produk ini.
+                      Belum ada opsi tambahan. Klik "Tambah Opsi" untuk membuat pilihan khusus {terminology.product.toLowerCase()} ini.
                     </p>
                   )}
                 </div>
@@ -932,7 +1158,7 @@ export default function PosMenu() {
                     className="inline-flex items-center gap-2 px-4 py-2 bg-amber-400 text-[#111111] hover:bg-amber-500 rounded-lg transition-colors disabled:opacity-60"
                   >
                     {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-                    {saving ? 'Menyimpan…' : editingProduct ? 'Simpan Perubahan' : 'Simpan Produk'}
+                    {saving ? 'Menyimpan…' : editingProduct ? 'Simpan Perubahan' : `Simpan ${terminology.product}`}
                   </button>
                 </div>
               </form>
@@ -947,7 +1173,7 @@ export default function PosMenu() {
           <div className="bg-white rounded-xl max-w-md w-full p-6">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-semibold text-gray-900">
-                {editingCategory ? 'Edit Kategori' : 'Tambah Kategori Baru'}
+                {editingCategory ? `Edit ${terminology.category}` : `Tambah ${terminology.category}`}
               </h3>
               <button
                 onClick={() => { setShowCategoryModal(false); setCategoryError(null); }}
@@ -961,7 +1187,7 @@ export default function PosMenu() {
               {categoryError && <p role="alert" className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />{categoryError}</p>}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Nama Kategori *
+                  Nama {terminology.category} *
                 </label>
                 <input
                   type="text"
@@ -999,7 +1225,7 @@ export default function PosMenu() {
                   className="inline-flex items-center gap-2 px-4 py-2 bg-amber-400 text-[#111111] hover:bg-amber-500 rounded-lg transition-colors disabled:opacity-60"
                 >
                   {savingCategory && <Loader2 className="h-4 w-4 animate-spin" />}
-                  {savingCategory ? 'Menyimpan…' : editingCategory ? 'Simpan Perubahan' : 'Simpan Kategori'}
+                  {savingCategory ? 'Menyimpan…' : editingCategory ? 'Simpan Perubahan' : `Simpan ${terminology.category}`}
                 </button>
               </div>
             </form>
@@ -1012,8 +1238,8 @@ export default function PosMenu() {
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="delete-title" data-delete-dialog>
           <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-2xl">
             <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-red-50"><Trash2 className="h-6 w-6 text-red-600" /></div>
-            <h3 id="delete-title" className="text-center text-lg font-semibold text-gray-900">Hapus produk?</h3>
-            <p className="mt-1 text-center text-sm text-gray-600">"{confirmDelete.name}" akan dihapus dari menu. Pesanan lama tetap tersimpan.</p>
+            <h3 id="delete-title" className="text-center text-lg font-semibold text-gray-900">Hapus {terminology.product.toLowerCase()}?</h3>
+            <p className="mt-1 text-center text-sm text-gray-600">"{confirmDelete.name}" akan dihapus. Riwayat transaksi lama tetap tersimpan.</p>
             <div className="mt-5 grid grid-cols-2 gap-2">
               <button type="button" onClick={() => setConfirmDelete(null)} disabled={deleting} className="min-h-11 rounded-lg bg-gray-100 font-medium text-gray-700 hover:bg-gray-200">Batal</button>
               <button type="button" onClick={() => void confirmDeleteProduct()} disabled={deleting} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-red-600 font-medium text-white hover:bg-red-700 disabled:opacity-60">

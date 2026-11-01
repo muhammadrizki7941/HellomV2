@@ -11,7 +11,7 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { brand } = useBrand();
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,8 +54,12 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const result = await login(email, password);
+      const result = await login(identifier.trim(), password);
       setSession(result.token, result.user);
+      if ((result.user as { must_change_password?: boolean } | null)?.must_change_password) {
+        navigate('/auth/change-password', { replace: true });
+        return;
+      }
       const inviteToken = (searchParams.get('inviteToken') || '').trim();
       if (inviteToken) {
         navigate(`/invitation/accept?token=${encodeURIComponent(inviteToken)}`);
@@ -107,7 +111,7 @@ export default function LoginPage() {
       <p className="mt-2 text-sm leading-6 text-zinc-500">Masuk dan lanjutkan langkah hebat usahamu.</p>
       {contextText && <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{contextText}</p>}
       <form className="mt-7 space-y-5" onSubmit={handleSubmit}>
-        <LightAuthField id="email" label="Email" type="email" autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="nama@email.com" />
+        <LightAuthField id="identifier" label="Email, username, atau nomor HP" autoComplete="username" value={identifier} onChange={e => setIdentifier(e.target.value)} required placeholder="Email, username, atau nomor HP" />
         <LightPasswordField id="password" label="Kata sandi" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} required placeholder="Masukkan kata sandi" />
         <div className="flex justify-end"><Link to="/forgot-password" className="inline-flex min-h-11 items-center text-sm font-medium text-amber-800 hover:underline">Lupa kata sandi?</Link></div>
         {error && <LightAuthAlert>{error}</LightAuthAlert>}

@@ -24,6 +24,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'supportAgent' => \App\Http\Middleware\Api\EnsureSupportAgent::class,
             'shopManager' => \App\Http\Middleware\Api\EnsureShopManager::class,
             'posPermission' => \App\Http\Middleware\Api\EnsurePosPermission::class,
+            'posModule' => \App\Http\Middleware\Api\EnsurePosModule::class,
+            'organizationAdmin' => \App\Http\Middleware\Api\EnsureOrganizationAdmin::class,
             'injectPosContext' => \App\Http\Middleware\Api\InjectPosContext::class,
             'billing.mock' => \App\Http\Middleware\Api\EnsureBillingMockEnabled::class,
             'logPaymentWebhook' => \App\Http\Middleware\Api\LogPaymentWebhook::class,

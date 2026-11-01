@@ -10,8 +10,8 @@ use Symfony\Component\HttpFoundation\Response;
 
 /**
  * `posPermission:<key>` on POS routes. Runs after InjectPosContext, which attaches the
- * `posStaff` record only for non-managers (cashiers / POS staff accounts). Org owners and
- * admins have no `posStaff` attribute and always pass. `posPermission:manager` = owner/admin only.
+ * `posStaff` record for outlet-scoped POS accounts. Org owners/admins have no `posStaff`
+ * attribute and pass; outlet-admin-only capabilities are resolved from the staff role.
  */
 class EnsurePosPermission
 {

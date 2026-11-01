@@ -31,6 +31,8 @@ import {
   getPosReportSummary,
   getPosTables,
 } from '@/lib/hellomApi';
+import { useBusinessProfile } from '@/hooks/useBusinessProfile';
+import PosOnboardingWizard from '@/components/pos/PosOnboardingWizard';
 
 type DashboardSummary = {
   total_revenue: number;
@@ -183,6 +185,8 @@ type OutletBreakdownRow = {
 };
 
 export default function PosAdminDashboard() {
+  const { profile, loading: profileLoading, hasModule, terminology } = useBusinessProfile();
+  const hasTablesSelfOrder = hasModule('tables_selforder');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
@@ -192,6 +196,7 @@ export default function PosAdminDashboard() {
   const [outletBreakdown, setOutletBreakdown] = useState<OutletBreakdownRow[]>([]);
 
   const loadDashboard = async (scopeAllArg = scopeAll) => {
+    if (profileLoading) return;
     setIsLoading(true);
     setError(null);
 
@@ -214,7 +219,7 @@ export default function PosAdminDashboard() {
         getPosReportProducts({ start_date: monthStart, end_date: today, timezone: reportTimezone, limit: 5, scope }),
         getPosOrders(),
         getPosProducts(),
-        getPosTables(),
+        hasTablesSelfOrder ? getPosTables() : Promise.resolve({ tables: [] }),
       ]);
 
       setIsOwner(Boolean(monthReport.is_owner));
@@ -246,7 +251,7 @@ export default function PosAdminDashboard() {
   useEffect(() => {
     loadDashboard(scopeAll);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scopeAll]);
+  }, [scopeAll, hasTablesSelfOrder, profileLoading]);
 
   const activeOrders = useMemo(
     () => dashboard?.orders.filter((order) => ACTIVE_ORDER_STATUSES.includes(order.status)) ?? [],
@@ -305,6 +310,9 @@ export default function PosAdminDashboard() {
 
   return (
     <div className="space-y-6">
+      {profile?.onboarding_completed === false && (
+        <PosOnboardingWizard />
+      )}
       {isOwner && (
         <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-3">
           <span className="text-sm font-semibold text-amber-900">Tampilan ringkasan:</span>
@@ -338,10 +346,9 @@ export default function PosAdminDashboard() {
               Ringkasan operasional real-time
             </div>
             <div>
-              <h1 className="text-3xl font-semibold tracking-tight">Dashboard POS</h1>
+              <h1 className="text-3xl font-semibold tracking-tight">Ringkasan POS {profile?.business_type_label ?? ''}</h1>
               <p className="mt-2 max-w-2xl text-sm text-zinc-300">
-                Gambaran singkat performa outlet hari ini, aktivitas order yang masih berjalan, dan sinyal penjualan yang
-                perlu dipantau admin.
+                Pantau penjualan, aktivitas {terminology.transaction.toLowerCase()}, dan performa outlet hari ini.
               </p>
             </div>
 
@@ -357,15 +364,19 @@ export default function PosAdminDashboard() {
               </div>
 
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-zinc-400">Active Orders</p>
-                <p className="mt-3 text-2xl font-semibold">{activeOrders.length}</p>
+                <p className="text-xs uppercase tracking-[0.18em] text-zinc-400">
+                  {hasTablesSelfOrder ? `${terminology.transaction} aktif` : `${terminology.transaction} hari ini`}
+                </p>
+                <p className="mt-3 text-2xl font-semibold">
+                  {hasTablesSelfOrder ? activeOrders.length : dashboard.todaySummary.total_orders}
+                </p>
                 <p className="mt-2 text-xs text-zinc-300">
-                  {dashboard.todaySummary.total_orders} order selesai tercatat hari ini
+                  {dashboard.todaySummary.total_orders} {terminology.transaction.toLowerCase()} selesai hari ini
                 </p>
               </div>
 
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-zinc-400">Rata-rata Order</p>
+                <p className="text-xs uppercase tracking-[0.18em] text-zinc-400">Rata-rata transaksi</p>
                 <p className="mt-3 text-2xl font-semibold">{formatCurrency(dashboard.todaySummary.avg_order_value)}</p>
                 <p className="mt-2 text-xs text-zinc-300">
                   {dashboard.todaySummary.total_items_sold} item terjual hari ini
@@ -377,14 +388,14 @@ export default function PosAdminDashboard() {
           <div className="grid gap-3 self-start">
             <QuickActionCard
               to="/pos/orders"
-              title="Pantau order masuk"
-              description="Lihat antrean order baru dan proses pesanan yang sedang berjalan."
+              title={`Lihat ${terminology.transaction.toLowerCase()}`}
+              description={`Periksa riwayat dan status ${terminology.transaction.toLowerCase()} terbaru.`}
               icon={<ShoppingCart className="h-5 w-5" />}
             />
             <QuickActionCard
               to="/pos/menu"
-              title="Perbarui menu aktif"
-              description="Cek produk yang tampil hari ini dan pastikan stok jual tetap aman."
+              title={`Kelola ${terminology.product.toLowerCase()}`}
+              description={`Periksa ${terminology.product.toLowerCase()} yang tersedia untuk dijual.`}
               icon={<Package2 className="h-5 w-5" />}
             />
             <QuickActionCard
@@ -462,24 +473,26 @@ export default function PosAdminDashboard() {
         <MetricCard
           title="Pendapatan Bulan Ini"
           value={formatCurrency(dashboard.monthSummary.total_revenue)}
-          detail={`${dashboard.monthSummary.total_orders} order selesai`}
+          detail={`${dashboard.monthSummary.total_orders} ${terminology.transaction.toLowerCase()} selesai`}
               icon={<DollarSign className="h-5 w-5" />}
           tone="amber"
         />
         <MetricCard
-          title="Active Products"
+          title={`${terminology.product} aktif`}
           value={`${dashboard.activeProductsCount}/${dashboard.productsCount}`}
           detail="produk tersedia untuk dijual"
           icon={<Store className="h-5 w-5" />}
           tone="zinc"
         />
-        <MetricCard
-          title="Meja Aktif"
-          value={`${dashboard.activeTablesCount}/${dashboard.totalTablesCount}`}
-          detail="meja aktif untuk self-order"
-          icon={<Table2 className="h-5 w-5" />}
-          tone="amber"
-        />
+        {hasTablesSelfOrder && (
+          <MetricCard
+            title={`${terminology.table} aktif`}
+            value={`${dashboard.activeTablesCount}/${dashboard.totalTablesCount}`}
+            detail="meja aktif untuk pesan mandiri"
+            icon={<Table2 className="h-5 w-5" />}
+            tone="amber"
+          />
+        )}
         <MetricCard
           title="Metode Bayar Utama"
           value={topPaymentMethod ? formatCompactCurrency(topPaymentMethod.total) : 'Belum ada'}
@@ -583,8 +596,10 @@ export default function PosAdminDashboard() {
         <div className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-start justify-between gap-4">
             <div>
-              <h2 className="text-lg font-semibold text-zinc-900">Antrean & Order Terbaru</h2>
-              <p className="mt-1 text-sm text-zinc-500">Bantu admin lihat order yang masih bergerak dan transaksi terakhir.</p>
+              <h2 className="text-lg font-semibold text-zinc-900">
+                {hasTablesSelfOrder ? `Antrean & ${terminology.transaction.toLowerCase()} terbaru` : `${terminology.transaction} terbaru`}
+              </h2>
+              <p className="mt-1 text-sm text-zinc-500">Lihat aktivitas terbaru dan status transaksi usaha.</p>
             </div>
             <Link to="/pos/orders" className="inline-flex items-center gap-1 text-sm font-semibold text-amber-800 hover:text-[#111111]">
               Lihat semua
@@ -600,7 +615,8 @@ export default function PosAdminDashboard() {
                     <div>
                       <p className="font-semibold text-zinc-900">{order.order_number}</p>
                       <p className="mt-1 text-sm text-zinc-500">
-                        {order.customer_name || 'Walk-in'} • {order.table_label || order.table?.name || 'Tanpa meja'}
+                        {order.customer_name || `${terminology.customer} umum`}
+                        {hasTablesSelfOrder && ` • ${order.table_label || order.table?.name || 'Tanpa meja'}`}
                       </p>
                     </div>
                     <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${statusTone(order.status)}`}>
@@ -616,7 +632,7 @@ export default function PosAdminDashboard() {
                 </div>
               ))
             ) : (
-              <EmptyHint text="Belum ada order yang bisa ditampilkan." />
+              <EmptyHint text={`Belum ada ${terminology.transaction.toLowerCase()} yang bisa ditampilkan.`} />
             )}
           </div>
         </div>

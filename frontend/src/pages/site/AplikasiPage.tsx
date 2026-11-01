@@ -116,7 +116,7 @@ export default function AplikasiPage() {
   const isAuthenticated = Boolean(getToken() && getSessionUser());
   usePageMeta(
     'Aplikasi Unggulan',
-    'Aplikasi unggulan Hellom untuk UMKM: kasir POS untuk pesanan dan laporan, serta pembuat halaman jualan tanpa coding.',
+    'Aplikasi unggulan Hellom untuk UMKM: kasir untuk semua usaha—warung, restoran, retail, konter HP, sparepart, dan jasa—serta pembuat halaman jualan tanpa coding.',
     '/aplikasi'
   );
 
@@ -131,10 +131,10 @@ export default function AplikasiPage() {
             <div>
               <h1 className="font-display text-4xl font-medium md:text-6xl">Aplikasi andalan untuk usahamu</h1>
               <p className="mt-4 max-w-xl text-base leading-7 text-[#A1A1A6]">
-                Dibangun dan dirawat langsung oleh tim Hellom. Coba sekarang, pakai dari HP maupun laptop.
+                Kasir untuk semua usaha—warung, cafe, restoran, toko retail, konter HP, sparepart, dan jasa. Dibangun untuk dipakai dari HP maupun laptop.
               </p>
             </div>
-            <ShareButtons url="/aplikasi" title="Aplikasi unggulan Hellom" text="Kasir POS & Landing Page Builder untuk UMKM" className="md:max-w-md" />
+            <ShareButtons url="/aplikasi" title="Aplikasi unggulan Hellom" text="Kasir untuk semua usaha & Landing Page Builder untuk UMKM" className="md:max-w-md" />
           </div>
         </Reveal>
 

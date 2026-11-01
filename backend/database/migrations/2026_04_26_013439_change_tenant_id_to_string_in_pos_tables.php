@@ -43,7 +43,8 @@ return new class extends Migration
                 return "WHEN CAST(tenant_id AS UNSIGNED) = {$org->id} THEN '$tenantSlug'";
             })->join(' ');
 
-            \DB::statement("UPDATE `$table` SET tenant_id = CASE $caseStatements ELSE 'unknown-tenant' END WHERE tenant_id IS NOT NULL AND tenant_id REGEXP '^[0-9]+$'");
+            $case = $caseStatements === '' ? "'unknown-tenant'" : "CASE $caseStatements ELSE 'unknown-tenant' END";
+            \DB::statement("UPDATE `$table` SET tenant_id = $case WHERE tenant_id IS NOT NULL AND tenant_id REGEXP '^[0-9]+$'");
         }
     }
 

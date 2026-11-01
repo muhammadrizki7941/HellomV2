@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import OutletOrderSettings from '@/components/pos/OutletOrderSettings';
-import { getImageUrl, getToken, HELLOM_API_BASE, isPosCashier } from '@/lib/hellomApi';
+import { getImageUrl, getToken, HELLOM_API_BASE } from '@/lib/hellomApi';
+import { useBusinessProfile } from '@/hooks/useBusinessProfile';
+import { usePermissions } from '@/hooks/usePermissions';
+import { updatePosBusinessProfile, type PosBusinessType, type PosModuleKey } from '@/services/api/pos';
 
 interface OrganizationSettings {
   id: number;
@@ -33,8 +36,14 @@ function resolvePreviewUrl(value: string | null | undefined) {
 
 export default function PosSettings() {
   // Cashiers reach this page only with the "Pengaturan pesanan outlet" permission: order settings only.
-  const cashierView = isPosCashier();
-  const [activeTab, setActiveTab] = useState<'identity' | 'payment' | 'order' | 'tables'>('identity');
+  const { isPosStaff } = usePermissions();
+  const cashierView = isPosStaff;
+  const { profile, refresh: refreshBusinessProfile } = useBusinessProfile();
+  const [activeTab, setActiveTab] = useState<'business' | 'identity' | 'payment' | 'order' | 'tables'>('business');
+  const [businessType, setBusinessType] = useState<PosBusinessType['key']>('fnb');
+  const [enabledModules, setEnabledModules] = useState<PosModuleKey[]>([]);
+  const [businessSaving, setBusinessSaving] = useState(false);
+  const [businessStatus, setBusinessStatus] = useState<string | null>(null);
   const [settings, setSettings] = useState<OrganizationSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -81,6 +90,12 @@ export default function PosSettings() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
   const qrInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!profile) return;
+    setBusinessType(profile.business_type);
+    setEnabledModules(profile.enabled_modules);
+  }, [profile]);
 
   useEffect(() => {
     if (cashierView) return;
@@ -425,6 +440,31 @@ export default function PosSettings() {
     }
   };
 
+  const saveBusinessProfile = async () => {
+    if (!profile) return;
+    const disabledModules = profile.enabled_modules.filter((module) => !enabledModules.includes(module));
+    if (
+      disabledModules.length > 0 &&
+      !window.confirm(
+        `Nonaktifkan ${disabledModules.length} modul? Data yang sudah tersimpan tidak akan dihapus, tetapi fitur modul tersebut tidak tersedia sampai diaktifkan kembali.`
+      )
+    ) {
+      return;
+    }
+
+    setBusinessSaving(true);
+    setBusinessStatus(null);
+    try {
+      await updatePosBusinessProfile({ business_type: businessType, enabled_modules: enabledModules });
+      await refreshBusinessProfile();
+      setBusinessStatus('Jenis usaha dan modul berhasil disimpan.');
+    } catch (err) {
+      setBusinessStatus(err instanceof Error ? `Gagal menyimpan: ${err.message}` : 'Gagal menyimpan profil usaha.');
+    } finally {
+      setBusinessSaving(false);
+    }
+  };
+
   if (cashierView) {
     return (
       <div className="max-w-2xl mx-auto p-4 md:p-6">
@@ -473,6 +513,16 @@ export default function PosSettings() {
       {/* Tab Navigation */}
       <div className="mb-6 flex min-w-0 overflow-x-auto border-b border-gray-200 [&>button]:shrink-0">
         <button
+          onClick={() => setActiveTab('business')}
+          className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
+            activeTab === 'business'
+              ? 'border-blue-500 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Jenis Usaha & Modul
+        </button>
+        <button
           onClick={() => setActiveTab('identity')}
           className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
             activeTab === 'identity'
@@ -502,16 +552,18 @@ export default function PosSettings() {
         >
           Pesanan & Jam Buka
         </button>
-        <button
-          onClick={() => setActiveTab('tables')}
-          className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
-            activeTab === 'tables'
-              ? 'border-blue-500 text-blue-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          Meja & QR
-        </button>
+        {profile?.enabled_modules.includes('tables_selforder') && (
+          <button
+            onClick={() => setActiveTab('tables')}
+            className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
+              activeTab === 'tables'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Meja & QR
+          </button>
+        )}
       </div>
 
       {error && (
@@ -527,6 +579,75 @@ export default function PosSettings() {
       )}
 
       {/* Tab Content */}
+      {activeTab === 'business' && (
+        <section className="space-y-5 rounded-2xl bg-white p-5 shadow-sm sm:p-6">
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">Jenis usaha dan modul POS</h2>
+            <p className="mt-1 text-sm text-gray-600">
+              Pilih istilah yang sesuai dan aktifkan fitur yang dibutuhkan. Perubahan ini berlaku untuk seluruh outlet organisasi.
+            </p>
+          </div>
+          {!profile ? (
+            <p role="status" className="text-sm text-gray-600">Memuat profil usaha…</p>
+          ) : (
+            <>
+              <label className="block text-sm font-medium text-gray-700">
+                Jenis usaha
+                <select
+                  value={businessType}
+                  onChange={(event) => {
+                    const selected = profile.business_types.find((type) => type.key === event.target.value)?.key;
+                    if (!selected) return;
+                    setBusinessType(selected);
+                    setEnabledModules(profile.module_presets[selected] ?? []);
+                  }}
+                  className="mt-1 min-h-11 w-full rounded-lg border border-gray-300 bg-white px-3 text-gray-900"
+                >
+                  {profile.business_types.map((type) => (
+                    <option key={type.key} value={type.key}>{type.label} — {type.examples}</option>
+                  ))}
+                </select>
+              </label>
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900">Modul aktif</h3>
+                <div className="mt-3 space-y-3">
+                  {profile.modules.map((module) => (
+                    <label key={module.key} className="flex min-h-14 cursor-pointer items-start gap-3 rounded-xl border border-gray-200 p-3">
+                      <input
+                        type="checkbox"
+                        checked={enabledModules.includes(module.key)}
+                        onChange={(event) => setEnabledModules((current) =>
+                          event.target.checked
+                            ? [...current, module.key]
+                            : current.filter((key) => key !== module.key)
+                        )}
+                        className="mt-1 h-4 w-4 accent-amber-500"
+                      />
+                      <span>
+                        <span className="block text-sm font-semibold text-gray-900">{module.label}</span>
+                        <span className="mt-0.5 block text-xs text-gray-600">{module.description}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              {businessStatus && (
+                <p role="status" className={`text-sm ${businessStatus.startsWith('Gagal') ? 'text-red-700' : 'text-emerald-700'}`}>
+                  {businessStatus}
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={() => void saveBusinessProfile()}
+                disabled={businessSaving}
+                className="min-h-11 w-full rounded-xl bg-[#111111] px-5 font-semibold text-white transition-colors hover:bg-[#2a241d] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+              >
+                {businessSaving ? 'Menyimpan…' : 'Simpan jenis usaha & modul'}
+              </button>
+            </>
+          )}
+        </section>
+      )}
       {activeTab === 'identity' && (
         <>
           {/* Identitas Usaha */}

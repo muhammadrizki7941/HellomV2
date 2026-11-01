@@ -31,9 +31,14 @@ export type PosOrderTotals = {
 
 export type PosCartLine = {
   product_id: number;
+  product_variant_id?: number;
   quantity: number;
   options?: Array<{ option_id: number; value_id: number }>;
+  serial_numbers?: string[];
+  customer_type?: string;
   notes?: string | null;
+  client_uuid?: string;
+  created_at_client?: string;
 };
 
 export type PosOrderDraft = {

@@ -1,13 +1,23 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { LayoutDashboard, ShoppingCart, Users, BarChart3, Utensils, Settings, LogOut, Square, X, Menu, User, Ticket, Store, ShieldCheck, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
-import { useState, useEffect, useMemo } from 'react';
+import { LayoutDashboard, ShoppingCart, Users, BarChart3, Utensils, Settings, LogOut, Square, X, Menu, User, Ticket, Store, ShieldCheck, PanelLeftClose, PanelLeftOpen, Package, Smartphone, Wrench, BriefcaseBusiness, RefreshCw } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import BottomNav from '@/components/pos/BottomNav';
 import OutletSwitcher from '@/components/pos/OutletSwitcher';
 import { OwnerPinSetupDialog } from '@/components/pos/OwnerPin';
-import { getActiveOutletEventName, getAuthMe, getPosMyAccess, getPosOwnerPinStatus, getPosOrders, getPosRealtimeToken, getSessionEventName, getSessionUser, getSessionPosAccess, getToken, setSession, setSessionPosAccess, clearSession, POS_PERMISSION_DENIED_EVENT } from '@/lib/hellomApi';
+import { getActiveOutletEventName, getAuthMe, getPosMyAccess, getPosOwnerPinStatus, getPosOrders, getPosRealtimeToken, getSessionEventName, getSessionUser, getSessionPosAccess, getToken, isPosOfflineSessionExpired, POS_OFFLINE_MAX_SESSION_HOURS, setSession, setSessionPosAccess, clearSession, POS_PERMISSION_DENIED_EVENT } from '@/lib/hellomApi';
 import { playOrderChime, setPosRealtimeConnected, subscribeRealtime } from '@/lib/realtime';
 import { usePWAInstall } from '@/hooks/usePWAInstall';
+import { clearSyncedPosCacheOnLogout, confirmPosContextChange, getPosOfflineScope, getPosSyncCounts } from '@/lib/posOfflineDb';
+import { getPosSyncSnapshot, startPosSyncEngine, subscribePosSync, type PosSyncSnapshot } from '@/lib/posSyncEngine';
+import {
+  activatePwaUpdate,
+  hasPwaUpdateAvailable,
+  isPosTransactionInProgress,
+  PWA_UPDATE_AVAILABLE_EVENT,
+  POS_TRANSACTION_STATE_EVENT,
+  setPosHasUnsyncedData,
+} from '@/lib/pwa';
 import { BRAND_LOGO_PATH } from '@/lib/branding';
 import type { PosOwnerPinStatus } from '@/lib/hellomApi';
 import {
@@ -15,12 +25,25 @@ import {
   getPosOrderListResetEventName,
   isOrderVisibleAfterReset,
 } from '@/lib/posOrderListReset';
+import { BusinessProfileProvider, useBusinessProfile, useModule } from '@/hooks/useBusinessProfile';
+import { usePermissions } from '@/hooks/usePermissions';
+import type { PosBusinessType } from '@/services/api/pos';
+
+const productIcons: Record<PosBusinessType['key'], typeof Package> = {
+  fnb: Utensils,
+  retail: Store,
+  konter_hp: Smartphone,
+  sparepart: Wrench,
+  jasa: BriefcaseBusiness,
+};
 
 const sidebarNavigation = [
   { name: 'Dashboard', href: '/pos/admin-dashboard', icon: LayoutDashboard },
   { name: 'Outlet', href: '/pos/outlets', icon: Store },
   { name: 'Orders', href: '/pos/orders', icon: ShoppingCart, hasBadge: true },
-  { name: 'Product Management', href: '/pos/menu', icon: Utensils },
+  { name: 'Antrean Sinkronisasi', href: '/pos/sync-queue', icon: RefreshCw, hasSyncBadge: true },
+  { name: 'Product Management', href: '/pos/menu', icon: Package },
+  { name: 'Inventori', href: '/pos/inventory', icon: Package },
   { name: 'Tables', href: '/pos/tables', icon: Square },
   { name: 'Staff', href: '/pos/staff', icon: Users },
   { name: 'Members', href: '/pos/members', icon: User },
@@ -36,10 +59,13 @@ const sidebarNavigation = [
 // NOTE: never include /pos/cashier or /pos/admin-dashboard here — the former is
 // an SSO bootstrap stub that redirects to admin-dashboard, the latter is a
 // manager overview; pointing cashiers there causes a redirect loop.
-const cashierNavigation: Array<{ name: string; href: string; icon: typeof ShoppingCart; hasBadge?: boolean; perm: string }> = [
+const cashierNavigation: Array<{ name: string; href: string; icon: typeof ShoppingCart; hasBadge?: boolean; hasSyncBadge?: boolean; perm: string }> = [
   { name: 'Orders', href: '/pos/orders', icon: ShoppingCart, hasBadge: true, perm: 'orders' },
+  { name: 'Antrean Sinkronisasi', href: '/pos/sync-queue', icon: RefreshCw, hasSyncBadge: true, perm: 'orders' },
+  { name: 'Staff', href: '/pos/staff', icon: Users, perm: 'staff_management' },
   { name: 'Tables', href: '/pos/tables', icon: Square, perm: 'tables' },
-  { name: 'Product Management', href: '/pos/menu', icon: Utensils, perm: 'products' },
+  { name: 'Product Management', href: '/pos/menu', icon: Package, perm: 'products' },
+  { name: 'Inventori', href: '/pos/inventory', icon: Package, perm: 'inventory_management' },
   { name: 'Members', href: '/pos/members', icon: User, perm: 'members' },
   { name: 'Loyalty', href: '/pos/loyalty', icon: Settings, perm: 'loyalty' },
   { name: 'Promo & Reservasi', href: '/pos/customer-hub', icon: Ticket, perm: 'customer_hub' },
@@ -48,6 +74,10 @@ const cashierNavigation: Array<{ name: string; href: string; icon: typeof Shoppi
 ];
 
 const ACTIVE_ORDER_STATUSES = ['new', 'accepted', 'preparing', 'prepared'];
+const INVENTORY_MODULES = [
+  'variants', 'barcode', 'serial_imei', 'warranty', 'price_tiers',
+  'suppliers_purchasing', 'stock_opname',
+] as const;
 
 const countActiveOrders = (orders: Array<{ status: string; created_at?: string }> = []) => {
   const resetAt = getPosOrderListResetAt();
@@ -61,6 +91,14 @@ const countActiveOrders = (orders: Array<{ status: string; created_at?: string }
 };
 
 export default function PosLayout() {
+  return (
+    <BusinessProfileProvider>
+      <PosLayoutContent />
+    </BusinessProfileProvider>
+  );
+}
+
+function PosLayoutContent() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try {
@@ -72,9 +110,72 @@ export default function PosLayout() {
   const [showIosGuide, setShowIosGuide] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const {
+    profile,
+    error: businessProfileError,
+    loading: businessProfileLoading,
+    refresh: refreshBusinessProfile,
+    terminology,
+    hasModule,
+  } = useBusinessProfile();
+  const productIcon = productIcons[profile?.business_type ?? 'retail'];
+  const hasTablesSelfOrder = useModule('tables_selforder');
   const [activeTab, setActiveTab] = useState('');
   const [activeOrdersCount, setActiveOrdersCount] = useState(0);
+  const [syncSnapshot, setSyncSnapshot] = useState<PosSyncSnapshot>(getPosSyncSnapshot);
+  const [offlineSessionExpired, setOfflineSessionExpired] = useState(isPosOfflineSessionExpired);
+  const lastOfflineScope = useRef(getPosOfflineScope());
   const { state: installState, install } = usePWAInstall();
+  const [pwaUpdateAvailable, setPwaUpdateAvailable] = useState(hasPwaUpdateAvailable);
+  const [posTransactionInProgress, setPosTransactionInProgress] = useState(isPosTransactionInProgress);
+
+  useEffect(() => startPosSyncEngine(), []);
+
+  useEffect(() => subscribePosSync(() => setSyncSnapshot(getPosSyncSnapshot())), []);
+
+  useEffect(() => {
+    const updateOfflineSessionState = () => setOfflineSessionExpired(isPosOfflineSessionExpired());
+    const onSessionChanged = () => {
+      if (getToken()) {
+        lastOfflineScope.current = getPosOfflineScope();
+      } else if (lastOfflineScope.current) {
+        const scope = lastOfflineScope.current;
+        lastOfflineScope.current = null;
+        void clearSyncedPosCacheOnLogout(scope).catch((error: unknown) => {
+          console.error('[POS offline] Failed to clear cached data after logout.', error);
+          window.alert('Cache POS belum dapat dibersihkan. Antrean transaksi belum tersinkron tetap disimpan di perangkat.');
+        });
+      }
+      updateOfflineSessionState();
+    };
+    const timer = window.setInterval(updateOfflineSessionState, 60000);
+    window.addEventListener('online', updateOfflineSessionState);
+    window.addEventListener('offline', updateOfflineSessionState);
+    window.addEventListener(getSessionEventName(), onSessionChanged);
+    updateOfflineSessionState();
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('online', updateOfflineSessionState);
+      window.removeEventListener('offline', updateOfflineSessionState);
+      window.removeEventListener(getSessionEventName(), onSessionChanged);
+    };
+  }, []);
+
+  useEffect(() => {
+    const onUpdateAvailable = () => setPwaUpdateAvailable(true);
+    const onTransactionState = (event: Event) => {
+      setPosTransactionInProgress(Boolean((event as CustomEvent<boolean>).detail));
+    };
+
+    window.addEventListener(PWA_UPDATE_AVAILABLE_EVENT, onUpdateAvailable);
+    window.addEventListener(POS_TRANSACTION_STATE_EVENT, onTransactionState);
+    setPwaUpdateAvailable(hasPwaUpdateAvailable());
+    setPosTransactionInProgress(isPosTransactionInProgress());
+    return () => {
+      window.removeEventListener(PWA_UPDATE_AVAILABLE_EVENT, onUpdateAvailable);
+      window.removeEventListener(POS_TRANSACTION_STATE_EVENT, onTransactionState);
+    };
+  }, []);
 
   useEffect(() => {
     try {
@@ -86,28 +187,92 @@ export default function PosLayout() {
 
   // Re-render when the session (and with it pos_access) changes.
   const [, setAccessVersion] = useState(0);
-  const posAccess = getSessionPosAccess();
-  const isCashier = posAccess?.is_cashier === true;
+  const { access: posAccess, isPosStaff, can } = usePermissions();
   const permissionsKey = JSON.stringify(posAccess?.permissions ?? {});
   // Shop owner: "Log Audit" menu, and a PIN must exist before using POS (created on first visit).
   const [ownerPin, setOwnerPin] = useState<PosOwnerPinStatus | null>(null);
   useEffect(() => {
-    if (isCashier || !getToken()) return;
+    if (isPosStaff || !getToken()) return;
     getPosOwnerPinStatus().then(setOwnerPin).catch(() => setOwnerPin(null));
-  }, [isCashier]);
+  }, [isPosStaff]);
   const isOwner = ownerPin?.is_owner === true;
   const navItems = useMemo(
-    () =>
-      isCashier
-        ? cashierNavigation.filter((item) => item.perm === 'orders' || posAccess?.permissions?.[item.perm] === true)
+    () => {
+      const items = isPosStaff
+        ? cashierNavigation.filter((item) => can(item.perm))
         : isOwner
           ? [...sidebarNavigation, { name: 'Log Audit', href: '/pos/audit', icon: ShieldCheck }]
-          : sidebarNavigation,
+          : sidebarNavigation;
+      return items
+        .filter((item) => item.href !== '/pos/tables' || hasTablesSelfOrder)
+        .filter((item) => item.href !== '/pos/inventory' || INVENTORY_MODULES.some(hasModule))
+        .map((item) => ({
+          ...item,
+          icon: item.href === '/pos/menu' ? productIcon : item.icon,
+          name: item.href === '/pos/orders'
+            ? terminology.transaction
+            : item.href === '/pos/menu'
+              ? terminology.product
+              : item.href === '/pos/tables'
+                ? terminology.table
+                : item.href === '/pos/inventory'
+                  ? 'Inventori'
+                : item.href === '/pos/members'
+                  ? terminology.customer
+                    : item.href === '/pos/admin-dashboard'
+                      ? 'Ringkasan'
+                    : item.href === '/pos/reports'
+                      ? 'Laporan'
+                      : item.href === '/pos/settings'
+                        ? 'Pengaturan'
+                        : item.href === '/pos/staff'
+                          ? 'Staf'
+                          : item.href === '/pos/customer-hub'
+                            ? 'Promo pelanggan'
+                          : item.name,
+        }));
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [isCashier, permissionsKey, isOwner]
+    [isPosStaff, permissionsKey, isOwner, hasTablesSelfOrder, terminology, hasModule, productIcon, can]
   );
   // Tablet bottom bar: tab ids = the second path segment (/pos/menu → "menu").
-  const allowedTabs = isCashier ? navItems.map((item) => item.href.split('/')[2]) : undefined;
+  const allowedTabs = isPosStaff ? navItems.map((item) => item.href.split('/')[2]) : undefined;
+  const pendingSyncCount = syncSnapshot.pending + syncSnapshot.syncing;
+  const unsyncedSyncCount = pendingSyncCount + syncSnapshot.failed;
+  const syncStatusLabel = !syncSnapshot.online
+    ? `🔴 Offline (${unsyncedSyncCount} tertunda)`
+    : syncSnapshot.failed > 0
+      ? `🟠 Ada yang gagal (${syncSnapshot.failed})`
+      : syncSnapshot.running || pendingSyncCount > 0
+        ? `🟡 Menyinkronkan (${pendingSyncCount})`
+        : '🟢 Online & tersinkron';
+  const canActivateUpdate = !posTransactionInProgress && unsyncedSyncCount === 0;
+
+  useEffect(() => {
+    setPosHasUnsyncedData(unsyncedSyncCount > 0);
+  }, [unsyncedSyncCount]);
+
+  const handlePwaUpdate = async () => {
+    try {
+      const counts = await getPosSyncCounts();
+      const hasUnsynced = counts.pending + counts.syncing + counts.failed > 0;
+      setPosHasUnsyncedData(hasUnsynced);
+      if (hasUnsynced || isPosTransactionInProgress()) {
+        setSyncSnapshot((current) => ({ ...current, ...counts }));
+        return;
+      }
+      activatePwaUpdate();
+    } catch (error) {
+      console.error('[PWA] Could not verify the offline queue before updating.', error);
+      window.alert('Antrean lokal belum dapat diperiksa. Pembaruan ditunda agar transaksi tidak hilang.');
+    }
+  };
+
+  useEffect(() => {
+    if (!businessProfileLoading && !hasTablesSelfOrder && location.pathname.startsWith('/pos/tables')) {
+      navigate('/pos/admin-dashboard', { replace: true });
+    }
+  }, [businessProfileLoading, hasTablesSelfOrder, location.pathname, navigate]);
 
   // Cashier permissions can change while they are logged in (owner/admin edits POS › Staff):
   // reload them on open, on focus, every minute, and right after the API refused something.
@@ -117,7 +282,7 @@ export default function PosLayout() {
     return () => window.removeEventListener(getSessionEventName(), onSession);
   }, []);
   useEffect(() => {
-    if (!getSessionPosAccess()?.is_cashier) return undefined;
+    if (!isPosStaff) return undefined;
     let last = 0;
     const refresh = async () => {
       if (Date.now() - last < 3000 || !getToken()) return;
@@ -141,24 +306,39 @@ export default function PosLayout() {
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener(POS_PERMISSION_DENIED_EVENT, refresh);
     };
-  }, [isCashier]);
+  }, [isPosStaff]);
 
   // Keep cashiers out of manager-only pages even via direct URL. Redirect to the
   // first page they ARE allowed to see (never a hardcoded route that might bounce).
   useEffect(() => {
-    if (!isCashier) return;
+    if (businessProfileLoading || businessProfileError || hasTablesSelfOrder) return;
+    if (location.pathname === '/pos/tables' || location.pathname.startsWith('/pos/tables/')) {
+      navigate('/pos/orders', { replace: true });
+    }
+  }, [businessProfileLoading, businessProfileError, hasTablesSelfOrder, location.pathname, navigate]);
+
+  useEffect(() => {
+    if (!isPosStaff) return;
     const allowed = navItems.map((item) => item.href);
     const path = location.pathname;
     const ok = allowed.some((href) => path === href || path.startsWith(`${href}/`));
     const home = navItems[0]?.href;
     if (!ok && home && path !== home) navigate(home, { replace: true });
-  }, [isCashier, location.pathname, navItems, navigate]);
+  }, [isPosStaff, location.pathname, navItems, navigate]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    if (!(await confirmPosContextChange())) return;
+    try {
+      await clearSyncedPosCacheOnLogout();
+    } catch (error) {
+      console.error('[POS offline] Failed to clear cached data before logout.', error);
+      window.alert('Cache POS belum dapat dibersihkan. Logout dibatalkan agar data perangkat tetap aman.');
+      return;
+    }
     setSidebarOpen(false);
     clearSession();
     // Cashiers go back to their own login page; owners/admins to the normal one.
-    navigate(isCashier ? '/login/kasir' : '/login?app=pos', { replace: true });
+    navigate(isPosStaff ? '/login/kasir' : '/login?app=pos', { replace: true });
   };
 
   // Map current location to active tab
@@ -196,7 +376,8 @@ export default function PosLayout() {
           if (token && isMounted) {
             setSession(token, me);
           }
-        } catch {
+        } catch (error) {
+          console.error('[POS] Failed to refresh the authenticated session:', error);
         } finally {
           refreshing = false;
         }
@@ -353,19 +534,19 @@ export default function PosLayout() {
           <div className={cn('pt-4', sidebarCollapsed ? 'flex justify-center px-2' : 'px-4')}>
             {sidebarCollapsed ? (
               <div
-                title={`Outlet aktif: ${isCashier ? (posAccess?.outlet_name || 'Outlet kamu') : 'Pilih outlet'}`}
-                aria-label={`Outlet aktif: ${isCashier ? (posAccess?.outlet_name || 'Outlet kamu') : 'Pilih outlet'}`}
+                title={`Outlet aktif: ${isPosStaff ? (posAccess?.outlet_name || 'Outlet kamu') : 'Pilih outlet'}`}
+                aria-label={`Outlet aktif: ${isPosStaff ? (posAccess?.outlet_name || 'Outlet kamu') : 'Pilih outlet'}`}
                 className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#eadfbe] bg-[#fffdf5] text-[#8a7d63]"
               >
                 <Store className="h-5 w-5" />
               </div>
-            ) : isCashier ? (
+            ) : isPosStaff && (posAccess?.outlets?.length ?? 0) <= 1 ? (
               <div className="rounded-md border border-[#eadfbe] bg-[#fffdf5] px-3 py-2">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-[#8a7d63]">Outlet aktif</p>
                 <p className="truncate text-sm font-semibold text-[#111111]">{posAccess?.outlet_name || 'Outlet kamu'}</p>
               </div>
             ) : (
-              <OutletSwitcher />
+              <OutletSwitcher canManageOutlets={!isPosStaff} />
             )}
           </div>
           <nav className={cn('mt-4 flex-1', sidebarCollapsed ? 'px-2' : 'px-4')}>
@@ -393,19 +574,55 @@ export default function PosLayout() {
                     {activeOrdersCount > 99 ? '99+' : activeOrdersCount}
                   </span>
                 )}
+                {item.hasSyncBadge && unsyncedSyncCount > 0 && (
+                  <span className={cn(
+                    'inline-flex min-w-[22px] items-center justify-center rounded-full bg-orange-500 px-2 py-0.5 text-xs font-semibold text-white',
+                    sidebarCollapsed ? 'absolute -right-1 -bottom-1 min-w-[18px] px-1 text-[10px]' : 'ml-auto',
+                  )}>
+                    {unsyncedSyncCount > 99 ? '99+' : unsyncedSyncCount}
+                  </span>
+                )}
               </Link>
             ))}
           </nav>
           <div className={cn('border-t border-[#f1e7c9]', sidebarCollapsed ? 'p-2' : 'p-4')}>
+            {(installState === 'available' || installState === 'ios') && (
+              <button
+                type="button"
+                onClick={installState === 'available' ? () => void install() : () => setShowIosGuide(true)}
+                className={cn(
+                  'mb-1 flex min-h-11 w-full items-center rounded-md py-2 text-sm font-medium text-amber-800 hover:bg-amber-50',
+                  sidebarCollapsed ? 'justify-center px-2' : 'px-3',
+                )}
+                aria-label="Install Aplikasi"
+                title="Install Aplikasi"
+              >
+                <Smartphone className={cn('h-5 w-5 shrink-0', sidebarCollapsed ? '' : 'mr-3')} />
+                {!sidebarCollapsed && 'Install Aplikasi'}
+              </button>
+            )}
+            <Link
+              to="/pos/profile"
+              title={sidebarCollapsed ? 'Profil saya' : undefined}
+              aria-label="Profil saya"
+              className={cn(
+                'mb-1 flex min-h-11 items-center rounded-md py-2 text-sm font-medium',
+                sidebarCollapsed ? 'justify-center px-2' : 'px-3',
+                location.pathname === '/pos/profile' ? 'bg-amber-300 text-[#111111]' : 'text-[#4b5563] hover:bg-[#fff7db] hover:text-[#111111]'
+              )}
+            >
+              <User className={cn('h-5 w-5 shrink-0', sidebarCollapsed ? '' : 'mr-3')} />
+              {!sidebarCollapsed && 'Profil saya'}
+            </Link>
             <button
               type="button"
-              onClick={isCashier ? handleLogout : handleGoToDashboard}
-              title={sidebarCollapsed ? (isCashier ? 'Keluar' : 'Ke Dashboard Hellom') : undefined}
-              aria-label={isCashier ? 'Keluar' : 'Ke Dashboard Hellom'}
+              onClick={isPosStaff ? handleLogout : handleGoToDashboard}
+              title={sidebarCollapsed ? (isPosStaff ? 'Keluar' : 'Ke Dashboard Hellom') : undefined}
+              aria-label={isPosStaff ? 'Keluar' : 'Ke Dashboard Hellom'}
               className={cn('flex min-h-11 w-full items-center rounded-md py-2 text-sm font-medium text-[#4b5563] hover:bg-[#fff7db] hover:text-[#111111]', sidebarCollapsed ? 'justify-center px-2' : 'px-3')}
             >
               <LogOut className={cn('h-5 w-5 shrink-0', sidebarCollapsed ? '' : 'mr-3')} />
-              {!sidebarCollapsed && (isCashier ? 'Keluar' : 'Ke Dashboard Hellom')}
+              {!sidebarCollapsed && (isPosStaff ? 'Keluar' : 'Ke Dashboard Hellom')}
             </button>
           </div>
         </div>
@@ -425,14 +642,23 @@ export default function PosLayout() {
             >
               <Menu className="h-6 w-6" />
             </button>
-            <h1 className="min-w-0 truncate text-base font-semibold text-[#111111] sm:text-lg">POS System</h1>
+            <h1 className="min-w-0 truncate text-base font-semibold text-[#111111] sm:text-lg">Kasir POS</h1>
             <div className="flex items-center gap-1.5">
+              <Link
+                to="/pos/sync-queue"
+                aria-label={`Status sinkronisasi: ${syncStatusLabel}`}
+                title={syncStatusLabel}
+                className="max-w-[108px] truncate rounded-lg bg-gray-100 px-2 py-2 text-[10px] font-semibold text-gray-800 sm:max-w-none sm:text-xs"
+              >
+                {syncStatusLabel}
+              </Link>
               {(installState === 'available' || installState === 'ios') && (
                 <button
                   type="button"
                   onClick={installState === 'available' ? () => void install() : () => setShowIosGuide(true)}
                   className="flex items-center gap-1 rounded-lg bg-amber-100 px-2.5 py-1.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-200"
-                  title="Install sebagai aplikasi"
+                  title="Install Aplikasi"
+                  aria-label="Install Aplikasi"
                 >
                   📲 Install
                 </button>
@@ -445,12 +671,12 @@ export default function PosLayout() {
               </Link>
               <button
                 type="button"
-                onClick={isCashier ? handleLogout : handleGoToDashboard}
-                aria-label={isCashier ? 'Keluar' : 'Ke Dashboard Hellom'}
+                onClick={isPosStaff ? handleLogout : handleGoToDashboard}
+                aria-label={isPosStaff ? 'Keluar' : 'Ke Dashboard Hellom'}
                 className="flex h-11 shrink-0 items-center gap-2 px-3 py-1.5 text-sm font-medium text-[#4b5563] hover:text-[#111111] hover:bg-[#fff7db] rounded-lg transition-colors"
               >
                 <LogOut className="h-5 w-5 sm:hidden" />
-                <span className="hidden sm:inline">{isCashier ? 'Keluar' : 'Ke Dashboard Hellom'}</span>
+                <span className="hidden sm:inline">{isPosStaff ? 'Keluar' : 'Ke Dashboard Hellom'}</span>
               </button>
             </div>
           </div>
@@ -458,7 +684,62 @@ export default function PosLayout() {
 
         {/* Main Content */}
         <main className="min-w-0 flex-1 bg-[#fffdf5] p-3 pb-24 sm:p-5 sm:pb-24 lg:p-6 lg:pb-6">
-          <Outlet />
+          <div className="mb-3 hidden justify-end lg:flex">
+            <Link
+              to="/pos/sync-queue"
+              aria-label={`Status sinkronisasi: ${syncStatusLabel}`}
+              className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-800 shadow-sm"
+            >
+              {syncStatusLabel}
+            </Link>
+          </div>
+          {pwaUpdateAvailable && (
+            <div role="status" className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <span>
+                {!canActivateUpdate
+                  ? `Versi baru tersedia. ${posTransactionInProgress ? 'Selesaikan transaksi' : `Sinkronkan ${unsyncedSyncCount} transaksi tertunda`} sebelum memuat ulang.`
+                  : 'Versi baru tersedia, muat ulang.'}
+              </span>
+              <button
+                type="button"
+                onClick={() => void handlePwaUpdate()}
+                disabled={!canActivateUpdate}
+                className="rounded-lg bg-amber-300 px-3 py-2 font-semibold text-gray-900 hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Muat ulang
+              </button>
+            </div>
+          )}
+          {businessProfileError && (
+            <div role="alert" className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+              <span>Profil usaha gagal dimuat: {businessProfileError}</span>
+              <button type="button" onClick={() => void refreshBusinessProfile()} className="font-semibold underline">
+                Coba lagi
+              </button>
+            </div>
+          )}
+          {offlineSessionExpired ? (
+            <div className="mx-auto mt-8 max-w-xl rounded-2xl border border-red-200 bg-white p-6 text-center shadow-sm">
+              <h2 className="text-lg font-bold text-gray-950">Sesi offline berakhir</h2>
+              <p className="mt-2 text-sm leading-6 text-gray-700">
+                Demi keamanan perangkat bersama, POS memerlukan validasi online setidaknya setiap {POS_OFFLINE_MAX_SESSION_HOURS} jam.
+                Order yang belum tersinkron tetap disimpan dan tidak dihapus. Hubungkan perangkat ke internet untuk melanjutkan dan login ulang bila diminta.
+              </p>
+              <p className="mt-3 text-xs text-gray-500">
+                Token sesi saat ini disimpan di penyimpanan lokal browser (localStorage); jangan gunakan profil browser bersama tanpa logout.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  clearSession();
+                  navigate('/login?app=pos', { replace: true });
+                }}
+                className="mt-5 min-h-11 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+              >
+                Ke halaman login
+              </button>
+            </div>
+          ) : <Outlet />}
           {ownerPin?.is_owner && !ownerPin.pin_set && (
             <OwnerPinSetupDialog resetEmail={ownerPin.reset_email} onDone={() => setOwnerPin({ ...ownerPin, pin_set: true })} />
           )}
@@ -471,6 +752,11 @@ export default function PosLayout() {
             onTabChange={handleTabChange}
             activeOrdersCount={activeOrdersCount}
             allowedTabs={allowedTabs}
+            hasTablesSelfOrder={hasTablesSelfOrder}
+            productLabel={terminology.product}
+            transactionLabel={terminology.transaction}
+            customerLabel={terminology.customer}
+            productIcon={productIcon}
           />
         </div>
       </div>
@@ -512,19 +798,19 @@ export default function PosLayout() {
           )}
         >
           <div className="flex h-16 items-center justify-between border-b border-[#f1e7c9] px-4">
-            <h2 className="text-lg font-semibold text-[#111111]">POS System</h2>
+            <h2 className="text-lg font-semibold text-[#111111]">Kasir POS</h2>
             <button onClick={() => setSidebarOpen(false)} className="text-[#8a7d63] hover:text-[#111111]">
               <X className="h-5 w-5" />
             </button>
           </div>
           <div className="px-4 pt-4">
-            {isCashier ? (
+            {isPosStaff && (posAccess?.outlets?.length ?? 0) <= 1 ? (
               <div className="rounded-md border border-[#eadfbe] bg-[#fffdf5] px-3 py-2">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-[#8a7d63]">Outlet</p>
                 <p className="truncate text-sm font-semibold text-[#111111]">{posAccess?.outlet_name || 'Outlet kamu'}</p>
               </div>
             ) : (
-              <OutletSwitcher />
+              <OutletSwitcher canManageOutlets={!isPosStaff} />
             )}
           </div>
           <nav className="mt-4 px-4">
@@ -551,13 +837,24 @@ export default function PosLayout() {
             ))}
           </nav>
           <div className="border-t border-[#f1e7c9] p-4">
+            <Link
+              to="/pos/profile"
+              onClick={() => setSidebarOpen(false)}
+              className={cn(
+                'mb-1 flex items-center rounded-md px-3 py-2 text-sm font-medium',
+                location.pathname === '/pos/profile' ? 'bg-amber-300 text-[#111111]' : 'text-[#4b5563] hover:bg-[#fff7db] hover:text-[#111111]'
+              )}
+            >
+              <User className="mr-3 h-5 w-5" />
+              Profil saya
+            </Link>
             <button
               type="button"
-              onClick={isCashier ? handleLogout : handleGoToDashboard}
+              onClick={isPosStaff ? handleLogout : handleGoToDashboard}
               className="flex items-center rounded-md px-3 py-2 text-sm font-medium text-[#4b5563] hover:bg-[#fff7db] hover:text-[#111111]"
             >
               <LogOut className="mr-3 h-5 w-5" />
-              {isCashier ? 'Keluar' : 'Ke Dashboard Hellom'}
+              {isPosStaff ? 'Keluar' : 'Ke Dashboard Hellom'}
             </button>
           </div>
         </div>

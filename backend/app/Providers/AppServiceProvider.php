@@ -3,7 +3,16 @@
 namespace App\Providers;
 
 use App\Models\OrganizationLandingPage;
+use App\Models\PosStaff;
+use App\Models\Category;
+use App\Models\DiningTable;
+use App\Models\PosMember;
+use App\Models\Product;
+use App\Models\ProductVariant;
+use App\Models\ProductSerial;
 use App\Policies\LandingPagePolicy;
+use App\Policies\PosStaffPolicy;
+use App\Observers\PosSyncChangeObserver;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Event;
@@ -27,6 +36,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Gate::policy(PosStaff::class, PosStaffPolicy::class);
+        foreach ([Product::class, Category::class, ProductVariant::class, ProductSerial::class, PosMember::class, DiningTable::class] as $model) {
+            $model::observe(PosSyncChangeObserver::class);
+        }
         \App\Models\CheckoutIntent::observe(\App\Observers\MarketingCheckoutObserver::class);
         \App\Models\ProductPurchase::observe(\App\Observers\MarketingProductObserver::class);
         \App\Models\User::created(function ($user) {
@@ -39,7 +52,7 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('hellom-auth', function (Request $request) {
             // Per email + IP, plus a per-IP cap so rotating emails does not bypass it.
             return [
-                Limit::perMinute(10)->by(strtolower((string) $request->input('email')) . '|' . $request->ip()),
+                Limit::perMinute(10)->by(strtolower((string) $request->input('identifier', $request->input('email'))) . '|' . $request->ip()),
                 Limit::perMinute(30)->by('ip:' . $request->ip()),
             ];
         });
@@ -51,6 +64,9 @@ class AppServiceProvider extends ServiceProvider
         // Member lookup by phone number (enumeration protection).
         RateLimiter::for('hellom-public-lookup', function (Request $request) {
             return Limit::perMinute(30)->by($request->ip());
+        });
+        RateLimiter::for('hellom-pos-sync', function (Request $request) {
+            return Limit::perMinute(30)->by('pos-sync:' . ($request->user()?->id ?? $request->ip()));
         });
         // Guest digital-product checkout: creates accounts and sends email.
         RateLimiter::for('hellom-guest-checkout', function (Request $request) {

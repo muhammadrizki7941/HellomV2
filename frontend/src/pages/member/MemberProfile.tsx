@@ -18,7 +18,7 @@ export default function MemberProfile() {
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState('');
   const sync = (me: HellomUser) => {
-    setUser(me); setForm({ name: me.name, email: me.email, phone: me.phone || '' });
+    setUser(me); setForm({ name: me.name, email: me.email || '', phone: me.phone || '' });
     const token = getToken(); if (token) setSession(token, me);
   };
   const load = async () => {

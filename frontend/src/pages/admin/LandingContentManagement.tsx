@@ -129,7 +129,7 @@ export default function LandingContentManagement() {
             <Field label="Judul" value={String(about.title || '')} onChange={(value) => setAbout({ ...about, title: value })} />
             <Field label="Subjudul" value={String(about.subtitle || '')} onChange={(value) => setAbout({ ...about, subtitle: value })} />
             <Textarea label="Deskripsi" value={String(about.description || '')} onChange={(value) => setAbout({ ...about, description: value })} />
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Tahun pengalaman" type="number" value={String(about.years_experience || 0)} onChange={(value) => setAbout({ ...about, years_experience: Number(value) })} />
               <Field label="Proyek selesai" type="number" value={String(about.projects_completed || 0)} onChange={(value) => setAbout({ ...about, projects_completed: Number(value) })} />
               <Field label="Klien puas" type="number" value={String(about.happy_clients || 0)} onChange={(value) => setAbout({ ...about, happy_clients: Number(value) })} />

@@ -8,6 +8,7 @@ use App\Models\Outlet;
 use App\Models\PosStaff;
 use App\Services\Pos\Audit\ActivityLogger;
 use App\Services\Pos\Audit\OwnerPinException;
+use App\Support\Pos\PosRoles;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -102,6 +103,6 @@ abstract class BasePosController extends BaseApiController
 
         $role = (string) ($membership?->pivot?->role ?? '');
 
-        return in_array($role, ['owner', 'admin'], true);
+        return PosRoles::isOrganizationAdminMembership($role);
     }
 }

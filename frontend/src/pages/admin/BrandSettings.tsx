@@ -478,7 +478,7 @@ export default function BrandSettingsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 md:px-6">
+    <div className="mx-auto max-w-6xl">
       <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Branding Utama Hellom</h1>
@@ -901,7 +901,7 @@ export default function BrandSettingsPage() {
               </div>
             </div>
 
-            <div className="mt-5 grid grid-cols-4 gap-3">
+            <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
               {[
                 ['primary_color', previewBrand.primary_color],
                 ['secondary_color', previewBrand.secondary_color],

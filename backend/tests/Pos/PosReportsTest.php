@@ -141,6 +141,26 @@ class PosReportsTest extends PosTestCase
         ]))->assertOk()->json('data.transactions');
         $this->assertCount(2, $transactions);
         $this->assertSame(0, $transactions[0]['net_collected']);
+        $this->assertSame($outlet->name, $transactions[0]['outlet_name']);
+        $this->assertSame($product->name, $transactions[1]['items'][0]['product_name']);
+
+        $allTransactions = $this->withHeaders($headers)->getJson('/api/v1/hellom/pos/reports/transactions?' . http_build_query([
+            'start_date' => '2026-10-30',
+            'end_date' => '2026-10-30',
+            'timezone' => 'Asia/Jakarta',
+            'scope' => 'all',
+        ]))->assertOk()->json('data.transactions');
+        $this->assertCount(3, $allTransactions);
+        $this->assertContains($otherOutlet->name, array_column($allTransactions, 'outlet_name'));
+
+        $selectedOutletTransactions = $this->withHeaders($headers)->getJson('/api/v1/hellom/pos/reports/transactions?' . http_build_query([
+            'start_date' => '2026-10-30',
+            'end_date' => '2026-10-30',
+            'timezone' => 'Asia/Jakarta',
+            'outlet_id' => $otherOutlet->id,
+        ]))->assertOk()->json('data.transactions');
+        $this->assertCount(1, $selectedOutletTransactions);
+        $this->assertSame($otherOutlet->name, $selectedOutletTransactions[0]['outlet_name']);
 
         $export = $this->withHeaders($headers)->get('/api/v1/hellom/pos/reports/export?' . http_build_query([
             'start_date' => '2026-10-30',
@@ -151,6 +171,50 @@ class PosReportsTest extends PosTestCase
         $export->assertOk()->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         $this->assertStringContainsString('Laporan-Keuangan', $export->headers->get('content-disposition'));
         $this->assertNotNull($user->fresh());
+    }
+
+    public function test_outlet_admin_cannot_select_another_outlets_report_details(): void
+    {
+        ['org' => $org, 'outlet' => $outletA] = $this->makeOrganization('REPORT-STAFF');
+        $outletB = $this->makeOutlet($org);
+        $user = User::factory()->create([
+            'name' => 'Outlet Report Admin',
+            'email' => Str::lower(Str::random(10)) . '@example.test',
+            'password' => bcrypt('secret-password'),
+            'role' => 'cashier',
+            'current_organization_id' => $org->id,
+        ]);
+        $org->users()->attach($user->id, ['role' => 'cashier']);
+        PosStaff::query()->create([
+            'organization_id' => $org->id,
+            'tenant_id' => $outletA->tenant_slug,
+            'outlet_id' => $outletA->id,
+            'linked_user_id' => $user->id,
+            'name' => $user->name,
+            'role' => 'admin',
+            'employment_status' => 'active',
+        ]);
+        $app = AppCatalog::query()->firstOrCreate(['slug' => 'pos'], ['name' => 'POS', 'is_active' => true]);
+        Entitlement::query()->firstOrCreate(
+            ['organization_id' => $org->id, 'app_id' => $app->id],
+            ['status' => 'active', 'starts_at' => now()->subDay(), 'ends_at' => now()->addMonth()]
+        );
+        $plain = Str::random(40);
+        ApiToken::query()->create([
+            'user_id' => $user->id,
+            'name' => 'outlet-report-test',
+            'token_hash' => hash('sha256', $plain),
+        ]);
+
+        $this->withHeaders([
+            'Authorization' => 'Bearer ' . $plain,
+            'Accept' => 'application/json',
+            'X-Outlet-Id' => (string) $outletA->id,
+        ])->getJson('/api/v1/hellom/pos/reports/transactions?' . http_build_query([
+            'start_date' => now()->toDateString(),
+            'end_date' => now()->toDateString(),
+            'outlet_id' => $outletB->id,
+        ]))->assertForbidden();
     }
 
     public function test_report_includes_cash_reconciliation_and_hpp_margin_with_coverage(): void
@@ -176,6 +240,7 @@ class PosReportsTest extends PosTestCase
             'unit_price' => 50000,
             'qty' => 2,
             'line_total' => 100000,
+            'cost_price' => 15000,
         ]);
 
         $staff = PosStaff::query()->create([
@@ -239,6 +304,12 @@ class PosReportsTest extends PosTestCase
         $this->assertSame(100, $marginReport['coverage_pct']);
         $this->assertSame(70000, $marginReport['estimated_profit']);
         $this->assertSame(70, $marginReport['gross_margin_pct']);
+
+        $grossProfitReport = $this->withHeaders($headers)->getJson("/api/v1/hellom/pos/reports/gross-profit?{$query}")
+            ->assertOk()->json('data');
+        $this->assertSame(100, $grossProfitReport['coverage_pct']);
+        $this->assertSame(70000, $grossProfitReport['gross_profit']);
+        $this->assertSame(70, $grossProfitReport['gross_margin_pct']);
     }
 
     private function ownerHeaders(Organization $org, int $outletId): array

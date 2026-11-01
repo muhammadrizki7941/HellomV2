@@ -21,7 +21,9 @@ export function usePWAInstall() {
       return;
     }
 
-    const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isIos =
+      /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
     if (isIos && isSafari) {
       setState('ios');

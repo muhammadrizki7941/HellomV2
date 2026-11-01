@@ -70,7 +70,7 @@ export default function AdminProductPurchases() {
         </div>
       )}
 
-      <div className="bg-white border border-zinc-200 rounded-2xl shadow-sm overflow-hidden">
+      <div className="bg-white border border-zinc-200 rounded-2xl shadow-sm overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-zinc-50 text-zinc-600">
             <tr>

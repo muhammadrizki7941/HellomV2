@@ -5,19 +5,19 @@ import { currentPushEndpoint } from './push';
 
 // ─── Auth ───
 
-export function login(email: string, password: string) {
+export function login(identifier: string, password: string) {
   return apiRequest<{ token: string; user: unknown }>('/auth/login', {
     method: 'POST',
-    body: { email, password },
+    body: { identifier, password },
     token: null,
   });
 }
 
 /** Staff/cashier login: straight into the store where the account is POS staff (409 = choose a store). */
-export function staffLogin(email: string, password: string, staffId?: number) {
+export function staffLogin(identifier: string, password: string, staffId?: number) {
   return apiRequest<{ token: string; user: unknown }>('/auth/staff-login', {
     method: 'POST',
-    body: { email, password, staff_id: staffId },
+    body: { identifier, password, staff_id: staffId },
     token: null,
   });
 }
@@ -60,9 +60,11 @@ export async function logout() {
 export type HellomUser = {
   id: number;
   name: string;
-  email: string;
+  email: string | null;
+  username?: string | null;
   role: string;
   phone: string | null;
+  must_change_password?: boolean;
   current_organization: { id: number; name: string; slug: string; status: string } | null;
   organizations: Array<{ id: number; name: string; slug: string; status: string; role: string }>;
   pos_access?: PosAccess;

@@ -17,34 +17,51 @@ final class PosAccess
     {
         $organization = $user->currentOrganization;
         if (!$organization instanceof Organization) {
-            return ['is_cashier' => false];
+            return ['is_cashier' => false, 'organization_role' => null];
         }
 
-        $isPlatform = in_array((string) $user->role, ['super_admin', 'tenant_admin'], true);
+        $isPlatform = PosRoles::isPlatformManager((string) $user->role);
         $pivotRole = (string) ($user->organizations()->where('organizations.id', (int) $organization->id)->first()?->pivot?->role ?? '');
-        if ($isPlatform || in_array($pivotRole, ['owner', 'admin', 'super_admin'], true)) {
-            return ['is_cashier' => false];
+        if ($isPlatform || $pivotRole === 'super_admin') {
+            return ['is_cashier' => false, 'organization_role' => 'platform_admin'];
+        }
+        if (PosRoles::isOrganizationAdminMembership($pivotRole)) {
+            return ['is_cashier' => false, 'organization_role' => PosRoles::ORG_ADMIN];
         }
 
         $staff = PosStaff::query()
-            ->where('organization_id', (int) $organization->id)
+            ->forOrganization((int) $organization->id)
             ->where('linked_user_id', (int) $user->id)
             ->where('employment_status', 'active')
             ->orderByDesc('id')
             ->first();
         if (!$staff instanceof PosStaff) {
-            return ['is_cashier' => false];
+            return ['is_cashier' => false, 'organization_role' => 'member'];
         }
 
         $outlet = $staff->resolveBoundOutlet();
+        $assignedOutlets = $staff->outlets()
+            ->where('outlets.is_active', true)
+            ->orderBy('outlets.sort_order')
+            ->orderBy('outlets.id')
+            ->get(['outlets.id', 'outlets.name']);
+        if ($assignedOutlets->isEmpty() && $outlet) {
+            $assignedOutlets = collect([(object) $outlet->only(['id', 'name'])]);
+        }
 
         return [
             'is_cashier' => true,
+            'organization_role' => 'staff',
             'staff_id' => (int) $staff->id,
             'pos_role' => (string) $staff->role,
+            'business_role' => $staff->businessRole(),
             'permissions' => PosPermissions::forStaff($staff),
             'outlet_id' => $outlet?->id,
             'outlet_name' => $outlet?->name,
+            'outlets' => $assignedOutlets->map(fn ($assignedOutlet) => [
+                'id' => (int) $assignedOutlet->id,
+                'name' => (string) $assignedOutlet->name,
+            ])->values(),
             'tenant_slug' => (string) ($outlet?->tenant_slug ?? $staff->tenant_id),
         ];
     }

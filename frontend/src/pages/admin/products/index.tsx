@@ -62,7 +62,7 @@ export default function AdminProducts() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-zinc-900">Kelola Produk</h1>
           <p className="text-sm text-zinc-600">Kelola katalog produk digital.</p>
@@ -81,7 +81,7 @@ export default function AdminProducts() {
         </div>
       )}
 
-      <div className="bg-white border border-zinc-200 rounded-2xl shadow-sm overflow-hidden">
+      <div className="bg-white border border-zinc-200 rounded-2xl shadow-sm overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-zinc-50 text-zinc-600">
             <tr>
