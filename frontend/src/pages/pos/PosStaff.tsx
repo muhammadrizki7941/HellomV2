@@ -5,6 +5,7 @@ import {
   CalendarClock,
   Camera,
   CheckCircle2,
+  ChevronDown,
   Clock3,
   Download,
   Edit2,
@@ -34,6 +35,7 @@ import {
   getPosStaffDashboard,
   markLeavePosStaff,
   openPosStaffCash,
+  resetPosStaffPassword,
   type PosStaffDashboard,
   type PosStaffEmploymentStatus,
   type PosStaffItem,
@@ -49,8 +51,10 @@ import {
   updatePosStaffShift,
 } from '@/lib/hellomApi';
 import { getPosOutlets, getActiveOutletId, setActiveOutletId, type PosOutlet } from '@/lib/hellomApi';
+import { usePermissions } from '@/hooks/usePermissions';
 
 type ScanMode = 'check_in' | 'check_out';
+type StaffView = 'team' | 'shifts' | 'overview';
 
 type ScannerLocationState = {
   label: string;
@@ -87,6 +91,9 @@ const FALLBACK_PERMISSIONS: PosPermissionDef[] = [
   { key: 'reports', label: 'Laporan', description: 'Lihat dan export laporan penjualan outlet.', locked: false, default_cashier: false, default_admin: true },
   { key: 'cash_control', label: 'Buka/tutup kas', description: 'Membuka dan menutup kas shift sendiri.', locked: false, default_cashier: true, default_admin: true },
   { key: 'outlet_settings', label: 'Pengaturan pesanan outlet', description: 'Jam buka, status buka/tutup, pengaturan pesanan online.', locked: false, default_cashier: false, default_admin: true },
+  { key: 'staff_management', label: 'Kelola kasir outlet', description: 'Buat dan kelola akun kasir di outlet yang ditugaskan.', locked: true, default_cashier: false, default_admin: true },
+  { key: 'stock_transfer', label: 'Transfer stok antar outlet', description: 'Transfer stok hanya ke outlet yang juga ditugaskan.', locked: true, default_cashier: false, default_admin: true },
+  { key: 'inventory_management', label: 'Kelola pembelian & stok', description: 'Catat pembelian, stok opname, dan supplier outlet.', locked: true, default_cashier: false, default_admin: true },
 ];
 
 function permissionPreset(role: PosStaffRole, catalog: PosPermissionDef[] = FALLBACK_PERMISSIONS): Record<PosStaffPermissionKey, boolean> {
@@ -98,8 +105,12 @@ const initialStaffForm = {
   email: '',
   phone: '',
   role: 'cashier' as PosStaffRole,
+  outlet_ids: [] as number[],
   employment_status: 'active' as PosStaffEmploymentStatus,
   permissions: permissionPreset('cashier'),
+  create_login: false,
+  username: '',
+  password: '',
   hourly_rate: 0,
   joined_at: '',
   notes: '',
@@ -184,7 +195,7 @@ function toDateTimeInput(value?: string | null) {
 }
 
 function roleLabel(role: PosStaffRole) {
-  if (role === 'admin') return 'Admin';
+  if (role === 'admin') return 'Admin Outlet';
   return 'Kasir';
 }
 
@@ -206,11 +217,18 @@ const inputClass =
   'w-full rounded-2xl border border-[#eadfbe] bg-[#fffdf7] px-4 py-3 text-sm text-[#1d1914] outline-none transition focus:border-amber-300 focus:ring-2 focus:ring-amber-100';
 
 export default function PosStaff() {
+  const { isOutletAdmin } = usePermissions();
   const [dashboard, setDashboard] = useState<PosStaffDashboard | null>(null);
   const permissionCatalog: PosPermissionDef[] = dashboard?.meta?.permissions?.length ? dashboard.meta.permissions : FALLBACK_PERMISSIONS;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterRole, setFilterRole] = useState<'all' | PosStaffRole>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | PosStaffEmploymentStatus>('all');
+  const [filterOutlet, setFilterOutlet] = useState('all');
+  const [activeView, setActiveView] = useState<StaffView>('team');
+  const [expandedStaffId, setExpandedStaffId] = useState<number | null>(null);
+  const [issuedCredentials, setIssuedCredentials] = useState<{ identifier: string; password: string } | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [showStaffModal, setShowStaffModal] = useState(false);
   const [showShiftModal, setShowShiftModal] = useState(false);
@@ -276,13 +294,20 @@ export default function PosStaff() {
 
   const visibleStaff = (dashboard?.staff || []).filter((member) => {
     const q = searchTerm.toLowerCase().trim();
-    if (!q) return true;
-    return (
+    const matchesSearch = !q || (
       member.name.toLowerCase().includes(q) ||
       (member.email || '').toLowerCase().includes(q) ||
       (member.phone || '').toLowerCase().includes(q) ||
-      roleLabel(member.role).toLowerCase().includes(q)
+      (member.login_identifier || '').toLowerCase().includes(q) ||
+      roleLabel(member.role).toLowerCase().includes(q) ||
+      (member.created_by?.name || '').toLowerCase().includes(q)
     );
+    const matchesOutlet = filterOutlet === 'all' || (member.outlet_ids || []).includes(Number(filterOutlet));
+
+    return matchesSearch
+      && (filterRole === 'all' || member.role === filterRole)
+      && (filterStatus === 'all' || member.employment_status === filterStatus)
+      && matchesOutlet;
   });
 
   async function loadDashboard() {
@@ -292,7 +317,7 @@ export default function PosStaff() {
       const payload = await getPosStaffDashboard();
       setDashboard(payload);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Gagal memuat data staff');
+      setError(err instanceof Error ? err.message : 'Gagal memuat data staf');
     } finally {
       setLoading(false);
     }
@@ -475,17 +500,23 @@ export default function PosStaff() {
 
   function openCreateStaffModal() {
     setEditingStaff(null);
-    setStaffForm(initialStaffForm);
+    setStaffForm({
+      ...initialStaffForm,
+      role: 'cashier',
+      outlet_ids: selectedOutletValue ? [Number(selectedOutletValue)] : [],
+    });
     setShowStaffModal(true);
   }
 
   function openEditStaffModal(member: PosStaffItem) {
     setEditingStaff(member);
     setStaffForm({
+      ...initialStaffForm,
       name: member.name,
       email: member.email || '',
       phone: member.phone || '',
       role: member.role,
+      outlet_ids: member.outlet_ids?.length ? [...member.outlet_ids] : [Number(selectedOutletValue)],
       employment_status: member.employment_status,
       permissions: { ...permissionPreset(member.role, permissionCatalog), ...member.permissions },
       hourly_rate: member.hourly_rate || 0,
@@ -534,6 +565,7 @@ export default function PosStaff() {
         email: staffForm.email.trim() || undefined,
         phone: staffForm.phone.trim() || undefined,
         role: staffForm.role,
+        outlet_ids: staffForm.outlet_ids,
         employment_status: staffForm.employment_status,
         permissions: staffForm.permissions,
         hourly_rate: Number(staffForm.hourly_rate) || 0,
@@ -544,7 +576,15 @@ export default function PosStaff() {
       if (editingStaff) {
         await updatePosStaff(editingStaff.id, payload);
       } else {
-        await createPosStaff(payload);
+        const created = await createPosStaff({
+          ...payload,
+          create_login: staffForm.create_login,
+          username: staffForm.create_login ? staffForm.username.trim() || undefined : undefined,
+          password: staffForm.create_login ? staffForm.password || undefined : undefined,
+        });
+        if (created.credentials) {
+          setIssuedCredentials(created.credentials);
+        }
       }
 
       setShowStaffModal(false);
@@ -590,12 +630,23 @@ export default function PosStaff() {
   }
 
   async function handleDeleteStaff(member: PosStaffItem) {
-    if (!confirm(`Hapus ${member.name} dari daftar staff?`)) return;
+    if (!confirm(`Nonaktifkan akun ${member.name}? Akun tidak akan bisa masuk lagi dan data staf tetap tersimpan.`)) return;
     await withBusy(`delete-${member.id}`, async () => {
       await deletePosStaff(member.id);
       await loadDashboard();
     }).catch((err) => {
       alert(err instanceof Error ? err.message : 'Gagal menghapus staff');
+    });
+  }
+
+  async function handleResetPassword(member: PosStaffItem) {
+    if (!confirm(`Buat kata sandi sementara baru untuk ${member.name}? Sesi login lama akan dicabut.`)) return;
+    await withBusy(`reset-password-${member.id}`, async () => {
+      const response = await resetPosStaffPassword(member.id);
+      setIssuedCredentials(response.credentials);
+      await loadDashboard();
+    }).catch((err) => {
+      alert(err instanceof Error ? err.message : 'Gagal mereset kata sandi');
     });
   }
 
@@ -730,92 +781,67 @@ export default function PosStaff() {
   return (
     <div className="min-h-screen bg-[#f7f4ea]">
       <div className="mx-auto max-w-7xl space-y-6">
-        <section className="overflow-hidden rounded-[28px] border border-[#eadfbe] bg-[radial-gradient(circle_at_top_left,_rgba(251,191,36,0.22),_transparent_38%),linear-gradient(135deg,#fff8df_0%,#fffef9_54%,#f4efe3_100%)] p-6 shadow-[0_18px_50px_rgba(17,17,17,0.08)]">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl space-y-3">
-              <span className="inline-flex items-center gap-2 rounded-full border border-[#e9d9a0] bg-white/75 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#8b6f18]">
-                <ShieldCheck className="h-3.5 w-3.5" />
-                Staff Management POS
-              </span>
-              <div>
-                <h1 className="text-3xl font-bold tracking-tight text-[#181512] sm:text-4xl">Kelola staff, shift, absensi, dan kas tanpa ribet.</h1>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6a6255] sm:text-base">
-                  Satu panel ringan untuk owner dan admin: atur role, pantau shift hari ini, cek performa kasir, dan rekap absensi bulanan yang siap dibuka di Excel.
-                </p>
-              </div>
-
-              {outlets.length > 1 && (
-                <div className="flex flex-col gap-1 rounded-2xl border border-[#e6d8b2] bg-white/70 p-3 sm:max-w-md">
-                  <label className="text-xs font-semibold uppercase tracking-wide text-[#8b6f18]">Outlet yang dikelola</label>
-                  <select
-                    value={selectedOutletValue}
-                    onChange={(event) => handleOutletChange(event.target.value)}
-                    className="rounded-xl border border-[#eadfbe] bg-white px-3 py-2 text-sm font-semibold text-[#1d1914] outline-none focus:border-amber-300 focus:ring-2 focus:ring-amber-100"
-                  >
-                    {outlets.map((outlet) => (
-                      <option key={outlet.id} value={String(outlet.id)}>
-                        {outlet.name}{outlet.is_primary ? ' (Utama)' : ''}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-[#8d806c]">Staff & undangan login yang dibuat di sini terikat ke outlet ini. Pindah outlet untuk kelola timnya masing-masing.</p>
-                </div>
-              )}
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-              <button
-                onClick={() => openScanner('check_in')}
-                className="inline-flex items-center gap-2 rounded-2xl border border-[#d5c089] bg-[#fff7dd] px-4 py-3 text-sm font-semibold text-[#5a4310] transition hover:-translate-y-0.5 hover:shadow-md"
-              >
-                <Camera className="h-4 w-4" />
-                Scan QR Check-in
-              </button>
-              <button
-                onClick={() => openScanner('check_out')}
-                className="inline-flex items-center gap-2 rounded-2xl border border-[#e6d8b2] bg-white px-4 py-3 text-sm font-semibold text-[#2e2820] transition hover:-translate-y-0.5 hover:shadow-md"
-              >
-                <QrCode className="h-4 w-4" />
-                Scan QR Check-out
-              </button>
-              <button
-                onClick={() => handleExport('attendance')}
-                disabled={busyKey === 'export-attendance'}
-                className="inline-flex items-center gap-2 rounded-2xl border border-[#e6d8b2] bg-white px-4 py-3 text-sm font-semibold text-[#2e2820] transition hover:-translate-y-0.5 hover:shadow-md disabled:opacity-60"
-              >
-                <Download className="h-4 w-4" />
-                Export Absensi
-              </button>
-              <button
-                onClick={() => handleExport('performance')}
-                disabled={busyKey === 'export-performance'}
-                className="inline-flex items-center gap-2 rounded-2xl border border-[#e6d8b2] bg-white px-4 py-3 text-sm font-semibold text-[#2e2820] transition hover:-translate-y-0.5 hover:shadow-md disabled:opacity-60"
-              >
-                <ReceiptText className="h-4 w-4" />
-                Export Performa
-              </button>
-              <button
-                onClick={() => openCreateShiftModal()}
-                className="inline-flex items-center gap-2 rounded-2xl border border-[#111111]/5 bg-[#111111] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#2b241c]"
-              >
-                <CalendarClock className="h-4 w-4" />
-                Atur Shift
-              </button>
+        <section className="rounded-2xl border border-[#eadfbe] bg-white p-4 shadow-sm sm:flex sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-[#181512] sm:text-2xl">Kelola staf</h1>
+            <p className="mt-1 text-sm text-[#6a6255]">Atur akun, jadwal, dan kehadiran tim outlet.</p>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2 sm:mt-0">
+            {outlets.length > 1 && (
+              <label className="flex items-center gap-2 text-sm text-[#6a6255]">
+                <span className="sr-only">Pilih outlet</span>
+                <select
+                  aria-label="Pilih outlet"
+                  value={selectedOutletValue}
+                  onChange={(event) => handleOutletChange(event.target.value)}
+                  className="rounded-xl border border-[#eadfbe] bg-[#fffdf7] px-3 py-2 text-sm font-medium text-[#1d1914] outline-none focus:border-amber-300 focus:ring-2 focus:ring-amber-100"
+                >
+                  {outlets.map((outlet) => (
+                    <option key={outlet.id} value={String(outlet.id)}>
+                      {outlet.name}{outlet.is_primary ? ' (Utama)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {activeView === 'team' && (
               <button
                 onClick={openCreateStaffModal}
-                className="inline-flex items-center gap-2 rounded-2xl bg-amber-400 px-4 py-3 text-sm font-semibold text-[#111111] transition hover:bg-amber-300"
+                className="inline-flex items-center gap-2 rounded-xl bg-amber-400 px-4 py-2.5 text-sm font-semibold text-[#111111] transition hover:bg-amber-300"
               >
                 <Plus className="h-4 w-4" />
-                Tambah Staff
+                Tambah staf
               </button>
-            </div>
+            )}
           </div>
         </section>
+
+        <nav className="flex gap-1 overflow-x-auto rounded-2xl border border-[#eadfbe] bg-white p-1.5 shadow-sm" aria-label="Menu kelola staf">
+          {([
+            { id: 'team', label: 'Tim', icon: UserRound },
+            { id: 'shifts', label: 'Shift & absensi', icon: CalendarClock },
+            { id: 'overview', label: 'Ringkasan', icon: ReceiptText },
+          ] as const).map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setActiveView(id)}
+              aria-pressed={activeView === id}
+              className={cn(
+                'inline-flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition',
+                activeView === id ? 'bg-[#1d1914] text-white shadow-sm' : 'text-[#6a6255] hover:bg-[#f7f4ea]'
+              )}
+            >
+              <Icon className="h-4 w-4" />
+              {label}
+            </button>
+          ))}
+        </nav>
 
         {loading ? (
           <div className="rounded-[24px] border border-[#eadfbe] bg-white p-12 text-center shadow-sm">
             <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-[#eadfbe] border-t-amber-400" />
-            <p className="text-sm text-[#6a6255]">Memuat panel staff management...</p>
+            <p className="text-sm text-[#6a6255]">Memuat data staf...</p>
           </div>
         ) : error ? (
           <div className="rounded-[24px] border border-red-200 bg-red-50 p-6 text-red-700">
@@ -830,11 +856,13 @@ export default function PosStaff() {
           </div>
         ) : dashboard ? (
           <>
-            <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">
-              <StatCard icon={UserRound} title="Total Staff" value={String(dashboard.summary.total_staff)} tone="amber" />
-              <StatCard icon={BriefcaseBusiness} title="Aktif" value={String(dashboard.summary.active_staff)} tone="emerald" />
-              <StatCard icon={UserCheck} title="Sudah Check-in" value={String(dashboard.summary.checked_in_now)} tone="sky" />
-              <StatCard icon={CalendarClock} title="Shift Hari Ini" value={String(dashboard.summary.scheduled_today)} tone="violet" />
+            {activeView === 'overview' && (
+              <>
+            <section className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+              <StatCard icon={UserRound} title="Total staf" value={String(dashboard.summary.total_staff)} tone="amber" />
+              <StatCard icon={BriefcaseBusiness} title="Staf aktif" value={String(dashboard.summary.active_staff)} tone="emerald" />
+              <StatCard icon={UserCheck} title="Sudah masuk" value={String(dashboard.summary.checked_in_now)} tone="sky" />
+              <StatCard icon={CalendarClock} title="Shift hari ini" value={String(dashboard.summary.scheduled_today)} tone="violet" />
               <StatCard icon={Wallet} title="Kas Terbuka" value={String(dashboard.summary.open_cash_sessions)} tone="rose" />
               <StatCard icon={CheckCircle2} title="Kedisiplinan" value={`${dashboard.summary.attendance_rate}%`} tone="slate" />
             </section>
@@ -871,7 +899,7 @@ export default function PosStaff() {
               <PanelCard>
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-sm font-semibold text-[#2d261e]">Top staff</p>
+                    <p className="text-sm font-semibold text-[#2d261e]">Performa staf</p>
                     <p className="mt-1 text-sm text-[#7a7063]">Ranking sederhana dari transaksi dan penjualan.</p>
                   </div>
                   <ShieldCheck className="h-5 w-5 text-[#aa8e3b]" />
@@ -897,49 +925,73 @@ export default function PosStaff() {
                 </div>
               </PanelCard>
             </section>
+              </>
+            )}
 
-            <section className="grid grid-cols-1 gap-6 xl:grid-cols-[1.4fr_1fr]">
-              <PanelCard>
+            {activeView !== 'overview' && (
+            <section className="grid grid-cols-1 gap-6">
+              {activeView === 'team' && <PanelCard>
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-[#2d261e]">Manajemen staff</p>
-                    <p className="mt-1 text-sm text-[#7a7063]">Cari staff, atur role, lihat performa, dan jalankan aksi harian.</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-[#2d261e]">Daftar tim</p>
+                    <p className="mt-1 text-xs text-[#7a7063]">{visibleStaff.length} staf ditampilkan</p>
                   </div>
-                  <div className="relative w-full sm:max-w-sm">
+                  <div className="w-full space-y-2 sm:max-w-2xl">
+                    <div className="relative">
                     <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#998d77]" />
                     <input
                       value={searchTerm}
                       onChange={(event) => setSearchTerm(event.target.value)}
-                      placeholder="Cari nama, email, role..."
+                      placeholder="Cari nama, akun, atau nomor HP"
                       className="w-full rounded-2xl border border-[#eadfbe] bg-[#fffdf7] py-3 pl-10 pr-4 text-sm text-[#1d1914] outline-none transition focus:border-amber-300 focus:ring-2 focus:ring-amber-100"
                     />
+                    </div>
+                      <div className={cn('grid grid-cols-1 gap-2 sm:grid-cols-3', isOutletAdmin && 'sm:grid-cols-1')}>
+                        <select aria-label="Filter status staf" value={filterStatus} onChange={(event) => setFilterStatus(event.target.value as typeof filterStatus)} className={inputClass}>
+                          <option value="all">Semua status</option>
+                          <option value="active">Aktif</option>
+                          <option value="inactive">Nonaktif</option>
+                          <option value="on_leave">Izin</option>
+                        </select>
+                        {!isOutletAdmin && <>
+                        <select aria-label="Filter peran staf" value={filterRole} onChange={(event) => setFilterRole(event.target.value as typeof filterRole)} className={inputClass}>
+                          <option value="all">Semua peran</option>
+                          <option value="admin">Admin Outlet</option>
+                          <option value="cashier">Kasir</option>
+                        </select>
+                        <select aria-label="Filter outlet staf" value={filterOutlet} onChange={(event) => setFilterOutlet(event.target.value)} className={inputClass}>
+                          <option value="all">Semua outlet</option>
+                          {outlets.map((outlet) => <option key={outlet.id} value={outlet.id}>{outlet.name}</option>)}
+                        </select>
+                        </>}
+                      </div>
                   </div>
                 </div>
 
-                <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <div className="mt-4 space-y-2">
                   {visibleStaff.map((member) => (
                     <article
                       key={member.id}
                       className={cn(
-                        'rounded-[24px] border p-5 shadow-sm transition',
+                        'rounded-2xl border px-4 py-3 shadow-sm transition',
                         member.id === dashboard.current_user_staff_id
-                          ? 'border-[#d7c17a] bg-[linear-gradient(180deg,#fff8e0_0%,#fffef9_100%)]'
+                          ? 'border-[#d7c17a] bg-[#fffaf0]'
                           : 'border-[#eadfbe] bg-white'
                       )}
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-start gap-3">
-                          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#fff2c3] text-lg font-bold text-[#7a5d15]">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#fff2c3] text-base font-bold text-[#7a5d15]">
                             {member.name.charAt(0).toUpperCase()}
                           </div>
-                          <div>
+                          <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
-                              <h3 className="font-semibold text-[#1d1914]">{member.name}</h3>
-                              <span className="rounded-full bg-[#111111] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-white">
+                              <h3 className="truncate font-semibold text-[#1d1914]">{member.name}</h3>
+                              <span className="rounded-full bg-[#f1ead9] px-2 py-0.5 text-[11px] font-semibold text-[#5b4b2b]">
                                 {roleLabel(member.role)}
                               </span>
                               <span className={cn(
-                                'rounded-full px-2.5 py-1 text-[11px] font-semibold',
+                                'rounded-full px-2 py-0.5 text-[11px] font-semibold',
                                 member.employment_status === 'active'
                                   ? 'bg-emerald-100 text-emerald-700'
                                   : member.employment_status === 'inactive'
@@ -949,31 +1001,56 @@ export default function PosStaff() {
                                 {statusLabel(member.employment_status)}
                               </span>
                             </div>
-                            <p className="mt-1 text-sm text-[#6a6255]">{member.email || 'Tanpa email'}{member.phone ? ` • ${member.phone}` : ''}</p>
-                            <p className="mt-1 text-xs text-[#8d806c]">
-                              Gabung {formatDate(member.joined_at)}{member.linked_user_name ? ` • Terkait akun ${member.linked_user_name}` : ' • Staff manual'}
+                            <p className="mt-0.5 truncate text-xs text-[#7a7063]">
+                              {member.login_identifier || member.phone || member.email || 'Belum ada akun login'}
+                              {member.outlet_ids?.length
+                                ? ` · ${member.outlet_ids.map((id) => outlets.find((outlet) => outlet.id === id)?.name).filter(Boolean).join(', ')}`
+                                : ''}
                             </p>
                           </div>
                         </div>
 
-                        <div className="flex gap-2">
+                        <div className="flex shrink-0 items-center gap-1">
+                          {(!isOutletAdmin || member.role === 'cashier') && (
+                            <button
+                              onClick={() => openEditStaffModal(member)}
+                              className="rounded-lg border border-[#eadfbe] bg-white px-3 py-2 text-xs font-semibold text-[#4f463a] transition hover:bg-[#fffdf7]"
+                            >
+                              <Edit2 className="mr-1 inline h-3.5 w-3.5" />
+                              Edit
+                            </button>
+                          )}
                           <button
-                            onClick={() => openEditStaffModal(member)}
-                            className="rounded-xl border border-[#eadfbe] bg-[#fffdf7] p-2 text-[#4f463a] transition hover:bg-white"
-                            title="Edit staff"
+                            type="button"
+                            onClick={() => setExpandedStaffId((current) => current === member.id ? null : member.id)}
+                            aria-expanded={expandedStaffId === member.id}
+                            aria-label={`${expandedStaffId === member.id ? 'Tutup' : 'Lihat'} detail ${member.name}`}
+                            className="rounded-lg p-2 text-[#6a6255] transition hover:bg-[#f4efe3]"
                           >
-                            <Edit2 className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => void handleDeleteStaff(member)}
-                            className="rounded-xl border border-red-200 bg-red-50 p-2 text-red-600 transition hover:bg-red-100"
-                            title="Hapus staff"
-                          >
-                            <Trash2 className="h-4 w-4" />
+                            <ChevronDown className={cn('h-4 w-4 transition-transform', expandedStaffId === member.id && 'rotate-180')} />
                           </button>
                         </div>
                       </div>
 
+                      {expandedStaffId === member.id && <>
+                      <div className="mt-3 border-t border-[#efe5c8] pt-3">
+                        <p className="text-xs text-[#6a6255]">
+                          {member.email || member.phone || 'Kontak belum diisi'}
+                          {member.email && member.phone ? ` · ${member.phone}` : ''}
+                          {!isOutletAdmin && ` · Dibuat ${formatDateTime(member.created_at)}${member.created_by?.name ? ` oleh ${member.created_by.name}` : ''}`}
+                        </p>
+                        {!isOutletAdmin && member.last_login_at && (
+                          <p className="mt-1 text-xs text-[#8d806c]">Login terakhir {formatDateTime(member.last_login_at)}</p>
+                        )}
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {(!isOutletAdmin || member.role === 'cashier') && member.linked_user_id && (
+                            <ActionButton label="Reset kata sandi" icon={RefreshCcw} onClick={() => void handleResetPassword(member)} />
+                          )}
+                          {(!isOutletAdmin || member.role === 'cashier') && member.employment_status !== 'inactive' && (
+                            <ActionButton label="Nonaktifkan staf" icon={Trash2} onClick={() => void handleDeleteStaff(member)} />
+                          )}
+                        </div>
+                      </div>
                       <div className="mt-4 grid grid-cols-2 gap-3">
                         <MiniMetric label="Transaksi" value={formatCompactNumber(member.performance.total_transactions)} />
                         <MiniMetric label="Penjualan" value={formatCurrency(member.performance.total_sales)} />
@@ -1051,17 +1128,20 @@ export default function PosStaff() {
                       </div>
 
                       <div className="mt-4 flex flex-wrap gap-2">
+                        {(!isOutletAdmin || member.role === 'cashier') && (
+                          <ActionButton
+                            label={member.linked_user_id ? 'Akun tertaut' : 'Undang login'}
+                            icon={Mail}
+                            disabled={Boolean(member.linked_user_id)}
+                            loading={busyKey === `invite-${member.id}`}
+                            onClick={() => void handleInviteLogin(member)}
+                          />
+                        )}
+                        {!isOutletAdmin && <>
                         <ActionButton
                           label="QR Staff"
                           icon={QrCode}
                           onClick={() => void openQrModal(member)}
-                        />
-                        <ActionButton
-                          label={member.linked_user_id ? 'Akun tertaut' : 'Undang login'}
-                          icon={Mail}
-                          disabled={Boolean(member.linked_user_id)}
-                          loading={busyKey === `invite-${member.id}`}
-                          onClick={() => void handleInviteLogin(member)}
                         />
                         <ActionButton
                           label="Check-in"
@@ -1103,6 +1183,7 @@ export default function PosStaff() {
                           icon={CalendarClock}
                           onClick={() => openCreateShiftModal(member.id)}
                         />
+                        </>}
                       </div>
 
                       <div className="mt-4 flex flex-wrap gap-2">
@@ -1122,23 +1203,44 @@ export default function PosStaff() {
                           );
                         })}
                       </div>
+                      </>}
                     </article>
                   ))}
                 </div>
 
                 {visibleStaff.length === 0 && (
                   <div className="mt-5 rounded-2xl border border-dashed border-[#eadfbe] bg-[#fffdf7] px-4 py-10 text-center text-sm text-[#7a7063]">
-                    Tidak ada staff yang cocok dengan pencarian.
+                    Tidak ada staf yang cocok. Coba ubah pencarian atau filter.
                   </div>
                 )}
-              </PanelCard>
+              </PanelCard>}
 
-              <div className="space-y-6">
+              {activeView === 'shifts' && <>
+                <div className="flex flex-wrap gap-2">
+                  {!isOutletAdmin && <>
+                    <button onClick={() => openScanner('check_in')} className="inline-flex items-center gap-2 rounded-xl border border-[#eadfbe] bg-white px-3 py-2 text-sm font-semibold text-[#4f463a]">
+                      <Camera className="h-4 w-4" /> Scan masuk
+                    </button>
+                    <button onClick={() => openScanner('check_out')} className="inline-flex items-center gap-2 rounded-xl border border-[#eadfbe] bg-white px-3 py-2 text-sm font-semibold text-[#4f463a]">
+                      <QrCode className="h-4 w-4" /> Scan pulang
+                    </button>
+                    <button onClick={() => handleExport('attendance')} disabled={busyKey === 'export-attendance'} className="inline-flex items-center gap-2 rounded-xl border border-[#eadfbe] bg-white px-3 py-2 text-sm font-semibold text-[#4f463a] disabled:opacity-60">
+                      <Download className="h-4 w-4" /> Export absensi
+                    </button>
+                    <button onClick={() => handleExport('performance')} disabled={busyKey === 'export-performance'} className="inline-flex items-center gap-2 rounded-xl border border-[#eadfbe] bg-white px-3 py-2 text-sm font-semibold text-[#4f463a] disabled:opacity-60">
+                      <ReceiptText className="h-4 w-4" /> Export performa
+                    </button>
+                    <button onClick={() => openCreateShiftModal()} className="inline-flex items-center gap-2 rounded-xl bg-[#1d1914] px-3 py-2 text-sm font-semibold text-white">
+                      <CalendarClock className="h-4 w-4" /> Atur shift
+                    </button>
+                  </>}
+                </div>
+                <div className="grid gap-6 lg:grid-cols-2">
                 <PanelCard>
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-semibold text-[#2d261e]">My shift</p>
-                      <p className="mt-1 text-sm text-[#7a7063]">Panel cepat untuk staff yang sedang login.</p>
+                      <p className="text-sm font-semibold text-[#2d261e]">Shift saya</p>
+                      <p className="mt-1 text-sm text-[#7a7063]">Kehadiran dan kas akun yang sedang masuk.</p>
                     </div>
                     <UserCheck className="h-5 w-5 text-[#8b6f18]" />
                   </div>
@@ -1179,7 +1281,7 @@ export default function PosStaff() {
                     </div>
                   ) : (
                     <div className="mt-4 rounded-2xl border border-dashed border-[#eadfbe] bg-[#fffdf7] px-4 py-5 text-sm text-[#7a7063]">
-                      User login saat ini belum dikaitkan ke data staff POS. Owner tetap bisa kelola tim dari panel kiri.
+                      Akun ini belum dikaitkan ke data staf POS. Tim tetap dapat dikelola dari tab Tim.
                     </div>
                   )}
                 </PanelCard>
@@ -1202,7 +1304,7 @@ export default function PosStaff() {
                       >
                         <div className="flex items-center justify-between gap-3">
                           <div>
-                            <p className="font-semibold text-[#1d1914]">{shift.staff_name || 'Staff'} • {shift.title}</p>
+                            <p className="font-semibold text-[#1d1914]">{shift.staff_name || 'Staf'} • {shift.title}</p>
                             <p className="text-xs text-[#7a7063]">{formatDateTime(shift.start_at)} - {new Date(shift.end_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</p>
                           </div>
                           <span className="rounded-full bg-[#f4edd9] px-2.5 py-1 text-[11px] font-semibold text-[#7b6640]">
@@ -1233,7 +1335,7 @@ export default function PosStaff() {
                       <div className="space-y-2">
                         {dashboard.today.recent_attendances.slice(0, 4).map((attendance) => (
                           <div key={attendance.id} className="rounded-2xl border border-[#efe5c8] bg-[#fffdf7] px-4 py-3 text-sm">
-                            <p className="font-semibold text-[#1d1914]">{attendance.staff_name || 'Staff'} • {attendance.status}</p>
+                            <p className="font-semibold text-[#1d1914]">{attendance.staff_name || 'Staf'} • {attendance.status}</p>
                             <p className="text-xs text-[#7a7063]">{formatDate(attendance.attendance_date)} • {attendance.check_in_at ? formatDateTime(attendance.check_in_at) : 'Belum check-in'}</p>
                           </div>
                         ))}
@@ -1250,7 +1352,7 @@ export default function PosStaff() {
                       <div className="space-y-2">
                         {dashboard.today.recent_cash_logs.slice(0, 4).map((cashLog) => (
                           <div key={cashLog.id} className="rounded-2xl border border-[#efe5c8] bg-[#fffdf7] px-4 py-3 text-sm">
-                            <p className="font-semibold text-[#1d1914]">{cashLog.staff_name || 'Staff'} • {cashLog.status === 'open' ? 'Kas terbuka' : 'Kas ditutup'}</p>
+                            <p className="font-semibold text-[#1d1914]">{cashLog.staff_name || 'Staf'} • {cashLog.status === 'open' ? 'Kas terbuka' : 'Kas ditutup'}</p>
                             <p className="text-xs text-[#7a7063]">
                               {formatCurrency(cashLog.opening_cash)} awal
                               {cashLog.status === 'closed' ? ` • selisih ${formatCurrency(cashLog.difference_cash || 0)}` : ''}
@@ -1266,36 +1368,121 @@ export default function PosStaff() {
                     </div>
                   </div>
                 </PanelCard>
-              </div>
+                </div>
+              </>}
             </section>
+            )}
           </>
         ) : null}
       </div>
 
       {showStaffModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(17,17,17,0.22)] p-4 backdrop-blur-md">
-          <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-[28px] border border-[#eadfbe] bg-white p-6 shadow-[0_28px_80px_rgba(17,17,17,0.24)]">
+          <div className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-[#eadfbe] bg-white p-5 shadow-[0_28px_80px_rgba(17,17,17,0.24)] sm:p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-xl font-bold text-[#1d1914]">{editingStaff ? 'Edit staff' : 'Tambah staff baru'}</h2>
-                <p className="mt-1 text-sm text-[#7a7063]">Role, permission, dan status kerja bisa diatur per staff.</p>
+                <h2 className="text-xl font-bold text-[#1d1914]">{editingStaff ? 'Edit staf' : 'Tambah staf'}</h2>
+                <p className="mt-1 text-sm text-[#7a7063]">Isi informasi utama. Detail tambahan bisa diatur nanti.</p>
               </div>
               <button onClick={() => setShowStaffModal(false)} className="rounded-xl bg-[#f3efe5] px-3 py-2 text-sm text-[#4b4338]">
                 Tutup
               </button>
             </div>
 
-            <form onSubmit={handleSaveStaff} className="mt-6 space-y-5">
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <Field label="Nama lengkap *">
-                  <input
-                    required
-                    value={staffForm.name}
-                    onChange={(event) => setStaffForm((prev) => ({ ...prev, name: event.target.value }))}
-                    className={inputClass}
-                    placeholder="Misal: Ahmad Prasetyo"
-                  />
-                </Field>
+            <form onSubmit={handleSaveStaff} className="mt-5 space-y-4">
+              <Field label="Nama lengkap *">
+                <input
+                  required
+                  value={staffForm.name}
+                  onChange={(event) => setStaffForm((prev) => ({ ...prev, name: event.target.value }))}
+                  className={inputClass}
+                  placeholder="Contoh: Ahmad Prasetyo"
+                />
+              </Field>
+
+              <Field label="Peran *">
+                <select
+                  value={staffForm.role}
+                  onChange={(event) => applyRolePreset(event.target.value as PosStaffRole)}
+                  className={inputClass}
+                >
+                  {dashboard?.meta.roles.includes('admin') && <option value="admin">Admin Outlet</option>}
+                  <option value="cashier">Kasir</option>
+                </select>
+              </Field>
+
+              {!editingStaff && (
+                <div className="rounded-xl border border-[#eadfbe] bg-[#fffdf7] p-3">
+                  <label className="flex items-start gap-3 text-sm font-semibold text-[#2d261e]">
+                    <input
+                      type="checkbox"
+                      checked={staffForm.create_login}
+                      onChange={(event) => setStaffForm((prev) => ({ ...prev, create_login: event.target.checked }))}
+                      className="mt-1 h-4 w-4 accent-amber-500"
+                    />
+                    Buat akun login sekarang
+                  </label>
+                  {staffForm.create_login && (
+                    <>
+                      <p className="mt-2 text-xs leading-5 text-[#7a7063]">
+                        Username boleh dikosongkan. Kata sandi sementara akan ditampilkan setelah disimpan.
+                      </p>
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        <Field label="Username (opsional)">
+                          <input
+                            autoComplete="off"
+                            value={staffForm.username}
+                            onChange={(event) => setStaffForm((prev) => ({ ...prev, username: event.target.value }))}
+                            className={inputClass}
+                            placeholder="contoh: budi.kasir"
+                          />
+                        </Field>
+                        <Field label="Kata sandi (opsional)">
+                          <input
+                            type="password"
+                            autoComplete="new-password"
+                            minLength={8}
+                            value={staffForm.password}
+                            onChange={(event) => setStaffForm((prev) => ({ ...prev, password: event.target.value }))}
+                            className={inputClass}
+                            placeholder="Dibuat otomatis"
+                          />
+                        </Field>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              <Field label="Outlet yang ditugaskan *">
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {outlets.map((outlet) => {
+                    const selected = staffForm.outlet_ids.includes(outlet.id);
+                    return (
+                      <label key={outlet.id} className="flex items-center gap-3 rounded-xl border border-[#eadfbe] bg-[#fffdf7] px-3 py-2.5 text-sm text-[#2d261e]">
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          onChange={(event) => setStaffForm((prev) => ({
+                            ...prev,
+                            outlet_ids: event.target.checked
+                              ? [...new Set([...prev.outlet_ids, outlet.id])]
+                              : prev.outlet_ids.filter((id) => id !== outlet.id),
+                          }))}
+                          className="h-4 w-4 accent-amber-500"
+                        />
+                        <span>{outlet.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </Field>
+
+              <details className="rounded-xl border border-[#eadfbe] bg-white">
+                <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-[#4f463a]">
+                  Kontak & informasi tambahan
+                </summary>
+                <div className="grid gap-4 border-t border-[#efe5c8] p-4 sm:grid-cols-2">
                 <Field label="Email">
                   <input
                     type="email"
@@ -1321,19 +1508,15 @@ export default function PosStaff() {
                     className={inputClass}
                   />
                 </Field>
-              </div>
+                </div>
+              </details>
 
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                <Field label="Role *">
-                  <select
-                    value={staffForm.role}
-                    onChange={(event) => applyRolePreset(event.target.value as PosStaffRole)}
-                    className={inputClass}
-                  >
-                    <option value="admin">Admin</option>
-                    <option value="cashier">Kasir</option>
-                  </select>
-                </Field>
+              <details className="rounded-xl border border-[#eadfbe] bg-white">
+                <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-[#4f463a]">
+                  Pengaturan lanjutan
+                </summary>
+                <div className="space-y-4 border-t border-[#efe5c8] p-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Status kerja">
                   <select
                     value={staffForm.employment_status}
@@ -1355,13 +1538,13 @@ export default function PosStaff() {
                     placeholder="0"
                   />
                 </Field>
-              </div>
+                  </div>
 
               <Field label="Hak akses POS">
                 <p className="mb-3 text-xs text-[#7a7063]">
                   {staffForm.role === 'cashier'
                     ? 'Pilih fitur yang boleh dibuka kasir ini. Fitur yang mati tidak tampil di menu dan ditolak server.'
-                    : 'Admin outlet: pilih fitur yang boleh dikelola. Outlet, staf, dan pengaturan pembayaran tetap khusus owner/admin organisasi.'}
+                    : 'Admin Outlet dapat mengelola fitur dan akun Kasir hanya pada outlet yang ditugaskan. Pengaturan organisasi tetap khusus Admin Utama.'}
                 </p>
                 <div className="grid gap-2 md:grid-cols-2">
                   {permissionCatalog.map((perm) => {
@@ -1403,6 +1586,8 @@ export default function PosStaff() {
                   placeholder="Contoh: bisa tutup kas, jaga shift malam, atau catatan izin tetap."
                 />
               </Field>
+                </div>
+              </details>
 
               <div className="flex justify-end gap-3">
                 <button
@@ -1421,6 +1606,34 @@ export default function PosStaff() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {issuedCredentials && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="issued-credentials-title">
+          <div className="w-full max-w-md space-y-4 rounded-3xl border border-[#eadfbe] bg-white p-6 text-[#1d1914] shadow-2xl">
+            <div>
+              <h2 id="issued-credentials-title" className="text-xl font-bold">Kredensial login sementara</h2>
+              <p className="mt-2 text-sm leading-6 text-[#6a6255]">Tampilkan dan berikan langsung kepada staf. Kata sandi ini tidak akan ditampilkan lagi setelah jendela ditutup.</p>
+            </div>
+            <div className="space-y-3 rounded-2xl bg-[#fffdf7] p-4">
+              <div>
+                <p className="text-xs font-semibold uppercase text-[#8d806c]">Email / username / nomor HP</p>
+                <p className="mt-1 select-all break-all font-mono text-sm">{issuedCredentials.identifier}</p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase text-[#8d806c]">Kata sandi sementara</p>
+                <p className="mt-1 select-all break-all font-mono text-lg font-bold">{issuedCredentials.password}</p>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-amber-800">Staf wajib mengganti kata sandi saat pertama kali masuk.</p>
+              <p className="text-xs leading-5 text-[#6a6255]">Kartu identitas dengan QR absensi otomatis tersedia di menu Profil saya setelah staf masuk.</p>
+            </div>
+            <button type="button" onClick={() => setIssuedCredentials(null)} className="min-h-12 w-full rounded-xl bg-[#111111] px-4 font-semibold text-white">
+              Saya sudah menyimpan kredensial
+            </button>
           </div>
         </div>
       )}

@@ -59,6 +59,8 @@ class Order extends Model
         'refunded_at',
         'refund_amount',
         'notes',
+        'client_uuid',
+        'created_at_client',
     ];
 
     public const PAYMENT_UNPAID = 'unpaid';
@@ -85,6 +87,7 @@ class Order extends Model
         'payment_change' => 'integer',
         'payment_meta' => 'array',
         'paid_at' => 'datetime',
+        'created_at_client' => 'datetime',
     ];
 
     public function table(): BelongsTo

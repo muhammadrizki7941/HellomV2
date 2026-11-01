@@ -15,6 +15,7 @@ use App\Services\Pos\Audit\OwnerPinService;
 use App\Services\Pos\Audit\Snapshots;
 use App\Services\Pos\OrderAdjustmentService;
 use App\Services\Pos\OrderService;
+use App\Support\Pos\BusinessProfile;
 use App\Services\Pos\OrderStatus;
 use App\Services\Pos\OutletSettings;
 use App\Services\Pos\PricingException;
@@ -46,6 +47,10 @@ class PosOrderController extends BasePosController
             return $this->error('Konteks POS tidak tersedia', 'CONTEXT_MISSING');
         }
         $validated = $request->validate($this->cartRules());
+        $moduleError = $this->tableModuleError($request, $validated);
+        if ($moduleError) {
+            return $moduleError;
+        }
 
         try {
             $input = $this->orderInput($validated, $outlet);
@@ -55,8 +60,14 @@ class PosOrderController extends BasePosController
             return $this->orderRuleFailed($e);
         }
 
+        $previewLines = array_map(static function (array $line): array {
+            unset($line['cost_price'], $line['warranty_days']);
+
+            return $line;
+        }, $quote['lines']);
+
         return $this->success([
-            'lines' => $quote['lines'],
+            'lines' => $previewLines,
             'totals' => $quote['totals'],
             'redeem_points' => $quote['redeem_points'],
         ], 'Estimasi total');
@@ -69,6 +80,10 @@ class PosOrderController extends BasePosController
             return $this->error('Konteks POS tidak tersedia', 'CONTEXT_MISSING');
         }
         $validated = $request->validate($this->cartRules());
+        $moduleError = $this->tableModuleError($request, $validated);
+        if ($moduleError) {
+            return $moduleError;
+        }
 
         try {
             $input = $this->orderInput($validated, $outlet);
@@ -341,8 +356,11 @@ class PosOrderController extends BasePosController
         return $this->success([
             'receipt' => [
                 'order_number' => $order->order_number,
-                'created_at' => $order->created_at,
+                'created_at' => $order->created_at_client ?? $order->created_at,
+                'synced_at' => $order->created_at_client ? $order->created_at : null,
                 'status' => $order->status,
+                'offline_created' => (bool) (((array) ($order->payment_meta ?? []))['offline_created'] ?? false),
+                'paid_manually' => (bool) (((array) ($order->payment_meta ?? []))['paid_manually'] ?? false),
                 'service_type' => $order->service_type,
                 'table_code' => $order->table?->code,
                 'customer_name' => $order->customer_name,
@@ -353,6 +371,8 @@ class PosOrderController extends BasePosController
                     'quantity' => $i->qty,
                     'price' => (int) $i->unit_price,
                     'subtotal' => (int) $i->line_total,
+                    'serial_number' => $i->serial_number,
+                    'warranty_expires_at' => $i->warranty_expires_at?->toDateString(),
                 ]),
                 'total_amount' => (int) $order->total_amount,
                 'discount_amount' => (int) $order->discount_amount,
@@ -383,6 +403,21 @@ class PosOrderController extends BasePosController
         ], 'Receipt retrieved');
     }
 
+    /** @param array<string, mixed> $validated */
+    private function tableModuleError(Request $request, array $validated): ?JsonResponse
+    {
+        if (empty($validated['table_id'])) {
+            return null;
+        }
+
+        $organization = $this->getOrg($request);
+        if ($organization && BusinessProfile::hasModule($organization, 'tables_selforder')) {
+            return null;
+        }
+
+        return $this->error('Modul meja & self-order tidak aktif untuk usaha ini.', 'POS_MODULE_DISABLED', null, 403);
+    }
+
     /** @return array<string, mixed> */
     private function cartRules(): array
     {
@@ -396,13 +431,19 @@ class PosOrderController extends BasePosController
             'redeem_points' => 'nullable|integer|min:0',
             'confirm_member_name' => 'nullable|string|max:100',
             'notes' => 'nullable|string|max:500',
+            'client_uuid' => 'nullable|uuid',
+            'created_at_client' => 'nullable|date',
             'items' => 'required|array|min:1|max:100',
             'items.*.product_id' => 'required|integer',
+            'items.*.product_variant_id' => 'nullable|integer',
+            'items.*.customer_type' => 'nullable|string|max:80',
             'items.*.quantity' => 'required|integer|min:1|max:999',
             'items.*.notes' => 'nullable|string|max:255',
             'items.*.options' => 'nullable|array',
             'items.*.options.*.option_id' => 'nullable|integer',
             'items.*.options.*.value_id' => 'nullable|integer',
+            'items.*.serial_numbers' => 'nullable|array|max:999',
+            'items.*.serial_numbers.*' => 'required|string|max:100',
             // Client-side totals (discount_amount, final_amount) are ignored: the server prices the cart.
         ];
     }
@@ -420,6 +461,8 @@ class PosOrderController extends BasePosController
 
         return [
             'items' => $validated['items'],
+            'client_uuid' => $validated['client_uuid'] ?? null,
+            'created_at_client' => $validated['created_at_client'] ?? null,
             'member' => $member,
             'reward_rule_id' => $validated['reward_rule_id'] ?? null,
             'redeem_points' => (int) ($validated['redeem_points'] ?? 0),
@@ -781,8 +824,13 @@ class PosOrderController extends BasePosController
             'member_id' => $order->member_id,
             'notes' => $order->notes,
             'cancel_reason' => $order->cancel_reason,
-            'created_at' => $order->created_at,
+            'created_at' => $order->created_at_client ?? $order->created_at,
+            'created_at_client' => $order->created_at_client,
+            'synced_at' => $order->created_at_client ? $order->created_at : null,
             'updated_at' => $order->updated_at,
+            'offline_created' => (bool) (((array) ($order->payment_meta ?? []))['offline_created'] ?? false),
+            'paid_manually' => (bool) (((array) ($order->payment_meta ?? []))['paid_manually'] ?? false),
+            'negative_stock_review' => ((array) ($order->payment_meta ?? []))['negative_stock_review'] ?? [],
         ];
 
         if ($withItems) {

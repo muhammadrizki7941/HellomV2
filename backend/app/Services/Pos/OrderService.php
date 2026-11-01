@@ -16,6 +16,7 @@ use App\Models\PosMember;
 use App\Models\PosRedemption;
 use App\Models\PosRewardRule;
 use App\Models\Product;
+use App\Models\ProductSerial;
 use App\Models\TableBill;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -45,6 +46,7 @@ final class OrderService
         private readonly PricingService $pricing,
         private readonly LoyaltyService $loyalty,
         private readonly TableBillService $bills,
+        private readonly StockMovementService $stockMovements,
     ) {
     }
 
@@ -60,7 +62,7 @@ final class OrderService
      *
      * @return array{lines:list<array>, totals:array, reward_rule:?PosRewardRule, redeem_points:int, member:?PosMember}
      */
-    public function quote(Outlet $outlet, array $input, bool $lock = false): array
+    public function quote(Outlet $outlet, array $input, bool $lock = false, bool $allowNegativeStock = false): array
     {
         $items = array_values((array) ($input['items'] ?? []));
         if ($items === []) {
@@ -68,7 +70,8 @@ final class OrderService
         }
 
         $products = $this->loadProducts($outlet, $items, $lock);
-        $this->assertAvailable($items, $products);
+        $this->assertAvailable($outlet, $items, $products, $allowNegativeStock);
+        $this->assertSerialsAvailable($outlet, $items, $products, $lock);
 
         $priced = $this->pricing->priceLines($items, $products);
         $this->assertExpectedPrices($items, $priced['lines']);
@@ -126,12 +129,28 @@ final class OrderService
         }
 
         return DB::transaction(function () use ($outlet, $input, $table) {
+            if (!empty($input['client_uuid'])) {
+                $existingOrder = Order::withoutGlobalScope('tenant')
+                    ->where('tenant_id', $outlet->tenant_slug)
+                    ->where('client_uuid', $input['client_uuid'])
+                    ->lockForUpdate()
+                    ->first();
+                if ($existingOrder) {
+                    return $existingOrder;
+                }
+            }
+
             if (!empty($input['member']) && (int) ($input['redeem_points'] ?? 0) > 0) {
                 // Lock the member first: concurrent redemptions queue here.
                 $input['member'] = PosMember::query()->lockForUpdate()->findOrFail($input['member']->id);
             }
 
-            $quote = $this->quote($outlet, $input, lock: true);
+            $quote = $this->quote(
+                $outlet,
+                $input,
+                lock: true,
+                allowNegativeStock: (bool) ($input['allow_negative_stock'] ?? false),
+            );
             $totals = $quote['totals'];
             $member = $quote['member'];
             $userId = $input['user_id'] ?? null;
@@ -163,7 +182,15 @@ final class OrderService
                 'points_redeemed' => $quote['redeem_points'],
                 'redeemed_points' => $quote['redeem_points'],
                 'notes' => $input['notes'] ?? null,
-                'payment_meta' => ['pricing' => array_intersect_key($totals, array_flip(['service_percent', 'tax_percent', 'rounding_step']))],
+                'payment_meta' => array_filter([
+                    'pricing' => array_intersect_key($totals, array_flip(['service_percent', 'tax_percent', 'rounding_step'])),
+                    'offline_created' => !empty($input['offline_created']),
+                    'offline_sync' => !empty($input['offline_sync']),
+                    'created_at_client' => $input['created_at_client'] ?? null,
+                    'sync_received_at' => !empty($input['offline_sync']) ? now()->toIso8601String() : null,
+                ], static fn ($value) => $value !== null),
+                'client_uuid' => $input['client_uuid'] ?? null,
+                'created_at_client' => $input['created_at_client'] ?? null,
             ]);
 
             if (!empty($input['payment_method'])) {
@@ -173,18 +200,45 @@ final class OrderService
 
             foreach ($quote['lines'] as $line) {
                 $optionRows = $line['options'];
-                $item = $order->items()->create([
-                    'product_id' => $line['product_id'],
-                    'product_name' => $line['product_name'],
-                    'unit_price' => $line['unit_price'],
-                    'base_unit_price' => $line['base_unit_price'],
-                    'options_total' => $line['options_total'],
-                    'qty' => $line['qty'],
-                    'line_total' => $line['line_total'],
-                    'selected_options' => $line['selected_options'],
-                ]);
-                foreach ($optionRows as $row) {
-                    $item->options()->create($row);
+                $serialNumbers = $line['serial_numbers'] ?? [];
+                $quantities = $serialNumbers !== []
+                    ? array_map(fn (string $serialNumber) => ['qty' => 1, 'serial_number' => $serialNumber], $serialNumbers)
+                    : [['qty' => $line['qty'], 'serial_number' => null]];
+
+                foreach ($quantities as $quantity) {
+                    $serial = null;
+                    if ($quantity['serial_number'] !== null) {
+                        $serial = ProductSerial::query()
+                            ->where('tenant_id', $outlet->tenant_slug)
+                            ->where('outlet_id', $outlet->id)
+                            ->where('product_id', $line['product_id'])
+                            ->where('serial_number', $quantity['serial_number'])
+                            ->where('status', 'available')
+                            ->lockForUpdate()
+                            ->firstOrFail();
+                        $serial->update(['status' => 'sold', 'sold_order_id' => $order->id, 'sold_at' => now()]);
+                    }
+
+                    $item = $order->items()->create([
+                        'product_id' => $line['product_id'],
+                        'product_variant_id' => $line['product_variant_id'],
+                        'product_name' => $line['product_name'],
+                        'unit_price' => $line['unit_price'],
+                        'base_unit_price' => $line['base_unit_price'],
+                        'options_total' => $line['options_total'],
+                        'qty' => $quantity['qty'],
+                        'line_total' => $line['unit_price'] * $quantity['qty'],
+                        'selected_options' => $line['selected_options'],
+                        'cost_price' => $line['cost_price'],
+                        'product_serial_id' => $serial?->id,
+                        'serial_number' => $serial?->serial_number,
+                        'warranty_expires_at' => $serial && $line['warranty_days'] !== null
+                            ? now()->addDays((int) $line['warranty_days'])
+                            : null,
+                    ]);
+                    foreach ($optionRows as $row) {
+                        $item->options()->create($row);
+                    }
                 }
             }
 
@@ -275,9 +329,16 @@ final class OrderService
     }
 
     /** Record payment. Does not change the kitchen status. */
-    public function markPaid(Order $order, string $method, int $amount, ?string $note = null, ?int $userId = null): Order
+    public function markPaid(
+        Order $order,
+        string $method,
+        int $amount,
+        ?string $note = null,
+        ?int $userId = null,
+        array $paymentMetadata = [],
+    ): Order
     {
-        return DB::transaction(function () use ($order, $method, $amount, $note, $userId) {
+        return DB::transaction(function () use ($order, $method, $amount, $note, $userId, $paymentMetadata) {
             $locked = $this->lock($order);
             $this->assertPayable($locked);
             $final = (int) $locked->final_amount;
@@ -287,6 +348,7 @@ final class OrderService
 
             $meta = (array) ($locked->payment_meta ?? []);
             $meta['paid_by'] = $userId;
+            $meta = array_replace($meta, $paymentMetadata);
             $locked->forceFill([
                 'payment_meta' => $meta,
                 'payment_method' => $method,
@@ -437,35 +499,84 @@ final class OrderService
         return Product::withoutGlobalScope('tenant')
             ->where('tenant_id', $outlet->tenant_slug)
             ->whereIn('id', $ids)
-            ->with(['options.values'])
+            ->with(['options.values', 'variants', 'priceTiers'])
             ->when($lock, fn ($q) => $q->lockForUpdate())
             ->get()
             ->keyBy('id');
     }
 
-    private function assertAvailable(array $items, Collection $products): void
+    private function assertAvailable(Outlet $outlet, array $items, Collection $products, bool $allowNegativeStock = false): void
     {
         $wanted = [];
         foreach ($items as $item) {
-            $wanted[(int) $item['product_id']] = ($wanted[(int) $item['product_id']] ?? 0) + max(1, (int) $item['quantity']);
+            $key = (int) $item['product_id'] . ':' . (int) ($item['product_variant_id'] ?? 0);
+            $wanted[$key] = [
+                'product_id' => (int) $item['product_id'],
+                'variant_id' => !empty($item['product_variant_id']) ? (int) $item['product_variant_id'] : null,
+                'qty' => ($wanted[$key]['qty'] ?? 0) + max(1, (int) $item['quantity']),
+            ];
         }
 
         $problems = [];
-        foreach ($wanted as $productId => $qty) {
-            $product = $products[$productId] ?? null;
+        foreach ($wanted as $wantedItem) {
+            $product = $products[$wantedItem['product_id']] ?? null;
+            $variant = $product?->variants->firstWhere('id', $wantedItem['variant_id']);
+            $qty = $wantedItem['qty'];
             if (!$product) {
-                $problems[] = ['product_id' => $productId, 'reason' => 'not_found', 'message' => 'Menu sudah tidak tersedia'];
+                $problems[] = ['product_id' => $wantedItem['product_id'], 'reason' => 'not_found', 'message' => 'Produk sudah tidak tersedia'];
             } elseif (!$product->is_available) {
-                $problems[] = ['product_id' => $productId, 'name' => $product->name, 'reason' => 'unavailable', 'message' => "{$product->name} sedang tidak tersedia"];
-            } elseif ($product->track_stock && (int) $product->stock < $qty) {
-                $stock = max(0, (int) $product->stock);
-                $problems[] = ['product_id' => $productId, 'name' => $product->name, 'reason' => 'stock', 'available' => $stock,
-                    'message' => $stock > 0 ? "Stok {$product->name} tinggal {$stock}" : "Stok {$product->name} habis"];
+                $problems[] = ['product_id' => $product->id, 'name' => $product->name, 'reason' => 'unavailable', 'message' => "{$product->name} sedang tidak tersedia"];
+            } elseif (!empty($wantedItem['variant_id']) && (!$variant || !$variant->is_active)) {
+                $problems[] = ['product_id' => $product->id, 'reason' => 'variant', 'message' => 'Varian produk tidak tersedia'];
+            } elseif (!$allowNegativeStock && ($variant?->track_stock || $product->track_stock) && ($stock = $this->stockMovements->onHand($product, $outlet->id, $variant)) < $qty) {
+                $stock = max(0, $stock);
+                $problems[] = ['product_id' => $product->id, 'name' => $product->name, 'reason' => 'stock', 'available' => $stock,
+                    'message' => $stock > 0 ? 'Stok ' . ($variant?->name ?? $product->name) . " tinggal {$stock}" : 'Stok ' . ($variant?->name ?? $product->name) . ' habis'];
             }
         }
 
         if ($problems !== []) {
             throw new PricingException($problems[0]['message'], $problems, 'CART_CHANGED', 409);
+        }
+    }
+
+    private function assertSerialsAvailable(Outlet $outlet, array $items, Collection $products, bool $lock): void
+    {
+        $allSerials = [];
+        foreach ($items as $item) {
+            $product = $products[(int) $item['product_id']] ?? null;
+            $serialNumbers = array_values((array) ($item['serial_numbers'] ?? []));
+            if (!$product?->track_serial) {
+                if ($serialNumbers !== []) {
+                    throw new PricingException('Produk ini tidak menggunakan serial/IMEI.', [], 'SERIAL_NOT_REQUIRED');
+                }
+                continue;
+            }
+
+            $quantity = max(1, (int) $item['quantity']);
+            if (count($serialNumbers) !== $quantity || count(array_unique($serialNumbers)) !== $quantity) {
+                throw new PricingException("Pilih {$quantity} nomor serial/IMEI untuk {$product->name}.", [], 'SERIAL_REQUIRED');
+            }
+            foreach ($serialNumbers as $serialNumber) {
+                if (isset($allSerials[$serialNumber])) {
+                    throw new PricingException('Nomor serial/IMEI yang sama dipilih lebih dari sekali.', [], 'SERIAL_DUPLICATE');
+                }
+                $allSerials[$serialNumber] = true;
+            }
+
+            $serialQuery = ProductSerial::query()
+                ->where('tenant_id', $outlet->tenant_slug)
+                ->where('outlet_id', $outlet->id)
+                ->where('product_id', $product->id)
+                ->where('product_variant_id', $item['product_variant_id'] ?? null)
+                ->whereIn('serial_number', $serialNumbers)
+                ->where('status', 'available');
+            if ($lock) {
+                $serialQuery->lockForUpdate();
+            }
+            if ($serialQuery->get()->count() !== $quantity) {
+                throw new PricingException("Satu atau lebih nomor serial/IMEI untuk {$product->name} tidak tersedia atau sudah terjual.", [], 'SERIAL_UNAVAILABLE', 409);
+            }
         }
     }
 

@@ -20,6 +20,8 @@ class Organization extends Model
         'pos_tenant_slug',
         'pos_tenant_name',
         'pos_provisioned_at',
+        'business_type',
+        'enabled_modules',
         'max_outlets_override',
         'logo_path',
         'banner_path',
@@ -34,6 +36,8 @@ class Organization extends Model
     {
         return [
             'pos_provisioned_at' => 'datetime',
+            'enabled_modules' => 'array',
+            'pos_onboarding_completed_at' => 'datetime',
             'max_outlets_override' => 'integer',
             'landing_suspended_at' => 'datetime', // Hellom Page shop switched off by super admin
             'landing_shipping' => 'array', // { origin: { id, label }, couriers: [...] } for courier rates
@@ -52,6 +56,13 @@ class Organization extends Model
 
     protected static function booted(): void
     {
+        static::creating(function (Organization $organization): void {
+            $organization->business_type = $organization->business_type ?: 'fnb';
+            if ($organization->enabled_modules === null) {
+                $organization->enabled_modules = \App\Support\Pos\BusinessProfile::preset($organization->business_type);
+            }
+        });
+
         // The slug doubles as the Hellom Page address until a username is chosen, so it
         // may not be a reserved word (/login, /admin…) or another shop's username.
         static::creating(function (Organization $organization): void {

@@ -7,6 +7,7 @@ use App\Models\OrganizationTeamInvitation;
 use App\Models\Organization;
 use App\Models\User;
 use App\Services\Hellom\PlatformMailService;
+use App\Services\Realtime\RealtimeClient;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -140,6 +141,9 @@ class OrganizationTeamController extends BaseApiController
 
         $newRole = (string) $validated['role'];
         $organization->users()->updateExistingPivot((int) $member->id, ['role' => $newRole]);
+        if ($currentRole !== $newRole) {
+            $this->revokeMemberAccess($member);
+        }
 
         $freshMember = $organization->users()->where('users.id', $userId)->first();
 
@@ -180,6 +184,7 @@ class OrganizationTeamController extends BaseApiController
         }
 
         $organization->users()->detach($userId);
+        $this->revokeMemberAccess($member);
 
         $target = User::query()->find($userId);
         if ($target && (int) ($target->current_organization_id ?? 0) === (int) $organization->id) {
@@ -196,6 +201,14 @@ class OrganizationTeamController extends BaseApiController
             'organization_id' => (int) $organization->id,
             'removed_user_id' => $userId,
         ], 'Member removed');
+    }
+
+    private function revokeMemberAccess(User $member): void
+    {
+        $member->apiTokens()->delete();
+        app(RealtimeClient::class)->emitToRoom('user_'.$member->id, 'auth.revoked', [
+            'reason' => 'organization_access_changed',
+        ]);
     }
 
     public function listInvitations(Request $request): JsonResponse

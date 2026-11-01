@@ -18,6 +18,13 @@ class OrderItem extends Model
         'qty',
         'line_total',
         'selected_options',
+        'product_variant_id',
+        'cost_price',
+        'product_serial_id',
+        'serial_number',
+        'warranty_expires_at',
+        'client_uuid',
+        'created_at_client',
     ];
 
     protected $casts = [
@@ -27,6 +34,10 @@ class OrderItem extends Model
         'qty' => 'integer',
         'line_total' => 'integer',
         'selected_options' => 'array',
+        'product_variant_id' => 'integer',
+        'cost_price' => 'integer',
+        'warranty_expires_at' => 'date',
+        'created_at_client' => 'datetime',
     ];
 
     public function order(): BelongsTo
@@ -37,6 +48,16 @@ class OrderItem extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+
+    public function variant(): BelongsTo
+    {
+        return $this->belongsTo(ProductVariant::class, 'product_variant_id');
+    }
+
+    public function serial(): BelongsTo
+    {
+        return $this->belongsTo(ProductSerial::class, 'product_serial_id');
     }
 
     public function options(): HasMany

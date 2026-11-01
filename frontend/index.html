@@ -11,8 +11,8 @@
     <!-- iOS PWA -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="POS Hellom" />
-    <link rel="apple-touch-icon" href="/assets/hellom.png" />
+    <meta name="apple-mobile-web-app-title" content="Hellom POS" />
+    <link rel="apple-touch-icon" href="/assets/pwa-192.png" />
 
     <!-- App icon -->
     <link rel="icon" type="image/png" href="/assets/hellom.png" />
@@ -38,18 +38,10 @@
       } catch (e) {}
     </script>
 
-    <!-- Service Worker registration (production only) -->
+    <!-- Dev only: avoid stale production worker assets interfering with Vite HMR. -->
     <script type="module">
       if ('serviceWorker' in navigator) {
-        if (import.meta.env.PROD) {
-          window.addEventListener('load', function () {
-            navigator.serviceWorker
-              .register('/sw.js', { scope: '/' })
-              .catch(function (err) {
-                console.warn('[SW] Registration failed:', err);
-              });
-          });
-        } else {
+        if (!import.meta.env.PROD) {
           // Dev: never let a stale service worker serve cached bundles — it breaks
           // Vite HMR and can freeze the app on old code. Unregister + purge caches.
           navigator.serviceWorker

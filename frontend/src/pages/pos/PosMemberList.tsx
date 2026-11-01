@@ -3,7 +3,6 @@ import { Search, Plus, Star, ShoppingBag, TrendingUp, MessageCircle, CheckCircle
 import { cn } from '@/lib/utils';
 import {
   adjustPosMemberPoints,
-  canPos,
   createPosMember,
   exportPosMembers,
   getPosFraudFlags,
@@ -25,6 +24,7 @@ import type {
   PosMemberRecord,
   PosOutlet,
 } from '@/lib/hellomApi';
+import { usePermissions } from '@/hooks/usePermissions';
 
 type MemberForm = { name: string; phone: string; email: string };
 type AddResult = { member: { name: string; phone: string | null }; waLink: string | null };
@@ -58,6 +58,7 @@ const tierColor = (tier: string) =>
       : 'text-green-600 bg-green-50 border-green-200';
 
 export default function PosMemberList() {
+  const { can } = usePermissions();
   const [tab, setTab] = useState<Tab>('members');
   const [members, setMembers] = useState<PosMemberRecord[]>([]);
   const [meta, setMeta] = useState({ page: 1, lastPage: 1, total: 0 });
@@ -161,7 +162,7 @@ export default function PosMemberList() {
             <p className="mt-1 text-gray-600">Member berlaku di semua outlet. Nomor HP = identitas member.</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            {canPos('member_points') && (
+            {can('member_points') && (
               <button onClick={() => void handleExport()} className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-gray-800 hover:bg-gray-50">
                 <Download className="h-4 w-4" />
                 Export Excel
@@ -175,7 +176,7 @@ export default function PosMemberList() {
         </div>
 
         <div className="flex min-w-0 gap-1 overflow-x-auto border-b border-gray-200">
-          {([['members', 'Member', Users], ['duplicates', 'Nomor ganda', Users], ['fraud', 'Sinyal kecurangan', ShieldAlert]] as const).filter(([key]) => key === 'members' || canPos('member_points')).map(([key, label, Icon]) => (
+          {([['members', 'Member', Users], ['duplicates', 'Nomor ganda', Users], ['fraud', 'Sinyal kecurangan', ShieldAlert]] as const).filter(([key]) => key === 'members' || can('member_points')).map(([key, label, Icon]) => (
             <button
               key={key}
               onClick={() => setTab(key)}
@@ -387,6 +388,7 @@ export default function PosMemberList() {
 }
 
 function MemberDrawer({ memberId, onClose, onChanged }: { memberId: number; onClose: () => void; onChanged: () => void }) {
+  const { can } = usePermissions();
   const [detail, setDetail] = useState<PosMemberDetail | null>(null);
   const [ledger, setLedger] = useState<PosLedgerRow[]>([]);
   const [orders, setOrders] = useState<Awaited<ReturnType<typeof getPosMemberOrders>>['data']>([]);
@@ -442,7 +444,7 @@ function MemberDrawer({ memberId, onClose, onChanged }: { memberId: number; onCl
           </div>
         )}
 
-        {canPos('member_points') && <div className="mt-5 rounded-xl border border-gray-200 p-4">
+        {can('member_points') && <div className="mt-5 rounded-xl border border-gray-200 p-4">
           <p className="text-sm font-semibold text-gray-900">Ubah poin manual</p>
           <p className="text-xs text-gray-500">Pakai angka minus untuk mengurangi. Alasan wajib.</p>
           <div className="mt-2 flex gap-2">

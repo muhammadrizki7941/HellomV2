@@ -20,6 +20,7 @@ export const HERO_CONTENT = {
 } as const;
 
 export const TICKER_ITEMS = [
+  'Kasir Semua Usaha',
   'POS Restoran',
   'Landing Builder',
   'Template Premium',
@@ -39,8 +40,8 @@ export const STATS_DATA = [
 export const SERVICES_DATA = [
   {
     code: 'POS',
-    name: 'Aplikasi Kasir & Manajemen Restoran',
-    desc: 'Sistem POS lengkap dengan fitur meja, pesanan online, laporan omzet harian, dan integrasi payment gateway lokal seperti QRIS, DANA, dan transfer bank.',
+    name: 'Aplikasi Kasir untuk Semua Jenis Usaha',
+    desc: 'Kasir dan laporan penjualan untuk UMKM, dengan pilihan profil usaha retail, konter HP, sparepart, jasa, maupun F&B yang tetap mendukung meja dan self-order.',
   },
   {
     code: 'WEB',

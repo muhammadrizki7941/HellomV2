@@ -757,7 +757,7 @@ export default function AdminSettings() {
     <div className="mx-auto max-w-6xl space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-zinc-900">Pengaturan Platform</h1>
-        <p className="text-zinc-500">Configure payments, landing page, and team access.</p>
+        <p className="text-zinc-500">Kelola pembayaran, pengiriman, tampilan situs, dan akses tim.</p>
       </div>
 
       {errorMessage && (
@@ -769,34 +769,33 @@ export default function AdminSettings() {
         <div className="rounded-2xl border border-green-100 bg-green-50 p-3 text-sm text-green-700">{statusMessage}</div>
       )}
 
-      <div className="flex overflow-x-auto border-b border-zinc-200">
+      <div className="admin-settings-layout">
+      <nav className="admin-settings-nav" aria-label="Kategori pengaturan">
         {[
-          { key: 'payment', label: 'Payment Gateways', icon: CreditCard },
+          { key: 'payment', label: 'Pembayaran', icon: CreditCard },
           { key: 'shipping', label: 'Ongkir', icon: Truck },
           { key: 'templates', label: 'Template Halaman', icon: LayoutTemplate },
-          { key: 'landing', label: 'Landing Page', icon: Globe },
+          { key: 'landing', label: 'Situs utama', icon: Globe },
           { key: 'team', label: 'Tim admin', icon: Users },
         ].map((tab) => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key as typeof activeTab)}
-            className={`flex items-center gap-2 whitespace-nowrap border-b-2 px-6 py-3 text-sm font-medium transition-colors ${
-              activeTab === tab.key ? 'border-zinc-900 text-zinc-900' : 'border-transparent text-zinc-500 hover:text-zinc-700'
-            }`}
+            aria-pressed={activeTab === tab.key}
           >
             <tab.icon className="h-4 w-4" /> {tab.label}
           </button>
         ))}
-      </div>
-
+      </nav>
+      <div className="min-w-0">
       {activeTab === 'payment' && (
         <div className="space-y-6">
           <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
-                <h2 className="text-lg font-bold text-zinc-900">Runtime pembayaran owner</h2>
+                <h2 className="text-lg font-bold text-zinc-900">Pengaturan pembayaran</h2>
                 <p className="mt-1 text-sm text-zinc-500">
-                  Pilih provider aktif, tentukan mode checkout langsung, dan hide/show wallet member dari sini.
+                  Pilih penyedia pembayaran, alur checkout, dan ketersediaan dompet member.
                 </p>
               </div>
               <button
@@ -879,7 +878,7 @@ export default function AdminSettings() {
             </div>
 
             <div className="mt-5 rounded-3xl border border-zinc-200 bg-zinc-50 p-5">
-              <div className="flex items-start gap-4">
+              <div className="admin-toggle-row flex items-start gap-4">
                 <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${paymentConfig.member_wallet_enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-200 text-zinc-700'}`}>
                   <Wallet className="h-5 w-5" />
                 </div>
@@ -901,7 +900,7 @@ export default function AdminSettings() {
             </div>
 
             <div className="mt-5 rounded-3xl border border-zinc-200 bg-zinc-50 p-5">
-              <div className="flex items-start gap-4">
+              <div className="admin-toggle-row flex items-start gap-4">
                 <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${paymentConfig.guest_checkout_enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-200 text-zinc-700'}`}>
                   <Globe className="h-5 w-5" />
                 </div>
@@ -1139,6 +1138,8 @@ export default function AdminSettings() {
       )}
 
       {activeTab === 'team' && <AdminTeamSettings />}
+      </div>
+      </div>
     </div>
   );
 }

@@ -24,6 +24,43 @@ const LEGACY_USER_KEY = 'user';
 const SESSION_EVENT_NAME = 'hellom-session-changed';
 const ACTIVE_OUTLET_KEY = 'hellom_active_outlet_id';
 const ACTIVE_OUTLET_EVENT_NAME = 'hellom-active-outlet-changed';
+const LAST_ONLINE_VALIDATION_KEY = 'hellom_pos_last_online_validation';
+const OFFLINE_REAUTH_REQUIRED_KEY = 'hellom_pos_offline_reauth_required';
+
+const configuredOfflineSessionHours = Number(import.meta.env.VITE_POS_OFFLINE_MAX_SESSION_HOURS ?? 24);
+export const POS_OFFLINE_MAX_SESSION_HOURS =
+  Number.isFinite(configuredOfflineSessionHours) && configuredOfflineSessionHours > 0
+    ? configuredOfflineSessionHours
+    : 24;
+
+export function recordOnlineSessionValidation(reauthenticated = false): void {
+  if (typeof navigator === 'undefined' || !navigator.onLine) return;
+  try {
+    if (localStorage.getItem(OFFLINE_REAUTH_REQUIRED_KEY) === 'true' && !reauthenticated) return;
+    localStorage.setItem(LAST_ONLINE_VALIDATION_KEY, String(Date.now()));
+    if (reauthenticated) localStorage.removeItem(OFFLINE_REAUTH_REQUIRED_KEY);
+  } catch (error) {
+    console.warn('[POS offline] Could not store the latest online session validation.', error);
+  }
+}
+
+export function isPosOfflineSessionExpired(now = Date.now()): boolean {
+  try {
+    if (localStorage.getItem(OFFLINE_REAUTH_REQUIRED_KEY) === 'true') return true;
+    const lastValidation = Number(localStorage.getItem(LAST_ONLINE_VALIDATION_KEY));
+    if (!Number.isFinite(lastValidation) || lastValidation <= 0) {
+      if (typeof navigator !== 'undefined' && navigator.onLine) return false;
+      localStorage.setItem(OFFLINE_REAUTH_REQUIRED_KEY, 'true');
+      return true;
+    }
+    const expired = now - lastValidation >= POS_OFFLINE_MAX_SESSION_HOURS * 60 * 60 * 1000;
+    if (expired) localStorage.setItem(OFFLINE_REAUTH_REQUIRED_KEY, 'true');
+    return expired;
+  } catch (error) {
+    console.warn('[POS offline] Could not verify the offline session lifetime.', error);
+    return true;
+  }
+}
 
 // Random id of this browser/POS terminal — sent as X-Device-Id so the POS audit log can tell
 // devices apart. Not a secret and not a fingerprint; clearing site data makes a new one.
@@ -49,6 +86,25 @@ export function getDeviceId(): string | null {
 export function getActiveOutletId(): string | null {
   if (typeof window === 'undefined') return null;
   return window.localStorage.getItem(ACTIVE_OUTLET_KEY);
+}
+
+function getRequestOutletId(): string | null {
+  const activeOutletId = getActiveOutletId();
+  const access = getSessionPosAccess();
+  if (!access?.is_cashier) return activeOutletId;
+
+  const assignedOutletIds = new Set((access.outlets ?? []).map((outlet) => String(outlet.id)));
+  if (access.outlet_id !== null && access.outlet_id !== undefined) {
+    assignedOutletIds.add(String(access.outlet_id));
+  }
+
+  if (activeOutletId && assignedOutletIds.has(activeOutletId)) return activeOutletId;
+
+  const fallbackOutletId = access.outlet_id !== null && access.outlet_id !== undefined
+    ? String(access.outlet_id)
+    : assignedOutletIds.values().next().value ?? null;
+  setActiveOutletId(fallbackOutletId);
+  return fallbackOutletId;
 }
 
 export function setActiveOutletId(outletId: string | number | null): void {
@@ -161,7 +217,7 @@ export async function apiRequest<T>(
   const token = options?.token ?? getToken();
   const autoLogout = options?.autoLogout ?? (path === '/auth/me' || path === '/auth/logout');
   const isFormData = options?.body instanceof FormData;
-  const activeOutletId = getActiveOutletId();
+  const activeOutletId = getRequestOutletId();
   const deviceId = getDeviceId();
 
   const response = await fetch(`${HELLOM_API_BASE}${path}`, {
@@ -194,6 +250,7 @@ export async function apiRequest<T>(
     throw toApiError(response, payload);
   }
 
+  if (token) recordOnlineSessionValidation(path === '/auth/me');
   return payload.data;
 }
 
@@ -210,7 +267,7 @@ export function buildQuery(params?: Record<string, string | number | boolean | n
 // token and active-outlet headers as apiRequest, but returns the raw Blob.
 export async function apiRequestBlob(path: string): Promise<Blob> {
   const token = getToken();
-  const activeOutletId = getActiveOutletId();
+  const activeOutletId = getRequestOutletId();
 
   const response = await fetch(`${HELLOM_API_BASE}${path}`, {
     method: 'GET',
@@ -226,6 +283,7 @@ export async function apiRequestBlob(path: string): Promise<Blob> {
     throw new Error(payload?.message || `HTTP ${response.status}`);
   }
 
+  if (getToken()) recordOnlineSessionValidation();
   return response.blob();
 }
 
@@ -271,6 +329,7 @@ function emitSessionChanged(): void {
 export function setSession(token: string, user: unknown): void {
   localStorage.setItem(TOKEN_KEY, token);
   localStorage.setItem(USER_KEY, JSON.stringify(user));
+  recordOnlineSessionValidation(true);
   localStorage.removeItem(LEGACY_TOKEN_KEY);
   localStorage.removeItem(LEGACY_USER_KEY);
   emitSessionChanged();
@@ -288,10 +347,13 @@ export function getSessionUser<T = unknown>(): T | null {
 
 export interface PosAccess {
   is_cashier: boolean;
+  organization_role?: 'org_admin' | 'staff' | 'member' | 'platform_admin' | null;
   pos_role?: 'admin' | 'cashier';
+  business_role?: 'outlet_admin' | 'cashier';
   permissions?: Record<string, boolean>;
   outlet_id?: number | null;
   outlet_name?: string | null;
+  outlets?: Array<{ id: number; name: string }>;
   tenant_slug?: string | null;
 }
 
@@ -299,23 +361,6 @@ export interface PosAccess {
 export function getSessionPosAccess(): PosAccess | null {
   const user = getSessionUser<{ pos_access?: PosAccess }>();
   return user?.pos_access ?? null;
-}
-
-/** True when the current account is a POS cashier locked to a single outlet. */
-export function isPosCashier(): boolean {
-  return getSessionPosAccess()?.is_cashier === true;
-}
-
-/**
- * Whether the signed-in user may use a POS feature. Owners/admins always may; cashiers only
- * what their owner/admin switched on (App\Support\Pos\PosPermissions). The API enforces the
- * same rule; this only hides what would be refused.
- */
-export function canPos(permission: string): boolean {
-  const access = getSessionPosAccess();
-  if (!access?.is_cashier) return true;
-  if (permission === 'orders') return true;
-  return access.permissions?.[permission] === true;
 }
 
 /** Store fresh POS access (GET /pos/me/access) in the session; notifies session listeners. */
@@ -334,6 +379,7 @@ export function clearSession(): void {
   localStorage.removeItem(USER_KEY);
   localStorage.removeItem(LEGACY_TOKEN_KEY);
   localStorage.removeItem(LEGACY_USER_KEY);
+  localStorage.removeItem(LAST_ONLINE_VALIDATION_KEY);
   emitSessionChanged();
 }
 

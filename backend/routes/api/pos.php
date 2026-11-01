@@ -7,9 +7,11 @@
 
 use App\Http\Controllers\Api\V1\Hellom\EntitlementController;
 use App\Http\Controllers\Api\V1\Hellom\Pos\PosActivityController;
+use App\Http\Controllers\Api\V1\Hellom\Pos\PosBusinessProfileController;
 use App\Http\Controllers\Api\V1\Hellom\Pos\PosCategoryController;
 use App\Http\Controllers\Api\V1\Hellom\Pos\PosExperienceController;
 use App\Http\Controllers\Api\V1\Hellom\Pos\PosLoyaltyController;
+use App\Http\Controllers\Api\V1\Hellom\Pos\PosInventoryController;
 use App\Http\Controllers\Api\V1\Hellom\Pos\PosMemberController;
 use App\Http\Controllers\Api\V1\Hellom\Pos\PosOrderController;
 use App\Http\Controllers\Api\V1\Hellom\Pos\PosOutletController;
@@ -18,11 +20,15 @@ use App\Http\Controllers\Api\V1\Hellom\Pos\PosPaymentSettingController;
 use App\Http\Controllers\Api\V1\Hellom\Pos\PosProductController;
 use App\Http\Controllers\Api\V1\Hellom\Pos\PosReportController;
 use App\Http\Controllers\Api\V1\Hellom\Pos\PosStaffController;
+use App\Http\Controllers\Api\V1\Hellom\Pos\PosSyncController;
 use App\Http\Controllers\Api\V1\Hellom\Pos\PosTableController;
 use Illuminate\Support\Facades\Route;
 
 // ─── POS Routes ───
 Route::middleware(['canUseApp:pos', 'App\Http\Middleware\Api\InjectPosContext'])->group(function () {
+    Route::get('/pos/business-profile', [PosBusinessProfileController::class, 'show'])->middleware('posPermission:orders');
+    Route::put('/pos/business-profile', [PosBusinessProfileController::class, 'update'])->middleware('posPermission:manager');
+
     // Outlet management (multi-outlet per organization)
     Route::get('/pos/outlets', [PosOutletController::class, 'index'])->middleware('posPermission:orders');
     Route::post('/pos/outlets', [PosOutletController::class, 'store'])->middleware('posPermission:manager');
@@ -32,6 +38,8 @@ Route::middleware(['canUseApp:pos', 'App\Http\Middleware\Api\InjectPosContext'])
     // Orders: one engine (OrderService) for cashier and self-order. Payment is separate from kitchen status.
     Route::get('/pos/orders', [PosOrderController::class, 'index'])->middleware('posPermission:orders');
     Route::post('/pos/orders', [PosOrderController::class, 'store'])->middleware('posPermission:orders');
+    Route::post('/pos/sync/orders', [PosSyncController::class, 'orders'])->middleware(['posPermission:orders', 'throttle:hellom-pos-sync']);
+    Route::get('/pos/sync/pull', [PosSyncController::class, 'pull'])->middleware(['posPermission:orders', 'throttle:hellom-pos-sync']);
     Route::post('/pos/orders/preview', [PosOrderController::class, 'preview'])->middleware('posPermission:orders');
     Route::patch('/pos/orders/{orderId}/status', [PosOrderController::class, 'updateStatus'])->middleware('posPermission:orders');
     Route::post('/pos/orders/{orderId}/payment', [PosOrderController::class, 'pay'])->middleware('posPermission:orders');
@@ -44,30 +52,46 @@ Route::middleware(['canUseApp:pos', 'App\Http\Middleware\Api\InjectPosContext'])
     Route::post('/pos/orders/{orderId}/discount', [PosOrderController::class, 'discount'])->middleware('posPermission:orders');
     Route::post('/pos/orders/{orderId}/payment-method', [PosOrderController::class, 'changePaymentMethod'])->middleware('posPermission:orders');
     Route::post('/pos/orders/{orderId}/split', [PosOrderController::class, 'split'])->middleware('posPermission:orders');
-    Route::post('/pos/orders/{orderId}/transfer', [PosOrderController::class, 'transfer'])->middleware('posPermission:orders');
-    Route::post('/pos/table-bills/{billId}/move', [PosOrderController::class, 'moveTableBill'])->middleware('posPermission:orders');
+    Route::post('/pos/orders/{orderId}/transfer', [PosOrderController::class, 'transfer'])->middleware(['posPermission:orders', 'posModule:tables_selforder']);
+    Route::post('/pos/table-bills/{billId}/move', [PosOrderController::class, 'moveTableBill'])->middleware(['posPermission:orders', 'posModule:tables_selforder']);
     Route::post('/pos/cash/no-sale', [PosStaffController::class, 'noSale'])->middleware('posPermission:cash_control');
-    Route::get('/pos/table-bills', [PosOrderController::class, 'tableBills'])->middleware('posPermission:orders');
-    Route::get('/pos/table-bills/{billId}', [PosOrderController::class, 'showTableBill'])->middleware('posPermission:orders');
-    Route::post('/pos/table-bills/{billId}/pay', [PosOrderController::class, 'payTableBill'])->middleware('posPermission:orders');
+    Route::get('/pos/table-bills', [PosOrderController::class, 'tableBills'])->middleware(['posPermission:orders', 'posModule:tables_selforder']);
+    Route::get('/pos/table-bills/{billId}', [PosOrderController::class, 'showTableBill'])->middleware(['posPermission:orders', 'posModule:tables_selforder']);
+    Route::post('/pos/table-bills/{billId}/pay', [PosOrderController::class, 'payTableBill'])->middleware(['posPermission:orders', 'posModule:tables_selforder']);
     Route::get('/pos/realtime/token', [PosOrderController::class, 'realtimeToken'])->middleware('posPermission:orders');
     Route::get('/pos/products', [PosProductController::class, 'index'])->middleware('posPermission:orders');
+    Route::get('/pos/products/import-template', [PosProductController::class, 'importTemplate'])->middleware('posPermission:products');
+    Route::post('/pos/products/import', [PosProductController::class, 'import'])->middleware('posPermission:products');
     Route::post('/pos/products', [PosProductController::class, 'store'])->middleware('posPermission:products');
     Route::post('/pos/products/{productId}', [PosProductController::class, 'update'])->middleware('posPermission:products'); // For FormData with _method spoofing
     Route::patch('/pos/products/{productId}', [PosProductController::class, 'update'])->middleware('posPermission:products');
     Route::delete('/pos/products/{productId}', [PosProductController::class, 'destroy'])->middleware('posPermission:products');
+    Route::get('/pos/products/{productId}/variants', [PosInventoryController::class, 'variants'])->middleware(['posPermission:products', 'posModule:variants']);
+    Route::get('/pos/products/{productId}/price-tiers', [PosInventoryController::class, 'priceTiers'])->middleware(['posPermission:products', 'posModule:price_tiers']);
+    Route::get('/pos/products/{productId}/serials/available', [PosInventoryController::class, 'availableSerials'])->middleware(['posPermission:orders', 'posModule:serial_imei']);
+    Route::post('/pos/products/{productId}/variants', [PosInventoryController::class, 'storeVariant'])->middleware(['posPermission:products', 'posModule:variants']);
+    Route::patch('/pos/products/{productId}/variants/{variantId}', [PosInventoryController::class, 'updateVariant'])->middleware(['posPermission:products', 'posModule:variants']);
+    Route::delete('/pos/products/{productId}/variants/{variantId}', [PosInventoryController::class, 'destroyVariant'])->middleware(['posPermission:products', 'posModule:variants']);
+    Route::put('/pos/products/{productId}/price-tiers', [PosInventoryController::class, 'updatePriceTiers'])->middleware(['posPermission:products', 'posModule:price_tiers']);
+    Route::get('/pos/stock-movements', [PosInventoryController::class, 'movements'])->middleware('posPermission:products');
+    Route::get('/pos/warranties/search', [PosInventoryController::class, 'warrantyLookup'])->middleware(['posPermission:orders', 'posModule:warranty']);
+    Route::get('/pos/suppliers', [PosInventoryController::class, 'suppliers'])->middleware(['posPermission:inventory_management', 'posModule:suppliers_purchasing']);
+    Route::post('/pos/suppliers', [PosInventoryController::class, 'storeSupplier'])->middleware(['posPermission:inventory_management', 'posModule:suppliers_purchasing']);
+    Route::post('/pos/purchases', [PosInventoryController::class, 'purchase'])->middleware(['posPermission:inventory_management', 'posModule:suppliers_purchasing']);
+    Route::post('/pos/stocktakes', [PosInventoryController::class, 'stocktake'])->middleware(['posPermission:inventory_management', 'posModule:stock_opname']);
+    Route::post('/pos/stock-transfers', [PosInventoryController::class, 'transfer'])->middleware('posPermission:stock_transfer');
 
     Route::get('/pos/categories', [PosCategoryController::class, 'index'])->middleware('posPermission:orders');
     Route::post('/pos/categories', [PosCategoryController::class, 'store'])->middleware('posPermission:products');
     Route::patch('/pos/categories/{categoryId}', [PosCategoryController::class, 'update'])->middleware('posPermission:products');
     Route::delete('/pos/categories/{categoryId}', [PosCategoryController::class, 'destroy'])->middleware('posPermission:products');
 
-    Route::get('/pos/tables', [PosTableController::class, 'index'])->middleware('posPermission:orders');
-    Route::post('/pos/tables', [PosTableController::class, 'store'])->middleware('posPermission:tables');
-    Route::patch('/pos/tables/{tableId}', [PosTableController::class, 'update'])->middleware('posPermission:tables');
-    Route::delete('/pos/tables/{tableId}', [PosTableController::class, 'destroy'])->middleware('posPermission:tables');
-    Route::get('/pos/tables-qr-sheet', [PosTableController::class, 'qrSheet'])->middleware('posPermission:tables');
-    Route::post('/pos/tables/{tableId}/regenerate-token', [PosTableController::class, 'regenerateToken'])->middleware('posPermission:tables');
+    Route::get('/pos/tables', [PosTableController::class, 'index'])->middleware(['posPermission:orders', 'posModule:tables_selforder']);
+    Route::post('/pos/tables', [PosTableController::class, 'store'])->middleware(['posPermission:tables', 'posModule:tables_selforder']);
+    Route::patch('/pos/tables/{tableId}', [PosTableController::class, 'update'])->middleware(['posPermission:tables', 'posModule:tables_selforder']);
+    Route::delete('/pos/tables/{tableId}', [PosTableController::class, 'destroy'])->middleware(['posPermission:tables', 'posModule:tables_selforder']);
+    Route::get('/pos/tables-qr-sheet', [PosTableController::class, 'qrSheet'])->middleware(['posPermission:tables', 'posModule:tables_selforder']);
+    Route::post('/pos/tables/{tableId}/regenerate-token', [PosTableController::class, 'regenerateToken'])->middleware(['posPermission:tables', 'posModule:tables_selforder']);
 
     // Active outlet: tax/service/rounding, self-order behaviour, opening hours.
     Route::get('/pos/outlet-settings', [PosOutletSettingsController::class, 'show'])->middleware('posPermission:orders');
@@ -122,17 +146,19 @@ Route::middleware(['canUseApp:pos', 'App\Http\Middleware\Api\InjectPosContext'])
         Route::get('/daily', [PosReportController::class, 'daily'])->middleware('posPermission:reports');
         Route::get('/shifts', [PosReportController::class, 'shifts'])->middleware('posPermission:reports');
         Route::get('/transactions', [PosReportController::class, 'transactions'])->middleware('posPermission:reports');
-        Route::get('/margin', [PosReportController::class, 'margin'])->middleware('posPermission:reports');
+        Route::get('/margin', [PosReportController::class, 'margin'])->middleware('posPermission:manager');
+        Route::get('/gross-profit', [PosReportController::class, 'grossProfit'])->middleware('posPermission:manager');
         Route::get('/export', [PosReportController::class, 'export'])->middleware('posPermission:reports');
     });
 
     Route::prefix('pos/staff')->group(function () {
-        Route::get('/', [PosStaffController::class, 'index'])->middleware('posPermission:manager');
-        Route::post('/', [PosStaffController::class, 'store'])->middleware('posPermission:manager');
+        Route::get('/', [PosStaffController::class, 'index'])->middleware('posPermission:staff_management');
+        Route::post('/', [PosStaffController::class, 'store'])->middleware('posPermission:staff_management');
         Route::post('/attendance/scan', [PosStaffController::class, 'scanAttendanceQr'])->middleware('posPermission:manager');
-        Route::put('/{staffId}', [PosStaffController::class, 'update'])->middleware('posPermission:manager');
-        Route::post('/{staffId}/invite-login', [PosStaffController::class, 'inviteLogin'])->middleware('posPermission:manager');
-        Route::delete('/{staffId}', [PosStaffController::class, 'destroy'])->middleware('posPermission:manager');
+        Route::put('/{staffId}', [PosStaffController::class, 'update'])->middleware('posPermission:staff_management');
+        Route::post('/{staffId}/invite-login', [PosStaffController::class, 'inviteLogin'])->middleware('posPermission:staff_management');
+        Route::post('/{staffId}/reset-password', [PosStaffController::class, 'resetPassword'])->middleware('posPermission:staff_management');
+        Route::delete('/{staffId}', [PosStaffController::class, 'destroy'])->middleware('posPermission:staff_management');
         Route::get('/{staffId}/attendance-qr', [PosStaffController::class, 'showAttendanceQr'])->middleware('posPermission:manager');
         Route::post('/{staffId}/attendance-qr/regenerate', [PosStaffController::class, 'regenerateAttendanceQr'])->middleware('posPermission:manager');
         Route::post('/shifts', [PosStaffController::class, 'storeShift'])->middleware('posPermission:manager');
@@ -156,6 +182,8 @@ Route::middleware(['canUseApp:pos', 'App\Http\Middleware\Api\InjectPosContext'])
     Route::get('/pos/activity/integrity', [PosActivityController::class, 'integrity'])->middleware('posPermission:manager');
 
     // The signed-in cashier's current permissions (the POS menu refreshes from this).
+    Route::get('/pos/me/profile', [PosStaffController::class, 'myProfile']);
+    Route::put('/pos/me/profile', [PosStaffController::class, 'updateMyProfile']);
     Route::get('/pos/me/access', [PosStaffController::class, 'myAccess']);
     Route::get('/pos/me/cash', [PosStaffController::class, 'myCash'])->middleware('posPermission:cash_control');
     Route::get('/apps/pos/probe', [EntitlementController::class, 'probeLocked'])

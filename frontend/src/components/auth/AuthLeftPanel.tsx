@@ -16,8 +16,8 @@ const highlightItems = [
     icon: LayoutTemplate,
   },
   {
-    title: 'POS Kasir & Manajemen',
-    description: 'Kelola transaksi dan bisnis',
+    title: 'Kasir untuk Semua Usaha',
+    description: 'Warung, restoran, retail, konter HP, sparepart, dan jasa',
     icon: CreditCard,
   },
   {
@@ -40,7 +40,7 @@ const trustItems = [
 
 const ecosystemItems = [
   { label: 'Landing Builder', icon: Sparkles },
-  { label: 'POS Kasir', icon: CreditCard },
+  { label: 'POS Multiusaha', icon: CreditCard },
   { label: 'Produk Digital', icon: Package },
   { label: 'Member & Loyalty', icon: Users },
 ];

@@ -11,12 +11,12 @@ export default function AdminPager({ pagination, loading, unit, onPage }: {
   const { current_page: page, last_page: lastPage, total } = pagination;
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-zinc-200 px-6 py-3 text-sm text-zinc-600">
+    <nav aria-label="Navigasi halaman data" className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-200 px-4 py-4 text-xs text-zinc-600 sm:px-6">
       <span>Halaman {page} dari {lastPage} · {total.toLocaleString('id-ID')} {unit}</span>
-      <div className="flex gap-2">
-        <button onClick={() => onPage(page - 1)} disabled={page <= 1 || loading} className="rounded-lg border border-zinc-200 px-3 py-1 disabled:opacity-50">Sebelumnya</button>
-        <button onClick={() => onPage(page + 1)} disabled={page >= lastPage || loading} className="rounded-lg border border-zinc-200 px-3 py-1 disabled:opacity-50">Berikutnya</button>
+      <div className="flex w-full gap-2 sm:w-auto">
+        <button onClick={() => onPage(page - 1)} disabled={page <= 1 || loading} className="min-h-11 flex-1 rounded-lg border border-zinc-200 bg-white px-4 py-2 disabled:opacity-50">Sebelumnya</button>
+        <button onClick={() => onPage(page + 1)} disabled={page >= lastPage || loading} className="min-h-11 flex-1 rounded-lg border border-zinc-200 bg-white px-4 py-2 disabled:opacity-50">Berikutnya</button>
       </div>
-    </div>
+    </nav>
   );
 }

@@ -82,6 +82,7 @@ export function subscribeRealtime(options: {
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
     socket.on('connect_error', onDisconnect);
+    socket.on('auth.revoked', () => window.dispatchEvent(new Event('hellom-auth-revoked')));
     for (const [event, handler] of Object.entries(options.handlers)) {
       socket.on(event, (...args: unknown[]) => handler(args[0]));
     }

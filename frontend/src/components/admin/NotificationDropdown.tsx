@@ -10,6 +10,7 @@ import {
 } from '@/lib/hellomApi';
 import { isNotificationSoundEnabled, setNotificationSoundEnabled } from '@/lib/liveNotifications';
 import PushToggle from '@/components/notifications/PushToggle';
+import { useAdminDialog } from './useAdminDialog';
 import {
   ADMIN_NOTIFICATION_GROUPS,
   adminActionLabel,
@@ -62,6 +63,7 @@ export function NotificationDetailDialog({
 }) {
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
+  const dialogRef = useAdminDialog(true, onClose);
   const pending = notification.action_status === 'pending' && Boolean(notification.action_type);
 
   const openUrl = () => {
@@ -91,8 +93,8 @@ export function NotificationDetailDialog({
 
   // Portal: the bell's panel is a transformed box on mobile, which would trap "fixed".
   return createPortal(
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-zinc-950/45 p-4" onClick={onClose}>
-      <div className="w-full max-w-lg rounded-2xl border border-zinc-200 bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
+    <div className="admin-dialog-portal fixed inset-0 z-[60] flex items-center justify-center bg-zinc-950/45 p-4" onClick={onClose}>
+      <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Detail notifikasi" className="w-full max-w-lg rounded-2xl border border-zinc-200 bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
         <div className="flex items-start justify-between gap-3 border-b border-zinc-100 px-5 py-4">
           <div className="flex items-start gap-3">
             <div className={`rounded-lg p-2 ${meta.tone}`}><Icon className="h-4 w-4" /></div>

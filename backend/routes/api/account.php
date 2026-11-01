@@ -21,9 +21,9 @@ Route::get('/organizations', [OrganizationController::class, 'index'])->name('or
 Route::post('/organizations', [OrganizationController::class, 'store'])->name('organizations.store');
 Route::get('/organizations/current', [OrganizationController::class, 'current'])->name('organizations.current');
 Route::post('/organizations/switch', [OrganizationController::class, 'switch'])->name('organizations.switch');
-Route::get('/organizations/current/settings', [OrganizationController::class, 'settings'])->name('organizations.settings');
+Route::get('/organizations/current/settings', [OrganizationController::class, 'settings'])->middleware('organizationAdmin')->name('organizations.settings');
 Route::post('/organizations/current/settings', [OrganizationController::class, 'updateSettings'])->name('organizations.updateSettings');
-Route::get('/organizations/current/team', [OrganizationTeamController::class, 'index'])->name('organizations.current.team.index');
+Route::get('/organizations/current/team', [OrganizationTeamController::class, 'index'])->middleware('organizationAdmin')->name('organizations.current.team.index');
 Route::post('/organizations/current/team/invite', [OrganizationTeamController::class, 'invite'])->name('organizations.current.team.invite');
 Route::get('/organizations/current/team/invitations', [OrganizationTeamController::class, 'listInvitations'])->name('organizations.current.team.invitations.index');
 Route::post('/organizations/current/team/invitations', [OrganizationTeamController::class, 'inviteByToken'])->name('organizations.current.team.invitations.store');

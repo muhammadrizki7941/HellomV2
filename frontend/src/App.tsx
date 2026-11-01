@@ -1,9 +1,11 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
-import { Navigate, Routes, Route, useParams, useLocation } from 'react-router-dom';
+import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
+import { Navigate, Routes, Route, useParams, useLocation, useNavigate } from 'react-router-dom';
 import useBrand from '@/hooks/useBrand';
 import PlatformTracking from '@/components/PlatformTracking';
 import CheckoutQueryLauncher from '@/components/CheckoutQueryLauncher';
 import HellomLoading from '@/components/HellomLoading';
+import { clearSession, getSessionUser } from '@/lib/hellomApi';
+import { usePermissions } from '@/hooks/usePermissions';
 import { RouteJourney, ConnectionNotice, PageErrorBoundary, ServiceNotice } from '@/components/MascotFeedback';
 const MarketingAnalytics = lazy(() => import('@/pages/admin/MarketingAnalytics'));
 import {
@@ -33,6 +35,7 @@ const PosPaymentStatusPage = lazy(() => import('@/pages/public/PosPaymentStatusP
 const PosCheckoutRoute = lazy(() => import('@/pages/public/PosCheckoutRoute'));
 const LoginPage = lazy(() => import('@/pages/auth/LoginPage'));
 const StaffLoginPage = lazy(() => import('@/pages/auth/StaffLoginPage'));
+const ForcePasswordChangePage = lazy(() => import('@/pages/auth/ForcePasswordChangePage'));
 const RegisterPage = lazy(() => import('@/pages/auth/RegisterPage'));
 const ForgotPassword = lazy(() => import('@/pages/auth/ForgotPassword'));
 const ResetPasswordPage = lazy(() => import('@/pages/auth/ResetPasswordPage'));
@@ -79,7 +82,9 @@ const PosAdmin = lazy(() => import('@/pages/pos/PosAdmin'));
 const PosAdminDashboard = lazy(() => import('@/pages/pos/PosAdminDashboard'));
 const PosOutlets = lazy(() => import('@/pages/pos/PosOutlets'));
 const PosOrders = lazy(() => import('@/pages/pos/PosOrders'));
+const PosSyncQueue = lazy(() => import('@/pages/pos/PosSyncQueue'));
 const PosMenu = lazy(() => import('@/pages/pos/PosMenu'));
+const PosInventory = lazy(() => import('@/pages/pos/PosInventory'));
 const PosTables = lazy(() => import('@/pages/pos/PosTables'));
 const PosCustomerOrder = lazy(() => import('@/pages/pos/PosCustomerOrder'));
 const PosCustomerOrderSuccess = lazy(() => import('@/pages/pos/customer/SuccessPage'));
@@ -88,6 +93,7 @@ const PosSettings = lazy(() => import('@/pages/pos/PosSettings'));
 const PosMemberList = lazy(() => import('@/pages/pos/PosMemberList'));
 const PosLoyaltySettings = lazy(() => import('@/pages/pos/PosLoyaltySettings'));
 const PosStaff = lazy(() => import('@/pages/pos/PosStaff'));
+const PosProfile = lazy(() => import('@/pages/pos/PosProfile'));
 const PosReports = lazy(() => import('@/pages/pos/PosReports'));
 const PosExperienceCenter = lazy(() => import('@/pages/pos/PosExperienceCenter'));
 const PosAudit = lazy(() => import('@/pages/pos/PosAudit'));
@@ -112,6 +118,42 @@ function RouteFallback() {
   return <HellomLoading label={pathname.startsWith('/pos') ? 'Memuat POS...' : 'Menyiapkan halaman...'} />;
 }
 
+function FirstLoginPasswordGate({ children }: { children: ReactNode }) {
+  const user = getSessionUser<{ must_change_password?: boolean }>();
+
+  return user?.must_change_password
+    ? <Navigate to="/auth/change-password" replace />
+    : children;
+}
+
+function PosPermissionGate({ permission, children }: { permission: string; children: ReactNode }) {
+  const { can } = usePermissions();
+
+  return can(permission) ? children : <Navigate to="/pos/orders" replace />;
+}
+
+function OrganizationAdminGate({ children }: { children: ReactNode }) {
+  const { isOrganizationAdmin } = usePermissions();
+
+  return isOrganizationAdmin ? children : <Navigate to="/dashboard" replace />;
+}
+
+function AuthRevocationHandler() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const handleRevocation = () => {
+      clearSession();
+      navigate('/login/kasir', { replace: true });
+    };
+    window.addEventListener('hellom-auth-revoked', handleRevocation);
+
+    return () => window.removeEventListener('hellom-auth-revoked', handleRevocation);
+  }, [navigate]);
+
+  return null;
+}
+
 export default function App() {
   useBrand();
 
@@ -124,6 +166,7 @@ export default function App() {
     <Suspense fallback={<RouteFallback />}>
       <PlatformTracking />
       <CheckoutQueryLauncher />
+      <AuthRevocationHandler />
       <Routes>
         {/* Public site: persistent navbar/footer, curtain transitions between pages */}
         <Route element={<PublicLayout />}>
@@ -159,6 +202,7 @@ export default function App() {
         <Route path="/reset-pin-pos" element={<PosPinResetPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/login/kasir" element={<StaffLoginPage />} />
+        <Route path="/auth/change-password" element={<ForcePasswordChangePage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
@@ -190,14 +234,14 @@ export default function App() {
         <Route path="/:organizationSlug" element={<PublicPage />} />
 
         {/* Member Routes (Protected) */}
-        <Route path="/dashboard" element={<DashboardLayout />}>
+        <Route path="/dashboard" element={<FirstLoginPasswordGate><DashboardLayout /></FirstLoginPasswordGate>}>
           <Route index element={<DashboardHome />} />
           <Route path="profile" element={<MemberProfile />} />
           <Route path="support" element={<UserSupportPage />} />
-          <Route path="payments" element={<Payments />} />
-          <Route path="billing" element={<Payments />} />
-          <Route path="billing/renew" element={<Payments />} />
-          <Route path="billing/:transactionId" element={<Payments />} />
+          <Route path="payments" element={<OrganizationAdminGate><Payments /></OrganizationAdminGate>} />
+          <Route path="billing" element={<OrganizationAdminGate><Payments /></OrganizationAdminGate>} />
+          <Route path="billing/renew" element={<OrganizationAdminGate><Payments /></OrganizationAdminGate>} />
+          <Route path="billing/:transactionId" element={<OrganizationAdminGate><Payments /></OrganizationAdminGate>} />
           <Route path="products" element={<ConsumerProductCatalog />} />
           <Route path="products/:slug" element={<ConsumerProductDetail />} />
           <Route path="products/:slug/checkout" element={<ConsumerProductDetail />} />
@@ -210,21 +254,24 @@ export default function App() {
         <Route path="/support/agent" element={<SupportAgentConsole />} />
 
         {/* POS Routes */}
-        <Route path="/pos" element={<PosLayout />}>
+        <Route path="/pos" element={<FirstLoginPasswordGate><PosLayout /></FirstLoginPasswordGate>}>
+          <Route path="profile" element={<PosProfile />} />
           <Route path="admin" element={<PosAdmin />} />
           <Route path="cashier" element={<PosAdmin />} />
-          <Route path="admin-dashboard" element={<PosAdminDashboard />} />
-          <Route path="outlets" element={<PosOutlets />} />
-          <Route path="orders" element={<PosOrders />} />
-          <Route path="menu" element={<PosMenu />} />
-          <Route path="tables" element={<PosTables />} />
-          <Route path="staff" element={<PosStaff />} />
-          <Route path="members" element={<PosMemberList />} />
-          <Route path="loyalty" element={<PosLoyaltySettings />} />
-          <Route path="customer-hub" element={<PosExperienceCenter />} />
-          <Route path="reports" element={<PosReports />} />
-          <Route path="settings" element={<PosSettings />} />
-          <Route path="audit" element={<PosAudit />} />
+          <Route path="admin-dashboard" element={<PosPermissionGate permission="organization_admin"><PosAdminDashboard /></PosPermissionGate>} />
+          <Route path="outlets" element={<PosPermissionGate permission="organization_admin"><PosOutlets /></PosPermissionGate>} />
+          <Route path="orders" element={<PosPermissionGate permission="orders"><PosOrders /></PosPermissionGate>} />
+          <Route path="sync-queue" element={<PosPermissionGate permission="orders"><PosSyncQueue /></PosPermissionGate>} />
+          <Route path="menu" element={<PosPermissionGate permission="products"><PosMenu /></PosPermissionGate>} />
+          <Route path="inventory" element={<PosPermissionGate permission="inventory_management"><PosInventory /></PosPermissionGate>} />
+          <Route path="tables" element={<PosPermissionGate permission="tables"><PosTables /></PosPermissionGate>} />
+          <Route path="staff" element={<PosPermissionGate permission="staff_management"><PosStaff /></PosPermissionGate>} />
+          <Route path="members" element={<PosPermissionGate permission="members"><PosMemberList /></PosPermissionGate>} />
+          <Route path="loyalty" element={<PosPermissionGate permission="loyalty"><PosLoyaltySettings /></PosPermissionGate>} />
+          <Route path="customer-hub" element={<PosPermissionGate permission="customer_hub"><PosExperienceCenter /></PosPermissionGate>} />
+          <Route path="reports" element={<PosPermissionGate permission="reports"><PosReports /></PosPermissionGate>} />
+          <Route path="settings" element={<PosPermissionGate permission="outlet_settings"><PosSettings /></PosPermissionGate>} />
+          <Route path="audit" element={<PosPermissionGate permission="organization_admin"><PosAudit /></PosPermissionGate>} />
         </Route>
 
         {/* Super Admin Routes */}

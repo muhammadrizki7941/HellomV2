@@ -78,6 +78,9 @@ app.post('/emit', (req, res) => {
   if (room && typeof room === 'string') {
     // Private room (e.g. "admins", "user_12"): only authenticated sockets are in it.
     io.to(room).emit(event, data ?? {});
+    if (event === 'auth.revoked') {
+      setTimeout(() => io.in(room).disconnectSockets(true), 100);
+    }
   } else if (tenantId && typeof tenantId === 'number') {
     // Emit to tenant-specific room
     io.to(`tenant_${tenantId}`).emit(event, data ?? {});

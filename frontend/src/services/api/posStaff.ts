@@ -16,7 +16,10 @@ export type PosStaffPermissionKey =
   | 'customer_hub'
   | 'reports'
   | 'cash_control'
-  | 'outlet_settings';
+  | 'outlet_settings'
+  | 'staff_management'
+  | 'stock_transfer'
+  | 'inventory_management';
 
 /** One switchable POS feature (GET /pos/staff → meta.permissions). `locked` = always on. */
 export type PosPermissionDef = {
@@ -104,6 +107,8 @@ export type PosStaffItem = {
   email?: string | null;
   phone?: string | null;
   role: PosStaffRole;
+  business_role?: 'outlet_admin' | 'cashier';
+  outlet_ids?: number[];
   employment_status: PosStaffEmploymentStatus;
   permissions: Record<PosStaffPermissionKey, boolean>;
   hourly_rate: number;
@@ -112,6 +117,10 @@ export type PosStaffItem = {
   linked_user_id?: number | null;
   linked_user_name?: string | null;
   last_activity_at?: string | null;
+  created_at?: string | null;
+  created_by?: { id: number | null; name: string | null } | null;
+  login_identifier?: string | null;
+  last_login_at?: string | null;
   attendance_qr: PosStaffAttendanceQr;
   today_shift?: PosStaffShift | null;
   upcoming_shift?: PosStaffShift | null;
@@ -156,6 +165,36 @@ export type PosStaffDashboard = {
   };
 };
 
+export type PosMyProfile = {
+  user: {
+    id: number;
+    name: string;
+    email: string | null;
+    username: string | null;
+    phone: string | null;
+  };
+  organization: { name: string };
+  staff: {
+    id: number;
+    name: string;
+    role: 'outlet_admin' | 'cashier';
+    status: PosStaffEmploymentStatus;
+    outlets: string[];
+    attendance_qr: PosStaffAttendanceQr;
+  } | null;
+};
+
+export function getPosMyProfile() {
+  return apiRequest<PosMyProfile>('/pos/me/profile');
+}
+
+export function updatePosMyProfile(payload: { name: string; email: string | null; phone: string | null }) {
+  return apiRequest<PosMyProfile>('/pos/me/profile', {
+    method: 'PUT',
+    body: payload,
+  });
+}
+
 export function getPosStaffDashboard() {
   return apiRequest<PosStaffDashboard>('/pos/staff');
 }
@@ -169,14 +208,21 @@ export function createPosStaff(payload: {
   name: string;
   email?: string;
   phone?: string;
+  username?: string;
+  create_login?: boolean;
+  password?: string;
   role: PosStaffRole;
+  outlet_ids?: number[];
   employment_status: PosStaffEmploymentStatus;
   permissions: Record<PosStaffPermissionKey, boolean>;
   hourly_rate?: number;
   joined_at?: string;
   notes?: string;
 }) {
-  return apiRequest<{ staff: PosStaffItem }>('/pos/staff', {
+  return apiRequest<{
+    staff: PosStaffItem;
+    credentials: { identifier: string; password: string; must_change_password: boolean } | null;
+  }>('/pos/staff', {
     method: 'POST',
     body: payload,
   });
@@ -189,6 +235,7 @@ export function updatePosStaff(
     email?: string;
     phone?: string;
     role: PosStaffRole;
+    outlet_ids?: number[];
     employment_status: PosStaffEmploymentStatus;
     permissions: Record<PosStaffPermissionKey, boolean>;
     hourly_rate?: number;
@@ -205,6 +252,16 @@ export function updatePosStaff(
 export function deletePosStaff(staffId: number) {
   return apiRequest<null>(`/pos/staff/${staffId}`, {
     method: 'DELETE',
+  });
+}
+
+export function resetPosStaffPassword(staffId: number) {
+  return apiRequest<{
+    staff_id: number;
+    credentials: { identifier: string; password: string; must_change_password: boolean };
+  }>(`/pos/staff/${staffId}/reset-password`, {
+    method: 'POST',
+    body: {},
   });
 }
 

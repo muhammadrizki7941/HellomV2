@@ -269,7 +269,7 @@ function AdjustBalanceDialog({ seller, onClose, onDone }: { seller: AdminSeller;
           <h2 className="text-lg font-bold">Sesuaikan saldo</h2>
           <p className="text-sm text-zinc-500">{seller.name} · tersedia {rupiah(seller.balance_available)} · tertahan {rupiah(seller.balance_pending)}</p>
         </div>
-        <div className="grid grid-cols-2 gap-2 text-sm">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
           <select value={direction} onChange={(e) => setDirection(e.target.value as 'add' | 'subtract')} className="min-h-10 rounded-xl border border-zinc-200 px-3">
             <option value="add">Tambah</option>
             <option value="subtract">Kurangi</option>

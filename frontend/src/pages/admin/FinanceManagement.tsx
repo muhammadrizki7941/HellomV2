@@ -279,6 +279,7 @@ export default function FinanceManagement() {
         </div>
         <div className="flex gap-2 flex-wrap">
           <button
+            aria-label="Muat ulang keuangan"
             onClick={() => void reloadAll()}
             className="px-3 py-2 rounded-lg text-sm font-medium border border-zinc-200 bg-white hover:bg-zinc-50"
           >

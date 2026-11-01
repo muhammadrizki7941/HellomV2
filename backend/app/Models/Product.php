@@ -23,6 +23,14 @@ class Product extends Model
         'is_available',
         'track_stock',
         'stock',
+        'sku',
+        'barcode',
+        'unit',
+        'cost_price',
+        'min_stock',
+        'has_variants',
+        'track_serial',
+        'warranty_days',
         'is_package',
         'show_as_banner',
         'banner_title',
@@ -42,6 +50,11 @@ class Product extends Model
         'is_available' => 'boolean',
         'track_stock' => 'boolean',
         'stock' => 'integer',
+        'cost_price' => 'integer',
+        'min_stock' => 'integer',
+        'has_variants' => 'boolean',
+        'track_serial' => 'boolean',
+        'warranty_days' => 'integer',
         'is_package' => 'boolean',
         'show_as_banner' => 'boolean',
         'banner_starts_at' => 'datetime',
@@ -66,6 +79,26 @@ class Product extends Model
     public function options(): HasMany
     {
         return $this->hasMany(ProductOption::class);
+    }
+
+    public function variants(): HasMany
+    {
+        return $this->hasMany(ProductVariant::class);
+    }
+
+    public function priceTiers(): HasMany
+    {
+        return $this->hasMany(ProductPriceTier::class);
+    }
+
+    public function serials(): HasMany
+    {
+        return $this->hasMany(ProductSerial::class);
+    }
+
+    public function stockMovements(): HasMany
+    {
+        return $this->hasMany(StockMovement::class);
     }
 
     public function packageItems(): HasMany

@@ -33,11 +33,10 @@ const PURCHASE_STATUS: Record<string, string> = { paid: 'Lunas', pending: 'Menun
 
 function StatCard({ title, value, hint, icon: Icon }: { title: string; value: string; hint: string; icon: LucideIcon }) {
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-      <div className="mb-4 w-fit rounded-lg bg-zinc-100 p-2 text-zinc-600"><Icon className="h-5 w-5" /></div>
-      <h3 className="mb-1 text-sm font-medium text-zinc-500">{title}</h3>
-      <p className="text-2xl font-bold text-zinc-900">{value}</p>
-      <p className="mt-1 text-xs text-zinc-500">{hint}</p>
+    <div className="admin-stat">
+      <div className="admin-stat-label"><span>{title}</span><Icon className="h-4 w-4" aria-hidden="true" /></div>
+      <p className="admin-stat-value">{value}</p>
+      <p className="admin-stat-hint">{hint}</p>
     </div>
   );
 }
@@ -104,10 +103,11 @@ export default function AdminDashboard() {
   const statValue = (value: number | undefined) => (adminStats ? number(value) : '…');
 
   return (
-    <div className="space-y-8">
-      <div>
+    <div className="admin-overview">
+      <div className="admin-page-heading">
+        <div><p className="admin-eyebrow">Platform overview</p>
         <h1 className="text-2xl font-bold text-zinc-900">Ringkasan</h1>
-        <p className="text-zinc-500">Kondisi platform Hellom dan hal yang menunggu tindakan admin.</p>
+        <p className="text-zinc-500">Kondisi platform Hellom dan hal yang menunggu tindakan admin.</p></div>
       </div>
 
       {error && (
@@ -116,7 +116,7 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+      <div className="admin-stats">
         <StatCard title="Organisasi" value={statValue(adminStats?.organizations.total)} hint={`+${number(adminStats?.organizations.new_in_period)} dalam ${growthDays} hari`} icon={Building2} />
         <StatCard title="Pengguna" value={statValue(adminStats?.users.total)} hint={`+${number(adminStats?.users.new_in_period)} dalam ${growthDays} hari`} icon={Users} />
         <StatCard title="Langganan aktif" value={statValue(adminStats?.subscriptions.active)} hint={`${number(adminStats?.paid_entitlements)} akses aplikasi berbayar`} icon={CreditCard} />
@@ -128,19 +128,19 @@ export default function AdminDashboard() {
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-        <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+      <div className="admin-overview-grid">
+        <div className="admin-panel admin-tasks">
           <h3 className="font-bold text-zinc-900">Perlu tindakan</h3>
           <ul className="mt-4 divide-y divide-zinc-100">
             {todo.map((item) => (
               <li key={item.label}>
-                <Link to={item.to} className="flex items-center justify-between gap-3 py-3 text-sm hover:text-zinc-950">
+                <Link to={item.to} className="admin-task-link">
                   <span className="text-zinc-700">
                     {item.label}
                     {item.warn && <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">{item.warn}</span>}
                   </span>
                   <span className="flex items-center gap-2">
-                    <span className={item.count > 0 ? 'rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-800' : 'text-xs text-zinc-400'}>
+                    <span className={item.count > 0 ? 'admin-task-count' : 'text-xs text-zinc-400'}>
                       {loading ? '…' : item.count > 0 ? item.count : 'Tidak ada'}
                     </span>
                     <ArrowRight className="h-4 w-4 text-zinc-400" />
@@ -151,35 +151,8 @@ export default function AdminDashboard() {
           </ul>
         </div>
 
-        <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-          <div className="flex items-center justify-between gap-3">
-            <h3 className="font-bold text-zinc-900">Pembelian produk terbaru</h3>
-            <Link to="/admin/products/purchases" className="text-xs font-semibold text-zinc-600 underline">Semua pembelian</Link>
-          </div>
-          <div className="mt-5 space-y-3">
-            {recentPurchases.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 p-5 text-sm text-zinc-500">
-                {loading ? 'Memuat…' : 'Belum ada pembelian produk digital.'}
-              </div>
-            ) : (
-              recentPurchases.map((item) => (
-                <div key={item.id} className="flex items-start justify-between gap-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
-                  <div>
-                    <p className="font-semibold text-zinc-900">{item.product?.name || '-'}</p>
-                    <p className="text-sm text-zinc-500">{item.user?.name || '-'} · {rupiah(Number(item.amount_paid || 0))}</p>
-                  </div>
-                  <span className="text-xs font-semibold text-zinc-600">
-                    {PURCHASE_STATUS[item.payment_status ?? ''] ?? item.payment_status ?? '-'} · {item.payment_gateway || '-'}
-                  </span>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-        <div className="mb-6 flex items-center justify-between">
+      <div className="admin-panel admin-growth">
+        <div className="admin-panel-heading">
           <div>
             <h3 className="font-bold text-zinc-900">Pertumbuhan</h3>
             <p className="text-xs text-zinc-500">
@@ -189,6 +162,7 @@ export default function AdminDashboard() {
             </p>
           </div>
           <select
+            aria-label="Rentang waktu pertumbuhan"
             value={growthDays}
             onChange={(event) => setGrowthDays(Number(event.target.value) as GrowthRange)}
             className="rounded-lg border-zinc-200 text-sm text-zinc-600 focus:border-yellow-400 focus:ring-yellow-400"
@@ -198,7 +172,7 @@ export default function AdminDashboard() {
             ))}
           </select>
         </div>
-        <div className="relative h-[300px] w-full min-w-0">
+        <div className="relative h-[240px] sm:h-[280px] w-full min-w-0">
           {!growthLoading && chartData.length === 0 && (
             <div className="absolute inset-0 z-10 flex items-center justify-center text-sm text-zinc-500">Data pertumbuhan belum tersedia.</div>
           )}
@@ -206,27 +180,51 @@ export default function AdminDashboard() {
             <AreaChart data={chartData}>
               <defs>
                 <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#facc15" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#facc15" stopOpacity={0} />
+                  <stop offset="5%" stopColor="#d89d1b" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#d89d1b" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f4f4f5" />
               <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#71717a', fontSize: 12 }} minTickGap={16} />
-              <YAxis axisLine={false} tickLine={false} tick={{ fill: '#71717a', fontSize: 12 }} allowDecimals={false} />
+              <YAxis width={34} axisLine={false} tickLine={false} tick={{ fill: '#71717a', fontSize: 12 }} allowDecimals={false} />
               <Tooltip
                 contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e4e4e7', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                 itemStyle={{ color: '#18181b', fontSize: '12px', fontWeight: 600 }}
               />
-              <Area type="monotone" dataKey="users" name="Pengguna baru" stroke="#facc15" strokeWidth={2} fillOpacity={1} fill="url(#colorUsers)" />
+              <Area type="monotone" dataKey="users" name="Pengguna baru" stroke="#d89d1b" strokeWidth={2} fillOpacity={1} fill="url(#colorUsers)" />
               <Area type="monotone" dataKey="organizations" name="Organisasi baru" stroke="#71717a" strokeWidth={2} fillOpacity={0} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
         <div className="mt-3 flex gap-4 text-xs text-zinc-600">
-          <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 bg-[#facc15]" /> Pengguna baru</span>
+          <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 bg-[#d89d1b]" /> Pengguna baru</span>
           <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 bg-[#71717a]" /> Organisasi baru</span>
         </div>
       </div>
+      </div>
+        <div className="admin-panel">
+          <div className="admin-panel-heading">
+            <h3 className="font-bold text-zinc-900">Pembelian produk terbaru</h3>
+            <Link to="/admin/products/purchases" className="inline-flex min-h-11 items-center text-xs font-semibold text-zinc-600">Semua pembelian</Link>
+          </div>
+          {recentPurchases.length === 0 ? <p className="rounded-lg bg-zinc-50 p-5 text-center text-sm text-zinc-500">{loading ? 'Memuat…' : 'Belum ada pembelian produk digital.'}</p> : <>
+            <div className="admin-recent-desktop overflow-x-auto">
+              <table className="w-full text-left"><thead><tr><th>Produk / Pembeli</th><th>Metode</th><th>Status</th><th className="text-right">Nominal</th></tr></thead>
+                <tbody className="divide-y divide-zinc-100">{recentPurchases.map(item => <tr key={item.id}>
+                  <td><p className="font-medium text-zinc-900">{item.product?.name || '—'}</p><p className="mt-1 text-xs text-zinc-500">{item.user?.name || '—'}</p></td>
+                  <td className="text-zinc-500">{item.payment_gateway || '—'}</td>
+                  <td><span className="admin-status" data-status={item.payment_status}>{PURCHASE_STATUS[item.payment_status ?? ''] ?? item.payment_status ?? '—'}</span></td>
+                  <td className="whitespace-nowrap text-right font-medium tabular-nums">{rupiah(Number(item.amount_paid || 0))}</td>
+                </tr>)}</tbody>
+              </table>
+            </div>
+            <div className="admin-recent-mobile">{recentPurchases.map(item => <article key={item.id}>
+              <div className="flex items-start justify-between gap-3"><p className="text-sm font-semibold">{item.product?.name || '—'}</p><span className="admin-status shrink-0" data-status={item.payment_status}>{PURCHASE_STATUS[item.payment_status ?? ''] ?? item.payment_status ?? '—'}</span></div>
+              <p className="mt-1 text-xs text-zinc-500">{item.user?.name || '—'}</p>
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs"><span className="text-zinc-500">{item.payment_gateway || '—'}</span><span className="font-semibold tabular-nums">{rupiah(Number(item.amount_paid || 0))}</span></div>
+            </article>)}</div>
+          </>}
+        </div>
     </div>
   );
 }

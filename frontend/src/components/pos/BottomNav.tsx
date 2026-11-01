@@ -19,11 +19,16 @@ interface BottomNavProps {
   activeOrdersCount?: number;
   /** Cashiers: tab ids they may open (undefined = everything, for owners/admins). */
   allowedTabs?: string[];
+  hasTablesSelfOrder: boolean;
+  productLabel: string;
+  productIcon: typeof Package;
+  transactionLabel: string;
+  customerLabel: string;
 }
 
 const moreItems = [
-  { id: 'staff', label: 'Staff', icon: Users },
-  { id: 'members', label: 'Member', icon: User },
+  { id: 'staff', label: 'Staf', icon: Users },
+  { id: 'members', label: 'Pelanggan', icon: User },
   { id: 'loyalty', label: 'Loyalitas', icon: Settings },
   { id: 'customer-hub', label: 'Promo', icon: Ticket },
   { id: 'reports', label: 'Laporan', icon: BarChart3 },
@@ -71,7 +76,7 @@ const MoreSheet = ({
         <div className="w-10 h-1 bg-gray-200 rounded-full" />
       </div>
       <p className="text-center text-xs text-gray-400 mb-4 font-medium">
-        More Options
+        Menu lainnya
       </p>
       {/* Grid 2x2 */}
       <div className="grid grid-cols-4 gap-4 px-6 pb-8">
@@ -97,18 +102,29 @@ const MoreSheet = ({
   </>
 );
 
-const navItems = [
-  { id: 'admin-dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'menu', label: 'Products', icon: Package },
-  { id: 'orders', label: 'Orders', icon: ShoppingBag, isCenter: true, hasBadge: true },
-  { id: 'tables', label: 'Meja', icon: Grid2x2 },
-];
-
-export default function BottomNav({ activeTab, onTabChange, activeOrdersCount, allowedTabs }: BottomNavProps) {
+export default function BottomNav({
+  activeTab,
+  onTabChange,
+  activeOrdersCount,
+  allowedTabs,
+  hasTablesSelfOrder,
+  productLabel,
+  productIcon,
+  transactionLabel,
+  customerLabel,
+}: BottomNavProps) {
   const allowed = (id: string) => id === 'orders' || !allowedTabs || allowedTabs.includes(id);
+  const navItems = [
+    { id: 'admin-dashboard', label: 'Ringkasan', icon: LayoutDashboard },
+    { id: 'menu', label: productLabel, icon: productIcon },
+    { id: 'orders', label: transactionLabel, icon: ShoppingBag, isCenter: true, hasBadge: true },
+    ...(hasTablesSelfOrder ? [{ id: 'tables', label: 'Meja', icon: Grid2x2 }] : []),
+  ];
   const leftItems = navItems.slice(0, 2).filter((item) => allowed(item.id));
-  const rightItems = navItems.slice(3, 4).filter((item) => allowed(item.id));
-  const visibleMore = moreItems.filter((item) => allowed(item.id));
+  const rightItems = navItems.slice(3).filter((item) => allowed(item.id));
+  const visibleMore = moreItems
+    .filter((item) => allowed(item.id))
+    .map((item) => item.id === 'members' ? { ...item, label: customerLabel } : item);
   const [visible, setVisible] = useState(false);
   const [showMoreSheet, setShowMoreSheet] = useState(false);
   const hideTimerRef = useRef<NodeJS.Timeout | null>(null);

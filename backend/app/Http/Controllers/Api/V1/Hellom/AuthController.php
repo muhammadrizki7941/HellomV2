@@ -383,13 +383,12 @@ class AuthController extends BaseApiController
     public function login(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'email' => ['required', 'email'],
+            'identifier' => ['nullable', 'string', 'max:255', 'required_without:email'],
+            'email' => ['nullable', 'email', 'max:255', 'required_without:identifier'],
             'password' => ['required', 'string'],
         ]);
 
-        $user = User::query()
-            ->where('email', strtolower((string) $validated['email']))
-            ->first();
+        $user = $this->userByLoginIdentifier((string) ($validated['identifier'] ?? $validated['email']));
 
         if (!$user || !Hash::check((string) $validated['password'], (string) $user->password)) {
             return $this->fail(__('hellom.invalid_credentials'), ['code' => 'INVALID_CREDENTIALS'], 401);
@@ -399,6 +398,7 @@ class AuthController extends BaseApiController
             return $this->fail(__('hellom.account_suspended'), ['code' => 'ACCOUNT_SUSPENDED'], 403);
         }
 
+        $user->forceFill(['last_login_at' => now()])->save();
         [$plainToken] = $this->issueToken($user, 'hellom-web');
 
         return $this->ok([
@@ -416,12 +416,13 @@ class AuthController extends BaseApiController
     public function staffLogin(Request $request, \App\Services\Pos\StaffLogin $staffLogin): JsonResponse
     {
         $validated = $request->validate([
-            'email' => ['required', 'email'],
+            'identifier' => ['nullable', 'string', 'max:255', 'required_without:email'],
+            'email' => ['nullable', 'email', 'max:255', 'required_without:identifier'],
             'password' => ['required', 'string'],
             'staff_id' => ['nullable', 'integer'],
         ]);
 
-        $user = User::query()->where('email', strtolower((string) $validated['email']))->first();
+        $user = $this->userByLoginIdentifier((string) ($validated['identifier'] ?? $validated['email']));
         if (!$user || !Hash::check((string) $validated['password'], (string) $user->password)) {
             return $this->fail(__('hellom.invalid_credentials'), ['code' => 'INVALID_CREDENTIALS'], 401);
         }
@@ -451,6 +452,7 @@ class AuthController extends BaseApiController
         }
 
         $staffLogin->enter($user, $staff);
+        $user->forceFill(['last_login_at' => now()])->save();
         [$plainToken] = $this->issueToken($user, 'hellom-pos-staff');
 
         return $this->ok([
@@ -574,6 +576,7 @@ class AuthController extends BaseApiController
 
         $user->forceFill([
             'password' => Hash::make((string) $request->input('password')),
+            'must_change_password' => false,
         ])->save();
         app(\App\Services\Notifications\LifecycleEmails::class)->passwordChanged($user, 'settings', $request->ip());
 
@@ -603,8 +606,10 @@ class AuthController extends BaseApiController
             'id' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
+            'username' => $user->username,
             'phone' => $user->phone,
             'role' => $user->role,
+            'must_change_password' => (bool) $user->must_change_password,
             'current_organization' => $user->currentOrganization ? [
                 'id' => $user->currentOrganization->id,
                 'name' => $user->currentOrganization->name,
@@ -630,6 +635,22 @@ class AuthController extends BaseApiController
     private function posAccessPayload(User $user): array
     {
         return \App\Support\Pos\PosAccess::forUser($user);
+    }
+
+    private function userByLoginIdentifier(string $identifier): ?User
+    {
+        $identifier = trim($identifier);
+        $email = mb_strtolower($identifier);
+        $phone = preg_replace('/[\s()-]/', '', $identifier);
+
+        $matches = User::query()
+            ->where('email', $email)
+            ->orWhere('username', $email)
+            ->orWhere('phone', $phone)
+            ->limit(2)
+            ->get();
+
+        return $matches->count() === 1 ? $matches->first() : null;
     }
 
     private function seedDefaultEntitlements(Organization $organization): void

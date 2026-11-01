@@ -23,10 +23,12 @@ class User extends Authenticatable
     protected $fillable = [
         'name',
         'email',
+        'username',
         'current_organization_id',
         'phone',
         'marketing_attribution',
         'password',
+        'must_change_password',
         'role',
         'points_balance',
     ];
@@ -50,7 +52,9 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
+            'last_login_at' => 'datetime',
             'password' => 'hashed',
+            'must_change_password' => 'boolean',
             'points_balance' => 'integer',
             'pending_guest_credentials' => 'boolean',
             'builder_tour_done_at' => 'datetime',

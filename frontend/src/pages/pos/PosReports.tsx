@@ -7,9 +7,9 @@ import {
 import { Download, Calendar, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import {
   getPosReportSummary, getPosReportProducts, getPosReportDaily, getPosReportShifts,
-  getPosReportTransactions, getPosReportMargin, exportPosReport,
+  getPosReportTransactions, getPosReportMargin, getPosReportGrossProfit, exportPosReport,
   type PosReportDaily, type PosReportProducts, type PosReportSummary,
-  type PosReportShift, type PosReportTransactions, type PosReportMargin,
+  type PosReportShift, type PosReportTransactions, type PosReportMargin, type PosReportGrossProfit,
 } from '@/lib/hellomApi';
 
 // Format harga Indonesia
@@ -58,6 +58,7 @@ const PosReports = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [loadError, setLoadError] = useState('');
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
   const [transactionPage, setTransactionPage] = useState(1);
   const [shiftPage, setShiftPage] = useState(1);
 
@@ -71,11 +72,14 @@ const PosReports = () => {
   const [shifts, setShifts] = useState<PosReportShift | null>(null);
   const [transactions, setTransactions] = useState<PosReportTransactions | null>(null);
   const [margin, setMargin] = useState<PosReportMargin | null>(null);
+  const [grossProfit, setGrossProfit] = useState<PosReportGrossProfit | null>(null);
   const [chartMode, setChartMode] = useState<'revenue'|'orders'>('revenue');
   // Owner-only cross-outlet aggregate view
   const [isOwner, setIsOwner] = useState(false);
   const [scopeAll, setScopeAll] = useState(false);
   const [outletBreakdown, setOutletBreakdown] = useState<PosReportSummary['outlet_breakdown']>([]);
+  const [reportOutletId, setReportOutletId] = useState<number | null>(null);
+  const [reportOutletName, setReportOutletName] = useState<string | null>(null);
 
   // Set preset tanggal
   const handlePreset = (p: Preset) => {
@@ -115,6 +119,12 @@ const PosReports = () => {
 
   // Load semua data
   const loadReports = async () => {
+    if (!navigator.onLine) {
+      setIsOnline(false);
+      setLoadError('Laporan keuangan lengkap memerlukan koneksi internet. Data lokal transaksi hanya tersedia di antrean sinkronisasi dan bukan laporan lengkap.');
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
     setLoadError('');
     try {
@@ -123,17 +133,20 @@ const PosReports = () => {
         end_date: endDate,
         date_basis: dateBasis,
         timezone: reportTimezone,
-        scope: scopeAll ? 'all' : undefined,
+        scope: scopeAll && reportOutletId === null ? 'all' : undefined,
+        outlet_id: reportOutletId ?? undefined,
       };
-      const [summaryRes, dailyRes, productsRes, shiftsRes, transactionsRes, marginRes] = await Promise.all([
+      const [summaryRes, dailyRes, productsRes, shiftsRes, transactionsRes] = await Promise.all([
         getPosReportSummary(params),
         getPosReportDaily(params),
         getPosReportProducts(params),
         getPosReportShifts({ ...params, page: shiftPage, per_page: 15 }),
         getPosReportTransactions({ ...params, page: transactionPage, per_page: 15 }),
-        getPosReportMargin(params),
       ]);
 
+      const [marginRes, grossProfitRes] = summaryRes.is_owner
+        ? await Promise.all([getPosReportMargin(params), getPosReportGrossProfit(params)])
+        : [null, null];
       setSummary(summaryRes.summary);
       setDailyData(dailyRes.daily);
       setTopProducts(productsRes.top_products);
@@ -145,10 +158,13 @@ const PosReports = () => {
       setShifts(shiftsRes);
       setTransactions(transactionsRes);
       setMargin(marginRes);
+      setGrossProfit(grossProfitRes);
 
     } catch (err) {
       console.error('Gagal load laporan:', err);
       setSummary(null);
+      setMargin(null);
+      setGrossProfit(null);
       setLoadError(err instanceof Error ? err.message : 'Laporan gagal dimuat. Periksa koneksi lalu coba lagi.');
     } finally {
       setIsLoading(false);
@@ -157,6 +173,10 @@ const PosReports = () => {
 
   // Export Excel
   const handleExport = async () => {
+    if (!navigator.onLine) {
+      alert('Export laporan memerlukan koneksi internet.');
+      return;
+    }
     setIsExporting(true);
     try {
       const blob = await exportPosReport({
@@ -164,7 +184,8 @@ const PosReports = () => {
         end_date: endDate,
         date_basis: dateBasis,
         timezone: reportTimezone,
-        scope: scopeAll ? 'all' : undefined,
+        scope: scopeAll && reportOutletId === null ? 'all' : undefined,
+        outlet_id: reportOutletId ?? undefined,
       });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -181,9 +202,34 @@ const PosReports = () => {
   };
 
   useEffect(() => {
+    const updateNetworkState = () => {
+      const online = navigator.onLine;
+      setIsOnline(online);
+      if (online) {
+        void loadReports();
+      } else {
+        setSummary(null);
+        setDailyData([]);
+        setTopProducts([]);
+        setTopCategories([]);
+        setPeakHours([]);
+        setPaymentBreakdown([]);
+        setShifts(null);
+        setTransactions(null);
+        setMargin(null);
+        setGrossProfit(null);
+        setLoadError('Laporan keuangan lengkap memerlukan koneksi internet. Data lokal transaksi hanya tersedia di antrean sinkronisasi dan bukan laporan lengkap.');
+      }
+    };
+    window.addEventListener('online', updateNetworkState);
+    window.addEventListener('offline', updateNetworkState);
     loadReports();
+    return () => {
+      window.removeEventListener('online', updateNetworkState);
+      window.removeEventListener('offline', updateNetworkState);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scopeAll, dateBasis, transactionPage, shiftPage]);
+  }, [scopeAll, reportOutletId, dateBasis, transactionPage, shiftPage]);
 
   const lowMarginProduct = margin?.products.find(
     (product) => product.tracked_quantity > 0
@@ -231,7 +277,7 @@ const PosReports = () => {
         </div>
         <button
           onClick={handleExport}
-          disabled={isExporting}
+          disabled={isExporting || !isOnline}
           className="flex items-center gap-2 px-5 py-2.5
             bg-amber-400 hover:bg-amber-500 text-[#111111]
             rounded-xl font-semibold transition disabled:opacity-50"
@@ -241,25 +287,47 @@ const PosReports = () => {
         </button>
       </div>
 
+      {!isOnline && (
+        <div role="status" className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+          Laporan penuh dan export belum tersedia saat offline. Angka transaksi lokal di perangkat tidak mewakili laporan seluruh outlet.
+        </div>
+      )}
+
       {/* OWNER-ONLY: scope toggle (semua outlet vs outlet aktif) */}
       {isOwner && (
         <div className="mb-6 flex flex-wrap items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-3">
           <span className="text-sm font-semibold text-amber-900">Tampilan laporan:</span>
           <div className="inline-flex rounded-xl border border-amber-300 bg-white p-1">
             <button
-              onClick={() => { setTransactionPage(1); setShiftPage(1); setScopeAll(false); }}
-              className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${!scopeAll ? 'bg-amber-400 text-[#111111]' : 'text-amber-700'}`}
+              onClick={() => {
+                setTransactionPage(1);
+                setShiftPage(1);
+                setReportOutletId(null);
+                setReportOutletName(null);
+                setScopeAll(false);
+              }}
+              className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${!scopeAll && reportOutletId === null ? 'bg-amber-400 text-[#111111]' : 'text-amber-700'}`}
             >
               Outlet Aktif
             </button>
             <button
-              onClick={() => { setTransactionPage(1); setShiftPage(1); setScopeAll(true); }}
-              className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${scopeAll ? 'bg-amber-400 text-[#111111]' : 'text-amber-700'}`}
+              onClick={() => {
+                setTransactionPage(1);
+                setShiftPage(1);
+                setReportOutletId(null);
+                setReportOutletName(null);
+                setScopeAll(true);
+              }}
+              className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${scopeAll && reportOutletId === null ? 'bg-amber-400 text-[#111111]' : 'text-amber-700'}`}
             >
               Semua Outlet
             </button>
           </div>
-          <span className="text-xs text-amber-700">Hanya pemilik organisasi yang bisa melihat gabungan semua outlet.</span>
+          <span className="text-xs text-amber-700">
+            {reportOutletName
+              ? `Rincian difilter ke ${reportOutletName}.`
+              : 'Hanya Admin Utama yang bisa melihat gabungan dan rincian outlet.'}
+          </span>
         </div>
       )}
 
@@ -417,10 +485,10 @@ const PosReports = () => {
                 : summary.revenue_change !== null && summary.revenue_change >= 10
                   ? <p>Pendapatan bersih naik {summary.revenue_change}% dibanding periode sebelumnya.</p>
                   : <p>{summary.revenue_change === null ? 'Belum ada data periode sebelumnya untuk perbandingan.' : 'Pendapatan bersih relatif stabil dibanding periode sebelumnya.'}</p>}
-              {margin?.gross_margin_pct !== null && margin?.gross_margin_pct !== undefined
+              {isOwner && margin?.gross_margin_pct !== null && margin?.gross_margin_pct !== undefined
                 ? <p>Estimasi margin produk setelah HPP: {margin.gross_margin_pct}% dengan cakupan biaya {margin.coverage_pct}% dari unit terjual.</p>
-                : <p>Belum cukup data HPP terhubung untuk membuat estimasi margin yang dapat dipercaya.</p>}
-              {lowMarginProduct && <p>Evaluasi harga jual atau resep <strong>{lowMarginProduct.product_name}</strong>: estimasi margin {lowMarginProduct.estimated_margin_pct}% pada periode ini.</p>}
+                : isOwner && <p>Belum cukup data HPP terhubung untuk membuat estimasi margin yang dapat dipercaya.</p>}
+              {isOwner && lowMarginProduct && <p>Evaluasi harga jual atau resep <strong>{lowMarginProduct.product_name}</strong>: estimasi margin {lowMarginProduct.estimated_margin_pct}% pada periode ini.</p>}
             </div>
           </section>
 
@@ -441,7 +509,8 @@ const PosReports = () => {
                         <th className="py-2 px-3 font-medium text-right">Pesanan</th>
                         <th className="py-2 px-3 font-medium text-right">Pendapatan</th>
                         <th className="py-2 px-3 font-medium text-right">Rata-rata/Order</th>
-                        <th className="py-2 pl-3 font-medium text-right">Kontribusi</th>
+                        <th className="py-2 px-3 font-medium text-right">Kontribusi</th>
+                        <th className="py-2 pl-3 font-medium text-right">Rincian</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -459,13 +528,28 @@ const PosReports = () => {
                             <td className="py-2.5 px-3 text-right text-gray-700">{orders}</td>
                             <td className="py-2.5 px-3 text-right font-semibold text-gray-900">{formatRp(revenue)}</td>
                             <td className="py-2.5 px-3 text-right text-gray-700">{formatRp(aov)}</td>
-                            <td className="py-2.5 pl-3 text-right">
+                            <td className="py-2.5 px-3 text-right">
                               <div className="flex items-center justify-end gap-2">
                                 <div className="hidden h-1.5 w-16 overflow-hidden rounded-full bg-gray-100 sm:block">
                                   <div className="h-full rounded-full bg-amber-400" style={{ width: `${share}%` }} />
                                 </div>
                                 <span className="font-medium text-gray-700">{share}%</span>
                               </div>
+                            </td>
+                            <td className="py-2.5 pl-3 text-right">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setTransactionPage(1);
+                                  setShiftPage(1);
+                                  setReportOutletId(o.outlet_id);
+                                  setReportOutletName(o.name);
+                                  setScopeAll(false);
+                                }}
+                                className="inline-flex items-center gap-1 rounded-lg border border-amber-200 px-2.5 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-50"
+                              >
+                                Lihat rincian <ChevronRight size={14} />
+                              </button>
                             </td>
                           </tr>
                         );
@@ -477,7 +561,22 @@ const PosReports = () => {
                         <td className="py-2.5 px-3 text-right">{grandOrders}</td>
                         <td className="py-2.5 px-3 text-right">{formatRp(grandRevenue)}</td>
                         <td className="py-2.5 px-3 text-right">{formatRp(grandOrders > 0 ? Math.round(grandRevenue / grandOrders) : 0)}</td>
-                        <td className="py-2.5 pl-3 text-right">100%</td>
+                        <td className="py-2.5 px-3 text-right">100%</td>
+                        <td className="py-2.5 pl-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setTransactionPage(1);
+                              setShiftPage(1);
+                              setReportOutletId(null);
+                              setReportOutletName(null);
+                              setScopeAll(true);
+                            }}
+                            className="inline-flex items-center gap-1 rounded-lg border border-amber-200 px-2.5 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-50"
+                          >
+                            Semua transaksi <ChevronRight size={14} />
+                          </button>
+                        </td>
                       </tr>
                     </tfoot>
                   </table>
@@ -671,7 +770,44 @@ const PosReports = () => {
             </div>
           </div>
 
-          <section className="mb-6 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+          {isOwner && grossProfit && (
+            <section className="mb-6 rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm">
+              <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-lg font-bold text-gray-900">Laba kotor berdasarkan harga beli saat transaksi</h2>
+                <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">
+                  Cakupan harga beli {grossProfit.coverage_pct}% unit
+                </span>
+              </div>
+              <p className="mb-4 text-xs text-gray-500">{grossProfit.disclaimer}</p>
+              {grossProfit.gross_profit === null ? (
+                <p className="rounded-xl bg-gray-50 p-4 text-sm text-gray-600">Belum ada transaksi dengan harga beli yang tersimpan. Perbarui data harga beli produk untuk transaksi selanjutnya.</p>
+              ) : (
+                <>
+                  <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3">
+                    <div className="rounded-xl bg-emerald-50 p-3"><p className="text-xs text-emerald-800">Laba kotor</p><p className="mt-1 font-bold text-emerald-950">{formatRp(grossProfit.gross_profit)}</p></div>
+                    <div className="rounded-xl bg-amber-50 p-3"><p className="text-xs text-amber-800">Margin kotor</p><p className="mt-1 font-bold text-amber-950">{grossProfit.gross_margin_pct ?? 0}%</p></div>
+                    <div className="col-span-2 rounded-xl bg-gray-50 p-3 md:col-span-1"><p className="text-xs text-gray-600">Biaya barang terjual</p><p className="mt-1 font-bold text-gray-900">{formatRp(grossProfit.cost)}</p></div>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[560px] text-sm">
+                      <thead><tr className="border-b text-left text-xs text-gray-500"><th className="py-2">Produk</th><th className="py-2 text-right">Terjual</th><th className="py-2 text-right">Penjualan bersih</th><th className="py-2 text-right">Harga beli</th><th className="py-2 text-right">Laba kotor</th></tr></thead>
+                      <tbody>{grossProfit.products.slice(0, 10).map((product) => (
+                        <tr key={product.product_name} className="border-b border-gray-50">
+                          <td className="py-2.5 font-medium text-gray-900">{product.product_name}</td>
+                          <td className="py-2.5 text-right">{product.quantity} ({product.tracked_quantity} tercakup)</td>
+                          <td className="py-2.5 text-right">{product.tracked_quantity ? formatRp(product.net_sales) : '—'}</td>
+                          <td className="py-2.5 text-right">{product.tracked_quantity ? formatRp(product.cost) : '—'}</td>
+                          <td className="py-2.5 text-right font-semibold">{product.tracked_quantity ? formatRp(product.gross_profit) : '—'}</td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </section>
+          )}
+
+          {isOwner && <section className="mb-6 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
             <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-lg font-bold text-gray-900">Estimasi laba setelah HPP & margin produk</h2>
               <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-800">
@@ -722,7 +858,7 @@ const PosReports = () => {
                 </div>
               </>
             )}
-          </section>
+          </section>}
 
           <section className="mb-6 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
@@ -773,8 +909,10 @@ const PosReports = () => {
           <section className="mb-6 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <div>
-                <h2 className="text-lg font-bold text-gray-900">Rincian transaksi</h2>
-                <p className="text-xs text-gray-500">{transactions?.pagination.total ?? 0} transaksi lunas/refund · klik satu order untuk melihat item.</p>
+                <h2 className="text-lg font-bold text-gray-900">
+                  Rincian transaksi · {scopeAll ? 'Semua outlet' : reportOutletName || 'Outlet aktif'}
+                </h2>
+                <p className="text-xs text-gray-500">{transactions?.pagination.total ?? 0} transaksi lunas/refund · klik satu order untuk melihat item terjual.</p>
               </div>
               <div className="flex items-center gap-2">
                 <button aria-label="Halaman sebelumnya" disabled={transactionPage <= 1 || isLoading} onClick={() => setTransactionPage(page => Math.max(1, page - 1))} className="rounded-lg border p-2 disabled:opacity-40"><ChevronLeft size={16} /></button>
@@ -786,7 +924,10 @@ const PosReports = () => {
               {transactions?.transactions.map((transaction) => (
                 <details key={transaction.id} className="rounded-xl border border-gray-100 px-4 py-3">
                   <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2 text-sm">
-                    <span className="font-semibold text-gray-900">#{transaction.order_number} · {transaction.customer_name}</span>
+                    <span className="font-semibold text-gray-900">
+                      #{transaction.order_number} · {transaction.customer_name}
+                      {scopeAll && <span className="ml-1 font-normal text-amber-800">· {transaction.outlet_name}</span>}
+                    </span>
                     <span className="text-gray-500">{transaction.payment_method.replaceAll('_', ' ')} · {transaction.report_at ? new Date(transaction.report_at).toLocaleString('id-ID') : 'Waktu tidak tersedia'}</span>
                     <span className={`font-semibold ${transaction.net_collected < 0 ? 'text-red-600' : 'text-gray-900'}`}>{formatRp(transaction.net_collected)}{transaction.refund_amount > 0 ? ' setelah refund' : ''}</span>
                   </summary>
@@ -798,7 +939,8 @@ const PosReports = () => {
                     </div>
                     {transaction.items.map((item, index) => (
                       <div key={`${transaction.id}-${index}`} className="flex justify-between gap-3 py-1 text-sm text-gray-700">
-                        <span>{item.product_name} × {item.quantity}</span><span>{formatRp(item.line_total)}</span>
+                        <span>{item.product_name} × {item.quantity} <span className="text-xs text-gray-500">@ {formatRp(item.unit_price)}</span></span>
+                        <span>{formatRp(item.line_total)}</span>
                       </div>
                     ))}
                   </div>

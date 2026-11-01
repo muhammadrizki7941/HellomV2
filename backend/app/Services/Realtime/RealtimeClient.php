@@ -40,7 +40,8 @@ class RealtimeClient
                 ->withHeaders([
                     'X-RT-SECRET' => $secret,
                 ])
-                ->post($serverUrl.'/emit', $body);
+                ->post($serverUrl.'/emit', $body)
+                ->throw();
         } catch (\Throwable $e) {
             // Do not break ordering flow if realtime server is down.
             Log::warning('Realtime emit failed: '.$e->getMessage(), [

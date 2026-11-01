@@ -12,6 +12,7 @@ import LiveToasts from '@/components/notifications/LiveToasts';
 import { useConsumerNotifications } from '@/hooks/useConsumerNotifications';
 import { EditorChromeContext } from '@/contexts/editorChrome';
 import ProfileReminder from '@/components/consumer/ProfileReminder';
+import { usePermissions } from '@/hooks/usePermissions';
 
 type DashboardApp = {
   id: string;
@@ -59,6 +60,7 @@ export default function DashboardLayout() {
   useDashboardColorScheme();
   const navigate = useNavigate();
   const location = useLocation();
+  const { isOrganizationAdmin } = usePermissions();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isDesktopCollapsed, setIsDesktopCollapsed] = useState(false);
   // When an editor requests an immersive canvas, hide the mobile chrome.
@@ -301,7 +303,7 @@ export default function DashboardLayout() {
             Aplikasi Saya
           </NavLink>
 
-          {(
+          {isOrganizationAdmin && (
             <NavLink 
               to="/dashboard/payments" 
               onClick={() => setIsSidebarOpen(false)}
@@ -414,7 +416,7 @@ export default function DashboardLayout() {
         </div>
       </main>
       {!chromeHidden && <nav aria-label="Navigasi utama" className="fixed inset-x-3 bottom-[max(0.5rem,env(safe-area-inset-bottom))] z-30 grid grid-cols-6 gap-1 rounded-2xl border border-amber-300/70 bg-[#F6B400] p-1.5 shadow-[0_8px_28px_rgba(24,18,0,0.28)] lg:hidden">
-        {[{ to: '/dashboard', label: 'Beranda', icon: House }, { to: '/dashboard/products', label: 'Jelajah', icon: Compass }, { to: '/dashboard/my-purchases', label: 'Aplikasi', icon: Grid2X2 }, { to: '/dashboard/payments', label: 'Tagihan', icon: ReceiptText }, { to: '/dashboard/support', label: 'Bantuan', icon: LifeBuoy }, { to: '/dashboard/profile', label: 'Profile', icon: CircleUserRound }].map(item => <NavLink key={item.to} to={item.to} end={item.to === '/dashboard'} onClick={() => setIsSidebarOpen(false)} className={({ isActive }) => cn('flex min-h-11 min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl text-[9px] font-semibold', isActive ? 'bg-zinc-950 text-amber-300 shadow-sm' : 'text-zinc-950/75 hover:bg-amber-300/60 hover:text-zinc-950')}><item.icon className="h-[18px] w-[18px]" strokeWidth={1.9} />{item.label}</NavLink>)}
+        {[{ to: '/dashboard', label: 'Beranda', icon: House }, { to: '/dashboard/products', label: 'Jelajah', icon: Compass }, { to: '/dashboard/my-purchases', label: 'Aplikasi', icon: Grid2X2 }, ...(isOrganizationAdmin ? [{ to: '/dashboard/payments', label: 'Tagihan', icon: ReceiptText }] : []), { to: '/dashboard/support', label: 'Bantuan', icon: LifeBuoy }, { to: '/dashboard/profile', label: 'Profile', icon: CircleUserRound }].map(item => <NavLink key={item.to} to={item.to} end={item.to === '/dashboard'} onClick={() => setIsSidebarOpen(false)} className={({ isActive }) => cn('flex min-h-11 min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl text-[9px] font-semibold', isActive ? 'bg-zinc-950 text-amber-300 shadow-sm' : 'text-zinc-950/75 hover:bg-amber-300/60 hover:text-zinc-950')}><item.icon className="h-[18px] w-[18px]" strokeWidth={1.9} />{item.label}</NavLink>)}
       </nav>}
       <LiveToasts />
 

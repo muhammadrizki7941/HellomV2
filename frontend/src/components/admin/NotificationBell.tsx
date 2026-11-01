@@ -43,6 +43,7 @@ export default function NotificationBell({ state }: { state: AdminNotificationsS
         onClick={() => setIsOpen(!isOpen)}
         className="relative p-2 text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition-colors"
         title="Notifikasi"
+        aria-expanded={isOpen}
         aria-label={unreadCount > 0 ? `Notifikasi, ${unreadCount} belum dibaca` : 'Notifikasi'}
       >
         <Bell className="w-5 h-5" />
@@ -56,7 +57,7 @@ export default function NotificationBell({ state }: { state: AdminNotificationsS
       {isOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-          <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[calc(100vw-2rem)] max-w-md lg:absolute lg:left-auto lg:top-12 lg:-translate-x-0 lg:-translate-y-0 lg:right-0 lg:w-[26rem]">
+          <div className="admin-notification-popover fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[calc(100vw-2rem)] max-w-md lg:absolute lg:left-auto lg:top-12 lg:-translate-x-0 lg:-translate-y-0 lg:right-0 lg:w-[26rem]">
             <NotificationDropdown
               state={state}
               group={group}

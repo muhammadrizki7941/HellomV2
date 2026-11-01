@@ -6,6 +6,7 @@ use App\Mail\OrganizationTeamInvitationMail;
 use App\Models\Order;
 use App\Models\Organization;
 use App\Models\OrganizationTeamInvitation;
+use App\Models\Outlet;
 use App\Models\PosStaff;
 use App\Support\Pos\ActivityActions;
 use App\Support\Pos\PosAccess;
@@ -15,27 +16,179 @@ use App\Models\PosStaffCashLog;
 use App\Models\PosStaffShift;
 use App\Models\User;
 use App\Services\Hellom\PlatformMailService;
+use App\Services\Realtime\RealtimeClient;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class PosStaffController extends BasePosController
 {
+    public function myProfile(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $org = $this->getOrg($request);
+        if (! $user instanceof User || ! $org instanceof Organization) {
+            return $this->error('Profil POS tidak ditemukan.', 'POS_PROFILE_NOT_FOUND', null, 404);
+        }
+
+        $staff = PosStaff::query()
+            ->forOrganization((int) $org->id)
+            ->where('linked_user_id', (int) $user->id)
+            ->first();
+
+        if (! $staff && $request->attributes->get('posStaff') instanceof PosStaff) {
+            $boundStaff = $request->attributes->get('posStaff');
+            if ((int) $boundStaff->linked_user_id === (int) $user->id) {
+                $staff = $boundStaff;
+            }
+        }
+        $outletNames = $staff
+            ? Outlet::query()->whereIn('id', $staff->assignedOutletIds())->pluck('name')->values()
+            : collect();
+
+        return $this->success([
+            'user' => [
+                'id' => (int) $user->id,
+                'name' => (string) $user->name,
+                'email' => $user->email,
+                'username' => $user->username,
+                'phone' => $user->phone,
+            ],
+            'organization' => [
+                'name' => (string) $org->name,
+            ],
+            'staff' => $staff ? [
+                'id' => (int) $staff->id,
+                'name' => (string) $staff->name,
+                'role' => $staff->businessRole(),
+                'status' => (string) $staff->employment_status,
+                'outlets' => $outletNames,
+                'attendance_qr' => $this->serializeAttendanceQr($staff),
+            ] : null,
+        ], 'Profil POS');
+    }
+
+    public function updateMyProfile(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $org = $this->getOrg($request);
+        if (! $user instanceof User || ! $org instanceof Organization) {
+            return $this->error('Profil POS tidak ditemukan.', 'POS_PROFILE_NOT_FOUND', null, 404);
+        }
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'min:2', 'max:255'],
+            'email' => ['sometimes', 'nullable', 'email', 'max:255'],
+            'phone' => ['sometimes', 'nullable', 'string', 'max:30', 'regex:/^\\+?[0-9]{8,15}$/'],
+        ]);
+        $email = array_key_exists('email', $validated) ? strtolower((string) $validated['email']) : $user->email;
+        $phone = array_key_exists('phone', $validated) ? $validated['phone'] : $user->phone;
+        $identifiers = array_values(array_filter([$email, $phone, $user->username]));
+        $identifierTaken = $identifiers !== [] && User::query()
+            ->where('id', '!=', (int) $user->id)
+            ->where(function ($query) use ($identifiers): void {
+                foreach ($identifiers as $identifier) {
+                    $query->orWhere('email', $identifier)
+                        ->orWhere('username', $identifier)
+                        ->orWhere('phone', $identifier);
+                }
+            })
+            ->exists();
+        if ($identifierTaken) {
+            return $this->error('Email atau nomor HP sudah digunakan akun lain.', 'POS_PROFILE_IDENTIFIER_TAKEN', null, 409);
+        }
+
+        $staff = PosStaff::query()
+            ->forOrganization((int) $org->id)
+            ->where('linked_user_id', (int) $user->id)
+            ->first();
+
+        DB::transaction(function () use ($user, $staff, $validated, $email, $phone): void {
+            $oldEmail = strtolower((string) $user->email);
+            $user->forceFill([
+                'name' => trim($validated['name']),
+                'email' => $email ?: null,
+                'phone' => $phone ?: null,
+                'email_verified_at' => $email && $email !== $oldEmail ? null : $user->email_verified_at,
+            ])->save();
+
+            if ($staff) {
+                $staff->forceFill([
+                    'name' => trim($validated['name']),
+                    'email' => $email ?: null,
+                    'phone' => $phone ?: null,
+                ])->save();
+            }
+        });
+
+        return $this->myProfile($request);
+    }
+
     public function index(Request $request): JsonResponse
     {
+        Gate::forUser($request->user())->authorize('viewAny', PosStaff::class);
+
         $org = $this->getOrg($request);
         $tenantSlug = $this->getActiveTenantSlug($request, $org);
+        $staffActor = $request->attributes->get('posStaff');
+        $isOrgAdmin = $this->isOrgOwner($request, $org);
+        $filters = $request->validate([
+            'role' => 'nullable|string|in:admin,cashier',
+            'status' => 'nullable|string|in:active,inactive,on_leave',
+            'outlet_id' => 'nullable|integer',
+        ]);
+        $visibleOutletIds = $staffActor instanceof PosStaff
+            ? $staffActor->assignedOutletIds()
+            : Outlet::query()->where('organization_id', $org->id)->pluck('id')->map(fn ($id) => (int) $id)->all();
+        if (isset($filters['outlet_id']) && !in_array((int) $filters['outlet_id'], $visibleOutletIds, true)) {
+            return $this->error('Outlet tidak tersedia pada akses akun ini.', 'POS_OUTLET_NOT_ASSIGNED', null, 403);
+        }
+        $tenantSlugs = Outlet::query()
+            ->where('organization_id', $org->id)
+            ->whereIn('id', $visibleOutletIds)
+            ->pluck('tenant_slug')
+            ->filter()
+            ->push((string) $org->pos_tenant_slug)
+            ->unique()
+            ->values()
+            ->all();
         $today = now()->startOfDay();
         $endOfToday = now()->endOfDay();
 
-        $staff = PosStaff::query()
-            ->with('linkedUser:id,name,email')
-            ->where('tenant_id', $tenantSlug)
+        $staffQuery = PosStaff::query()
+            ->with(['linkedUser:id,name,email,username,phone,last_login_at', 'createdBy:id,name'])
+            ->where(function ($query) use ($org, $tenantSlugs) {
+                $query->where('organization_id', $org->id)
+                    ->orWhere(fn ($legacy) => $legacy->whereNull('organization_id')->whereIn('tenant_id', $tenantSlugs));
+            });
+        if ($staffActor instanceof PosStaff) {
+            $staffQuery->where(function ($query) use ($visibleOutletIds) {
+                $query->whereHas('outlets', fn ($outlets) => $outlets->whereIn('outlets.id', $visibleOutletIds))
+                    ->orWhereIn('outlet_id', $visibleOutletIds);
+            })->where(function ($visibleStaff) use ($staffActor) {
+                $visibleStaff->where('role', PosStaff::ROLE_CASHIER)
+                    ->orWhere('id', (int) $staffActor->id);
+            });
+        } elseif (isset($filters['outlet_id'])) {
+            $staffQuery->where(function ($query) use ($filters) {
+                $query->whereHas('outlets', fn ($outlets) => $outlets->where('outlets.id', (int) $filters['outlet_id']))
+                    ->orWhere('outlet_id', (int) $filters['outlet_id']);
+            });
+        }
+        if (isset($filters['role'])) {
+            $staffQuery->where('role', $filters['role']);
+        }
+        if (isset($filters['status'])) {
+            $staffQuery->where('employment_status', $filters['status']);
+        }
+        $staff = $staffQuery
             ->orderByRaw("FIELD(role, 'admin', 'cashier')")
             ->orderBy('name')
             ->get();
@@ -44,32 +197,32 @@ class PosStaffController extends BasePosController
         $linkedUserIds = $staff->pluck('linked_user_id')->filter()->values();
 
         $shifts = PosStaffShift::query()
-            ->where('tenant_id', $tenantSlug)
+            ->whereIn('staff_id', $staffIds)
             ->whereBetween('start_at', [now()->copy()->subDays(1)->startOfDay(), now()->copy()->addDays(7)->endOfDay()])
             ->orderBy('start_at')
             ->get()
             ->groupBy('staff_id');
 
         $todayAttendances = PosStaffAttendance::query()
-            ->where('tenant_id', $tenantSlug)
+            ->whereIn('staff_id', $staffIds)
             ->whereDate('attendance_date', $today)
             ->get()
             ->keyBy('staff_id');
 
         $recentAttendances = PosStaffAttendance::query()
-            ->where('tenant_id', $tenantSlug)
+            ->whereIn('staff_id', $staffIds)
             ->whereBetween('attendance_date', [now()->copy()->subDays(14)->toDateString(), now()->toDateString()])
             ->orderByDesc('attendance_date')
             ->get();
 
         $openCashLogs = PosStaffCashLog::query()
-            ->where('tenant_id', $tenantSlug)
+            ->whereIn('staff_id', $staffIds)
             ->where('status', 'open')
             ->get()
             ->keyBy('staff_id');
 
         $recentCashLogs = PosStaffCashLog::query()
-            ->where('tenant_id', $tenantSlug)
+            ->whereIn('staff_id', $staffIds)
             ->orderByDesc('started_at')
             ->limit(10)
             ->get();
@@ -78,7 +231,8 @@ class PosStaffController extends BasePosController
             ? collect()
             : Order::withoutGlobalScope('tenant')
                 ->selectRaw('user_id, COUNT(*) as total_transactions, COALESCE(SUM(final_amount), 0) as total_sales')
-                ->where('tenant_id', $tenantSlug)
+                ->whereIn('tenant_id', $tenantSlugs)
+                ->whereIn('outlet_id', $visibleOutletIds)
                 ->whereIn('user_id', $linkedUserIds)
                 ->where('payment_status', 'paid')
                 ->groupBy('user_id')
@@ -104,10 +258,10 @@ class PosStaffController extends BasePosController
                 ];
             });
 
-        $staffItems = $staff->map(function (PosStaff $member) use ($shifts, $todayAttendances, $openCashLogs, $performanceRows, $attendanceSummaries) {
+        $staffItems = $staff->map(function (PosStaff $member) use ($shifts, $todayAttendances, $openCashLogs, $performanceRows, $attendanceSummaries, $isOrgAdmin) {
             $this->ensureAttendanceQrToken($member);
 
-            return $this->serializeStaff($member, $shifts->get($member->id, collect()), $todayAttendances->get($member->id), $openCashLogs->get($member->id), $performanceRows->get($member->linked_user_id), $attendanceSummaries->get($member->id));
+            return $this->serializeStaff($member, $shifts->get($member->id, collect()), $todayAttendances->get($member->id), $openCashLogs->get($member->id), $performanceRows->get($member->linked_user_id), $attendanceSummaries->get($member->id), $isOrgAdmin);
         })->values();
 
         $scheduledTodayCount = $staffItems->filter(fn (array $member) => !empty($member['today_shift']))->count();
@@ -143,26 +297,27 @@ class PosStaffController extends BasePosController
                 'attendance_rate' => $attendanceRate,
             ],
             'staff' => $staffItems,
-            'top_staff' => $topStaff,
-            'notifications' => $notifications,
+            'top_staff' => $isOrgAdmin ? $topStaff : [],
+            'notifications' => $isOrgAdmin ? $notifications : [],
             'today' => [
                 'date' => $today->toDateString(),
                 'shifts' => PosStaffShift::query()
                     ->with('staff:id,name,role')
-                    ->where('tenant_id', $tenantSlug)
+                    ->whereIn('staff_id', $staffIds)
                     ->whereBetween('start_at', [$today, $endOfToday])
                     ->orderBy('start_at')
                     ->get()
                     ->map(fn (PosStaffShift $shift) => $this->serializeShift($shift)),
-                'recent_attendances' => $recentAttendances
+                'recent_attendances' => $isOrgAdmin ? $recentAttendances
                     ->take(8)
-                    ->map(fn (PosStaffAttendance $attendance) => $this->serializeAttendance($attendance, $staff->firstWhere('id', $attendance->staff_id))),
-                'recent_cash_logs' => $recentCashLogs
-                    ->map(fn (PosStaffCashLog $cashLog) => $this->serializeCashLog($cashLog, $staff->firstWhere('id', $cashLog->staff_id))),
+                    ->map(fn (PosStaffAttendance $attendance) => $this->serializeAttendance($attendance, $staff->firstWhere('id', $attendance->staff_id))) : [],
+                'recent_cash_logs' => $isOrgAdmin
+                    ? $recentCashLogs->map(fn (PosStaffCashLog $cashLog) => $this->serializeCashLog($cashLog, $staff->firstWhere('id', $cashLog->staff_id)))
+                    : [],
             ],
             'current_user_staff_id' => $myStaff?->id,
             'meta' => [
-                'roles' => ['admin', 'cashier'],
+                'roles' => $staffActor instanceof PosStaff ? ['cashier'] : ['admin', 'cashier'],
                 'permissions' => PosPermissions::catalog(),
             ],
         ], 'Staff management loaded');
@@ -170,6 +325,8 @@ class PosStaffController extends BasePosController
 
     public function store(Request $request): JsonResponse
     {
+        Gate::forUser($request->user())->authorize('create', PosStaff::class);
+
         $org = $this->getOrg($request);
         $tenantSlug = $this->getActiveTenantSlug($request, $org);
         $outletId = $request->attributes->get('posOutletId');
@@ -177,7 +334,12 @@ class PosStaffController extends BasePosController
             'name' => 'required|string|max:100',
             'email' => 'nullable|email|max:120',
             'phone' => 'nullable|string|max:30',
+            'username' => ['nullable', 'string', 'min:3', 'max:50', 'alpha_dash'],
+            'create_login' => 'nullable|boolean',
+            'password' => 'nullable|string|min:8|max:128',
             'role' => 'required|string|in:admin,cashier',
+            'outlet_ids' => 'nullable|array|min:1',
+            'outlet_ids.*' => 'required|integer|distinct',
             'employment_status' => 'nullable|string|in:active,inactive,on_leave',
             'permissions' => 'nullable|array',
             'linked_user_id' => 'nullable|integer|exists:users,id',
@@ -186,33 +348,136 @@ class PosStaffController extends BasePosController
             'notes' => 'nullable|string|max:1000',
         ]);
 
-        $linkedUserId = $this->resolveLinkedUserId($org->id, $validated['linked_user_id'] ?? null, $validated['email'] ?? null);
-
-        if ($linkedUserId === false) {
-            return $this->error('User terhubung tidak termasuk tim organisasi ini', 'STAFF_USER_INVALID', null, 422);
+        $staffActor = $request->attributes->get('posStaff');
+        if ($staffActor instanceof PosStaff && $validated['role'] !== PosStaff::ROLE_CASHIER) {
+            return $this->error('Admin Outlet hanya dapat membuat akun Kasir.', 'STAFF_ROLE_FORBIDDEN', null, 403);
         }
 
-        $staff = PosStaff::create([
-            'tenant_id' => $tenantSlug,
-            'outlet_id' => $outletId ? (int) $outletId : null,
-            'organization_id' => $org->id,
-            'linked_user_id' => $linkedUserId,
-            'name' => trim($validated['name']),
-            'email' => filled($validated['email'] ?? null) ? trim((string) $validated['email']) : null,
-            'phone' => filled($validated['phone'] ?? null) ? trim((string) $validated['phone']) : null,
-            'role' => $validated['role'],
-            'employment_status' => $validated['employment_status'] ?? 'active',
-            'permissions' => $this->normalizePermissions($validated['role'], $validated['permissions'] ?? null),
-            'hourly_rate' => $validated['hourly_rate'] ?? 0,
-            'joined_at' => $validated['joined_at'] ?? null,
-            'notes' => $validated['notes'] ?? null,
-            'attendance_qr_token' => $this->generateAttendanceQrToken(),
-            'attendance_qr_token_rotated_at' => now(),
-            'last_activity_at' => now(),
+        $outletIds = array_values(array_unique(array_map('intval', $validated['outlet_ids'] ?? [(int) $outletId])));
+        $invalidOutletResponse = $this->validateStaffOutletAssignments($org, $outletIds, $staffActor);
+        if ($invalidOutletResponse) {
+            return $invalidOutletResponse;
+        }
+        $primaryOutlet = Outlet::query()->where('organization_id', $org->id)->whereKey($outletIds[0])->firstOrFail();
+        $tenantSlug = (string) ($primaryOutlet->tenant_slug ?: $tenantSlug);
+
+        $createLogin = filter_var($validated['create_login'] ?? false, FILTER_VALIDATE_BOOLEAN)
+            || filled($validated['username'] ?? null);
+        $email = filled($validated['email'] ?? null) ? mb_strtolower(trim((string) $validated['email'])) : null;
+        $username = filled($validated['username'] ?? null) ? mb_strtolower(trim((string) $validated['username'])) : null;
+        $phone = filled($validated['phone'] ?? null) ? preg_replace('/[\s()-]/', '', (string) $validated['phone']) : null;
+        $temporaryPassword = null;
+        $linkedUserId = null;
+
+        if ($createLogin) {
+            if ($email === null && $username === null && $phone === null) {
+                return $this->error('Isi email, username, atau nomor HP untuk membuat akun login.', 'STAFF_LOGIN_IDENTIFIER_REQUIRED', null, 422);
+            }
+
+            $identifiers = array_values(array_filter([$email, $username, $phone]));
+            $existingUser = User::query()->where(function ($query) use ($identifiers): void {
+                foreach ($identifiers as $identifier) {
+                    $query->orWhere('email', $identifier)
+                        ->orWhere('username', $identifier)
+                        ->orWhere('phone', $identifier);
+                }
+            })->exists();
+            if ($existingUser) {
+                return $this->error('Email, username, atau nomor HP sudah dipakai akun lain.', 'STAFF_LOGIN_IDENTIFIER_TAKEN', null, 409);
+            }
+        } else {
+            $linkedUserId = $this->resolveLinkedUserId($org->id, $validated['linked_user_id'] ?? null, $email);
+            if ($linkedUserId === false) {
+                return $this->error('User terhubung tidak termasuk tim organisasi ini', 'STAFF_USER_INVALID', null, 422);
+            }
+        }
+
+        if ($staffActor instanceof PosStaff && $linkedUserId !== null) {
+            return $this->error('Akun yang sudah ada tidak dapat ditautkan oleh Admin Outlet.', 'STAFF_LINK_FORBIDDEN', null, 403);
+        }
+
+        if ($linkedUserId !== null) {
+            $membershipRole = DB::table('organization_user')
+                ->where('organization_id', $org->id)
+                ->where('user_id', $linkedUserId)
+                ->value('role');
+            if (in_array((string) $membershipRole, ['owner', 'admin'], true)) {
+                return $this->error('Akun Admin Utama tidak dapat ditautkan sebagai akun staf POS.', 'STAFF_LINK_FORBIDDEN', null, 403);
+            }
+            if (PosStaff::query()->where('linked_user_id', $linkedUserId)->exists()) {
+                return $this->error('Akun ini sudah tertaut ke data staf POS.', 'STAFF_ALREADY_LINKED', null, 409);
+            }
+        }
+
+        $staff = DB::transaction(function () use ($request, $org, $tenantSlug, $outletIds, $validated, $createLogin, $email, $username, $phone, &$linkedUserId, &$temporaryPassword): PosStaff {
+            if ($createLogin) {
+                $temporaryPassword = $validated['password'] ?? Str::password(20);
+                $user = User::query()->create([
+                    'name' => trim($validated['name']),
+                    'email' => $email,
+                    'username' => $username,
+                    'phone' => $phone,
+                    'password' => Hash::make($temporaryPassword),
+                    'must_change_password' => true,
+                    'role' => 'cashier',
+                    'current_organization_id' => $org->id,
+                ]);
+                DB::table('organization_user')->insert([
+                    'organization_id' => (int) $org->id,
+                    'user_id' => (int) $user->id,
+                    'role' => 'cashier',
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+                $linkedUserId = (int) $user->id;
+            }
+
+            $staff = PosStaff::query()->create([
+                'tenant_id' => $tenantSlug,
+                'outlet_id' => $outletIds[0],
+                'organization_id' => $org->id,
+                'linked_user_id' => $linkedUserId,
+                'created_by_user_id' => $request->user()?->id,
+                'name' => trim($validated['name']),
+                'email' => $email,
+                'phone' => $phone,
+                'role' => $validated['role'],
+                'employment_status' => $validated['employment_status'] ?? 'active',
+                'permissions' => $this->normalizePermissions($validated['role'], $validated['permissions'] ?? null),
+                'hourly_rate' => $validated['hourly_rate'] ?? 0,
+                'joined_at' => $validated['joined_at'] ?? null,
+                'notes' => $validated['notes'] ?? null,
+                'attendance_qr_token' => $this->generateAttendanceQrToken(),
+                'attendance_qr_token_rotated_at' => now(),
+                'last_activity_at' => now(),
+            ]);
+            $staff->outlets()->sync($outletIds);
+
+            return $staff;
+        });
+
+        $this->recordActivity($request, ActivityActions::STAFF_CREATED, [
+            'target_type' => 'staff',
+            'target_id' => $staff->id,
+            'target_label' => $staff->name,
+            'after' => $this->accessSnapshot($staff),
         ]);
 
         return $this->success([
-            'staff' => $this->serializeStaff($staff->fresh('linkedUser'), collect(), null, null, null, null),
+            'staff' => $this->serializeStaff(
+                $staff->fresh(['linkedUser', 'createdBy']),
+                collect(),
+                null,
+                null,
+                null,
+                null,
+                $this->isOrgOwner($request, $org)
+            ),
+            'credentials' => $temporaryPassword === null ? null : [
+                'identifier' => $username ?? $phone ?? $email,
+                'password' => $temporaryPassword,
+                'must_change_password' => true,
+            ],
         ], 'Staff created', 201);
     }
 
@@ -228,19 +493,7 @@ class PosStaffController extends BasePosController
             return $this->error('Organisasi tidak ditemukan', 'NO_ORGANIZATION', null, 403);
         }
 
-        if (!$this->isOrgOwner($request, $org)) {
-            return $this->error('Hanya owner/admin yang bisa mengundang login staff', 'INSUFFICIENT_ROLE', null, 403);
-        }
-
-        $tenantSlug = $this->getActiveTenantSlug($request, $org);
-        $staff = PosStaff::query()
-            ->where('tenant_id', $tenantSlug)
-            ->where('organization_id', $org->id)
-            ->find($staffId);
-
-        if (!$staff instanceof PosStaff) {
-            return $this->error('Staff tidak ditemukan untuk outlet ini', 'STAFF_NOT_FOUND', null, 404);
-        }
+        $staff = $this->findStaffForManagement($request, $org, $staffId);
 
         $validated = $request->validate([
             'email' => ['nullable', 'email', 'max:255'],
@@ -264,6 +517,18 @@ class PosStaffController extends BasePosController
         $existingUser = User::query()->where('email', $email)->first();
         if ($existingUser instanceof User) {
             $isMember = $org->users()->where('users.id', $existingUser->id)->exists();
+            $membershipRole = DB::table('organization_user')
+                ->where('organization_id', $org->id)
+                ->where('user_id', $existingUser->id)
+                ->value('role');
+            if ($request->attributes->get('posStaff') instanceof PosStaff
+                && in_array((string) $membershipRole, ['owner', 'admin'], true)) {
+                return $this->error('Admin Outlet tidak dapat menautkan akun Admin Utama.', 'STAFF_LINK_FORBIDDEN', null, 403);
+            }
+            if ($request->attributes->get('posStaff') instanceof PosStaff
+                && PosStaff::query()->where('organization_id', $org->id)->where('linked_user_id', $existingUser->id)->exists()) {
+                return $this->error('Akun ini sudah tertaut ke data staff lain.', 'STAFF_ALREADY_LINKED', null, 409);
+            }
             $belongsToOther = $existingUser->organizations()
                 ->where('organizations.id', '!=', $org->id)
                 ->exists();
@@ -278,7 +543,15 @@ class PosStaffController extends BasePosController
 
                 return $this->success([
                     'linked' => true,
-                    'staff' => $this->serializeStaff($staff->fresh('linkedUser'), collect(), null, null, null, null),
+                    'staff' => $this->serializeStaff(
+                        $staff->fresh(['linkedUser', 'createdBy']),
+                        collect(),
+                        null,
+                        null,
+                        null,
+                        null,
+                        $this->isOrgOwner($request, $org)
+                    ),
                 ], 'Akun sudah menjadi anggota organisasi dan langsung ditautkan ke staff');
             }
         }
@@ -323,7 +596,15 @@ class PosStaffController extends BasePosController
                 'expires_at' => $invitation->expires_at,
             ],
             'email_delivery' => $delivery,
-            'staff' => $this->serializeStaff($staff->fresh('linkedUser'), collect(), null, null, null, null),
+            'staff' => $this->serializeStaff(
+                $staff->fresh(['linkedUser', 'createdBy']),
+                collect(),
+                null,
+                null,
+                null,
+                null,
+                $this->isOrgOwner($request, $org)
+            ),
         ], 'Undangan login dikirim ke email staff', 201);
     }
 
@@ -345,16 +626,18 @@ class PosStaffController extends BasePosController
     public function update(Request $request, int $staffId): JsonResponse
     {
         $org = $this->getOrg($request);
-        $tenantSlug = $this->getActiveTenantSlug($request, $org);
-        $staff = PosStaff::query()
-            ->where('tenant_id', $tenantSlug)
-            ->findOrFail($staffId);
+        if (!$org instanceof Organization) {
+            return $this->error('Organisasi tidak ditemukan', 'NO_ORGANIZATION', null, 403);
+        }
+        $staff = $this->findStaffForManagement($request, $org, $staffId);
 
         $validated = $request->validate([
             'name' => 'required|string|max:100',
             'email' => 'nullable|email|max:120',
             'phone' => 'nullable|string|max:30',
             'role' => 'required|string|in:admin,cashier',
+            'outlet_ids' => 'nullable|array|min:1',
+            'outlet_ids.*' => 'required|integer|distinct',
             'employment_status' => 'nullable|string|in:active,inactive,on_leave',
             'permissions' => 'nullable|array',
             'linked_user_id' => 'nullable|integer|exists:users,id',
@@ -362,11 +645,32 @@ class PosStaffController extends BasePosController
             'joined_at' => 'nullable|date',
             'notes' => 'nullable|string|max:1000',
         ]);
+        $staffActor = $request->attributes->get('posStaff');
+        if ($staffActor instanceof PosStaff) {
+            if ($validated['role'] !== PosStaff::ROLE_CASHIER) {
+                return $this->error('Admin Outlet hanya dapat mengelola akun Kasir.', 'STAFF_ROLE_FORBIDDEN', null, 403);
+            }
+            if ($request->exists('linked_user_id') && (int) ($validated['linked_user_id'] ?? 0) !== (int) $staff->linked_user_id) {
+                return $this->error('Admin Outlet tidak dapat mengganti akun login staff.', 'STAFF_LINK_FORBIDDEN', null, 403);
+            }
+        }
+        $beforeAccess = $this->accessSnapshot($staff);
+        $outletIds = null;
+        if (array_key_exists('outlet_ids', $validated)) {
+            $outletIds = array_values(array_unique(array_map('intval', $validated['outlet_ids'])));
+            $invalidOutletResponse = $this->validateStaffOutletAssignments($org, $outletIds, $staffActor);
+            if ($invalidOutletResponse) {
+                return $invalidOutletResponse;
+            }
+        }
 
         $linkedUserId = $this->resolveLinkedUserId($org->id, $validated['linked_user_id'] ?? null, $validated['email'] ?? null);
 
         if ($linkedUserId === false) {
             return $this->error('User terhubung tidak termasuk tim organisasi ini', 'STAFF_USER_INVALID', null, 422);
+        }
+        if ($staffActor instanceof PosStaff && (int) ($linkedUserId ?? $staff->linked_user_id ?? 0) !== (int) ($staff->linked_user_id ?? 0)) {
+            return $this->error('Admin Outlet tidak dapat mengganti atau menautkan akun login staff.', 'STAFF_LINK_FORBIDDEN', null, 403);
         }
         // The edit form does not send linked_user_id: keep the invited login instead of unlinking
         // the cashier (who would lose POS access) whenever the staff email differs from theirs.
@@ -374,27 +678,85 @@ class PosStaffController extends BasePosController
             $linkedUserId = $staff->linked_user_id;
         }
 
-        $beforeAccess = $this->accessSnapshot($staff);
-        $staff->update([
-            'linked_user_id' => $linkedUserId,
-            'name' => trim($validated['name']),
-            'email' => filled($validated['email'] ?? null) ? trim((string) $validated['email']) : null,
-            'phone' => filled($validated['phone'] ?? null) ? trim((string) $validated['phone']) : null,
-            'role' => $validated['role'],
-            'employment_status' => $validated['employment_status'] ?? 'active',
-            'permissions' => $this->normalizePermissions($validated['role'], $validated['permissions'] ?? null),
-            'hourly_rate' => $validated['hourly_rate'] ?? 0,
-            'joined_at' => $validated['joined_at'] ?? null,
-            'notes' => $validated['notes'] ?? null,
-        ]);
-        $afterAccess = $this->accessSnapshot($staff->fresh());
-        if ($beforeAccess !== $afterAccess) {
-            $this->recordActivity($request, ActivityActions::STAFF_ACCESS_CHANGED, ['target_type' => 'staff', 'target_id' => $staff->id,
-                'target_label' => $staff->name, 'before' => $beforeAccess, 'after' => $afterAccess]);
+        $before = [
+            'name' => $staff->name,
+            'email' => $staff->email,
+            'phone' => $staff->phone,
+            'role' => $staff->role,
+            'employment_status' => $staff->employment_status,
+            'outlet_ids' => $staff->assignedOutletIds(),
+            'permissions' => PosPermissions::forStaff($staff),
+        ];
+        $oldLinkedUserId = (int) ($staff->linked_user_id ?? 0);
+        $oldAccess = $this->accessSnapshot($staff);
+        $nextStatus = $validated['employment_status'] ?? $staff->employment_status;
+        $nextRole = $validated['role'];
+        $nextOutletIds = $outletIds ?? $staff->assignedOutletIds();
+        $nextAccess = [
+            'role' => $nextRole,
+            'business_role' => $nextRole === PosStaff::ROLE_OUTLET_ADMIN ? 'outlet_admin' : 'cashier',
+            'employment_status' => $nextStatus,
+            'linked_user_id' => $linkedUserId ? (int) $linkedUserId : null,
+            'permissions' => PosPermissions::normalize($nextRole, $validated['permissions'] ?? $staff->permissions),
+            'outlet_ids' => $nextOutletIds,
+        ];
+        $identityAccessChanged = $oldAccess['role'] !== $nextAccess['role']
+            || $oldAccess['employment_status'] !== $nextAccess['employment_status']
+            || $oldAccess['linked_user_id'] !== $nextAccess['linked_user_id']
+            || $oldAccess['outlet_ids'] !== $nextAccess['outlet_ids'];
+
+        DB::transaction(function () use ($staff, $outletIds, $linkedUserId, $validated, $nextStatus): void {
+            if ($outletIds !== null) {
+                $staff->outlets()->sync($outletIds);
+                $staff->forceFill(['outlet_id' => $outletIds[0]])->save();
+            }
+            $staff->update([
+                'linked_user_id' => $linkedUserId,
+                'name' => trim($validated['name']),
+                'email' => array_key_exists('email', $validated) ? (filled($validated['email']) ? mb_strtolower(trim((string) $validated['email'])) : null) : $staff->email,
+                'phone' => array_key_exists('phone', $validated) ? (filled($validated['phone']) ? preg_replace('/[\s()-]/', '', (string) $validated['phone']) : null) : $staff->phone,
+                'role' => $validated['role'],
+                'employment_status' => $nextStatus,
+                'permissions' => $this->normalizePermissions($validated['role'], $validated['permissions'] ?? $staff->permissions),
+                'hourly_rate' => $validated['hourly_rate'] ?? $staff->hourly_rate,
+                'joined_at' => $validated['joined_at'] ?? $staff->joined_at,
+                'notes' => array_key_exists('notes', $validated) ? $validated['notes'] : $staff->notes,
+            ]);
+        });
+        $staff->refresh();
+        if ($identityAccessChanged || $oldLinkedUserId !== (int) ($staff->linked_user_id ?? 0)) {
+            $this->revokeStaffUserAccess($oldLinkedUserId ?: null);
+            if ($staff->linked_user_id && (int) $staff->linked_user_id !== $oldLinkedUserId) {
+                $this->revokeStaffUserAccess((int) $staff->linked_user_id);
+            }
         }
+        $after = [
+            'name' => $staff->name,
+            'email' => $staff->email,
+            'phone' => $staff->phone,
+            'role' => $staff->role,
+            'employment_status' => $staff->employment_status,
+            'outlet_ids' => $staff->assignedOutletIds(),
+            'permissions' => PosPermissions::forStaff($staff),
+        ];
+        $this->recordActivity($request, ActivityActions::STAFF_PROFILE_UPDATED, [
+            'target_type' => 'staff',
+            'target_id' => $staff->id,
+            'target_label' => $staff->name,
+            'before' => $before,
+            'after' => $after,
+        ]);
 
         return $this->success([
-            'staff' => $this->serializeStaff($staff->fresh('linkedUser'), collect(), null, null, null, null),
+            'staff' => $this->serializeStaff(
+                $staff->fresh(['linkedUser', 'createdBy']),
+                collect(),
+                null,
+                null,
+                null,
+                null,
+                $this->isOrgOwner($request, $org)
+            ),
         ], 'Staff updated');
     }
 
@@ -435,14 +797,60 @@ class PosStaffController extends BasePosController
 
     public function destroy(Request $request, int $staffId): JsonResponse
     {
-        $tenantSlug = $request->attributes->get('posTenantSlug');
-        $staff = PosStaff::query()
-            ->where('tenant_id', $tenantSlug)
-            ->findOrFail($staffId);
+        $org = $this->getOrg($request);
+        if (!$org instanceof Organization) {
+            return $this->error('Organisasi tidak ditemukan', 'NO_ORGANIZATION', null, 403);
+        }
+        $staff = $this->findStaffForManagement($request, $org, $staffId);
 
-        $staff->delete();
+        $before = $this->accessSnapshot($staff);
+        $staff->forceFill(['employment_status' => 'inactive'])->save();
+        $this->revokeStaffUserAccess($staff->linked_user_id ? (int) $staff->linked_user_id : null);
+        $this->recordActivity($request, ActivityActions::STAFF_DEACTIVATED, [
+            'target_type' => 'staff',
+            'target_id' => $staff->id,
+            'target_label' => $staff->name,
+            'before' => $before,
+            'after' => $this->accessSnapshot($staff),
+        ]);
 
-        return $this->success(null, 'Staff deleted');
+        return $this->success(null, 'Akun staf berhasil dinonaktifkan');
+    }
+
+    public function resetPassword(Request $request, int $staffId): JsonResponse
+    {
+        $org = $this->getOrg($request);
+        if (!$org instanceof Organization) {
+            return $this->error('Organisasi tidak ditemukan', 'NO_ORGANIZATION', null, 403);
+        }
+
+        $staff = $this->findStaffForManagement($request, $org, $staffId);
+        $user = $staff->linkedUser;
+        if (!$user instanceof User) {
+            return $this->error('Staf belum memiliki akun login. Buat akun login dari form staf terlebih dahulu.', 'STAFF_LOGIN_NOT_LINKED', null, 409);
+        }
+
+        $password = Str::password(20);
+        $user->forceFill([
+            'password' => Hash::make($password),
+            'must_change_password' => true,
+        ])->save();
+        $this->revokeStaffUserAccess((int) $user->id);
+        $this->recordActivity($request, ActivityActions::STAFF_PASSWORD_RESET, [
+            'target_type' => 'staff',
+            'target_id' => $staff->id,
+            'target_label' => $staff->name,
+            'after' => ['must_change_password' => true],
+        ]);
+
+        return $this->success([
+            'staff_id' => $staff->id,
+            'credentials' => [
+                'identifier' => $user->username ?: $user->email ?: $user->phone,
+                'password' => $password,
+                'must_change_password' => true,
+            ],
+        ], 'Kata sandi sementara dibuat. Tampilkan sekali dan berikan langsung kepada staf.');
     }
 
     public function storeShift(Request $request): JsonResponse
@@ -838,7 +1246,8 @@ class PosStaffController extends BasePosController
         ?PosStaffAttendance $todayAttendance,
         ?PosStaffCashLog $cashLog,
         mixed $performanceRow,
-        ?array $attendanceSummary
+        ?array $attendanceSummary,
+        bool $includeAdminDetails = false
     ): array {
         $todayShift = $shifts
             ->first(fn (PosStaffShift $shift) => $shift->start_at->isToday());
@@ -861,6 +1270,8 @@ class PosStaffController extends BasePosController
             'email' => $staff->email,
             'phone' => $staff->phone,
             'role' => $this->normalizeRole($staff->role),
+            'business_role' => $staff->businessRole(),
+            'outlet_ids' => $staff->assignedOutletIds(),
             'employment_status' => $staff->employment_status,
             'permissions' => PosPermissions::forStaff($staff),
             'hourly_rate' => $staff->hourly_rate,
@@ -869,6 +1280,17 @@ class PosStaffController extends BasePosController
             'linked_user_id' => $staff->linked_user_id,
             'linked_user_name' => $staff->linkedUser?->name,
             'last_activity_at' => optional($staff->last_activity_at)->toIso8601String(),
+            'created_at' => optional($staff->created_at)->toIso8601String(),
+            'created_by' => $includeAdminDetails ? [
+                'id' => $staff->created_by_user_id,
+                'name' => $staff->createdBy?->name,
+            ] : null,
+            'login_identifier' => $includeAdminDetails
+                ? ($staff->linkedUser?->username ?: $staff->linkedUser?->email ?: $staff->linkedUser?->phone)
+                : null,
+            'last_login_at' => $includeAdminDetails
+                ? optional($staff->linkedUser?->last_login_at)->toIso8601String()
+                : null,
             'attendance_qr' => $this->serializeAttendanceQr($staff),
             'today_shift' => $todayShift ? $this->serializeShift($todayShift) : null,
             'upcoming_shift' => $upcomingShift ? $this->serializeShift($upcomingShift) : null,
@@ -1006,6 +1428,62 @@ class PosStaffController extends BasePosController
     private function normalizePermissions(string $role, ?array $permissions): array
     {
         return PosPermissions::normalize($this->normalizeRole($role), $permissions);
+    }
+
+    /**
+     * @param list<int> $outletIds
+     */
+    private function validateStaffOutletAssignments(Organization $org, array $outletIds, ?PosStaff $staffActor): ?JsonResponse
+    {
+        $validIds = Outlet::query()
+            ->where('organization_id', $org->id)
+            ->where('is_active', true)
+            ->whereIn('id', $outletIds)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+        if ($outletIds === [] || count($validIds) !== count($outletIds)) {
+            return $this->error('Pilih outlet aktif milik organisasi ini.', 'STAFF_OUTLET_INVALID', null, 422);
+        }
+        if ($staffActor instanceof PosStaff && array_diff($outletIds, $staffActor->assignedOutletIds()) !== []) {
+            return $this->error('Admin Outlet hanya dapat menugaskan Kasir ke outlet yang dikelolanya.', 'STAFF_OUTLET_FORBIDDEN', null, 403);
+        }
+
+        return null;
+    }
+
+    private function findStaffForManagement(Request $request, Organization $org, int $staffId): PosStaff
+    {
+        $tenantSlugs = Outlet::query()
+            ->where('organization_id', $org->id)
+            ->pluck('tenant_slug')
+            ->filter()
+            ->push((string) $org->pos_tenant_slug)
+            ->unique()
+            ->values()
+            ->all();
+        $query = PosStaff::query()
+            ->where(function ($scope) use ($org, $tenantSlugs) {
+                $scope->where('organization_id', $org->id)
+                    ->orWhere(fn ($legacy) => $legacy->whereNull('organization_id')->whereIn('tenant_id', $tenantSlugs));
+            })
+            ->whereKey($staffId);
+        $staffActor = $request->attributes->get('posStaff');
+        if ($staffActor instanceof PosStaff) {
+            $outletIds = $staffActor->assignedOutletIds();
+            $query->where(function ($scope) use ($outletIds) {
+                $scope->whereHas('outlets', fn ($outlets) => $outlets->whereIn('outlets.id', $outletIds))
+                    ->orWhereIn('outlet_id', $outletIds);
+            });
+        }
+
+        $staff = $query->firstOrFail();
+        Gate::forUser($request->user())->authorize('update', $staff);
+        if ($staffActor instanceof PosStaff && $staff->businessRole() !== 'cashier') {
+            abort(403, 'Admin Outlet hanya dapat mengelola akun Kasir pada outlet yang ditugaskan.');
+        }
+
+        return $staff;
     }
 
     private function performCheckIn(int $organizationId, string $tenantSlug, PosStaff $staff, array $validated, ?int $scannedByUserId): array
@@ -1190,10 +1668,24 @@ class PosStaffController extends BasePosController
     {
         return [
             'role' => (string) $staff->role,
+            'business_role' => $staff->businessRole(),
             'employment_status' => (string) $staff->employment_status,
             'linked_user_id' => $staff->linked_user_id ? (int) $staff->linked_user_id : null,
             'permissions' => PosPermissions::forStaff($staff),
+            'outlet_ids' => $staff->assignedOutletIds(),
         ];
+    }
+
+    private function revokeStaffUserAccess(?int $userId): void
+    {
+        if (! $userId) {
+            return;
+        }
+
+        User::query()->whereKey($userId)->first()?->apiTokens()->delete();
+        app(RealtimeClient::class)->emitToRoom('user_'.$userId, 'auth.revoked', [
+            'reason' => 'pos_access_changed',
+        ]);
     }
 
     private function denyOtherStaff(Request $request, int $staffId): ?JsonResponse

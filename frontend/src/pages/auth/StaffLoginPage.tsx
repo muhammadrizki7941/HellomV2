@@ -12,7 +12,7 @@ import HellomLoading from '@/components/HellomLoading';
  */
 export default function StaffLoginPage() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState<number | 'form' | null>(null);
@@ -27,8 +27,12 @@ export default function StaffLoginPage() {
     setError(null);
     setLoading(staffId ?? 'form');
     try {
-      const result = await staffLogin(email.trim(), password, staffId);
+      const result = await staffLogin(identifier.trim(), password, staffId);
       setSession(result.token, result.user);
+      if ((result.user as { must_change_password?: boolean } | null)?.must_change_password) {
+        navigate('/auth/change-password', { replace: true });
+        return;
+      }
       const access = (result.user as { pos_access?: { is_cashier?: boolean; outlet_id?: number | null } } | null)?.pos_access;
       if (access?.outlet_id) setActiveOutletId(access.outlet_id);
       // Owners/admins who are also staff get the normal POS home.
@@ -60,7 +64,7 @@ export default function StaffLoginPage() {
         <section className="w-full max-w-sm">
           <p className="text-xs font-semibold uppercase tracking-widest text-[#F6B400]">Kasir & staf</p>
           <h1 className="mt-2 text-2xl font-bold">Masuk ke toko kamu</h1>
-          <p className="mt-2 text-sm text-white/60">Pakai email yang didaftarkan owner di POS › Staff. Kamu langsung masuk ke toko dan outlet tempat kamu bertugas.</p>
+          <p className="mt-2 text-sm text-white/60">Pakai email, username, atau nomor HP yang didaftarkan Admin Utama/Admin Outlet. Kamu langsung masuk ke outlet tempat bertugas.</p>
 
           {choices ? (
             <div className="mt-6 space-y-2" role="list" aria-label="Pilih toko">
@@ -81,9 +85,9 @@ export default function StaffLoginPage() {
           ) : (
             <form className="mt-6 space-y-4" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
               <div>
-                <label htmlFor="staff-email" className="mb-2 block text-sm font-medium text-white/80">Email</label>
-                <input id="staff-email" type="email" autoComplete="email" inputMode="email" required value={email}
-                  onChange={(e) => setEmail(e.target.value)} placeholder="nama@email.com" aria-invalid={Boolean(error)} className={inputClass} />
+                <label htmlFor="staff-identifier" className="mb-2 block text-sm font-medium text-white/80">Email, username, atau nomor HP</label>
+                <input id="staff-identifier" type="text" autoComplete="username" required value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)} placeholder="Email, username, atau nomor HP" aria-invalid={Boolean(error)} className={inputClass} />
               </div>
               <div>
                 <label htmlFor="staff-password" className="mb-2 block text-sm font-medium text-white/80">Kata sandi</label>

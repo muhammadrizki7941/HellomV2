@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Building2, Search, Eye, RefreshCw, Ban, CheckCircle, X, KeyRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import AdminPager from '@/components/admin/AdminPager';
+import { useAdminDialog } from '@/components/admin/useAdminDialog';
 import {
   getAdminOrganizations,
   getOrganizationDetail,
@@ -48,6 +49,7 @@ export default function OrganizationManagement() {
   const [busyOrgId, setBusyOrgId] = useState<number | null>(null);
 
   const [selectedOrg, setSelectedOrg] = useState<AdminOrganizationListItem | null>(null);
+  const detailDialogRef = useAdminDialog(Boolean(selectedOrg), () => setSelectedOrg(null));
   const [entitlements, setEntitlements] = useState<Entitlement[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
@@ -180,6 +182,7 @@ export default function OrganizationManagement() {
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
           <input
             type="search"
+            aria-label="Cari organisasi"
             placeholder="Cari nama atau slug organisasi…"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
@@ -187,6 +190,7 @@ export default function OrganizationManagement() {
           />
         </div>
         <select
+          aria-label="Status organisasi"
           value={statusFilter}
           onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
           className="rounded-lg border border-zinc-200 px-4 py-2 outline-none focus:ring-2 focus:ring-yellow-400"
@@ -208,7 +212,23 @@ export default function OrganizationManagement() {
       {notice && !error && <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-700">{notice}</div>}
 
       <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
-        <div className="overflow-x-auto">
+        <div className="divide-y divide-zinc-100 sm:hidden">
+          {organizations.length === 0 && <p className="px-4 py-10 text-center text-sm text-zinc-500">{loading ? 'Memuat organisasi…' : 'Tidak ada organisasi yang cocok.'}</p>}
+          {organizations.map(org => <article key={org.id} className="space-y-4 p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0"><h2 className="font-semibold text-zinc-900">{org.name}</h2><p className="mt-1 break-all text-xs text-zinc-500">{org.slug}</p></div>
+              <span className={cn('shrink-0 rounded-md px-2 py-1 text-xs font-medium', org.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700')}>{STATUS_LABEL[org.status] ?? org.status}</span>
+            </div>
+            <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-zinc-500"><span>{org.users_count} anggota</span><span>Dibuat {formatDate(org.created_at)}</span></div>
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => void loadOrgDetail(org)} className="inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-200 px-3 py-2 text-sm font-medium"><Eye size={16} />Detail</button>
+              <button onClick={() => void toggleSuspend(org)} disabled={busyOrgId === org.id} className={cn('inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-50', org.status === 'active' ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700')}>
+                {org.status === 'active' ? <><Ban size={16} />Suspend</> : <><CheckCircle size={16} />Aktifkan</>}
+              </button>
+            </div>
+          </article>)}
+        </div>
+        <div className="hidden overflow-x-auto sm:block">
           <table className="w-full">
             <thead className="bg-zinc-50">
               <tr>
@@ -269,7 +289,7 @@ export default function OrganizationManagement() {
 
       {selectedOrg && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setSelectedOrg(null)}>
-          <div className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white" onClick={(e) => e.stopPropagation()}>
+          <div ref={detailDialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Detail organisasi" className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between border-b border-zinc-200 p-6">
               <div>
                 <h3 className="text-lg font-semibold text-zinc-900">{selectedOrg.name}</h3>
@@ -357,7 +377,7 @@ export default function OrganizationManagement() {
                   <section className="border-t border-zinc-200 pt-4">
                     <h4 className="font-medium text-zinc-900">Batas outlet (POS)</h4>
                     <p className="mt-1 text-sm text-zinc-500">Override batas jumlah outlet untuk organisasi ini. Kosongkan untuk memakai batas dari paket POS-nya.</p>
-                    <div className="mt-3 flex items-center gap-2">
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
                       <input
                         type="number"
                         min={1}
@@ -373,7 +393,7 @@ export default function OrganizationManagement() {
                     {outletMessage && <p className="mt-2 text-xs text-zinc-600">{outletMessage}</p>}
                   </section>
 
-                  <section className="flex items-center justify-between border-t border-zinc-200 pt-4">
+                  <section className="flex flex-wrap items-center justify-between gap-4 border-t border-zinc-200 pt-4">
                     <div>
                       <h4 className="font-medium text-zinc-900">Status organisasi</h4>
                       <p className="mt-1 text-sm text-zinc-500">Organisasi yang disuspend tidak bisa memakai POS dan aplikasi berbayar.</p>

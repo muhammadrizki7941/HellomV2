@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Loader2, LockOpen, Wallet, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { canPos, closePosStaffCash, getPosMyCash, openPosStaffCash, recordPosNoSale } from '@/lib/hellomApi';
+import { closePosStaffCash, getPosMyCash, openPosStaffCash, recordPosNoSale } from '@/lib/hellomApi';
 import type { PosMyCash, PosStaffCashLog } from '@/lib/hellomApi';
+import { usePermissions } from '@/hooks/usePermissions';
 
 // Cashier's own cash drawer on the orders screen: open with the counted opening cash, close with
 // the counted cash; the server compares it with opening cash + cash sales of that session.
@@ -14,7 +15,8 @@ const toNumber = (raw: string) => Number(raw.replace(/\D/g, '')) || 0;
 const time = (iso?: string | null) => (iso ? new Date(iso).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '-');
 
 export default function CashDrawerButton() {
-  const allowed = canPos('cash_control');
+  const { can } = usePermissions();
+  const allowed = can('cash_control');
   const [cash, setCash] = useState<PosMyCash | null>(null);
   const [open, setOpen] = useState(false);
 

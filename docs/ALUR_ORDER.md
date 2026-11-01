@@ -53,7 +53,8 @@ Kasir ────────────────────────�
 Dapur:  new → accepted → preparing → prepared → completed   (maju saja; lompat boleh)
         (belum bayar) → cancelled  ⇒ OrderVoided: stok +, poin dikembalikan/ditarik
 Bayar:  unpaid → paid  ⇒ OrderPaid: poin masuk (sekali), fraud check     (status dapur tidak berubah)
-        paid → refunded ⇒ OrderRefunded: poin ditarik/dikembalikan        (stok tidak kembali)
+        paid → refunded ⇒ OrderRefunded: poin ditarik/dikembalikan
+          F&B: stok tidak kembali; bisnis non-F&B: stok/serial kembali sebagai movement `return`
 Laporan: payment_status = paid
 ```
 
@@ -95,6 +96,59 @@ Pengaturan per outlet (`outlets.settings`, UI: POS › Settings › Pesanan & Ja
 `pricing{tax_percent, service_percent, rounding}`, `self_order{accept_orders,
 require_confirmation, max_pending_per_table}`, `opening_hours{mon..sun:[{open,close}]}`
 (kosong = selalu buka; slot lewat tengah malam boleh), `timezone`.
+
+## 3.1. Fondasi inventori multi-usaha
+
+- Organisasi POS baru yang belum menyelesaikan onboarding melihat panduan wajib pada akses
+  dashboard pertama: pilih bidang usaha, konfirmasi modul, baca alur penggunaan POS, lalu
+  lanjut ke katalog produk/menu. Selesai onboarding disimpan pada profil organisasi sehingga
+  panduan awal tidak muncul lagi; profil dapat diubah kemudian melalui Pengaturan POS.
+  Organisasi yang sudah ada saat migrasi tetap ditandai selesai dan dipertahankan sebagai F&B.
+- Halaman inventori menampilkan petunjuk sesuai tab yang dipilih, contoh untuk pengisian SKU,
+  varian, harga, IMEI, dan stok, serta label form dengan kontras teks yang jelas.
+- SKU, barcode, satuan, harga beli, stok minimum, varian, serial/IMEI, dan garansi ditambahkan
+  sebagai atribut/relasi produk dengan default yang kompatibel untuk data F&B lama.
+- Mutasi stok dicatat sebagai baris bertanda di `stock_movements`; `products.stock` tetap menjadi
+  cache kompatibilitas untuk alur lama. POS membaca saldo berdasarkan outlet, produk, dan varian.
+- Barang masuk dicatat melalui `POST /pos/purchases`; opname melalui `POST /pos/stocktakes`.
+  Transfer antar-outlet melalui `POST /pos/stock-transfers` membuat movement keluar/masuk
+  berpasangan; produk dan varian tujuan dicocokkan berdasarkan SKU dan serial ikut berpindah.
+  Endpoint varian, harga bertingkat, dan movement dilindungi izin serta modul usaha.
+- Penjualan produk `track_serial` wajib menyertakan `serial_numbers` sebanyak kuantitas. Server
+  mengunci dan memvalidasi serial dalam transaksi; serial yang sudah terjual menghasilkan
+  `409 SERIAL_UNAVAILABLE`. Pembatalan order mengembalikan serial ke status tersedia.
+- `orders`, `order_items`, dan `stock_movements` menyediakan `client_uuid` serta
+  `created_at_client` sebagai fondasi pencatatan klien offline. Sinkronisasi batch Dexie belum
+  termasuk fase ini; fase offline tetap harus menjadikan server validator akhir serial.
+- Transfer dan penjualan serial juga harus dipertahankan sebagai batch movement ketika Dexie
+  dan endpoint sync diterapkan; konflik serial tetap diputuskan server.
+- Kasir POS dapat memilih varian, tipe harga bertingkat, jumlah, dan serial tersedia sebelum
+  preview/menyimpan transaksi. Server tetap menghitung ulang harga dan memvalidasi serial.
+- Halaman inventori menyediakan pencarian garansi berdasarkan IMEI/serial, nomor transaksi,
+  atau nomor HP pelanggan, serta pencetakan label barcode menggunakan library lokal.
+- Laporan laba kotor POS menggunakan `order_items.cost_price` sebagai snapshot harga beli saat
+  transaksi; endpoint margin dan laba kotor hanya untuk owner/admin. Laporan lama berbasis HPP
+  tetap tersedia bagi owner/admin.
+- Refund tetap mengembalikan seluruh pembayaran dan memerlukan persetujuan PIN owner. Pada
+  bisnis non-F&B, stok terlacak dikembalikan sebagai movement `return` yang idempoten dan serial
+  terjual dikembalikan ke status tersedia; refund F&B tidak mengembalikan stok makanan.
+- POS menampilkan stok menipis, produk terlaris, laba kotor sesuai hak owner/admin, serta
+  riwayat movement yang dapat difilter per produk di halaman inventori.
+- Untuk menyiapkan organisasi demo F&B, retail, konter HP, dan sparepart secara idempoten:
+  `cd backend` lalu `php artisan db:seed --class=PosBusinessDemoSeeder`. Seeder membuat empat
+  tenant/outlet terpisah, contoh katalog, harga tier/varian, serial konter, dan supplier sparepart.
+
+### Input untuk fase PWA/offline
+
+- Tabel Dexie utama: profil tenant/modul, produk, kategori, `product_variants`, `product_serials`,
+  order draft/outbox, pembayaran, dan `stock_movements`.
+- Indeks offline produk perlu mencakup tenant/outlet, SKU, barcode, nama, varian, dan status serial.
+- Order serta movement harus mempertahankan `client_uuid` dan `created_at_client`; server menjadi
+  validator akhir untuk stok dan serial. Konflik serial harus menghasilkan penolakan yang bisa
+  ditampilkan dan direkonsiliasi, bukan membuat penjualan ganda.
+- Data meja/self-order/dapur hanya dimuat/disinkronkan bila `tables_selforder` aktif. Penjualan,
+  pembelian, transfer berpasangan, dan opname perlu sinkronisasi sebagai kumpulan movement
+  idempoten; sinkronisasi batch belum diimplementasikan pada Fase 0C.
 
 ## 4. Self-order
 

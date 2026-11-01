@@ -7,6 +7,7 @@ use App\Models\PosStaff;
 use App\Models\User;
 use App\Services\Hellom\PosProvisioningService;
 use App\Services\OutletService;
+use App\Support\Pos\PosRoles;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -16,9 +17,6 @@ class InjectPosContext
     /**
      * Org roles allowed to manage every outlet and freely switch between them.
      */
-    private const MANAGER_PIVOT_ROLES = ['owner', 'admin', 'super_admin'];
-    private const PLATFORM_ROLES = ['super_admin', 'tenant_admin'];
-
     public function handle(Request $request, Closure $next): Response
     {
         $user = $request->user();
@@ -47,12 +45,10 @@ class InjectPosContext
 
         $outletService = app(OutletService::class);
 
-        // Cashiers (and any non-manager member) are hard-locked to the single
-        // outlet bound to their PosStaff record. The X-Outlet-Id header is
-        // ignored for them so they can never reach another outlet's data.
+        // POS staff may switch only among outlets explicitly assigned to their staff record.
         if (!$this->isManager($user, $organization)) {
             $staff = PosStaff::query()
-                ->where('organization_id', (int) $organization->id)
+                ->forOrganization((int) $organization->id)
                 ->where('linked_user_id', (int) $user->id)
                 ->where('employment_status', 'active')
                 ->orderByDesc('id')
@@ -66,12 +62,17 @@ class InjectPosContext
                 ], 403);
             }
 
-            $outlet = $staff->resolveBoundOutlet();
+            $requestedOutletId = $request->header('X-Outlet-Id') ?? $request->query('outlet_id');
+            $outlet = $staff->resolveBoundOutlet(
+                $requestedOutletId !== null && $requestedOutletId !== '' ? (int) $requestedOutletId : null
+            );
             if (!$outlet instanceof Outlet) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Outlet yang ditugaskan ke akun ini tidak aktif. Hubungi owner/admin.',
-                    'error' => ['code' => 'POS_OUTLET_UNAVAILABLE'],
+                    'message' => $requestedOutletId
+                        ? 'Akun ini tidak ditugaskan ke outlet yang dipilih.'
+                        : 'Outlet yang ditugaskan ke akun ini tidak aktif. Hubungi owner/admin.',
+                    'error' => ['code' => $requestedOutletId ? 'POS_OUTLET_NOT_ASSIGNED' : 'POS_OUTLET_UNAVAILABLE'],
                 ], 403);
             }
 
@@ -80,14 +81,14 @@ class InjectPosContext
             $request->attributes->set('posOutletId', $outlet->id);
             $request->attributes->set('posOutlet', $outlet);
             $request->attributes->set('posStaff', $staff);
+            $request->attributes->set('posAssignedOutletIds', $staff->assignedOutletIds());
 
             return $next($request);
         }
 
         // Owner/admin: resolve the active outlet from the request, free to switch.
         $requestedOutletId = $request->header('X-Outlet-Id')
-            ?? $request->query('outlet_id')
-            ?? $request->input('outlet_id');
+            ?? $request->query('outlet_id');
         $outlet = $outletService->resolveActiveOutlet($organization, $requestedOutletId);
 
         if (!empty($outlet->tenant_slug)) {
@@ -107,7 +108,7 @@ class InjectPosContext
      */
     private function isManager(User $user, $organization): bool
     {
-        if (in_array((string) $user->role, self::PLATFORM_ROLES, true)) {
+        if (PosRoles::isPlatformManager((string) $user->role)) {
             return true;
         }
 
@@ -117,6 +118,6 @@ class InjectPosContext
 
         $pivotRole = (string) ($membership?->pivot?->role ?? '');
 
-        return in_array($pivotRole, self::MANAGER_PIVOT_ROLES, true);
+        return PosRoles::isOrganizationManagerMembership($pivotRole);
     }
 }

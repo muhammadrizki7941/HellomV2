@@ -27,6 +27,24 @@ class PosReportController extends BasePosController
      */
     private function reportScope(Request $request, Organization $org): array
     {
+        $validated = $request->validate([
+            'outlet_id' => ['sometimes', 'integer', 'min:1'],
+        ]);
+        if (isset($validated['outlet_id'])) {
+            abort_unless($this->isOrgOwner($request, $org), 403);
+
+            $outlet = Outlet::query()
+                ->where('organization_id', $org->id)
+                ->findOrFail((int) $validated['outlet_id']);
+
+            return [
+                'slugs' => [(string) $outlet->tenant_slug],
+                'aggregate' => false,
+                'outlets' => collect([$outlet]),
+                'is_owner' => true,
+            ];
+        }
+
         $wantsAll = in_array((string) $request->input('scope'), ['all', 'aggregate'], true);
 
         if ($wantsAll && $this->isOrgOwner($request, $org)) {
@@ -94,7 +112,7 @@ class PosReportController extends BasePosController
         if ($dateColumn === 'paid_at') {
             $query->whereBetween(DB::raw('COALESCE(paid_at, created_at)'), [$start, $end]);
         } else {
-            $query->whereBetween('created_at', [$start, $end]);
+            $query->whereBetween(DB::raw('COALESCE(created_at_client, created_at)'), [$start, $end]);
         }
 
         return $query;
@@ -171,7 +189,7 @@ class PosReportController extends BasePosController
             ->whereIn('tenant_id', $slugs)
             ->where('payment_status', 'unpaid')
             ->where('status', '!=', 'cancelled')
-            ->whereBetween('created_at', [$createdStart, $createdEnd])
+            ->whereBetween(DB::raw('COALESCE(created_at_client, created_at)'), [$createdStart, $createdEnd])
             ->count();
         $cancelledOrders = Order::withoutGlobalScope('tenant')
             ->whereIn('tenant_id', $slugs)
@@ -435,6 +453,7 @@ class PosReportController extends BasePosController
         $org = $this->getOrg($request);
         $context = $this->reportContext($request);
         $slugs = $this->reportScope($request, $org)['slugs'];
+        $outletNames = Outlet::query()->whereIn('tenant_slug', $slugs)->pluck('name', 'tenant_slug');
         $perPage = min(100, max(1, (int) $request->input('per_page', 25)));
         $query = $this->settledOrders($slugs, $context['start_utc'], $context['end_utc'], $context['date_basis'])
             ->with(['items:id,order_id,product_name,qty,unit_price,line_total'])
@@ -449,6 +468,7 @@ class PosReportController extends BasePosController
         $orders->getCollection()->transform(fn (Order $order) => [
             'id' => (int) $order->id,
             'order_number' => (string) $order->order_number,
+            'outlet_name' => (string) ($outletNames->get($order->tenant_id) ?? 'Outlet tidak diketahui'),
             'customer_name' => (string) ($order->customer_name ?: 'Pelanggan umum'),
             'payment_status' => (string) $order->payment_status,
             'payment_method' => (string) ($order->payment_method ?: 'unknown'),
@@ -623,11 +643,94 @@ class PosReportController extends BasePosController
         ]);
     }
 
+    public function grossProfit(Request $request): JsonResponse
+    {
+        $org = $this->getOrg($request);
+        $context = $this->reportContext($request);
+        $slugs = $this->reportScope($request, $org)['slugs'];
+        $orders = $this->settledOrders($slugs, $context['start_utc'], $context['end_utc'], $context['date_basis'])
+            ->where('payment_status', 'paid')
+            ->with(['items:id,order_id,product_id,product_name,qty,line_total,cost_price'])
+            ->orderBy('id');
+
+        $products = [];
+        $totalUnits = 0;
+        $trackedUnits = 0;
+        $orders->chunkById(500, function ($batch) use (&$products, &$totalUnits, &$trackedUnits): void {
+            foreach ($batch as $order) {
+                $items = $order->items;
+                $totalUnits += (int) $items->sum('qty');
+                $subtotal = max(1, (int) $items->sum('line_total'));
+                $discount = (int) $order->discount_amount
+                    + (int) $order->points_discount_amount
+                    + (int) $order->manual_discount_amount;
+
+                foreach ($items as $item) {
+                    $productId = (int) $item->product_id;
+                    $qty = (int) $item->qty;
+                    $products[$productId] ??= [
+                        'product_name' => (string) $item->product_name,
+                        'quantity' => 0,
+                        'tracked_quantity' => 0,
+                        'net_sales' => 0,
+                        'cost' => 0,
+                    ];
+                    $products[$productId]['quantity'] += $qty;
+                    if ($item->cost_price === null) {
+                        continue;
+                    }
+
+                    $lineTotal = (int) $item->line_total;
+                    $allocatedDiscount = (int) round($discount * $lineTotal / $subtotal);
+                    $products[$productId]['tracked_quantity'] += $qty;
+                    $products[$productId]['net_sales'] += max(0, $lineTotal - $allocatedDiscount);
+                    $products[$productId]['cost'] += (int) $item->cost_price * $qty;
+                    $trackedUnits += $qty;
+                }
+            }
+        });
+
+        $rows = collect($products)->map(function (array $row): array {
+            $profit = $row['net_sales'] - $row['cost'];
+
+            return [
+                'product_name' => $row['product_name'],
+                'quantity' => $row['quantity'],
+                'tracked_quantity' => $row['tracked_quantity'],
+                'net_sales' => $row['net_sales'],
+                'cost' => $row['cost'],
+                'gross_profit' => $profit,
+                'gross_margin_pct' => $row['net_sales'] > 0 ? round($profit / $row['net_sales'] * 100, 1) : null,
+            ];
+        })->sortByDesc('net_sales')->values();
+
+        $trackedRows = $rows->filter(fn (array $row) => $row['tracked_quantity'] > 0);
+        $netSales = (int) $trackedRows->sum('net_sales');
+        $cost = (int) $trackedRows->sum('cost');
+        $profit = $netSales - $cost;
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'coverage_pct' => $totalUnits > 0 ? round($trackedUnits / $totalUnits * 100, 1) : 0,
+                'tracked_units' => $trackedUnits,
+                'total_units' => $totalUnits,
+                'net_sales' => $netSales,
+                'cost' => $cost,
+                'gross_profit' => $trackedUnits > 0 ? $profit : null,
+                'gross_margin_pct' => $netSales > 0 ? round($profit / $netSales * 100, 1) : null,
+                'products' => $rows,
+                'disclaimer' => 'Laba kotor dihitung dari harga beli yang tersimpan pada item saat transaksi. Nilai ini belum mengurangi pajak, biaya layanan, komisi, atau biaya operasional.',
+            ],
+            'message' => 'Laporan laba kotor berhasil dimuat',
+        ]);
+    }
+
     private function applyDateRange(Builder $query, string $dateBasis, Carbon $start, Carbon $end, string $table = ''): void
     {
         $prefix = $table === '' ? '' : $table . '.';
         if ($dateBasis === 'created_at') {
-            $query->whereBetween($prefix . 'created_at', [$start, $end]);
+            $query->whereBetween(DB::raw("COALESCE({$prefix}created_at_client, {$prefix}created_at)"), [$start, $end]);
             return;
         }
 
