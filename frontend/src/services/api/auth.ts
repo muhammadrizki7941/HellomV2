@@ -29,6 +29,7 @@ export function register(payload: {
   email: string;
   password: string;
   organization_name?: string;
+  phone?: string;
   invite_token?: string;
 }) {
   return apiRequest<{ token: string; user: unknown }>('/auth/register', {

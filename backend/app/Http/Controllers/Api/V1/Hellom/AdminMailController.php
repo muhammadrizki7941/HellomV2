@@ -28,11 +28,6 @@ class AdminMailController extends BaseApiController
     {
         $validated = $request->validate([
             'enabled' => ['required', 'boolean'],
-            'host' => ['nullable', 'string', 'max:255'],
-            'port' => ['nullable', 'integer', 'min:1', 'max:65535'],
-            'username' => ['nullable', 'string', 'max:255'],
-            'password' => ['nullable', 'string', 'max:255'],
-            'encryption' => ['nullable', 'string', 'in:tls,ssl'],
             'from_address' => ['nullable', 'email', 'max:255'],
             'from_name' => ['nullable', 'string', 'max:255'],
             'reply_to_address' => ['nullable', 'email', 'max:255'],
@@ -52,19 +47,10 @@ class AdminMailController extends BaseApiController
             $validated['owner_email'] = (string) $ownerEmail;
         }
 
-        if (!empty($validated['enabled']) && $validated['host'] !== '' && !$this->mailService->isValidSmtpHost($validated['host'])) {
-            throw ValidationException::withMessages([
-                'host' => 'SMTP host harus berupa hostname server mail, misalnya smtp.gmail.com, bukan alamat email.',
-            ]);
-        }
-
         $this->adminAudit($request, 'admin.mail_settings.updated', 'mail', null, [
             'enabled' => (bool) ($validated['enabled'] ?? false),
-            'host' => $validated['host'] ?? null,
-            'port' => $validated['port'] ?? null,
             'from_address' => $validated['from_address'] ?? null,
             'owner_email_changed' => array_key_exists('owner_email', $validated),
-            'password_changed' => trim((string) ($validated['password'] ?? '')) !== '',
         ]);
 
         return $this->ok([
@@ -79,9 +65,9 @@ class AdminMailController extends BaseApiController
         ]);
 
         $test = new HellomAnnouncementMail(
-            subjectLine: 'Tes email SMTP Hellom',
-            heading: 'SMTP Hellom aktif',
-            body: 'Email tes ini dikirim dari konfigurasi SMTP dinamis Hellom. Jika email ini masuk, maka invitation, reset password, welcome mail, promo, dan billing notification sudah siap dipakai.',
+            subjectLine: 'Tes email Resend Hellom',
+            heading: 'Resend Hellom aktif',
+            body: 'Email tes ini dikirim melalui Resend. Jika email ini masuk, maka email verifikasi, reset password, notifikasi transaksi, dan email pengguna lainnya dapat dikirim.',
             ctaLabel: null,
             ctaUrl: null,
         );
@@ -99,7 +85,7 @@ class AdminMailController extends BaseApiController
     {
         $settings = $this->mailService->getSettings();
 
-        return $this->ok($check->check((string) $settings['from_address'], (string) $settings['host'], (string) $settings['username']), 'Domain checked');
+        return $this->ok($check->check((string) $settings['from_address']), 'Domain checked');
     }
 
     /** Pengaturan Email › Riwayat: last 90 days of email attempts. */

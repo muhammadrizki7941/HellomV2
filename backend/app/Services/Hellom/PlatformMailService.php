@@ -6,8 +6,6 @@ use App\Models\EmailLog;
 use App\Models\HellomBrandSetting;
 use App\Models\SystemSetting;
 use Illuminate\Contracts\Mail\Mailable;
-use Illuminate\Support\Arr;
-use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Mail;
 use Throwable;
 
@@ -25,24 +23,12 @@ class PlatformMailService
     {
         $brand = HellomBrandSetting::getSettings();
         $enabled = $this->getBool('hellom_mail_enabled', false);
-        $port = (int) SystemSetting::get('hellom_mail_port', 587);
-        $username = trim((string) SystemSetting::get('hellom_mail_username', ''));
-        $host = $this->normalizeHost((string) SystemSetting::get('hellom_mail_host', ''), $username);
-        $password = $this->getDecryptedPassword();
-        if ($host === 'smtp.gmail.com') {
-            $password = preg_replace('/\s+/', '', $password);
-        }
         $fromAddress = (string) SystemSetting::get('hellom_mail_from_address', $brand->support_email ?: 'hello@example.com');
         $fromName = (string) SystemSetting::get('hellom_mail_from_name', $brand->app_name ?: $brand->business_name ?: 'Hellom');
 
         return [
             'enabled' => $enabled,
-            'host' => $host,
-            'port' => $port > 0 ? $port : 587,
-            'username' => $username,
-            'password' => $password,
-            'password_masked' => $this->maskedSecret($password),
-            'encryption' => (string) SystemSetting::get('hellom_mail_encryption', 'tls'),
+            'resend_configured' => trim((string) config('services.resend.key', '')) !== '',
             'from_address' => $fromAddress,
             'from_name' => $fromName,
             'reply_to_address' => (string) SystemSetting::get('hellom_mail_reply_to_address', $fromAddress),
@@ -58,11 +44,8 @@ class PlatformMailService
 
         return [
             'enabled' => $settings['enabled'],
-            'host' => $settings['host'],
-            'port' => $settings['port'],
-            'username' => $settings['username'],
-            'password_masked' => $settings['password_masked'],
-            'encryption' => $settings['encryption'],
+            'provider' => 'resend',
+            'resend_configured' => $settings['resend_configured'],
             'from_address' => $settings['from_address'],
             'from_name' => $settings['from_name'],
             'reply_to_address' => $settings['reply_to_address'],
@@ -78,25 +61,20 @@ class PlatformMailService
     {
         $settings = $this->normalizeSettings($settings);
 
-        SystemSetting::set('hellom_mail_enabled', !empty($settings['enabled']) ? '1' : '0');
-        SystemSetting::set('hellom_mail_host', trim((string) ($settings['host'] ?? '')));
-        SystemSetting::set('hellom_mail_port', (string) ((int) ($settings['port'] ?? 587)));
-        SystemSetting::set('hellom_mail_username', trim((string) ($settings['username'] ?? '')));
-        SystemSetting::set('hellom_mail_encryption', trim((string) ($settings['encryption'] ?? 'tls')));
+        SystemSetting::set('hellom_mail_enabled', ! empty($settings['enabled']) ? '1' : '0');
         SystemSetting::set('hellom_mail_from_address', trim((string) ($settings['from_address'] ?? '')));
         SystemSetting::set('hellom_mail_from_name', trim((string) ($settings['from_name'] ?? '')));
         SystemSetting::set('hellom_mail_reply_to_address', trim((string) ($settings['reply_to_address'] ?? '')));
         SystemSetting::set('hellom_mail_reply_to_name', trim((string) ($settings['reply_to_name'] ?? '')));
+        SystemSetting::query()->whereIn('key', [
+            'hellom_mail_host',
+            'hellom_mail_port',
+            'hellom_mail_username',
+            'hellom_mail_encryption',
+            'hellom_mail_password_encrypted',
+        ])->delete();
         if (array_key_exists('owner_email', $settings)) {
             SystemSetting::set(self::OWNER_EMAIL_SETTING, implode(', ', self::parseEmails((string) $settings['owner_email'])));
-        }
-
-        $password = trim((string) ($settings['password'] ?? ''));
-        if (($settings['host'] ?? '') === 'smtp.gmail.com') {
-            $password = preg_replace('/\s+/', '', $password);
-        }
-        if ($password !== '') {
-            SystemSetting::set('hellom_mail_password_encrypted', Crypt::encryptString($password));
         }
 
         return $this->publicSettingsSummary();
@@ -105,21 +83,13 @@ class PlatformMailService
     public function normalizeSettings(array $settings): array
     {
         $normalized = $settings;
-        $normalized['username'] = trim((string) Arr::get($settings, 'username', ''));
-        $normalized['host'] = $this->normalizeHost((string) Arr::get($settings, 'host', ''), $normalized['username']);
-        $normalized['port'] = $this->normalizePort(Arr::get($settings, 'port', 587));
-
-        return $normalized;
-    }
-
-    public function isValidSmtpHost(string $host): bool
-    {
-        $host = trim($host);
-        if ($host === '' || str_contains($host, '@')) {
-            return false;
+        foreach (['from_address', 'from_name', 'reply_to_address', 'reply_to_name', 'owner_email'] as $key) {
+            if (array_key_exists($key, $settings)) {
+                $normalized[$key] = trim((string) $settings[$key]);
+            }
         }
 
-        return (bool) preg_match('/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))+$/i', $host);
+        return $normalized;
     }
 
     /**
@@ -151,14 +121,11 @@ class PlatformMailService
     {
         $settings = $this->getSettings();
 
-        if (!$settings['enabled']) {
+        if (! $settings['enabled']) {
             return false;
         }
 
-        return $settings['host'] !== ''
-            && $settings['port'] > 0
-            && $settings['username'] !== ''
-            && $settings['password'] !== ''
+        return $settings['resend_configured']
             && $settings['from_address'] !== '';
     }
 
@@ -177,7 +144,7 @@ class PlatformMailService
 
         $unsubscribeUrl = null;
         if ($category === self::CATEGORY_MARKETING) {
-            $recipients = array_values(array_filter($recipients, fn (string $email) => !$this->hasUnsubscribed($email)));
+            $recipients = array_values(array_filter($recipients, fn (string $email) => ! $this->hasUnsubscribed($email)));
             if ($recipients === []) {
                 $this->log((array) $to, $mailable, $category, EmailLog::STATUS_SKIPPED, $meta, 'Penerima sudah berhenti berlangganan email info & tips.');
 
@@ -187,11 +154,12 @@ class PlatformMailService
         }
         $this->finish($mailable, $category, $unsubscribeUrl, $meta);
 
+        $mailer = 'log';
         try {
             $mailer = $this->configureMailer();
             $transport = (string) config("mail.mailers.{$mailer}.transport", $mailer);
-            if ($transport === 'log' || ($transport === 'array' && !app()->environment('testing'))) {
-                throw new \RuntimeException('Email belum dikirim: aktifkan SMTP di Pengaturan Email. Mailer log/array hanya menyimpan simulasi.');
+            if ($transport === 'log' || ($transport === 'array' && ! app()->environment('testing'))) {
+                throw new \RuntimeException('Email belum dikirim: konfigurasi Resend belum siap. Atur RESEND_API_KEY dan aktifkan email di Pengaturan Email.');
             }
             $sent = Mail::mailer($mailer)->to($recipients)->send($mailable);
             $meta['message_id'] = $sent?->getMessageId();
@@ -207,7 +175,7 @@ class PlatformMailService
 
             return [
                 'sent' => false,
-                'mailer' => $this->isReady() ? 'smtp' : (string) config('mail.default', 'log'),
+                'mailer' => $mailer,
                 'error' => $exception->getMessage(),
             ];
         }
@@ -217,8 +185,8 @@ class PlatformMailService
     public function sendOrFail(string|array $to, Mailable $mailable): array
     {
         $result = $this->sendTo($to, $mailable);
-        if (!$result['sent'] && empty($result['skipped'])) {
-            throw new \RuntimeException('Email gagal terkirim: ' . ($result['error'] ?? 'unknown'));
+        if (! $result['sent'] && empty($result['skipped'])) {
+            throw new \RuntimeException('Email gagal terkirim: '.($result['error'] ?? 'unknown'));
         }
 
         return $result;
@@ -238,7 +206,7 @@ class PlatformMailService
     public function resend(EmailLog $log): array
     {
         $mailable = $log->payload ? @unserialize((string) $log->payload) : false;
-        if (!$mailable instanceof Mailable) {
+        if (! $mailable instanceof Mailable) {
             return ['sent' => false, 'mailer' => 'none', 'error' => 'Isi email ini tidak tersimpan, tidak bisa dikirim ulang.'];
         }
 
@@ -269,7 +237,7 @@ class PlatformMailService
     public function unsubscribeUrl(string $email): ?string
     {
         $userId = \App\Models\User::query()->where('email', strtolower($email))->value('id');
-        if (!$userId) {
+        if (! $userId) {
             return null;
         }
 
@@ -279,7 +247,7 @@ class PlatformMailService
     /** @param array{subject: string, message_id?: ?string} $meta */
     private function finish(Mailable $mailable, string $category, ?string $unsubscribeUrl, array &$meta): void
     {
-        if (!$mailable instanceof \Illuminate\Mail\Mailable) {
+        if (! $mailable instanceof \Illuminate\Mail\Mailable) {
             return;
         }
         $settings = $this->getSettings();
@@ -310,7 +278,7 @@ class PlatformMailService
             }
 
             if ($category === self::CATEGORY_MARKETING && $unsubscribeUrl) {
-                $headers->addTextHeader('List-Unsubscribe', '<' . $unsubscribeUrl . '>');
+                $headers->addTextHeader('List-Unsubscribe', '<'.$unsubscribeUrl.'>');
                 $headers->addTextHeader('List-Unsubscribe-Post', 'List-Unsubscribe=One-Click');
             }
         });
@@ -354,59 +322,22 @@ class PlatformMailService
 
     private function configureMailer(): string
     {
-        if (!$this->isReady()) {
-            return (string) config('mail.default', 'log');
+        if (! $this->isReady()) {
+            return app()->environment('testing') && config('mail.default') === 'array'
+                ? 'array'
+                : 'log';
         }
 
         $settings = $this->getSettings();
 
         config([
-            'mail.default' => 'smtp',
-            'mail.mailers.smtp.transport' => 'smtp',
-            'mail.mailers.smtp.url' => null,
-            'mail.mailers.smtp.scheme' => $settings['encryption'] === 'ssl' ? 'smtps' : 'smtp',
-            'mail.mailers.smtp.timeout' => 20,
-            'mail.mailers.smtp.host' => $settings['host'],
-            'mail.mailers.smtp.port' => $settings['port'],
-            'mail.mailers.smtp.encryption' => $settings['encryption'] !== '' ? $settings['encryption'] : null,
-            'mail.mailers.smtp.username' => $settings['username'],
-            'mail.mailers.smtp.password' => $settings['password'],
+            'mail.default' => 'resend',
             'mail.from.address' => $settings['from_address'],
             'mail.from.name' => $settings['from_name'],
-            // EHLO with our real host name, not "localhost" (spam filters notice).
-            'mail.mailers.smtp.local_domain' => parse_url((string) config('app.url'), PHP_URL_HOST) ?: null,
         ]);
-        // A long-running queue worker would keep the first SMTP connection/settings forever.
-        Mail::purge('smtp');
+        Mail::purge('resend');
 
-        return 'smtp';
-    }
-
-    private function getDecryptedPassword(): string
-    {
-        $encrypted = (string) SystemSetting::get('hellom_mail_password_encrypted', '');
-        if ($encrypted === '') {
-            return '';
-        }
-
-        try {
-            return Crypt::decryptString($encrypted);
-        } catch (Throwable) {
-            return '';
-        }
-    }
-
-    private function maskedSecret(string $value): ?string
-    {
-        if ($value === '') {
-            return null;
-        }
-
-        if (strlen($value) <= 6) {
-            return str_repeat('*', strlen($value));
-        }
-
-        return substr($value, 0, 2) . str_repeat('*', max(0, strlen($value) - 4)) . substr($value, -2);
+        return 'resend';
     }
 
     private function getBool(string $key, bool $default): bool
@@ -414,58 +345,5 @@ class PlatformMailService
         $value = SystemSetting::get($key, $default ? '1' : '0');
 
         return in_array((string) $value, ['1', 'true', 'yes', 'on'], true);
-    }
-
-    private function normalizeHost(string $host, string $username = ''): string
-    {
-        $host = trim(strtolower($host));
-        if ($host === '') {
-            return '';
-        }
-
-        if (str_contains($host, '://')) {
-            $parsedHost = parse_url($host, PHP_URL_HOST);
-            if (is_string($parsedHost) && $parsedHost !== '') {
-                $host = $parsedHost;
-            }
-        }
-
-        $host = trim($host, "/ \t\n\r\0\x0B");
-
-        if (filter_var($host, FILTER_VALIDATE_EMAIL)) {
-            return $this->inferSmtpHostFromEmail($host) ?? $host;
-        }
-
-        if (preg_match('/^(?<hostname>[^:\/]+):(?<port>\d{1,5})$/', $host, $matches) === 1) {
-            $host = strtolower(trim((string) $matches['hostname']));
-        }
-
-        if ($host === '' && $username !== '' && filter_var($username, FILTER_VALIDATE_EMAIL)) {
-            return $this->inferSmtpHostFromEmail($username) ?? '';
-        }
-
-        return $host;
-    }
-
-    private function inferSmtpHostFromEmail(string $email): ?string
-    {
-        $domain = strtolower((string) substr(strrchr($email, '@') ?: '', 1));
-
-        return match ($domain) {
-            'gmail.com', 'googlemail.com' => 'smtp.gmail.com',
-            'outlook.com', 'hotmail.com', 'live.com', 'msn.com' => 'smtp-mail.outlook.com',
-            'yahoo.com', 'yahoo.co.id', 'ymail.com' => 'smtp.mail.yahoo.com',
-            'icloud.com', 'me.com', 'mac.com' => 'smtp.mail.me.com',
-            'aol.com' => 'smtp.aol.com',
-            'zoho.com' => 'smtp.zoho.com',
-            default => null,
-        };
-    }
-
-    private function normalizePort(mixed $port): int
-    {
-        $value = (int) $port;
-
-        return $value > 0 ? $value : 587;
     }
 }

@@ -16,6 +16,7 @@ export default function CheckoutQueryLauncher() {
 
   return (
     <CheckoutModal
+      key={`${getToken() ? "member" : "guest"}:${params.get("paket") || ""}`}
       isOpen
       onClose={close}
       appName="POS"

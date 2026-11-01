@@ -4,7 +4,9 @@ import {
   Check, CheckCircle2, Crown, LockKeyhole, Loader2, ShoppingCart, Tag, Wallet, X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getToken } from '@/services/api/client';
+import { getToken, setSession } from '@/services/api/client';
+import { register } from '@/services/api/auth';
+import HellomLoading from '@/components/HellomLoading';
 import {
   checkoutConfirmWallet,
   checkoutStart,
@@ -17,7 +19,6 @@ import {
 import {
   getPosCheckoutOptions,
   previewPosCheckoutPromo,
-  startGuestPosCheckout,
   type PosCheckoutPlan,
   type PosPaymentChannel,
 } from '@/services/api/posCheckout';
@@ -112,13 +113,13 @@ export default function CheckoutModal({
   const [walletBalance, setWalletBalance] = useState(0);
   const [walletAvailable, setWalletAvailable] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState('');
-  const [preferredCycle, setPreferredCycle] = useState('');
+  const [preferredCycle, setPreferredCycle] = useState(searchParams.get('cycle') || '');
   const [paymentFlow, setPaymentFlow] = useState<PaymentFlow>('direct');
   const [channel, setChannel] = useState('');
   const [promoInput, setPromoInput] = useState(initialPromo || searchParams.get('promo') || '');
   const [promo, setPromo] = useState<{ code: string; discount_amount: number; final_amount: number } | null>(null);
   const [guestFields, setGuestFields] = useState<GuestFields>(EMPTY_GUEST);
-  const [honeypot, setHoneypot] = useState('');
+  const [password, setPassword] = useState('');
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);
   const [loading, setLoading] = useState(false);
@@ -221,7 +222,7 @@ export default function CheckoutModal({
               promoInput?: string;
               channel?: string;
             };
-            if (state.selectedPlan && mappedPlans.some((item) => item.slug === state.selectedPlan)) setSelectedPlan(state.selectedPlan);
+            if (!requestedSlug && state.selectedPlan && mappedPlans.some((item) => item.slug === state.selectedPlan)) setSelectedPlan(state.selectedPlan);
             if (state.guestFields) setGuestFields({ ...EMPTY_GUEST, ...state.guestFields });
             if (state.promoInput && !initialPromo && !searchParams.get('promo')) setPromoInput(state.promoInput);
             if (state.channel && direct.some((item) => item.key === state.channel)) setChannel(state.channel);
@@ -259,6 +260,19 @@ export default function CheckoutModal({
     if (!walletCoversTotal && paymentFlow === 'wallet') setPaymentFlow('direct');
   }, [paymentFlow, walletCoversTotal]);
 
+  useEffect(() => {
+    const code = initialPromo || searchParams.get('promo');
+    if (!isOpen || !selectedPlan || !code) return;
+    let active = true;
+    setPromo(null);
+    void previewPosCheckoutPromo(selectedPlan, code, billingCycle).then((result) => {
+      if (active) setPromo({ code: result.code, discount_amount: Number(result.discount_amount), final_amount: Number(result.final_amount ?? result.total_amount) });
+    }).catch((reason) => {
+      if (active) setError(reason instanceof Error ? reason.message : 'Kode promo tidak dapat digunakan.');
+    });
+    return () => { active = false; };
+  }, [billingCycle, initialPromo, isOpen, searchParams, selectedPlan]);
+
   const features = useMemo(() => featureList(plan?.features), [plan]);
 
   if (!isOpen) return null;
@@ -288,6 +302,16 @@ export default function CheckoutModal({
       setError('Pilih paket terlebih dahulu.');
       return;
     }
+    if (!guest && paymentFlow === 'direct' && paymentUnavailable) {
+      setError('Pembayaran langsung belum tersedia saat ini. Silakan coba lagi nanti.');
+      return;
+    }
+    if (!guest && paymentFlow === 'direct') trackPlatformMetaEvent('AddPaymentInfo', newEventId());
+    setStep(2);
+  };
+
+  const submit = async () => {
+    if (!plan || !termsAccepted || loading) return;
     if (guest) {
       const fields = Object.values(guestFields).map((value) => value.trim());
       if (fields.some((value) => !value)) {
@@ -303,36 +327,25 @@ export default function CheckoutModal({
         return;
       }
     }
-    if (paymentFlow === 'direct' && paymentUnavailable) {
-      setError('Pembayaran langsung belum tersedia saat ini. Silakan coba lagi nanti.');
+    if (guest && password.length < 8) {
+      setError('Kata sandi minimal 8 karakter.');
       return;
     }
-    if (paymentFlow === 'direct') trackPlatformMetaEvent('AddPaymentInfo', newEventId());
-    setStep(2);
-  };
-
-  const submit = async () => {
-    if (!plan || !termsAccepted) return;
     setLoading(true);
     setError('');
     const purchaseEventId = newEventId();
     try {
       if (guest) {
-        const result = await startGuestPosCheckout({
-          ...guestFields,
-          plan_slug: plan.slug,
-          billing_cycle: billingCycle,
-          payment_channel: channel,
-          ...(promo ? { promo_code: promo.code } : {}),
-          website: honeypot,
-          purchase_event_id: purchaseEventId,
-          terms_accepted: true,
+        const result = await register({
+          name: guestFields.name.trim(), email: guestFields.email.trim(),
+          phone: guestFields.phone.trim(), organization_name: guestFields.business_name.trim(), password,
         });
+        setSession(result.token, result.user);
         trackPlatformMetaEvent('Lead', newEventId());
-        sessionStorage.removeItem(storageKey);
-        const path = new URL(result.status_url, window.location.origin).pathname;
-        navigate(path);
-        onClose();
+        try { sessionStorage.removeItem(storageKey); } catch { /* Checkout can continue without storage. */ }
+        const params = new URLSearchParams({ checkout: 'pos', paket: plan.slug, cycle: billingCycle });
+        if (promo) params.set('promo', promo.code);
+        navigate(`/dashboard?${params}`, { replace: true });
         return;
       }
       const started = await checkoutStart({
@@ -364,7 +377,6 @@ export default function CheckoutModal({
         sessionStorage.removeItem(storageKey);
         const path = new URL(started.status_url, window.location.origin).pathname;
         navigate(path);
-        onClose();
         return;
       }
       if (started.payment?.payment_url) {
@@ -398,6 +410,7 @@ export default function CheckoutModal({
     <div className="fixed inset-0 z-[120] flex items-end justify-center bg-zinc-950/60 p-0 backdrop-blur-sm sm:items-center sm:p-4" onMouseDown={(event) => {
       if (event.target === event.currentTarget) close();
     }}>
+      {guest && loading && step === 2 && <HellomLoading mode="overlay" className="!z-[130]" label="Silakan tunggu, pembuatan akun dan persiapan pembayaran sedang diproses…" />}
       <section role="dialog" aria-modal="true" aria-labelledby="checkout-title" className="relative flex max-h-[100dvh] w-full flex-col overflow-hidden rounded-t-[2rem] bg-white sm:max-h-[92dvh] sm:max-w-5xl sm:rounded-[2rem]">
         <header className="flex items-start gap-4 border-b border-zinc-100 px-5 py-5 sm:px-8 sm:py-6">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-zinc-950 text-amber-300 shadow-md">
@@ -408,7 +421,7 @@ export default function CheckoutModal({
               Aktifkan {appName}
             </h2>
             <p className="mt-1 text-sm text-zinc-500">
-              {step === 1 ? 'Pilih paket dan metode pembayaran untuk mulai berlangganan.' : 'Periksa kembali detail langganan sebelum melakukan pembayaran.'}
+              {guest ? (step === 1 ? 'Pilih paket untuk mulai berlangganan.' : 'Isi data diri untuk membuat akun. Metode pembayaran akan tampil di dashboard.') : (step === 1 ? 'Pilih paket dan metode pembayaran untuk mulai berlangganan.' : 'Periksa kembali detail langganan sebelum melakukan pembayaran.')}
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               {[1, 2].map((item) => (
@@ -417,7 +430,7 @@ export default function CheckoutModal({
                   item === step ? 'bg-amber-300 text-zinc-950' : item < step ? 'bg-emerald-100 text-emerald-800' : 'bg-zinc-100 text-zinc-500',
                 )}>
                   {item < step ? <Check className="h-3.5 w-3.5" /> : item}
-                  {item === 1 ? 'Pilih Paket & Pembayaran' : 'Konfirmasi & Bayar'}
+                  {guest ? (item === 1 ? 'Pilih Paket' : 'Buat Akun') : (item === 1 ? 'Pilih Paket & Pembayaran' : 'Konfirmasi & Bayar')}
                 </span>
               ))}
             </div>
@@ -484,28 +497,7 @@ export default function CheckoutModal({
                 ) : <p className="rounded-2xl bg-zinc-50 p-4 text-sm text-zinc-600">Belum ada paket yang tersedia.</p>}
               </section>
 
-              {guest && (
-                <section>
-                  <h3 className="mb-3 text-base font-extrabold text-zinc-900">Data Akun</h3>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <label className="text-xs font-semibold text-zinc-600">Nama lengkap
-                      <input autoComplete="name" value={guestFields.name} onChange={(event) => updateGuestField('name', event.target.value)} className="mt-1.5 min-h-11 w-full rounded-xl border border-zinc-300 px-3 text-sm text-zinc-900 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100" />
-                    </label>
-                    <label className="text-xs font-semibold text-zinc-600">Email
-                      <input type="email" autoComplete="email" value={guestFields.email} onChange={(event) => updateGuestField('email', event.target.value)} className="mt-1.5 min-h-11 w-full rounded-xl border border-zinc-300 px-3 text-sm text-zinc-900 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100" />
-                    </label>
-                    <label className="text-xs font-semibold text-zinc-600">Nomor WhatsApp
-                      <input type="tel" inputMode="numeric" autoComplete="tel" value={guestFields.phone} onChange={(event) => updateGuestField('phone', event.target.value)} className="mt-1.5 min-h-11 w-full rounded-xl border border-zinc-300 px-3 text-sm text-zinc-900 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100" />
-                    </label>
-                    <label className="text-xs font-semibold text-zinc-600">Nama usaha
-                      <input autoComplete="organization" value={guestFields.business_name} onChange={(event) => updateGuestField('business_name', event.target.value)} className="mt-1.5 min-h-11 w-full rounded-xl border border-zinc-300 px-3 text-sm text-zinc-900 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100" />
-                    </label>
-                  </div>
-                  <label className="hidden" aria-hidden="true">Website
-                    <input tabIndex={-1} autoComplete="off" value={honeypot} onChange={(event) => setHoneypot(event.target.value)} />
-                  </label>
-                </section>
-              )}
+
 
               <section>
                 <h3 className="mb-3 text-base font-extrabold text-zinc-900">Kode promo <span className="font-medium text-zinc-400">(opsional)</span></h3>
@@ -519,7 +511,7 @@ export default function CheckoutModal({
                 {promo && <p className="mt-2 text-sm font-semibold text-emerald-700">Promo {promo.code} berhasil diterapkan. Hemat {rupiah(promo.discount_amount)}.</p>}
               </section>
 
-              <section>
+              {!guest && <section>
                 <h3 className="mb-3 text-base font-extrabold text-zinc-900">Metode Pembayaran</h3>
                 <div className={cn('grid gap-3', !guest && 'sm:grid-cols-2')}>
                   {!guest && (
@@ -552,10 +544,32 @@ export default function CheckoutModal({
                   </div>
                 )}
                 {!guest && walletAvailable && <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2.5 text-xs leading-relaxed text-amber-900">Menggunakan wallet akan mengaktifkan langganan lebih cepat setelah pembayaran berhasil.</p>}
-              </section>
+              </section>}
             </div>
           ) : (
             <div className="space-y-5">
+              {guest && (
+                <section>
+                  <h3 className="mb-3 text-base font-extrabold text-zinc-900">Data Akun</h3>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="text-xs font-semibold text-zinc-600">Nama lengkap
+                      <input autoComplete="name" value={guestFields.name} onChange={(event) => updateGuestField('name', event.target.value)} className="mt-1.5 min-h-11 w-full rounded-xl border border-zinc-300 px-3 text-sm text-zinc-900 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100" />
+                    </label>
+                    <label className="text-xs font-semibold text-zinc-600">Email
+                      <input type="email" autoComplete="email" value={guestFields.email} onChange={(event) => updateGuestField('email', event.target.value)} className="mt-1.5 min-h-11 w-full rounded-xl border border-zinc-300 px-3 text-sm text-zinc-900 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100" />
+                    </label>
+                    <label className="text-xs font-semibold text-zinc-600">Nomor WhatsApp
+                      <input type="tel" inputMode="numeric" autoComplete="tel" value={guestFields.phone} onChange={(event) => updateGuestField('phone', event.target.value)} className="mt-1.5 min-h-11 w-full rounded-xl border border-zinc-300 px-3 text-sm text-zinc-900 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100" />
+                    </label>
+                    <label className="text-xs font-semibold text-zinc-600">Nama usaha
+                      <input autoComplete="organization" value={guestFields.business_name} onChange={(event) => updateGuestField('business_name', event.target.value)} className="mt-1.5 min-h-11 w-full rounded-xl border border-zinc-300 px-3 text-sm text-zinc-900 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100" />
+                    </label>
+                  </div>
+                  <label className="mt-4 block text-xs font-semibold text-zinc-600">Kata sandi
+                    <input type="password" autoComplete="new-password" minLength={8} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Minimal 8 karakter" className="mt-1.5 min-h-11 w-full rounded-xl border border-zinc-300 px-3 text-sm text-zinc-900" />
+                  </label>
+                </section>
+              )}
               {successMessage ? (
                 <div className="flex min-h-64 flex-col items-center justify-center text-center">
                   <CheckCircle2 className="h-14 w-14 text-emerald-600" />
@@ -576,7 +590,7 @@ export default function CheckoutModal({
                         <div className="flex justify-between gap-3"><dt className="text-zinc-500">Durasi</dt><dd className="font-semibold text-zinc-900">{plan?.duration_days && plan.type !== 'lifetime' && plan.type !== 'free' ? `${plan.duration_days} hari` : billingCycle === 'yearly' ? 'Tahunan' : billingCycle === 'monthly' ? 'Bulanan' : 'Sekali bayar'}</dd></div>
                         <div className="flex justify-between gap-3"><dt className="text-zinc-500">Harga</dt><dd className="font-semibold text-zinc-900">{rupiah(plan?.price ?? 0)}{plan && periodLabel(plan, billingCycle)}</dd></div>
                         {promo && <div className="flex justify-between gap-3 text-emerald-700"><dt>Diskon ({promo.code})</dt><dd className="font-bold">− {rupiah(promo.discount_amount)}</dd></div>}
-                        <div className="flex justify-between gap-3"><dt className="text-zinc-500">Metode pembayaran</dt><dd className="text-right font-semibold text-zinc-900">{paymentFlow === 'wallet' ? 'Wallet Hellom' : appSlug !== 'pos' && manualMode ? manualMethods.find((item) => item.key === manualMethod)?.label : chosenChannel?.label}</dd></div>
+                        <div className="flex justify-between gap-3"><dt className="text-zinc-500">Metode pembayaran</dt><dd className="text-right font-semibold text-zinc-900">{guest ? 'Dipilih di dashboard' : paymentFlow === 'wallet' ? 'Wallet Hellom' : appSlug !== 'pos' && manualMode ? manualMethods.find((item) => item.key === manualMethod)?.label : chosenChannel?.label}</dd></div>
                       </dl>
                       <div className="mt-5 flex items-center justify-between rounded-2xl bg-amber-100 px-4 py-4">
                         <span className="font-bold text-zinc-900">Total bayar</span><span className="text-xl font-black text-zinc-950">{rupiah(total)}</span>
@@ -608,14 +622,14 @@ export default function CheckoutModal({
             {step === 1 ? (
               <>
                 <button type="button" onClick={close} className={secondaryButton}>Batal</button>
-                <button type="button" onClick={advance} disabled={!plan || busy} className={primaryButton}>Lanjut ke Ringkasan <span aria-hidden="true">→</span></button>
+                <button type="button" onClick={advance} disabled={!plan || busy} className={primaryButton}>{guest ? 'Lanjut Isi Data Diri' : 'Lanjut ke Ringkasan'} <span aria-hidden="true">→</span></button>
               </>
             ) : (
               <>
                 <button type="button" onClick={() => { setStep(1); setError(''); }} disabled={busy} className={secondaryButton}>Kembali</button>
                 <button type="button" onClick={() => void submit()} disabled={!termsAccepted || busy} className={primaryButton}>
                   {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <LockKeyhole className="h-4 w-4" />}
-                  {busy ? 'Memproses…' : 'Bayar Sekarang'}
+                  {busy ? 'Memproses…' : guest ? 'Buat Akun & Lanjut Pembayaran' : 'Bayar Sekarang'}
                 </button>
               </>
             )}

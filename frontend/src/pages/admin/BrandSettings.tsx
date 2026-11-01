@@ -72,12 +72,7 @@ export default function BrandSettingsPage() {
   });
   const [mailForm, setMailForm] = useState({
     enabled: false,
-    host: '',
-    port: 587,
-    username: '',
-    password: '',
-    password_masked: '',
-    encryption: 'tls',
+    resend_configured: false,
     from_address: '',
     from_name: '',
     reply_to_address: '',
@@ -129,8 +124,6 @@ export default function BrandSettingsPage() {
             setMailForm((current) => ({
               ...current,
               ...result.mail,
-              password: '',
-              password_masked: result.mail.password_masked || '',
               // FIX 3: Gunakan brand.support_email yang sudah pasti ada
               test_email: brand.support_email || result.mail.from_address || '',
             }));
@@ -295,11 +288,6 @@ export default function BrandSettingsPage() {
     try {
       const result = await updateAdminMailSettings({
         enabled: mailForm.enabled,
-        host: mailForm.host,
-        port: Number(mailForm.port) || 587,
-        username: mailForm.username,
-        password: mailForm.password || undefined,
-        encryption: mailForm.encryption,
         from_address: mailForm.from_address,
         from_name: mailForm.from_name,
         reply_to_address: mailForm.reply_to_address,
@@ -308,12 +296,10 @@ export default function BrandSettingsPage() {
       setMailForm((current) => ({
         ...current,
         ...result.mail,
-        password: '',
-        password_masked: result.mail.password_masked || '',
       }));
-      setMessage({ type: 'success', text: 'SMTP Hellom berhasil disimpan.' });
+      setMessage({ type: 'success', text: 'Pengaturan Resend Hellom berhasil disimpan.' });
     } catch (error) {
-      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Gagal menyimpan SMTP' });
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Gagal menyimpan pengaturan Resend' });
     } finally {
       setSaving(false);
     }
@@ -462,7 +448,7 @@ export default function BrandSettingsPage() {
 
   const handleSendTestMail = async () => {
     if (!mailForm.test_email) {
-      setMessage({ type: 'error', text: 'Isi email tujuan untuk tes SMTP.' });
+      setMessage({ type: 'error', text: 'Isi email tujuan untuk tes Resend.' });
       return;
     }
 
@@ -815,11 +801,11 @@ export default function BrandSettingsPage() {
           <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-slate-900">SMTP & Email Hellom</h2>
+                <h2 className="text-lg font-semibold text-slate-900">Resend & Email Hellom</h2>
                 <p className="text-sm text-slate-500">Dipakai untuk invitation, reset password, welcome mail, promo, dan billing notification.</p>
               </div>
               <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${mailForm.is_ready ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'}`}>
-                {mailForm.is_ready ? 'SMTP Ready' : 'Belum siap'}
+                {mailForm.is_ready ? 'Resend Ready' : 'Belum siap'}
               </span>
             </div>
 
@@ -827,25 +813,16 @@ export default function BrandSettingsPage() {
               <label className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <p className="font-semibold text-slate-900">Aktifkan SMTP dinamis</p>
-                    <p className="mt-1 text-xs text-slate-500">Jika mati, email fallback ke mailer default aplikasi.</p>
+                    <p className="font-semibold text-slate-900">Aktifkan email melalui Resend</p>
+                    <p className="mt-1 text-xs text-slate-500">Dipakai untuk seluruh email transaksional dan notifikasi.</p>
                   </div>
                   <input type="checkbox" checked={mailForm.enabled} onChange={(event) => setMailForm((current) => ({ ...current, enabled: event.target.checked }))} />
                 </div>
               </label>
               <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                Password tersimpan aman.
-                {mailForm.password_masked ? ` Password saat ini: ${mailForm.password_masked}` : ' Belum ada password SMTP tersimpan.'}
+                API key dibaca dari <code>RESEND_API_KEY</code> di environment backend dan tidak dikirim ke browser.
+                {!mailForm.resend_configured ? ' API key belum dikonfigurasi.' : ''}
               </div>
-              <input value={mailForm.host} onChange={(event) => setMailForm((current) => ({ ...current, host: event.target.value }))} className={textInputClassName} placeholder="SMTP host" />
-              <input type="number" value={mailForm.port} onChange={(event) => setMailForm((current) => ({ ...current, port: Number(event.target.value) || 587 }))} className={textInputClassName} placeholder="Port" />
-              <input value={mailForm.username} onChange={(event) => setMailForm((current) => ({ ...current, username: event.target.value }))} className={textInputClassName} placeholder="SMTP username" />
-              <input type="password" value={mailForm.password} onChange={(event) => setMailForm((current) => ({ ...current, password: event.target.value }))} className={textInputClassName} placeholder="Kosongkan jika tidak ganti password" />
-              <select value={mailForm.encryption} onChange={(event) => setMailForm((current) => ({ ...current, encryption: event.target.value }))} className={textInputClassName}>
-                <option value="tls">TLS</option>
-                <option value="ssl">SSL</option>
-              </select>
-              <div />
               <input value={mailForm.from_address} onChange={(event) => setMailForm((current) => ({ ...current, from_address: event.target.value }))} className={textInputClassName} placeholder="From email" />
               <input value={mailForm.from_name} onChange={(event) => setMailForm((current) => ({ ...current, from_name: event.target.value }))} className={textInputClassName} placeholder="From name" />
               <input value={mailForm.reply_to_address} onChange={(event) => setMailForm((current) => ({ ...current, reply_to_address: event.target.value }))} className={textInputClassName} placeholder="Reply-to email" />
@@ -862,10 +839,10 @@ export default function BrandSettingsPage() {
                   placeholder="Email tujuan tes"
                 />
                 <button type="button" onClick={handleSendTestMail} disabled={saving} className="rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-800">
-                  Kirim Tes
+                  Kirim Tes Resend
                 </button>
                 <button type="button" onClick={handleSaveMail} disabled={saving} className="rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white">
-                  Simpan SMTP
+                  Simpan Pengaturan Email
                 </button>
               </div>
             </div>

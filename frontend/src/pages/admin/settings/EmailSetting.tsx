@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  Mail, Save, Send, AlertCircle, CheckCircle, RefreshCw,
-  Eye, EyeOff
+  Mail, Save, Send, AlertCircle, CheckCircle, RefreshCw
 } from 'lucide-react';
 import {
   getAdminMailSettings,
@@ -13,11 +12,8 @@ import MailLogPanel from './MailLogPanel';
 
 type MailSettings = {
   enabled: boolean;
-  host: string;
-  port: number;
-  username: string;
-  password_masked: string | null;
-  encryption: string;
+  provider: string;
+  resend_configured: boolean;
   from_address: string;
   from_name: string;
   reply_to_address: string;
@@ -27,16 +23,11 @@ type MailSettings = {
   owner_email_effective: string[];
 };
 
-type EncryptionOption = 'tls' | 'ssl' | 'none';
-
 export default function EmailSetting() {
   const [settings, setSettings] = useState<MailSettings>({
     enabled: false,
-    host: '',
-    port: 587,
-    username: '',
-    password_masked: null,
-    encryption: 'tls',
+    provider: 'resend',
+    resend_configured: false,
     from_address: '',
     from_name: '',
     reply_to_address: '',
@@ -48,11 +39,6 @@ export default function EmailSetting() {
 
   const [form, setForm] = useState<{
     enabled: boolean;
-    host: string;
-    port: number;
-    username: string;
-    password: string;
-    encryption: EncryptionOption;
     from_address: string;
     from_name: string;
     reply_to_address: string;
@@ -60,11 +46,6 @@ export default function EmailSetting() {
     owner_email: string;
   }>({
     enabled: false,
-    host: '',
-    port: 587,
-    username: '',
-    password: '',
-    encryption: 'tls',
     from_address: '',
     from_name: '',
     reply_to_address: '',
@@ -78,7 +59,6 @@ export default function EmailSetting() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [testEmail, setTestEmail] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
 
   const loadSettings = async () => {
     setLoading(true);
@@ -88,11 +68,6 @@ export default function EmailSetting() {
       setSettings(data.mail);
       setForm({
         enabled: data.mail.enabled,
-        host: data.mail.host,
-        port: data.mail.port,
-        username: data.mail.username,
-        password: '',
-        encryption: data.mail.encryption as EncryptionOption,
         from_address: data.mail.from_address,
         from_name: data.mail.from_name,
         reply_to_address: data.mail.reply_to_address,
@@ -118,11 +93,6 @@ export default function EmailSetting() {
     try {
       const result = await updateAdminMailSettings({
         enabled: form.enabled,
-        host: form.host,
-        port: form.port,
-        username: form.username,
-        password: form.password || undefined,
-        encryption: form.encryption,
         from_address: form.from_address,
         from_name: form.from_name,
         reply_to_address: form.reply_to_address,
@@ -131,11 +101,7 @@ export default function EmailSetting() {
       });
       setStatusMessage('Email settings berhasil disimpan.');
       setSettings(result.mail);
-      setForm((current) => ({
-        ...current,
-        password: '', // clear password after save
-      }));
-      await loadSettings(); // reload to get updated masked password
+      await loadSettings();
     } catch (saveError) {
       const message = saveError instanceof Error ? saveError.message : 'Gagal menyimpan email settings';
       setErrorMessage(message);
@@ -167,12 +133,6 @@ export default function EmailSetting() {
     }
   };
 
-  const encryptionOptions: Array<{ value: EncryptionOption; label: string }> = [
-    { value: 'tls', label: 'TLS (Port 587)' },
-    { value: 'ssl', label: 'SSL (Port 465)' },
-    { value: 'none', label: 'None (Port 25)' },
-  ];
-
   if (loading) {
     return (
       <div className="space-y-6 max-w-4xl mx-auto">
@@ -188,7 +148,7 @@ export default function EmailSetting() {
     <div className="space-y-6 max-w-4xl mx-auto">
       <div>
         <h1 className="text-2xl font-bold text-zinc-900">Pengaturan Email</h1>
-        <p className="text-zinc-500">Dua email berbeda: <strong>email resmi</strong> mengirim semua email platform ke pengguna (verifikasi & login, reset password, penjualan, pembayaran, penarikan dana), dan <strong>email owner</strong> menerima salinan setiap aktivitas penting untuk super admin.</p>
+        <p className="text-zinc-500">Resend mengirim semua email platform ke pengguna (verifikasi & login, reset password, penjualan, pembayaran, penarikan dana), dan <strong>email owner</strong> menerima salinan setiap aktivitas penting untuk super admin.</p>
       </div>
 
       {errorMessage && (
@@ -212,7 +172,7 @@ export default function EmailSetting() {
             </div>
             <div>
               <h3 className="font-bold text-zinc-900">Email resmi (pengirim)</h3>
-              <p className="text-sm text-zinc-500">Akun SMTP yang mengirim semua email Hellom ke penjual & pembeli.</p>
+              <p className="text-sm text-zinc-500">Resend mengirim semua email Hellom ke pengguna, penjual, dan pembeli.</p>
             </div>
           </div>
           <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${
@@ -236,75 +196,10 @@ export default function EmailSetting() {
               <span className="text-sm font-medium text-zinc-700">Aktifkan email notifikasi</span>
             </label>
 
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-2">SMTP Host</label>
-              <input
-                type="text"
-                value={form.host}
-                onChange={(e) => setForm({ ...form, host: e.target.value })}
-                placeholder="smtp.gmail.com"
-                className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-zinc-900"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-2">Port</label>
-              <input
-                type="number"
-                value={form.port}
-                onChange={(e) => setForm({ ...form, port: parseInt(e.target.value) || 587 })}
-                className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-zinc-900"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-2">Username</label>
-              <input
-                type="text"
-                value={form.username}
-                onChange={(e) => setForm({ ...form, username: e.target.value })}
-                placeholder="your-email@gmail.com"
-                className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-zinc-900"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-2">Password</label>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={form.password}
-                  onChange={(e) => setForm({ ...form, password: e.target.value })}
-                  placeholder={settings.password_masked ? 'Leave empty to keep current' : 'Enter password'}
-                  className="w-full px-3 py-2 pr-10 border border-zinc-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-zinc-900"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-2.5 text-zinc-400 hover:text-zinc-600"
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-              {settings.password_masked && (
-                <p className="mt-1 text-xs text-zinc-500">Current: {settings.password_masked}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-2">Encryption</label>
-              <select
-                value={form.encryption}
-                onChange={(e) => setForm({ ...form, encryption: e.target.value as EncryptionOption })}
-                className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-zinc-900"
-              >
-                {encryptionOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <p className="rounded-lg bg-zinc-50 p-3 text-sm text-zinc-600">
+              Provider: <strong>Resend</strong>. API key dibaca aman dari <code>RESEND_API_KEY</code> di environment backend dan tidak disimpan di database atau browser.
+              {!settings.resend_configured ? ' API key belum dikonfigurasi.' : ''}
+            </p>
           </div>
 
           <div className="space-y-4">
@@ -369,7 +264,7 @@ export default function EmailSetting() {
           <p className="text-xs text-zinc-500">
             Saat ini dikirim ke: {settings.owner_email_effective.length > 0 ? settings.owner_email_effective.join(', ') : 'belum ada'}
             {!settings.owner_email && settings.owner_email_effective.length > 0 ? ' (email akun super admin, karena kolom ini masih kosong)' : ''}.
-            {!settings.is_ready ? ' Email baru benar-benar terkirim setelah email resmi di atas siap (Ready).' : ''}
+            {!settings.is_ready ? ' Email terkirim setelah Resend API key dikonfigurasi dan email diaktifkan.' : ''}
           </p>
         </div>
 
@@ -397,7 +292,7 @@ export default function EmailSetting() {
           </div>
           <div>
             <h3 className="font-bold text-zinc-900">Kirim email tes</h3>
-            <p className="text-sm text-zinc-500">Kirim email test untuk memastikan konfigurasi benar.</p>
+            <p className="text-sm text-zinc-500">Kirim email tes lewat Resend untuk memastikan konfigurasi benar.</p>
           </div>
         </div>
 
@@ -419,7 +314,7 @@ export default function EmailSetting() {
         </div>
 
         {!settings.is_ready && (
-          <p className="mt-2 text-xs text-amber-700">Email settings belum ready. Simpan dulu sebelum test.</p>
+          <p className="mt-2 text-xs text-amber-700">Atur RESEND_API_KEY di environment backend, aktifkan email, lalu pastikan From memakai domain terverifikasi.</p>
         )}
       </div>
 
@@ -430,8 +325,8 @@ export default function EmailSetting() {
       <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">
         <p className="font-semibold text-zinc-900">Catatan keamanan</p>
         <div className="mt-2 space-y-2">
-          <p>Kredensial SMTP disimpan terenkripsi di database. Password tidak pernah dikirim ke frontend.</p>
-          <p>Gmail: gunakan smtp.gmail.com, port 587 dengan TLS atau 465 dengan SSL, username alamat Gmail lengkap, dan App Password. Gunakan alamat pengirim yang sama dengan akun Gmail; nama pengirim boleh “Hellomspace”. Untuk alamat @hellomspace.com, gunakan layanan yang sudah memverifikasi domain tersebut. SPF, DKIM, dan DMARC gmail.com dikelola Google. Status terkirim berarti diterima server pengirim, bukan jaminan masuk inbox.</p>
+          <p>API key Resend hanya disimpan di environment backend. Jangan masukkan API key ke halaman ini, frontend, atau chat.</p>
+          <p>Gunakan alamat pengirim dari domain yang sudah diverifikasi di Resend. Status terkirim berarti Resend menerima permintaan pengiriman, bukan jaminan masuk inbox.</p>
           <p>Test email akan dikirim dari konfigurasi yang sudah tersimpan.</p>
         </div>
       </div>

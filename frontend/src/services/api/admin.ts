@@ -536,11 +536,8 @@ export function ignoreOwnerNotificationAction(id: number | string) {
 // Mail settings summary (PlatformMailService::publicSettingsSummary).
 export type AdminMailSettings = {
   enabled: boolean;
-  host: string;
-  port: number;
-  username: string;
-  password_masked: string | null;
-  encryption: string;
+  provider: 'resend';
+  resend_configured: boolean;
   from_address: string;
   from_name: string;
   reply_to_address: string;

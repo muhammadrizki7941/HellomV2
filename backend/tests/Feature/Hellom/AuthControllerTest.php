@@ -15,6 +15,26 @@ class AuthControllerTest extends TestCase
 
     // ─── Register ───
 
+    public function test_checkout_registration_saves_phone_and_returns_dashboard_session(): void
+    {
+        $response = $this->postJson('/api/v1/hellom/auth/register', [
+            'name' => 'Checkout Guest',
+            'email' => 'checkout@example.test',
+            'password' => 'secret1234',
+            'organization_name' => 'Checkout Shop',
+            'phone' => '+62 812-3456789',
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('users', [
+            'email' => 'checkout@example.test',
+            'phone' => '+628123456789',
+        ]);
+        $this->withToken($response->json('data.token'))
+            ->getJson('/api/v1/hellom/auth/me')
+            ->assertOk()
+            ->assertJsonPath('data.email', 'checkout@example.test');
+    }
+
     public function test_register_creates_user_and_org(): void
     {
         $response = $this->postJson('/api/v1/hellom/auth/register', [

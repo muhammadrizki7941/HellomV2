@@ -173,6 +173,7 @@ class AuthController extends BaseApiController
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'password' => ['required', 'string', 'min:8'],
+            'phone' => ['nullable', 'string', 'regex:/^\+?[0-9\s\-]{8,20}$/'],
             'organization_name' => ['nullable', 'string', 'max:255'],
             'invite_token' => ['nullable', 'string', 'min:16', 'max:255'],
         ]);
@@ -209,6 +210,7 @@ class AuthController extends BaseApiController
             $user = User::query()->create([
                 'name' => $validated['name'],
                 'email' => strtolower((string) $validated['email']),
+                'phone' => isset($validated['phone']) ? preg_replace('/[^0-9+]/', '', $validated['phone']) : null,
                 'password' => Hash::make((string) $validated['password']),
                 'role' => $invitation instanceof OrganizationTeamInvitation ? 'member' : 'admin',
             ]);
@@ -268,7 +270,7 @@ class AuthController extends BaseApiController
         [$plainToken] = $this->issueToken($user, 'hellom-web');
 
         $organizationName = $user->currentOrganization?->name;
-        // Queued: signing up never waits on SMTP. Welcome + first steps + verify button.
+        // Queued: signup never waits on Resend. Welcome + first steps + verify button.
         app(\App\Services\Notifications\LifecycleEmails::class)->welcome($user, $organizationName);
         $welcomeDelivery = ['sent' => null, 'queued' => true, 'error' => null];
 
