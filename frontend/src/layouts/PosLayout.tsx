@@ -268,6 +268,20 @@ function PosLayoutContent() {
     }
   };
 
+  const handleInstallClick = async () => {
+    if (installState !== 'available') {
+      setShowIosGuide(true);
+      return;
+    }
+    try {
+      const outcome = await install();
+      if (outcome === null) setShowIosGuide(true);
+    } catch (error) {
+      console.error('[PWA] Install prompt failed.', error);
+      setShowIosGuide(true);
+    }
+  };
+
   useEffect(() => {
     if (!businessProfileLoading && !hasTablesSelfOrder && location.pathname.startsWith('/pos/tables')) {
       navigate('/pos/admin-dashboard', { replace: true });
@@ -586,10 +600,10 @@ function PosLayoutContent() {
             ))}
           </nav>
           <div className={cn('border-t border-[#f1e7c9]', sidebarCollapsed ? 'p-2' : 'p-4')}>
-            {(installState === 'available' || installState === 'ios') && (
+            {installState !== 'installed' && (
               <button
                 type="button"
-                onClick={installState === 'available' ? () => void install() : () => setShowIosGuide(true)}
+                onClick={() => void handleInstallClick()}
                 className={cn(
                   'mb-1 flex min-h-11 w-full items-center rounded-md py-2 text-sm font-medium text-amber-800 hover:bg-amber-50',
                   sidebarCollapsed ? 'justify-center px-2' : 'px-3',
@@ -652,15 +666,16 @@ function PosLayoutContent() {
               >
                 {syncStatusLabel}
               </Link>
-              {(installState === 'available' || installState === 'ios') && (
+              {installState !== 'installed' && (
                 <button
                   type="button"
-                  onClick={installState === 'available' ? () => void install() : () => setShowIosGuide(true)}
-                  className="flex items-center gap-1 rounded-lg bg-amber-100 px-2.5 py-1.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-200"
+                  onClick={() => void handleInstallClick()}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center gap-1 rounded-lg bg-amber-100 px-2.5 py-1.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-200 sm:w-auto"
                   title="Install Aplikasi"
                   aria-label="Install Aplikasi"
                 >
-                  📲 Install
+                  <Smartphone className="h-4 w-4" />
+                  <span className="hidden sm:inline">Install</span>
                 </button>
               )}
               <Link
@@ -765,12 +780,23 @@ function PosLayoutContent() {
       {showIosGuide && (
         <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/50 p-4">
           <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
-            <h3 className="mb-3 text-base font-semibold text-gray-900">Install POS Hellom di iPhone / iPad</h3>
-            <ol className="space-y-2.5 text-sm text-gray-600">
-              <li>1. Ketuk ikon <strong>Bagikan</strong> (□↑) di toolbar bawah Safari</li>
-              <li>2. Gulir daftar lalu pilih <strong>"Tambahkan ke Layar Utama"</strong></li>
-              <li>3. Ketuk <strong>Tambahkan</strong> di pojok kanan atas</li>
-            </ol>
+            <h3 className="mb-3 text-base font-semibold text-gray-900">
+              {installState === 'ios' ? 'Install POS Hellom di iPhone / iPad' : 'Pasang Hellom POS di perangkat ini'}
+            </h3>
+            {installState === 'ios' ? (
+              <ol className="space-y-2.5 text-sm text-gray-600">
+                <li>1. Ketuk ikon <strong>Bagikan</strong> di toolbar Safari.</li>
+                <li>2. Pilih <strong>Tambahkan ke Layar Utama</strong>.</li>
+                <li>3. Ketuk <strong>Tambah</strong> untuk memasang.</li>
+              </ol>
+            ) : (
+              <div className="space-y-2.5 text-sm text-gray-600">
+                <p><strong>Chrome Android:</strong> buka menu ⋮ lalu pilih <strong>Install aplikasi</strong> atau <strong>Tambahkan ke layar utama</strong>.</p>
+                <p><strong>Chrome desktop:</strong> pilih ikon install di bilah alamat, atau menu ⋮ → <strong>Install Hellom POS</strong>.</p>
+                <p><strong>Microsoft Edge:</strong> buka menu … → <strong>Aplikasi</strong> → <strong>Instal situs ini sebagai aplikasi</strong>.</p>
+                <p className="text-xs text-gray-500">Jika pilihan belum muncul, buka halaman POS melalui HTTPS di browser terbaru, lalu muat ulang sekali.</p>
+              </div>
+            )}
             <button
               type="button"
               onClick={() => setShowIosGuide(false)}
