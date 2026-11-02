@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, Plus, Minus, ShoppingCart, User, Star, Gift, ScanLine } from 'lucide-react';
+import {
+  X, Plus, Minus, User, Star, Gift, ScanLine, ArrowLeft, ArrowRight, ChevronDown, ChevronRight,
+  Trash2, Search, ShoppingBag, Armchair, LayoutGrid, List, Image as ImageIcon, StickyNote, ArrowUpDown,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getPosTables, getPosProducts, getPosCategories, searchPosMembers, createPosMember, calculateLoyaltyPoints, applyReward, previewPosOrder, getAvailablePosProductSerials, getPosOutletSettings } from '@/lib/hellomApi';
 import { getImageUrl } from '@/lib/hellomApi';
@@ -102,6 +105,8 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
   const { terminology, hasModule, loading: businessProfileLoading } = useBusinessProfile();
   const hasTablesSelfOrder = hasModule('tables_selforder');
   const [activeTab, setActiveTab] = useState<'menu' | 'cart'>('menu');
+  const [customerOpen, setCustomerOpen] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [tables, setTables] = useState<Table[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -336,6 +341,8 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
     }
     
     setActiveTab('menu');
+    setCustomerOpen(false);
+    setNotesOpen(false);
     setViewMode('grid');
     setSelectedTableId(null);
      setCustomerName('');
@@ -453,7 +460,7 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
     if (quantity <= 0) {
       const item = cart.find((row) => row.key === key);
       if (item) {
-        setNotification({ message: `${item.product.name} removed from cart`, visible: true });
+        setNotification({ message: `${item.product.name} dihapus dari keranjang`, visible: true });
         setTimeout(() => setNotification(null), 2000);
       }
       setCart((prev) => prev.filter((item) => item.key !== key));
@@ -536,6 +543,25 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
 
   const selectedSerialsInCart = cart.flatMap((item) => item.serialNumbers);
   const totalPrice = cart.reduce((sum, item) => sum + item.totalPrice, 0);
+  const cartKinds = cart.length;
+  const cartUnits = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const cartSummaryLabel = `${cartKinds} jenis · ${cartUnits} item`;
+  const serviceLabel = selectedTableId
+    ? `${terminology.table} ${tables.find((table) => table.id === selectedTableId)?.code || selectedTableId}`
+    : 'Bawa pulang';
+  // Products without options, variants, serials or price tiers go straight into the cart, so they get an inline stepper.
+  const isSimpleProduct = (product: Product) =>
+    !(product.options?.some((option) => option.is_active) ?? false)
+    && !(hasModule('variants') && (product.has_variants || (product.variants?.length ?? 0) > 0))
+    && !(hasModule('serial_imei') && Boolean(product.track_serial))
+    && !(hasModule('price_tiers') && (product.price_tiers?.length ?? 0) > 0);
+  const simpleCartItem = (product: Product) =>
+    cart.find((item) => item.key === JSON.stringify([product.id, null, '', []]));
+  const customerSummary = selectedMember
+    ? `${selectedMember.name || 'Member'} · member`
+    : customerName.trim() || customerPhone.trim()
+      ? [customerName.trim(), customerPhone.trim()].filter(Boolean).join(' · ')
+      : `${terminology.customer} umum · opsional`;
   const configuredQty = Math.max(1, Number.parseInt(configuredQuantity, 10) || 1);
   const configuredVariant = selectedProductForAddon?.variants?.find((variant) => variant.id === Number(selectedVariantId));
   const configuredTier = selectedProductForAddon?.price_tiers
@@ -547,6 +573,7 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
   const configuredRequiresVariant = Boolean(selectedProductForAddon?.has_variants || (selectedProductForAddon?.variants?.length ?? 0) > 0);
   const configuredRequiresSerial = hasModule('serial_imei') && Boolean(selectedProductForAddon?.track_serial);
   const redeemPointsNum = Math.max(0, parseInt(redeemPoints.replace(/\D/g, ''), 10) || 0);
+  const pointsNeedConfirm = Boolean(selectedMember) && redeemPointsNum > 0 && !confirmMemberName.trim();
   // The server total is authoritative; the local sum is only shown until it arrives.
   const finalAmount = serverTotals?.final_amount ?? (selectedReward ? Math.max(0, totalPrice - discountAmount) : totalPrice);
 
@@ -775,6 +802,7 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
 
     if (selectedMember && redeemPointsNum > 0 && !confirmMemberName.trim()) {
       setError('Ketik nama member untuk konfirmasi penukaran poin.');
+      setCustomerOpen(true);
       return;
     }
 
@@ -842,45 +870,126 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
     }
   };
 
+  const renderProductAction = (product: Product) => {
+    if (!isProductAvailable(product)) {
+      return (
+        <button type="button" disabled className="min-h-11 w-full cursor-not-allowed rounded-xl bg-gray-100 text-sm font-semibold text-gray-400">
+          Habis
+        </button>
+      );
+    }
+    const inCart = isSimpleProduct(product) ? simpleCartItem(product) : undefined;
+    if (inCart) {
+      const atLimit = Boolean(product.track_stock) && inCart.quantity >= (product.stock ?? 0);
+      return (
+        <div className="flex min-h-11 items-center justify-between rounded-xl border border-amber-300 bg-white">
+          <button
+            type="button"
+            onClick={() => updateQuantity(inCart.key, inCart.quantity - 1)}
+            aria-label={`Kurangi jumlah ${product.name}`}
+            className="flex h-11 w-11 items-center justify-center rounded-l-xl text-gray-700 hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+          >
+            <Minus className="h-4 w-4" />
+          </button>
+          <span className="text-base font-semibold text-gray-900" aria-live="polite">{inCart.quantity}</span>
+          <button
+            type="button"
+            onClick={() => handleProductClick(product)}
+            disabled={atLimit}
+            aria-label={`Tambah jumlah ${product.name}`}
+            className="flex h-11 w-11 items-center justify-center rounded-r-xl text-gray-700 hover:bg-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+        </div>
+      );
+    }
+    return (
+      <button
+        type="button"
+        onClick={() => handleProductClick(product)}
+        className="flex min-h-11 w-full items-center justify-center gap-1 rounded-xl bg-amber-400 text-sm font-semibold text-gray-900 hover:bg-amber-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600"
+      >
+        <Plus className="h-4 w-4" />
+        {isSimpleProduct(product) ? 'Tambah' : 'Pilih'}
+      </button>
+    );
+  };
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-white md:items-center md:justify-center md:bg-white/20 md:backdrop-blur-md">
+    <div className="fixed inset-0 z-50 flex flex-col bg-white md:items-center md:justify-center md:bg-gray-900/30 md:backdrop-blur-sm">
       {loading && <HellomLoading mode="overlay" label={loadingLabel} />}
-      <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-white md:h-[90vh] md:w-[90vw] md:max-w-6xl md:rounded-2xl">
+      <div className="relative flex h-[100dvh] w-full flex-col overflow-hidden bg-[#F7F8FA] md:h-[90vh] md:w-[94vw] md:max-w-6xl md:rounded-2xl md:shadow-2xl">
         {/* Header */}
-        <div className="flex flex-shrink-0 items-center justify-between border-b border-gray-200 p-4 md:p-6">
-          <div className="flex items-center gap-4">
-            {hasTablesSelfOrder && (
-            <button
-              onClick={() => setShowTableSelector(!showTableSelector)}
-              className={cn(
-                'px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-                selectedTableId ? 'bg-amber-100 text-amber-900' : 'bg-gray-100 text-gray-700'
-              )}
-            >
-              {selectedTableId ? `${terminology.table} ${tables.find(t => t.id === selectedTableId)?.code || selectedTableId}` : 'Bawa pulang'}
-            </button>
-            )}
-            <span className="text-gray-600">•</span>
-            <span className="text-sm text-gray-600">{cart.length} item</span>
+        <div className={cn(
+          'flex flex-shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-4 py-3 lg:px-6 lg:py-4',
+          activeTab === 'cart' && 'hidden lg:flex'
+        )}>
+          <div className="min-w-0 flex-1">
+            <h2 className="truncate text-xl font-bold text-gray-900 lg:text-2xl">Tambah {terminology.transaction.toLowerCase()}</h2>
+            <p className="hidden truncate text-sm text-gray-500 sm:block">Pilih {terminology.product.toLowerCase()} dan periksa keranjang</p>
           </div>
+          {hasTablesSelfOrder && (
+            <button
+              type="button"
+              onClick={() => setShowTableSelector(!showTableSelector)}
+              aria-expanded={showTableSelector}
+              aria-label="Pilih jenis transaksi atau meja"
+              className="flex min-h-11 min-w-0 max-w-[10.5rem] items-center gap-2 rounded-xl border border-gray-300 bg-white px-3 text-sm font-medium text-gray-900 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 sm:max-w-[14rem]"
+            >
+              {selectedTableId ? <Armchair className="h-4 w-4 shrink-0 text-amber-700" /> : <ShoppingBag className="h-4 w-4 shrink-0 text-gray-500" />}
+              <span className="truncate">{serviceLabel}</span>
+              <ChevronDown className="h-4 w-4 shrink-0 text-gray-500" />
+            </button>
+          )}
           <button
+            type="button"
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 p-2"
+            aria-label="Tutup"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
           >
-            <X className="w-6 h-6" />
+            <X className="h-5 w-5" />
           </button>
         </div>
 
+        {/* Cart header (phones and portrait tablets) */}
+        {activeTab === 'cart' && (
+          <div className="flex flex-shrink-0 items-center gap-2 border-b border-gray-200 bg-white px-3 py-3 lg:hidden">
+            <button
+              type="button"
+              onClick={() => setActiveTab('menu')}
+              aria-label={`Kembali ke daftar ${terminology.product.toLowerCase()}`}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-gray-700 hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+            <div className="min-w-0 flex-1">
+              <h2 className="truncate text-xl font-bold text-gray-900">Keranjang</h2>
+              <p className="truncate text-sm text-gray-500">{cartSummaryLabel}</p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Tutup"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-gray-500 hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        )}
+
         {/* Table Selector */}
         {hasTablesSelfOrder && showTableSelector && (
-          <div className="flex-shrink-0 overflow-y-auto border-b border-gray-200 p-4 max-h-[70vh]">
+          <div className="max-h-[70vh] flex-shrink-0 overflow-y-auto border-b border-gray-200 bg-white p-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900">Pilih {terminology.table.toLowerCase()}</h3>
               <button
+                type="button"
                 onClick={() => setShowTableSelector(false)}
-                className="text-gray-400 hover:text-gray-600"
+                aria-label={`Tutup pilihan ${terminology.table.toLowerCase()}`}
+                className="flex h-10 w-10 items-center justify-center text-gray-400 hover:text-gray-600"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -898,7 +1007,7 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
                     : 'border-gray-200 hover:border-gray-300 text-gray-700'
                 )}
               >
-                <div className="text-xl mb-1">🚶</div>
+                <ShoppingBag className="mx-auto mb-1 h-6 w-6" />
                 <div className="text-sm font-medium">Bawa pulang</div>
               </button>
               {tables.filter(table => table.is_active).map(table => (
@@ -915,7 +1024,7 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
                       : 'border-gray-200 hover:border-gray-300 text-gray-700'
                   )}
                 >
-                  <div className="text-xl mb-1">🪑</div>
+                  <Armchair className="mx-auto mb-1 h-6 w-6" />
                   <div className="text-sm font-medium">{table.name || table.code}</div>
                   <div className="text-xs text-gray-500">{table.code}</div>
                 </button>
@@ -948,7 +1057,7 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
               </div>
               <button
                 onClick={() => setShowTableSelector(false)}
-                className="w-full px-4 py-2 bg-amber-400 text-[#111111] rounded-lg hover:bg-amber-500 transition-colors text-sm"
+                className="min-h-11 w-full rounded-lg bg-[#111111] px-4 py-2 text-sm font-semibold text-amber-400 transition-colors hover:bg-[#2a241d]"
               >
                 Selesai
               </button>
@@ -956,28 +1065,6 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
           </div>
         )}
 
-        {/* Mobile Tabs */}
-        <div className="flex flex-shrink-0 md:hidden border-b border-gray-200">
-          <button
-            onClick={() => setActiveTab('menu')}
-            className={cn(
-              'flex-1 py-3 text-center text-sm font-medium transition-colors',
-              activeTab === 'menu' ? 'text-amber-800 border-b-2 border-amber-400' : 'text-gray-600'
-            )}
-          >
-            Pilih {terminology.product}
-          </button>
-          <button
-            data-cart-tab
-            onClick={() => setActiveTab('cart')}
-            className={cn(
-              'flex-1 py-3 text-center text-sm font-medium transition-colors relative',
-              activeTab === 'cart' ? 'text-amber-800 border-b-2 border-amber-400' : 'text-gray-600'
-            )}
-          >
-            Keranjang ({cart.length})
-          </button>
-        </div>
 
         {/* Notification */}
         {notification?.visible && (
@@ -994,79 +1081,13 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
         )}
 
         {/* Main Content: Menu + Cart */}
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
           {/* Menu Panel */}
           <div className={cn(
-            'flex-1 min-h-0 overflow-y-auto',
-            activeTab === 'cart' ? 'hidden md:block' : 'block'
+            'flex min-h-0 flex-1 flex-col',
+            activeTab === 'cart' ? 'hidden lg:flex' : 'flex'
           )}>
-            <div className="p-4">
-              {/* Categories */}
-              <div className="mb-4">
-                <div className="flex gap-2 overflow-x-auto pb-2">
-                  <button
-                    onClick={() => setSelectedCategory(null)}
-                    className={cn(
-                      'px-3 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors',
-                      !selectedCategory
-                        ? 'bg-amber-400 text-[#111111]'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    )}
-                  >
-                    Semua
-                  </button>
-                  {categories.map(category => (
-                    <button
-                      key={category.id}
-                      onClick={() => setSelectedCategory(category.id)}
-                      className={cn(
-                        'px-3 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors',
-                        selectedCategory === category.id
-                          ? 'bg-amber-400 text-[#111111]'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      )}
-                    >
-                      {category.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* View Toggle */}
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setViewMode('grid')}
-                    className={cn(
-                      'p-2 rounded-lg transition-colors',
-                      viewMode === 'grid'
-                        ? 'bg-amber-100 text-amber-900'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    )}
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={() => setViewMode('list')}
-                    className={cn(
-                      'p-2 rounded-lg transition-colors',
-                      viewMode === 'list'
-                        ? 'bg-amber-100 text-amber-900'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    )}
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-                    </svg>
-                  </button>
-                </div>
-                <div className="text-sm text-gray-500">
-                  {filteredProducts.filter(isProductAvailable).length} {terminology.product.toLowerCase()}
-                </div>
-              </div>
-
+            <div className="min-h-0 flex-1 overflow-y-auto p-4 lg:p-5">
               {/* Search and Filters */}
               <div className="mb-4 space-y-3">
                 {/* Search */}
@@ -1097,16 +1118,16 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
                         setSearchQuery('');
                       }
                     }}
-                    className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-3 pr-12 text-sm text-gray-900 placeholder-gray-400 focus:border-amber-300 focus:ring-2 focus:ring-amber-300"
+                    className="min-h-11 w-full rounded-xl border border-gray-300 bg-white py-2 pl-10 pr-3 text-base text-gray-900 placeholder-gray-400 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-300"
                   />
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</div>
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden="true" />
                 </div>
                 {hasModule('barcode') && (
                   <div className="space-y-2">
                     <button
                       type="button"
                       onClick={() => setScannerOpen((open) => !open)}
-                      className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                     >
                       <ScanLine className="h-4 w-4" />
                       {scannerOpen ? 'Tutup kamera' : 'Pindai dengan kamera'}
@@ -1116,228 +1137,348 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
                   </div>
                 )}
 
-                {/* Price Sort */}
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setPriceSort(priceSort === 'asc' ? 'none' : 'asc')}
-                    className={cn(
-                      'flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-                      priceSort === 'asc'
-                        ? 'bg-amber-400 text-[#111111]'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    )}
-                  >
-                      💰 Termurah
-                  </button>
-                  <button
-                    onClick={() => setPriceSort(priceSort === 'desc' ? 'none' : 'desc')}
-                    className={cn(
-                      'flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-                      priceSort === 'desc'
-                        ? 'bg-amber-400 text-[#111111]'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    )}
-                  >
-                    💎 Termahal
-                  </button>
+                {/* Categories: one horizontally scrollable row, all original names kept */}
+                <div className="-mx-4 overflow-x-auto px-4 pb-1 lg:-mx-5 lg:px-5" role="group" aria-label="Kategori">
+                  <div className="flex w-max min-w-full gap-2">
+                    <button
+                      type="button"
+                      aria-pressed={!selectedCategory}
+                      onClick={() => setSelectedCategory(null)}
+                      className={cn(
+                        'min-h-10 shrink-0 whitespace-nowrap rounded-full px-4 text-sm font-semibold transition-colors',
+                        !selectedCategory ? 'bg-amber-400 text-[#111111]' : 'bg-white text-gray-700 ring-1 ring-gray-200 hover:bg-gray-50'
+                      )}
+                    >
+                      Semua
+                    </button>
+                    {categories.map(category => (
+                      <button
+                        key={category.id}
+                        type="button"
+                        aria-pressed={selectedCategory === category.id}
+                        onClick={() => setSelectedCategory(category.id)}
+                        className={cn(
+                          'min-h-10 shrink-0 whitespace-nowrap rounded-full px-4 text-sm font-semibold transition-colors',
+                          selectedCategory === category.id ? 'bg-amber-400 text-[#111111]' : 'bg-white text-gray-700 ring-1 ring-gray-200 hover:bg-gray-50'
+                        )}
+                      >
+                        {category.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Count, sort (all old options in one control) and view mode */}
+                <div className="flex items-center justify-between gap-2">
+                  <p className="min-w-0 truncate text-sm text-gray-600">
+                    {filteredProducts.filter(isProductAvailable).length} {terminology.product.toLowerCase()} tersedia
+                  </p>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <label className="relative flex min-h-10 items-center">
+                      <span className="sr-only">Urutkan {terminology.product.toLowerCase()}</span>
+                      <ArrowUpDown className="pointer-events-none absolute left-3 h-4 w-4 text-gray-500" aria-hidden="true" />
+                      <select
+                        value={priceSort}
+                        onChange={(event) => setPriceSort(event.target.value as 'none' | 'asc' | 'desc')}
+                        className="min-h-10 appearance-none rounded-xl border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm font-medium text-gray-800 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-300"
+                      >
+                        <option value="none">Urutkan</option>
+                        <option value="asc">Termurah</option>
+                        <option value="desc">Termahal</option>
+                      </select>
+                    </label>
+                    <div className="flex items-center gap-1 rounded-xl bg-gray-100 p-1" role="group" aria-label="Tampilan katalog">
+                      {([['grid', 'Kisi', LayoutGrid], ['list', 'Daftar', List]] as const).map(([mode, label, Icon]) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          aria-pressed={viewMode === mode}
+                          aria-label={`Tampilan ${label.toLowerCase()}`}
+                          onClick={() => setViewMode(mode)}
+                          className={cn(
+                            'flex h-9 w-9 items-center justify-center rounded-lg transition-colors',
+                            viewMode === mode ? 'bg-white text-amber-800 shadow-sm' : 'text-gray-500 hover:text-gray-800'
+                          )}
+                        >
+                          <Icon className="h-4 w-4" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
 
               {/* Products Display */}
-              {viewMode === 'grid' ? (
-                /* Grid View */
-                <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-1.5 overflow-hidden">
+              {loading && products.length === 0 ? (
+                <p role="status" className="py-12 text-center text-sm text-gray-500">Memuat {terminology.product.toLowerCase()}...</p>
+              ) : filteredProducts.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-4 py-12 text-center">
+                  <p className="text-sm font-semibold text-gray-800">
+                    {products.length === 0 ? `Belum ada ${terminology.product.toLowerCase()}` : `${terminology.product} tidak ditemukan`}
+                  </p>
+                  <p className="mt-1 text-sm text-gray-500">
+                    {products.length === 0 ? `Tambahkan ${terminology.product.toLowerCase()} dulu di halaman ${terminology.product}.` : 'Coba ubah kata kunci atau pilih kategori lain.'}
+                  </p>
+                </div>
+              ) : viewMode === 'grid' ? (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
                   {filteredProducts.map(product => (
                     <div
                       key={product.id}
-                      onClick={() => handleProductClick(product)}
                       className={cn(
-                        "bg-white border border-gray-200 rounded-lg overflow-hidden transition-all duration-200 group select-none min-w-0 transform",
-                        isProductAvailable(product)
-                          ? "cursor-pointer hover:border-amber-400 hover:shadow-lg active:scale-95 active:bg-amber-50"
-                          : "cursor-not-allowed opacity-60"
+                        'flex min-w-0 flex-col overflow-hidden rounded-xl border bg-white transition-colors',
+                        simpleCartItem(product) ? 'border-amber-300 bg-amber-50/40' : 'border-gray-200',
+                        !isProductAvailable(product) && 'opacity-70'
                       )}
                     >
-                      <div className="aspect-[4/3] bg-gray-100 relative overflow-hidden">
-                        {product.image_path ? (
-                          <img
-                            src={getImageUrl(product.image_path)}
-                            alt={product.name}
-                            className={cn(
-                              'w-full h-full object-cover group-hover:scale-105 transition-transform duration-200',
-                              !isProductAvailable(product) && 'grayscale'
-                            )}
-                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-gray-400">
-                            <div className="w-3 h-3 border-2 border-gray-300 rounded" />
+                      <button
+                        type="button"
+                        onClick={() => handleProductClick(product)}
+                        aria-label={`${product.name}, Rp ${product.price.toLocaleString('id-ID')}, ${getStockLabel(product)}`}
+                        className="group min-w-0 flex-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-400"
+                      >
+                        <div className="relative aspect-[4/3] overflow-hidden bg-gray-100">
+                          <div className="absolute inset-0 flex items-center justify-center text-gray-300" aria-hidden="true">
+                            <ImageIcon className="h-8 w-8" />
                           </div>
-                        )}
-                        <div className={cn('absolute left-1 top-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold', getStockBadgeClass(product))}>
-                          {getStockLabel(product)}
+                          {product.image_path && (
+                            <img
+                              src={getImageUrl(product.image_path)}
+                              alt=""
+                              loading="lazy"
+                              className={cn('absolute inset-0 h-full w-full object-cover', !isProductAvailable(product) && 'grayscale')}
+                              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                            />
+                          )}
                         </div>
-                        {/* Overlay + button */}
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-200 flex items-center justify-center">
-                          <div className="w-5 h-5 bg-amber-400 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 shadow-lg">
-                            <Plus className="w-2.5 h-2.5 text-white" />
-                          </div>
-                        </div>
-                        {!isProductAvailable(product) && (
-                          <div className="absolute inset-x-0 bottom-0 bg-red-500/90 text-white text-[10px] font-semibold text-center py-0.5">
-                            Habis
-                          </div>
-                        )}
-                      </div>
-                      <div className="p-1">
-                        <h4 className="text-gray-900 font-medium text-xs mb-0.5 line-clamp-1 leading-tight truncate">{product.name}</h4>
-                        <div className="text-center">
-                          <span className="text-amber-800 font-bold text-xs">
-                            Rp {product.price.toLocaleString('id-ID')}
+                        <div className="space-y-1 p-3 pb-2">
+                          <h4 className="line-clamp-2 break-words text-sm font-semibold leading-snug text-gray-900">{product.name}</h4>
+                          <p className="text-sm font-bold text-amber-800">Rp {product.price.toLocaleString('id-ID')}</p>
+                          <span className={cn('inline-block rounded-full border px-2 py-0.5 text-[11px] font-semibold', getStockBadgeClass(product))}>
+                            {getStockLabel(product)}
                           </span>
                         </div>
-                      </div>
+                      </button>
+                      <div className="p-3 pt-1">{renderProductAction(product)}</div>
                     </div>
                   ))}
                 </div>
               ) : (
-                /* List View - Gojek Style */
                 <div className="space-y-2">
                   {filteredProducts.map(product => (
                     <div
                       key={product.id}
-                      onClick={() => handleProductClick(product)}
                       className={cn(
-                        "bg-white border border-gray-200 rounded-lg overflow-hidden transition-all duration-200 group select-none transform",
-                        isProductAvailable(product)
-                          ? "cursor-pointer hover:border-amber-400 hover:shadow-md active:scale-95 active:bg-amber-50"
-                          : "cursor-not-allowed opacity-60"
+                        'flex min-w-0 items-center gap-3 rounded-xl border bg-white p-3 transition-colors',
+                        simpleCartItem(product) ? 'border-amber-300 bg-amber-50/40' : 'border-gray-200',
+                        !isProductAvailable(product) && 'opacity-70'
                       )}
                     >
-                      <div className="flex items-center p-3">
-                        {/* Product Image */}
-                        <div className="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 mr-3">
-                          {product.image_path ? (
+                      <button
+                        type="button"
+                        onClick={() => handleProductClick(product)}
+                        aria-label={`${product.name}, Rp ${product.price.toLocaleString('id-ID')}, ${getStockLabel(product)}`}
+                        className="flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                      >
+                        <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-gray-100">
+                          <div className="absolute inset-0 flex items-center justify-center text-gray-300" aria-hidden="true">
+                            <ImageIcon className="h-6 w-6" />
+                          </div>
+                          {product.image_path && (
                             <img
                               src={getImageUrl(product.image_path)}
-                              alt={product.name}
-                              className={cn(
-                                'w-full h-full object-cover group-hover:scale-105 transition-transform duration-200',
-                                !isProductAvailable(product) && 'grayscale'
-                              )}
+                              alt=""
+                              loading="lazy"
+                              className={cn('absolute inset-0 h-full w-full object-cover', !isProductAvailable(product) && 'grayscale')}
                               onError={(e) => { e.currentTarget.style.display = 'none'; }}
                             />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-gray-400">
-                              <div className="w-6 h-6 border-2 border-gray-300 rounded" />
-                            </div>
                           )}
                         </div>
-
-                        {/* Product Details */}
-                        <div className="flex-1 min-w-0">
-                          <h4 className="text-gray-900 font-medium text-sm mb-1 line-clamp-2 leading-tight">{product.name}</h4>
-                          {product.description && (
-                            <p className="text-gray-600 text-xs mb-2 line-clamp-1">{product.description}</p>
-                          )}
-                          <div className="flex items-center justify-between">
-                            <span className="text-amber-800 font-bold text-sm">
-                              Rp {product.price.toLocaleString('id-ID')}
-                            </span>
-                            <span className={cn('text-[11px] font-semibold border px-2 py-0.5 rounded-full', getStockBadgeClass(product))}>
+                        <div className="min-w-0 flex-1">
+                          <h4 className="line-clamp-2 break-words text-sm font-semibold leading-snug text-gray-900">{product.name}</h4>
+                          {product.description && <p className="line-clamp-1 text-xs text-gray-500">{product.description}</p>}
+                          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <span className="text-sm font-bold text-amber-800">Rp {product.price.toLocaleString('id-ID')}</span>
+                            <span className={cn('rounded-full border px-2 py-0.5 text-[11px] font-semibold', getStockBadgeClass(product))}>
                               {getStockLabel(product)}
                             </span>
-                            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                              {product.category?.name}
-                            </span>
+                            {product.category?.name && (
+                              <span className="max-w-[9rem] truncate rounded bg-gray-100 px-2 py-0.5 text-[11px] text-gray-600">{product.category.name}</span>
+                            )}
                           </div>
                         </div>
-
-                        {/* Add Button */}
-                        <div className="ml-3 flex-shrink-0">
-                          <div className="w-8 h-8 bg-amber-400 rounded-full flex items-center justify-center opacity-100 group-hover:bg-amber-500 transition-colors duration-200 shadow-md">
-                            <Plus className="w-4 h-4 text-white" />
-                          </div>
-                        </div>
-                      </div>
+                      </button>
+                      <div className="w-28 shrink-0 sm:w-32">{renderProductAction(product)}</div>
                     </div>
                   ))}
                 </div>
               )}
             </div>
+
+            {/* Phone/portrait-tablet cart summary bar */}
+            <div
+              className="flex-shrink-0 space-y-3 border-t border-gray-200 bg-white px-4 pt-3 lg:hidden"
+              style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
+            >
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <span className="font-medium text-gray-700">{cartUnits} item</span>
+                <span className="text-base font-bold text-gray-900">Rp {totalPrice.toLocaleString('id-ID')}</span>
+              </div>
+              <button
+                type="button"
+                data-cart-tab
+                disabled={cart.length === 0}
+                onClick={() => setActiveTab('cart')}
+                className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#111111] px-4 text-base font-bold text-amber-400 transition-colors hover:bg-[#2a241d] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Lihat keranjang
+                <ArrowRight className="h-5 w-5" />
+              </button>
+            </div>
           </div>
 
           {/* Cart Panel */}
           <div className={cn(
-            'w-full md:w-80 lg:w-96 bg-gray-50 border-l border-gray-200 min-h-0 flex flex-col',
-            activeTab === 'menu' ? 'hidden md:flex' : 'flex'
+            'flex min-h-0 w-full flex-col border-gray-200 bg-white lg:w-[40%] lg:min-w-[340px] lg:max-w-[460px] lg:border-l',
+            activeTab === 'menu' ? 'hidden lg:flex' : 'flex'
           )}>
-            {/* Scrollable cart content: items + member + customer info + notes */}
-            <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
-              <h4 className="font-semibold text-gray-900 flex items-center gap-2">
-                <ShoppingCart className="w-5 h-5" />
-                Your Order Summary
-              </h4>
+            {/* Scrollable cart content: items + customer + notes */}
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 lg:p-5">
+              <div className="hidden lg:block">
+                <h3 className="text-xl font-bold text-gray-900">Keranjang</h3>
+                <p className="text-sm text-gray-500">{cartSummaryLabel}</p>
+              </div>
+              {hasTablesSelfOrder && (
+                <button
+                  type="button"
+                  onClick={() => setShowTableSelector(true)}
+                  className="flex min-h-11 w-full items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 text-left text-sm font-medium text-gray-800 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 lg:hidden"
+                >
+                  {selectedTableId ? <Armchair className="h-4 w-4 shrink-0 text-amber-700" /> : <ShoppingBag className="h-4 w-4 shrink-0 text-gray-500" />}
+                  <span className="min-w-0 flex-1 truncate">{serviceLabel}</span>
+                  <span className="text-xs font-semibold text-amber-800">Ubah</span>
+                </button>
+              )}
 
               {cart.length === 0 ? (
-                <div className="text-center py-8">
-                  <div className="text-gray-400 mb-2">🛒</div>
-                  <p className="text-gray-500 text-sm">Keranjang masih kosong nih</p>
+                <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-4 py-10 text-center">
+                  <ShoppingBag className="mx-auto mb-2 h-8 w-8 text-gray-300" aria-hidden="true" />
+                  <p className="text-sm font-semibold text-gray-800">Keranjang masih kosong</p>
+                  <p className="mt-1 text-sm text-gray-500">Pilih {terminology.product.toLowerCase()} untuk menambah ke keranjang.</p>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('menu')}
+                    className="mt-4 min-h-11 rounded-xl bg-[#111111] px-4 text-sm font-semibold text-amber-400 lg:hidden"
+                  >
+                    Pilih {terminology.product.toLowerCase()}
+                  </button>
                 </div>
               ) : (
                 <>
                   <div className="space-y-3">
                     {cart.map((item) => (
-                      <div key={item.key} className="p-3 bg-white rounded-lg border border-gray-200">
-                        <div className="flex items-start gap-3">
-                          <div className="flex-1 min-w-0">
-                            <h5 className="font-medium text-gray-900 text-sm">{item.product.name}</h5>
-                            <p className="text-xs text-gray-600">
-                              Rp {getCartUnitPrice(item).toLocaleString('id-ID')} / unit
+                      <div key={item.key} className="rounded-xl border border-gray-200 bg-white p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <h5 className="break-words text-base font-semibold leading-snug text-gray-900">{item.product.name}</h5>
+                            <p className="text-sm text-gray-500">
+                              Rp {getCartUnitPrice(item).toLocaleString('id-ID')} / item
                             </p>
-                            {item.variantId && <p className="text-xs text-gray-600">Varian: {item.product.variants?.find((variant) => variant.id === item.variantId)?.name}</p>}
-                            {item.customerType && <p className="text-xs text-gray-600">Harga: {item.customerType}</p>}
-                            {item.serialNumbers.length > 0 && <p className="text-xs text-gray-600">IMEI/serial: {item.serialNumbers.join(', ')}</p>}
+                            {item.variantId && <p className="text-sm text-gray-500">Varian: {item.product.variants?.find((variant) => variant.id === item.variantId)?.name}</p>}
+                            {item.customerType && <p className="text-sm text-gray-500">Harga: {item.customerType}</p>}
+                            {item.serialNumbers.length > 0 && <p className="break-all text-sm text-gray-500">IMEI/serial: {item.serialNumbers.join(', ')}</p>}
                             {item.addons.length > 0 && (
-                              <div className="mt-1 space-y-1">
+                              <div className="mt-1 space-y-0.5">
                                 {item.addons.map(addon => (
-                                  <div key={addon.value_id} className="text-xs text-amber-800">
+                                  <div key={addon.value_id} className="text-sm text-amber-800">
                                     + {addon.value_name} {addon.price_delta > 0 && `(+Rp ${addon.price_delta.toLocaleString('id-ID')})`}
                                   </div>
                                 ))}
                               </div>
                             )}
                           </div>
-                          <div className="flex items-center gap-1 flex-shrink-0">
+                          <p className="shrink-0 text-base font-bold text-gray-900">Rp {item.totalPrice.toLocaleString('id-ID')}</p>
+                        </div>
+                        <div className="mt-3 flex items-center justify-between gap-2">
+                          <div className="flex items-center rounded-xl border border-gray-300 bg-white">
                             <button
+                              type="button"
                               onClick={() => updateQuantity(item.key, item.quantity - 1)}
-                              className="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
+                              aria-label={`Kurangi jumlah ${item.product.name}`}
+                              className="flex h-11 w-11 items-center justify-center rounded-l-xl text-gray-700 hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
                             >
-                              <Minus className="w-4 h-4" />
+                              <Minus className="h-4 w-4" />
                             </button>
-                            <span className="w-8 text-center text-sm font-medium text-gray-900">{item.quantity}</span>
+                            <span className="min-w-[2.5rem] text-center text-base font-semibold text-gray-900" aria-live="polite">{item.quantity}</span>
                             <button
+                              type="button"
                               onClick={() => updateQuantity(item.key, item.quantity + 1)}
                               disabled={Boolean(item.product.track_serial)}
+                              aria-label={`Tambah jumlah ${item.product.name}`}
                               title={item.product.track_serial ? 'Tambahkan unit dengan memilih serial baru' : undefined}
                               className={cn(
-                                'w-8 h-8 flex items-center justify-center text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors',
+                                'flex h-11 w-11 items-center justify-center rounded-r-xl text-gray-700 hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400',
                                 item.product.track_serial && 'cursor-not-allowed opacity-40'
                               )}
                             >
-                              <Plus className="w-4 h-4" />
+                              <Plus className="h-4 w-4" />
                             </button>
                           </div>
-                        </div>
-                        <div className="mt-2 flex justify-between items-center">
-                          <span className="text-xs text-gray-500">
-                            Rp {item.totalPrice.toLocaleString('id-ID')}
-                          </span>
+                          <button
+                            type="button"
+                            onClick={() => updateQuantity(item.key, 0)}
+                            aria-label={`Hapus ${item.product.name} dari keranjang`}
+                            className="flex h-11 w-11 items-center justify-center rounded-xl border border-gray-200 text-gray-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
                         </div>
                       </div>
                     ))}
                   </div>
 
+                  {/* Customer entry point: member search/registration and walk-in details live in one sheet */}
+                  <button
+                    type="button"
+                    onClick={() => setCustomerOpen(true)}
+                    className={cn(
+                      'flex min-h-14 w-full items-center gap-3 rounded-xl border bg-white px-3 py-2 text-left hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400',
+                      pointsNeedConfirm ? 'border-red-300' : 'border-gray-200'
+                    )}
+                  >
+                    <User className="h-5 w-5 shrink-0 text-gray-500" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-semibold text-gray-900">{terminology.customer}</span>
+                      <span className="block truncate text-sm text-gray-500">{customerSummary}</span>
+                      {pointsNeedConfirm && <span className="block text-xs font-medium text-red-600">Konfirmasi nama member untuk tukar poin</span>}
+                    </span>
+                    <ChevronRight className="h-5 w-5 shrink-0 text-gray-400" />
+                  </button>
+
+                  {customerOpen && (
+                    <div
+                      className="fixed inset-0 z-[55] flex items-end justify-center bg-black/40 lg:items-center lg:p-4"
+                      onClick={() => setCustomerOpen(false)}
+                    >
+                      <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label={terminology.customer}
+                        className="flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl lg:max-w-lg lg:rounded-2xl"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <div className="flex flex-shrink-0 items-center justify-between border-b border-gray-200 px-4 py-3">
+                          <h3 className="text-lg font-bold text-gray-900">{terminology.customer}</h3>
+                          <button
+                            type="button"
+                            onClick={() => setCustomerOpen(false)}
+                            aria-label={`Tutup ${terminology.customer.toLowerCase()}`}
+                            className="flex h-11 w-11 items-center justify-center rounded-xl text-gray-500 hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                          >
+                            <X className="h-5 w-5" />
+                          </button>
+                        </div>
+                        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
                   {/* Member Information */}
                   <div className="border border-gray-200 rounded-xl p-4 bg-gradient-to-br from-blue-50 to-transparent">
                     <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
@@ -1376,7 +1517,7 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
 
                         {/* Hasil pencarian */}
                         {memberResults.length > 0 && (
-                          <div className="absolute top-full left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-xl z-50 mt-1 overflow-hidden max-h-56 overflow-y-auto">
+                          <div className="bg-white border border-gray-200 rounded-lg mt-2 overflow-hidden max-h-56 overflow-y-auto">
                             {memberResults.map(m => (
                               <button
                                 key={m.id}
@@ -1573,14 +1714,47 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
                       />
                     </div>
                   </div>
+                        </div>
+                        <div className="flex-shrink-0 border-t border-gray-200 p-4" style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}>
+                          <button
+                            type="button"
+                            onClick={() => setCustomerOpen(false)}
+                            className="min-h-12 w-full rounded-xl bg-[#111111] text-base font-semibold text-amber-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                          >
+                            Selesai
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
-                  <textarea
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    placeholder="misalnya: gak pake kecap, tambah sambal ya..."
-                    rows={2}
-                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 text-sm focus:ring-2 focus:ring-amber-300 focus:border-amber-300 resize-none"
-                  />
+                  <div className="rounded-xl border border-gray-200 bg-white">
+                    <button
+                      type="button"
+                      onClick={() => setNotesOpen((open) => !open)}
+                      aria-expanded={notesOpen}
+                      className="flex min-h-12 w-full items-center gap-3 px-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 rounded-xl"
+                    >
+                      <StickyNote className="h-5 w-5 shrink-0 text-gray-500" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-semibold text-gray-900">Catatan</span>
+                        {!notesOpen && notes.trim() && <span className="block truncate text-sm text-gray-500">{notes}</span>}
+                      </span>
+                      <ChevronDown className={cn('h-5 w-5 shrink-0 text-gray-400 transition-transform', notesOpen && 'rotate-180')} />
+                    </button>
+                    {notesOpen && (
+                      <div className="px-3 pb-3">
+                        <textarea
+                          value={notes}
+                          onChange={(e) => setNotes(e.target.value)}
+                          placeholder="misalnya: gak pake kecap, tambah sambal ya..."
+                          rows={3}
+                          aria-label="Catatan"
+                          className="w-full resize-none rounded-lg border border-gray-300 bg-white px-3 py-2 text-base text-gray-900 placeholder-gray-400 focus:border-amber-300 focus:ring-2 focus:ring-amber-300"
+                        />
+                      </div>
+                    )}
+                  </div>
 
                   {/* Spacer so last field isn't flush against sticky footer */}
                   <div className="h-1" />
@@ -1620,25 +1794,28 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
                   </div>
                 )}
                 {previewError && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{previewError}</p>}
+                {error && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p>}
                 <div className="flex justify-between items-center">
                   <span className="font-semibold text-gray-900">Total Bayar</span>
-                  <span className="font-bold text-gray-900 text-lg">Rp {finalAmount.toLocaleString('id-ID')}</span>
+                  <span className="font-bold text-gray-900 text-xl">Rp {finalAmount.toLocaleString('id-ID')}</span>
                 </div>
 
                 <button
+                  type="button"
                   onClick={handleCreateOrder}
                   disabled={loading || Boolean(previewError)}
-                  className="w-full bg-[#111111] text-white py-3 px-4 rounded-lg font-medium hover:bg-[#2a241d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-base"
+                  className="min-h-12 w-full rounded-xl bg-[#111111] px-4 py-3 text-base font-semibold text-amber-400 transition-colors hover:bg-[#2a241d] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {loading ? `Membuat ${terminology.transaction.toLowerCase()}...` : `Buat ${terminology.transaction} • Rp ${finalAmount.toLocaleString('id-ID')}`}
                 </button>
+                <p className="text-center text-xs text-gray-500">Pembayaran diproses setelah {terminology.transaction.toLowerCase()} dibuat</p>
               </div>
             )}
           </div>
         </div>
 
-        {/* Error Message */}
-        {error && (
+        {/* Error Message (cart empty; otherwise shown inside the footer) */}
+        {error && cart.length === 0 && (
           <div className="flex-shrink-0 border-t border-gray-200 p-4 bg-red-50">
             <p className="text-red-800 text-sm">{error}</p>
           </div>

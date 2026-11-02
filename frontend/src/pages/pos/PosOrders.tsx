@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Search, Clock, CheckCircle, XCircle, CirclePlus, RotateCcw, Info, Wifi, WifiOff, Receipt, LayoutGrid, List, PanelRight, UserRound, MapPin, CalendarDays, ChevronRight } from 'lucide-react';
+import { Search, Clock, CheckCircle, XCircle, CirclePlus, RotateCcw, Info, Wifi, WifiOff, Receipt, LayoutGrid, List, PanelRight, UserRound, MapPin, CalendarDays, ChevronRight, MoreHorizontal, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   POS_ORDER_STATUS_LABELS,
@@ -79,6 +79,8 @@ export default function PosOrders() {
   const [methodOrder, setMethodOrder] = useState<PosOrderListItem | null>(null);
   const [movingBill, setMovingBill] = useState<PosTableBill | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
   useEffect(() => {
     if (!toast) return undefined;
     const timer = window.setTimeout(() => setToast(null), 4000);
@@ -430,6 +432,126 @@ export default function PosOrders() {
     );
   };
 
+  const renderDetail = (order: PosOrderListItem, onClose?: () => void) => (
+    <>
+      <div className="flex items-start justify-between gap-3 border-b border-gray-100 p-4">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Detail {terminology.transaction}</p>
+          <h2 className="mt-1 break-all font-mono text-sm font-bold text-gray-900">#{order.order_number}</h2>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className={cn('rounded-full border px-2.5 py-1 text-[11px] font-semibold', getStatusColor(order.status))}>
+            {statusLabel(order)}
+          </span>
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Tutup detail"
+              className="flex h-11 w-11 items-center justify-center rounded-xl text-gray-500 hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="space-y-4 p-4">
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="min-w-0">
+            <p className="text-xs text-gray-400">{terminology.customer}</p>
+            <p className="mt-1 flex items-center gap-1.5 font-semibold text-gray-800"><UserRound className="h-4 w-4 shrink-0 text-gray-400" /><span className="min-w-0 break-words">{order.customer_name || 'Walk-in'}</span></p>
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs text-gray-400">{hasTablesSelfOrder ? 'Meja / layanan' : 'Jenis transaksi'}</p>
+            <p className="mt-1 flex items-center gap-1.5 font-semibold text-gray-800"><MapPin className="h-4 w-4 shrink-0 text-gray-400" /><span className="min-w-0 break-words">{hasTablesSelfOrder ? order.table_label || order.service_type || 'Bawa pulang' : order.service_type || 'Kasir'}</span></p>
+          </div>
+        </div>
+        <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+          <h3 className="text-sm font-bold text-gray-900">Item transaksi</h3>
+          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">{order.items_count}</span>
+        </div>
+        <div className="max-h-64 space-y-3 overflow-y-auto">
+          {order.items.map((item) => (
+            <div key={item.id} className="flex items-start justify-between gap-3 text-sm">
+              <div className="min-w-0">
+                <p className="break-words font-medium text-gray-800">{item.product_name}</p>
+                <p className="text-xs text-gray-500">{item.quantity} × {rupiah(item.unit_price)}</p>
+                {item.options?.map((option) => <p key={option} className="text-xs text-gray-500">{option}</p>)}
+              </div>
+              <span className="shrink-0 font-semibold text-gray-700">{rupiah(item.line_total)}</span>
+            </div>
+          ))}
+          {order.items.length === 0 && <p className="text-sm text-gray-500">Rincian item tidak tersedia.</p>}
+        </div>
+        <div className="space-y-2 border-t border-gray-100 pt-3 text-sm">
+          <div className="flex justify-between text-gray-500"><span>Subtotal</span><span>{rupiah(order.subtotal_amount ?? order.total_amount)}</span></div>
+          {(order.discount_amount ?? 0) > 0 && <div className="flex justify-between text-gray-500"><span>Diskon</span><span>-{rupiah(order.discount_amount)}</span></div>}
+          {(order.service_amount ?? 0) > 0 && <div className="flex justify-between text-gray-500"><span>Service</span><span>{rupiah(order.service_amount ?? 0)}</span></div>}
+          {(order.tax_amount ?? 0) > 0 && <div className="flex justify-between text-gray-500"><span>Pajak</span><span>{rupiah(order.tax_amount ?? 0)}</span></div>}
+          <div className="flex justify-between border-t border-gray-100 pt-2 text-base font-bold text-gray-900"><span>Total</span><span>{rupiah(order.final_amount ?? order.total_amount)}</span></div>
+        </div>
+        <PaymentBadge method={order.payment_method} status={order.payment_status} paidManually={order.paid_manually} />
+        {renderOrderActions(order)}
+      </div>
+    </>
+  );
+
+  const openDetail = (order: PosOrderListItem) => {
+    setSelectedOrderId(order.id);
+    setDetailOpen(true);
+  };
+
+  // Compact list actions: the next required step plus access to the full detail.
+  const renderPrimaryActions = (order: PosOrderListItem) => {
+    const forward = (order.allowed_next ?? []).filter((status) => status !== 'cancelled');
+    const nextStep = forward[0] as PosOrderStatus | undefined;
+    const isPaid = order.payment_status === 'paid';
+    const busy = busyOrderId === order.id;
+    const isOfflineOrder = Boolean(order.offline_client_uuid);
+    const canPay = !isPaid && order.payment_status !== 'refunded' && order.status !== 'cancelled';
+
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        {nextStep && !isOfflineOrder && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => handleStatusUpdate(order, nextStep)}
+            className="min-h-11 flex-1 rounded-xl bg-amber-400 px-3 text-sm font-bold text-[#111111] transition hover:bg-amber-500 disabled:opacity-50"
+          >
+            {busy ? 'Memproses...' : NEXT_ACTION[nextStep] ?? POS_ORDER_STATUS_LABELS[nextStep]}
+          </button>
+        )}
+        {canPay && (
+          <button
+            type="button"
+            onClick={() => {
+              setCurrentPaymentOrder(order);
+              setShowPaymentModal(true);
+            }}
+            className="min-h-11 flex-1 rounded-xl bg-[#111111] px-3 text-sm font-bold text-amber-400 transition hover:bg-[#2a241d]"
+          >
+            Bayar
+          </button>
+        )}
+        {isOfflineOrder && (
+          <span className="rounded-full bg-amber-100 px-2.5 py-2 text-[11px] font-semibold text-amber-800">
+            Lokal · menunggu sinkronisasi
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={() => openDetail(order)}
+          aria-label={`Lihat detail ${terminology.transaction.toLowerCase()} ${order.order_number}`}
+          className="flex min-h-11 items-center justify-center gap-1 rounded-xl border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-700 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+        >
+          Detail
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+    );
+  };
+
   const renderOrderSummary = (order: PosOrderListItem, compact = false) => (
     <>
       <div className="flex items-start justify-between gap-3">
@@ -479,59 +601,119 @@ export default function PosOrders() {
   );
 
   return (
-    <div className="min-h-screen min-w-0 bg-gray-50 p-2 [overflow-wrap:anywhere] sm:p-4 lg:p-6">
-      <div className="w-full space-y-4 sm:space-y-6">
-        <div className="flex flex-col justify-between gap-4 xl:flex-row xl:items-center">
+    <div className="min-h-screen min-w-0 bg-[#F7F8FA] p-3 pb-28 [overflow-wrap:anywhere] sm:p-4 md:pb-4 lg:p-6">
+      <div className="w-full space-y-4 sm:space-y-5">
+        <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-gray-900">Daftar {terminology.transaction}</h1>
-            <p className="mt-1 flex items-center gap-1.5 text-gray-600">
-              {live ? <Wifi className="h-4 w-4 text-green-600" /> : <WifiOff className="h-4 w-4 text-gray-400" />}
+            <h1 className="text-2xl font-bold text-gray-900 md:text-3xl">{terminology.transaction}</h1>
+            <p className="mt-1 flex items-center gap-1.5 text-sm text-gray-600">
+              {live ? <Wifi className="h-4 w-4 shrink-0 text-green-600" /> : <WifiOff className="h-4 w-4 shrink-0 text-gray-400" />}
               {live ? `${terminology.transaction} baru masuk otomatis` : `Menyegarkan tiap ${POLL_FALLBACK_MS / 1000} detik`}
             </p>
           </div>
-          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:flex-wrap xl:w-auto xl:justify-end">
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
             <button
               type="button"
               onClick={() => setShowNewOrderModal(true)}
-              className="order-first col-span-2 flex min-h-12 items-center justify-center gap-2 rounded-xl bg-amber-400 px-5 py-3 text-base font-bold text-[#111111] shadow-sm transition hover:bg-amber-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 sm:order-last sm:col-span-1 sm:min-h-11 sm:px-5"
+              className="hidden min-h-11 items-center justify-center gap-2 rounded-xl bg-[#111111] px-5 text-base font-bold text-amber-400 shadow-sm transition hover:bg-[#2a241d] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 md:order-last md:flex"
             >
               <CirclePlus className="h-5 w-5" />
               Tambah {terminology.transaction}
             </button>
+            <div className="hidden items-center gap-2 md:flex">
+              <button
+                type="button"
+                onClick={() => setAutoRefresh(!autoRefresh)}
+                aria-pressed={autoRefresh}
+                className={cn(
+                  'min-h-11 rounded-full border px-3 text-sm font-medium transition-colors',
+                  autoRefresh ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-gray-200 bg-gray-100 text-gray-700 hover:bg-gray-200'
+                )}
+              >
+                Otomatis: {autoRefresh ? 'Aktif' : 'Nonaktif'}
+              </button>
+              <button
+                type="button"
+                onClick={() => void loadOrders()}
+                className="min-h-11 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+              >
+                Muat ulang
+              </button>
+            </div>
             <CashDrawerButton />
-            <button
-              onClick={() => void loadOrders()}
-              className="min-h-11 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
-            >
-              Muat ulang
-            </button>
-            <button
-              onClick={() => setAutoRefresh(!autoRefresh)}
-              className={cn(
-                'min-h-11 rounded-lg border px-3 py-2 text-sm font-medium transition-colors',
-                autoRefresh ? 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50' : 'border-gray-200 bg-gray-100 text-gray-700 hover:bg-gray-200'
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setMenuOpen((open) => !open)}
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+                aria-label="Menu tambahan"
+                className="flex h-11 w-11 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+              >
+                <MoreHorizontal className="h-5 w-5" />
+              </button>
+              {menuOpen && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setMenuOpen(false)} aria-hidden="true" />
+                  <div role="menu" className="absolute right-0 top-12 z-40 w-64 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
+                    <div className="border-b border-gray-100 px-4 pb-2 pt-1 md:hidden" role="group" aria-label={`Tampilan ${terminology.transaction.toLowerCase()}`}>
+                      <p className="py-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Tampilan</p>
+                      {([['grid', 'Kartu'], ['list', 'Daftar'], ['split', 'Detail']] as const).map(([mode, label]) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          role="menuitemradio"
+                          aria-checked={viewMode === mode}
+                          onClick={() => { setViewMode(mode); setMenuOpen(false); }}
+                          className={cn('flex min-h-11 w-full items-center justify-between text-left text-sm hover:bg-gray-50', viewMode === mode ? 'font-semibold text-gray-900' : 'text-gray-700')}
+                        >
+                          {label}
+                          {viewMode === mode && <CheckCircle className="h-4 w-4 text-amber-500" />}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => { setAutoRefresh(!autoRefresh); setMenuOpen(false); }}
+                      className="flex min-h-11 w-full items-center justify-between px-4 text-left text-sm text-gray-800 hover:bg-gray-50 md:hidden"
+                    >
+                      <span>Pembaruan otomatis</span>
+                      <span className={cn('rounded-full px-2 py-0.5 text-xs font-semibold', autoRefresh ? 'bg-amber-100 text-amber-900' : 'bg-gray-100 text-gray-600')}>{autoRefresh ? 'Aktif' : 'Nonaktif'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => { void loadOrders(); setMenuOpen(false); }}
+                      className="flex min-h-11 w-full items-center px-4 text-left text-sm text-gray-800 hover:bg-gray-50 md:hidden"
+                    >
+                      Muat ulang
+                    </button>
+                    {hasTablesSelfOrder && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => { setShowBills(!showBills); setMenuOpen(false); }}
+                        className="flex min-h-11 w-full items-center gap-2 px-4 text-left text-sm text-gray-800 hover:bg-gray-50"
+                      >
+                        <Receipt className="h-4 w-4" />
+                        Tagihan {terminology.table}{openBills.length > 0 ? ` (${openBills.length})` : ''}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => { handleResetOrderList(); setMenuOpen(false); }}
+                      title={`Bersihkan tampilan ${terminology.transaction.toLowerCase()}`}
+                      className="flex min-h-11 w-full items-center gap-2 px-4 text-left text-sm text-gray-800 hover:bg-gray-50"
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                      Bersihkan Tampilan
+                    </button>
+                  </div>
+                </>
               )}
-            >
-              Otomatis: {autoRefresh ? 'Aktif' : 'Nonaktif'}
-            </button>
-            {hasTablesSelfOrder && <button
-              onClick={() => setShowBills(!showBills)}
-              className={cn(
-                'flex min-h-11 items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors',
-                showBills ? 'border-gray-300 bg-gray-100 text-gray-900' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
-              )}
-            >
-              <Receipt className="h-4 w-4" />
-              Tagihan {terminology.table}{openBills.length > 0 ? ` (${openBills.length})` : ''}
-            </button>}
-            <button
-              onClick={handleResetOrderList}
-              className="flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
-              title={`Bersihkan tampilan ${terminology.transaction.toLowerCase()}`}
-            >
-              <RotateCcw className="h-4 w-4" />
-              Bersihkan Tampilan
-            </button>
+            </div>
           </div>
         </div>
 
@@ -600,25 +782,42 @@ export default function PosOrders() {
           <div className="relative min-w-0 flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-gray-400" />
             <input
-              type="text"
+              type="search"
               placeholder={`Cari nomor ${terminology.transaction.toLowerCase()} atau nama ${terminology.customer.toLowerCase()}...`}
+              aria-label={`Cari ${terminology.transaction.toLowerCase()}`}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="min-h-11 w-full rounded-xl border border-gray-200 bg-gray-50 py-2 pl-10 pr-4 text-gray-900 placeholder-gray-400 focus:border-amber-300 focus:bg-white focus:ring-2 focus:ring-amber-300"
+              className="min-h-11 w-full rounded-xl border border-gray-200 bg-gray-50 py-2 pl-10 pr-4 text-base text-gray-900 placeholder-gray-400 focus:border-amber-300 focus:bg-white focus:ring-2 focus:ring-amber-300"
             />
+          </div>
+          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 md:hidden" role="group" aria-label={`Filter status ${terminology.transaction.toLowerCase()}`}>
+            {(['all', ...Object.keys(POS_ORDER_STATUS_LABELS)] as string[]).map((status) => (
+              <button
+                key={status}
+                type="button"
+                aria-pressed={statusFilter === status}
+                onClick={() => setStatusFilter(status)}
+                className={cn(
+                  'min-h-11 shrink-0 rounded-full border px-4 text-sm font-medium',
+                  statusFilter === status ? 'border-amber-300 bg-amber-100 text-amber-950' : 'border-gray-200 bg-white text-gray-600'
+                )}
+              >
+                {status === 'all' ? 'Semua' : POS_ORDER_STATUS_LABELS[status as PosOrderStatus]}
+              </button>
+            ))}
           </div>
           <select
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value)}
             aria-label={`Filter status ${terminology.transaction.toLowerCase()}`}
-            className="min-h-11 rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-700 focus:border-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-200"
+            className="hidden min-h-11 rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-700 focus:border-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-200 md:block"
           >
             <option value="all">Semua status</option>
             {(Object.keys(POS_ORDER_STATUS_LABELS) as PosOrderStatus[]).map((status) => (
               <option key={status} value={status}>{POS_ORDER_STATUS_LABELS[status]}</option>
             ))}
           </select>
-          <div className="grid min-h-11 grid-cols-3 items-center gap-1 rounded-xl bg-gray-100 p-1 md:flex" role="group" aria-label={`Tampilan ${terminology.transaction.toLowerCase()}`}>
+          <div className="hidden min-h-11 items-center gap-1 rounded-xl bg-gray-100 p-1 md:flex" role="group" aria-label={`Tampilan ${terminology.transaction.toLowerCase()}`}>
             {([
               ['grid', 'Kartu', LayoutGrid],
               ['list', 'Daftar', List],
@@ -664,16 +863,13 @@ export default function PosOrders() {
               >
                 <button
                   type="button"
-                  onClick={() => {
-                    setSelectedOrderId(order.id);
-                    setViewMode('split');
-                  }}
+                  onClick={() => openDetail(order)}
                   className="min-w-0 rounded-xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
                   aria-label={`Lihat detail ${terminology.transaction.toLowerCase()} ${order.order_number}`}
                 >
                   {renderOrderSummary(order)}
                 </button>
-                <div className="mt-4">{renderOrderActions(order)}</div>
+                <div className="mt-4 border-t border-gray-100 pt-3">{renderPrimaryActions(order)}</div>
               </article>
             ))}
           </div>
@@ -717,7 +913,7 @@ export default function PosOrders() {
             <div className="min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
           <div className="border-b border-gray-100 bg-gray-50 px-4 py-2">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
-              {viewMode === 'split' ? `${terminology.transaction} · pilih untuk melihat detail` : `Daftar ${terminology.transaction}`}
+              Daftar {terminology.transaction}
             </span>
           </div>
 
@@ -736,17 +932,14 @@ export default function PosOrders() {
                     viewMode === 'split' && selectedOrder?.id === order.id && 'bg-amber-50/70 ring-1 ring-inset ring-amber-300'
                   )}
                 >
-                  {viewMode === 'split' && (
+                  {viewMode === 'split' && selectedOrder?.id !== order.id && (
                     <button
                       type="button"
                       onClick={() => setSelectedOrderId(order.id)}
-                      aria-pressed={selectedOrder?.id === order.id}
-                      className="mb-2 flex min-h-8 w-full items-center justify-between gap-2 text-left"
+                      aria-label={`Pilih ${terminology.transaction.toLowerCase()} ${order.order_number}`}
+                      className="sr-only xl:not-sr-only xl:mb-1 xl:block xl:min-h-6 xl:text-[11px] xl:font-semibold xl:text-gray-400 xl:hover:text-amber-800"
                     >
-                      <span className="text-[11px] font-semibold text-amber-800">
-                        {selectedOrder?.id === order.id ? `Detail ${terminology.transaction.toLowerCase()} dipilih` : 'Pilih untuk melihat detail'}
-                      </span>
-                      <ChevronRight className="h-4 w-4 text-gray-400" />
+                      Tampilkan di panel
                     </button>
                   )}
                   <div className="flex flex-col items-start justify-between gap-2 sm:flex-row">
@@ -793,63 +986,31 @@ export default function PosOrders() {
                     {order.split_from_order_id && <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[11px] text-gray-500">Pisahan bill</span>}
                   </div>
 
-                  <div className="mt-3">{renderOrderActions(order)}</div>
+                  <div className="mt-3">{renderPrimaryActions(order)}</div>
                 </div>
               );
             })}
           </div>
         </div>
             {viewMode === 'split' && selectedOrder && (
-              <aside className="h-fit min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm xl:sticky xl:top-6">
-                <div className="flex items-start justify-between gap-3 border-b border-gray-100 p-4">
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Detail {terminology.transaction}</p>
-                    <h2 className="mt-1 break-all font-mono text-sm font-bold text-gray-900">#{selectedOrder.order_number}</h2>
-                  </div>
-                  <span className={cn('shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold', getStatusColor(selectedOrder.status))}>
-                    {statusLabel(selectedOrder)}
-                  </span>
-                </div>
-                <div className="space-y-4 p-4">
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div className="min-w-0">
-                      <p className="text-xs text-gray-400">{terminology.customer}</p>
-                      <p className="mt-1 flex items-center gap-1.5 truncate font-semibold text-gray-800"><UserRound className="h-4 w-4 shrink-0 text-gray-400" />{selectedOrder.customer_name || 'Walk-in'}</p>
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs text-gray-400">{hasTablesSelfOrder ? 'Meja / layanan' : 'Jenis transaksi'}</p>
-                      <p className="mt-1 flex items-center gap-1.5 truncate font-semibold text-gray-800"><MapPin className="h-4 w-4 shrink-0 text-gray-400" />{hasTablesSelfOrder ? selectedOrder.table_label || selectedOrder.service_type || 'Bawa pulang' : selectedOrder.service_type || 'Kasir'}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                    <h3 className="text-sm font-bold text-gray-900">Item transaksi</h3>
-                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">{selectedOrder.items_count}</span>
-                  </div>
-                  <div className="max-h-64 space-y-3 overflow-y-auto">
-                    {selectedOrder.items.map((item) => (
-                      <div key={item.id} className="flex items-start justify-between gap-3 text-sm">
-                        <div className="min-w-0">
-                          <p className="break-words font-medium text-gray-800">{item.product_name}</p>
-                          <p className="text-xs text-gray-400">{item.quantity} × {rupiah(item.unit_price)}</p>
-                          {item.options?.map((option) => <p key={option} className="text-xs text-gray-400">{option}</p>)}
-                        </div>
-                        <span className="shrink-0 font-semibold text-gray-700">{rupiah(item.line_total)}</span>
-                      </div>
-                    ))}
-                    {selectedOrder.items.length === 0 && <p className="text-sm text-gray-500">Rincian item tidak tersedia.</p>}
-                  </div>
-                  <div className="space-y-2 border-t border-gray-100 pt-3 text-sm">
-                    <div className="flex justify-between text-gray-500"><span>Subtotal</span><span>{rupiah(selectedOrder.subtotal_amount ?? selectedOrder.total_amount)}</span></div>
-                    {(selectedOrder.discount_amount ?? 0) > 0 && <div className="flex justify-between text-gray-500"><span>Diskon</span><span>-{rupiah(selectedOrder.discount_amount)}</span></div>}
-                    {(selectedOrder.service_amount ?? 0) > 0 && <div className="flex justify-between text-gray-500"><span>Service</span><span>{rupiah(selectedOrder.service_amount ?? 0)}</span></div>}
-                    {(selectedOrder.tax_amount ?? 0) > 0 && <div className="flex justify-between text-gray-500"><span>Pajak</span><span>{rupiah(selectedOrder.tax_amount ?? 0)}</span></div>}
-                    <div className="flex justify-between border-t border-gray-100 pt-2 text-base font-bold text-gray-900"><span>Total</span><span>{rupiah(selectedOrder.final_amount ?? selectedOrder.total_amount)}</span></div>
-                  </div>
-                  <PaymentBadge method={selectedOrder.payment_method} status={selectedOrder.payment_status} paidManually={selectedOrder.paid_manually} />
-                  {renderOrderActions(selectedOrder)}
-                </div>
+              <aside className="hidden h-fit min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm xl:sticky xl:top-6 xl:block">
+                {renderDetail(selectedOrder)}
               </aside>
             )}
+          </div>
+        )}
+
+        {detailOpen && selectedOrder && (
+          <div className={cn('fixed inset-0 z-[45] flex items-end justify-center bg-black/40 md:items-center md:p-4', viewMode === 'split' && 'xl:hidden')} onClick={() => setDetailOpen(false)}>
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label={`Detail ${terminology.transaction.toLowerCase()} ${selectedOrder.order_number}`}
+              className="flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl md:max-w-lg md:rounded-2xl"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="min-h-0 flex-1 overflow-y-auto">{renderDetail(selectedOrder, () => setDetailOpen(false))}</div>
+            </div>
           </div>
         )}
 
@@ -858,6 +1019,20 @@ export default function PosOrders() {
             <p className="text-gray-500">List order sedang bersih. Data lama tetap aman di laporan.</p>
           </div>
         )}
+
+        <div
+          className="fixed inset-x-0 bottom-0 z-30 border-t border-gray-200 bg-white/95 px-4 pt-3 backdrop-blur md:hidden"
+          style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
+        >
+          <button
+            type="button"
+            onClick={() => setShowNewOrderModal(true)}
+            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#111111] text-base font-bold text-amber-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+          >
+            <CirclePlus className="h-5 w-5" />
+            Tambah {terminology.transaction}
+          </button>
+        </div>
 
         <NewOrderModal isOpen={showNewOrderModal} onClose={() => setShowNewOrderModal(false)} onOrderCreated={announce} />
 
