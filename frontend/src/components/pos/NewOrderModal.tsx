@@ -295,7 +295,6 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
         setTables(cached.tables);
         setProducts(cached.products);
         setCategories(cached.categories);
-        setLoading(false);
       }
       if (!navigator.onLine) {
         if (!hasCachedData) setError('Data kasir belum tersedia di perangkat ini. Hubungkan ke internet untuk memuat data pertama kali.');
@@ -316,11 +315,12 @@ export default function NewOrderModal({ isOpen, onClose, onOrderCreated }: NewOr
         products: productsRes.products,
         categories: categoriesRes.categories,
       });
-      void getPosOutletSettings()
-        .then((response) => cachePosOutletSettings(response.settings, response.payment_methods))
-        .catch((reason: unknown) => {
-          console.warn('[POS offline] Outlet settings refresh failed:', reason);
-        });
+      try {
+        const settingsResponse = await getPosOutletSettings();
+        await cachePosOutletSettings(settingsResponse.settings, settingsResponse.payment_methods);
+      } catch (reason) {
+        console.warn('[POS offline] Outlet settings refresh failed:', reason);
+      }
     } catch (err) {
       if (!hasCachedData) setError(err instanceof Error ? err.message : 'Data kasir gagal dimuat.');
     } finally {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getPosOutletSettings, updatePosOutletSettings } from '@/lib/hellomApi';
 import type { PosOpeningSlot, PosOutletSettings, PosOutletStatus } from '@/lib/hellomApi';
+import { cachePosOutletSettings } from '@/lib/posOfflineDb';
 
 type Day = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
 const DAYS: Array<[Day, string]> = [
@@ -25,6 +26,7 @@ export default function OutletOrderSettings() {
     void (async () => {
       try {
         const res = await getPosOutletSettings();
+        await cachePosOutletSettings(res.settings, res.payment_methods);
         setSettings(res.settings);
         setStatus(res.status);
         setUseHours(res.settings.opening_hours !== null);
@@ -55,6 +57,7 @@ export default function OutletOrderSettings() {
         self_order: settings.self_order,
         opening_hours: useHours ? hours : null,
       });
+      await cachePosOutletSettings(res.settings, res.payment_methods);
       setSettings(res.settings);
       setStatus(res.status);
       setMessage({ ok: true, text: 'Pengaturan outlet disimpan.' });

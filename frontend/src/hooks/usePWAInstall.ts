@@ -5,64 +5,81 @@ interface DeferredPrompt extends Event {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
 
-export type PWAInstallState = 'checking' | 'available' | 'ios' | 'installed' | 'unavailable';
+export type PWAInstallState = 'available' | 'ios' | 'manual' | 'installed';
+
+let deferredPrompt: DeferredPrompt | null = null;
+let listenersInitialized = false;
+let installed = false;
+const listeners = new Set<() => void>();
+
+function isStandalone(): boolean {
+  return window.matchMedia('(display-mode: standalone)').matches ||
+    (navigator as { standalone?: boolean }).standalone === true;
+}
+
+function isIosSafari(): boolean {
+  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  return ios && /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+}
+
+function emitChange(): void {
+  listeners.forEach((listener) => listener());
+}
+
+export function initializePWAInstallPrompt(): void {
+  if (listenersInitialized || typeof window === 'undefined') return;
+  listenersInitialized = true;
+  installed = isStandalone();
+
+  window.addEventListener('beforeinstallprompt', (event: Event) => {
+    event.preventDefault();
+    deferredPrompt = event as DeferredPrompt;
+    emitChange();
+  });
+  window.addEventListener('appinstalled', () => {
+    installed = true;
+    deferredPrompt = null;
+    emitChange();
+  });
+  window.matchMedia('(display-mode: standalone)').addEventListener?.('change', (event) => {
+    installed = event.matches;
+    if (installed) deferredPrompt = null;
+    emitChange();
+  });
+}
+
+function getInstallState(): PWAInstallState {
+  if (installed || isStandalone()) return 'installed';
+  if (isIosSafari()) return 'ios';
+  return deferredPrompt ? 'available' : 'manual';
+}
 
 export function usePWAInstall() {
-  const [state, setState] = useState<PWAInstallState>('checking');
-  const [prompt, setPrompt] = useState<DeferredPrompt | null>(null);
+  const [state, setState] = useState<PWAInstallState>(getInstallState);
 
   useEffect(() => {
-    const isStandalone =
-      window.matchMedia('(display-mode: standalone)').matches ||
-      (navigator as { standalone?: boolean }).standalone === true;
-
-    if (isStandalone) {
-      setState('installed');
-      return;
-    }
-
-    const isIos =
-      /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-    if (isIos && isSafari) {
-      setState('ios');
-      return;
-    }
-
-    const onBeforeInstall = (e: Event) => {
-      e.preventDefault();
-      setPrompt(e as DeferredPrompt);
-      setState('available');
-    };
-
-    const onInstalled = () => {
-      setState('installed');
-      setPrompt(null);
-    };
-
-    window.addEventListener('beforeinstallprompt', onBeforeInstall);
-    window.addEventListener('appinstalled', onInstalled);
-
-    const timer = window.setTimeout(() => {
-      setState((cur) => (cur === 'checking' ? 'unavailable' : cur));
-    }, 3500);
-
+    initializePWAInstallPrompt();
+    const refresh = () => setState(getInstallState());
+    listeners.add(refresh);
+    refresh();
     return () => {
-      window.removeEventListener('beforeinstallprompt', onBeforeInstall);
-      window.removeEventListener('appinstalled', onInstalled);
-      clearTimeout(timer);
+      listeners.delete(refresh);
     };
   }, []);
 
-  const install = async () => {
-    if (!prompt) return;
+  const install = async (): Promise<'accepted' | 'dismissed' | null> => {
+    if (!deferredPrompt) return null;
+    const prompt = deferredPrompt;
+    deferredPrompt = null;
+    emitChange();
     await prompt.prompt();
     const { outcome } = await prompt.userChoice;
     if (outcome === 'accepted') {
-      setState('installed');
-      setPrompt(null);
+      installed = true;
     }
+    emitChange();
+    return outcome;
   };
 
   return { state, install };

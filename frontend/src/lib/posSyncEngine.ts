@@ -1,8 +1,10 @@
 import { ApiError, getActiveOutletEventName, getSessionEventName, isPosOfflineSessionExpired } from '@/services/api/client';
 import { isPosRealtimeConnected } from '@/lib/realtime';
 import { pullPosSyncChanges, uploadPosSyncOrders, type PosSyncOrderPayload } from '@/services/api/posSync';
+import { getPosOutletSettings } from '@/services/api/posOrders';
 import {
   applyPosMasterDataPull,
+  cachePosOutletSettings,
   getDueOfflineOrders,
   getOfflineOrders,
   getPosOfflineScope,
@@ -182,6 +184,12 @@ async function pullMasterData() {
   const changes = await pullPosSyncChanges(since);
   await applyPosMasterDataPull(changes);
   publish({ lastSyncedAt: changes.server_time });
+  try {
+    const outletSettings = await getPosOutletSettings();
+    await cachePosOutletSettings(outletSettings.settings, outletSettings.payment_methods);
+  } catch (error) {
+    console.warn('[POS sync] Outlet pricing settings were not refreshed; cached values are retained.', error);
+  }
 }
 
 async function runUnlocked(retryClientUuid?: string) {
