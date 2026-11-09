@@ -55,6 +55,10 @@ export type SiteArticle = {
 };
 
 export type SiteAbout = {
+  demo_video_enabled?: boolean;
+  demo_video_url?: string | null;
+  demo_video_title?: string | null;
+  demo_video_description?: string | null;
   title?: string | null;
   subtitle?: string | null;
   description?: string | null;

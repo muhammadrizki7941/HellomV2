@@ -1,199 +1,53 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight, ArrowUpRight } from 'lucide-react';
-import { getImageUrl } from '@/lib/hellomApi';
-import HeroPortrait from '@/components/site/HeroPortrait';
-import IntroVideo from '@/components/site/IntroVideo';
-import MagneticLink, { primaryCta, secondaryCta } from '@/components/site/MagneticLink';
-import { SectionLabel, usePageMeta } from '@/components/site/PageHero';
-import { Reveal, RevealText } from '@/components/site/Reveal';
+import { ArrowRight, Camera, Store, UserRound, Play } from 'lucide-react';
+import { usePageMeta } from '@/components/site/PageHero';
 import useSiteData from '@/components/site/useSiteData';
 import useFlagshipApps from '@/components/site/useFlagshipApps';
 import PublicBannerSlot from '@/components/site/PublicBannerSlot';
-
-// Short teaser for every inner page; each row links to the full page.
-const INDEX_ROWS = [
-  { path: '/tentang', title: 'Tentang', line: 'Siapa di balik Hellom dan cara kami bekerja.' },
-  { path: '/layanan', title: 'Layanan', line: 'Branding, website, produk digital, dan sistem bisnis.' },
-  { path: '/aplikasi', title: 'Aplikasi', line: 'Kasir POS dan pembuat halaman jualan untuk UMKM.' },
-  { path: '/produk', title: 'Produk', line: 'Template dan produk digital siap pakai, sekali beli.' },
-  { path: '/portofolio', title: 'Portofolio', line: 'Beberapa proyek pilihan yang pernah kami kerjakan.' },
-  { path: '/wawasan', title: 'Wawasan', line: 'Artikel seputar digital, branding, dan produktivitas.' },
-];
+import DemoVideo from '@/components/site/DemoVideo';
+import { SITE_PAGES } from '@/data/siteNav';
 
 export default function BerandaPage() {
-  const { clients, content } = useSiteData();
-  const { apps: flagshipApps } = useFlagshipApps();
-  const about = content.about || {};
-  usePageMeta(
-    'Partner Kreatif untuk Bisnismu',
-    'Hellom membantu bisnis dan kreator membangun brand, sistem, dan produk digital — plus aplikasi kasir dan pembuat halaman jualan untuk UMKM.',
-    '/'
-  );
-
-  const stats = [
-    { value: `${about.happy_clients || 100}+`, label: 'Klien puas' },
-    { value: `${about.years_experience || 5}+`, label: 'Tahun pengalaman' },
-    { value: `${about.projects_completed || 100}+`, label: 'Proyek selesai' },
-  ];
-
+  const { content, clients } = useSiteData();
+  const { apps } = useFlagshipApps();
+  const about = content.about;
+  const demoVisible = Boolean(about?.demo_video_enabled && about.demo_video_url);
+  usePageMeta('Ide besar, mulai dari langkah kecil.', 'Aplikasi dan layanan digital untuk individu, kreator, dan pemilik usaha. Temukan aplikasi yang tepat bersama Hellom Space.', '/');
   return (
-    <>
-      {/* Intro: full-screen background video with clickable content on top */}
-      <IntroVideo nextSectionId="sorotan" />
-      <div className="px-5 pt-6 md:px-10 lg:px-16">
-        <PublicBannerSlot position="hero" />
-      </div>
-
-      {/* Hero (now the section after the intro, so it reveals on scroll) */}
-      <section id="sorotan" className="relative scroll-mt-20 border-b border-white/[0.08] px-5 py-20 md:px-10 md:py-28 lg:px-16">
-        <div className="mx-auto grid max-w-[1500px] items-center gap-12 md:grid-cols-[0.95fr_1.05fr]">
-          <div className="relative z-10">
-            <Reveal className="mb-8 flex items-center gap-3">
-              <span className="h-px w-12 bg-white/[0.15]" />
-              <span className="text-[11px] font-bold uppercase tracking-[0.4em] text-[#F6B400]">Kreator · Desainer · Builder</span>
-            </Reveal>
-            <RevealText
-              as="h2"
-              inView
-              lines={['Hellom', <span key="space" className="text-[#F6B400]">Space.</span>]}
-              className="font-display text-[3.6rem] font-semibold leading-[0.92] sm:text-8xl lg:text-[8.2rem]"
-            />
-            <Reveal delay={0.2}>
-              <p className="mt-6 font-serif text-2xl italic md:text-3xl">Partner kreatif untuk bisnismu</p>
-              <p className="mt-6 max-w-xl text-base leading-8 text-[#A1A1A6]">
-                Kami membantu bisnis dan kreator membangun brand, sistem, dan produk digital yang estetik, fungsional, dan berdampak.
-              </p>
-            </Reveal>
-            <Reveal delay={0.3} className="mt-9 flex flex-col gap-4 sm:flex-row">
-              <MagneticLink to="/aplikasi" className={primaryCta}>
-                Lihat Aplikasi <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-              </MagneticLink>
-              <Link to="/portofolio" className={secondaryCta}>
-                Lihat Portofolio <ArrowRight className="h-4 w-4" />
-              </Link>
-            </Reveal>
-            <Reveal delay={0.4} className="mt-10 grid max-w-xl grid-cols-3 gap-5">
-              {stats.map((stat) => (
-                <div key={stat.label} className="border-r border-white/[0.08] last:border-r-0">
-                  <p className="font-display text-2xl text-[#F6B400]">{stat.value}</p>
-                  <p className="mt-1 text-xs text-[#A1A1A6]">{stat.label}</p>
-                </div>
-              ))}
-            </Reveal>
-          </div>
-
-          <Reveal delay={0.15} className="relative">
-            <div className="relative aspect-[592/478] overflow-hidden rounded-[28px] border border-[#F6B400]/15 bg-[#0E0E11]">
-              <HeroPortrait className="h-full w-full object-cover" />
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_55%_18%,rgba(246,180,0,.20),transparent_40%),linear-gradient(to_top,#050505,transparent_45%)]" />
-              <div className="absolute bottom-6 right-6 text-right">
-                <p className="font-signature text-4xl text-[#F6B400] md:text-5xl">Muhammad Rizki</p>
-                <p className="mt-2 text-[10px] font-bold uppercase tracking-[0.45em] text-[#F5F5F2]">Pendiri Hellom</p>
-              </div>
-            </div>
-          </Reveal>
+    <div className="hellom-home">
+      <section className="home-hero">
+        <h1>Ide besar,<br /><em>mulai dari langkah kecil.</em></h1>
+        <p>Aplikasi dan layanan digital untuk individu,<br className="hidden sm:block" /> kreator, dan pemilik usaha.</p>
+        <div className="home-actions">
+          <Link to="/aplikasi" className="home-button">Jelajahi Aplikasi <ArrowRight /></Link>
+          {demoVisible && <a href="#video-demo" className="home-demo-link"><Play size={17} /> Tonton demo</a>}
+        </div>
+        <div className="home-illustration"><img src="/images/hellom-home-reference.jpg" width="1024" height="1536" alt="Kreator dengan Landing Page Builder di ponsel dan pemilik usaha dengan Hellom POS di tablet" fetchPriority="high" /></div>
+      </section>
+      <div className="home-container"><PublicBannerSlot position="hero" /></div>
+      <section className="home-container home-apps">
+        <h2>Temukan aplikasi untuk <em>kebutuhanmu</em></h2>
+        <div className="home-app-grid">
+          {apps.map((app) => { const Icon = app.icon; return (
+            <article key={app.key} className="home-app-card">
+              <div className="home-app-copy"><h3><Icon />{app.name}</h3><p>{app.summary}</p><Link className="home-outline" to={`/aplikasi/${app.key}`}>Pelajari {app.name}<ArrowRight size={18} /></Link></div>
+              {app.banner ? <img className="home-app-banner" src={app.banner} alt={app.name} loading="lazy" /> : ['pos', 'landing-page-builder'].includes(app.key) ? <div className={`home-product-art ${app.key === 'pos' ? 'is-pos' : 'is-builder'}`} aria-hidden="true"><img src="/images/hellom-home-reference.jpg" alt="" loading="lazy" /></div> : <Icon className="ml-auto h-24 w-24 text-amber-500" aria-hidden />}
+            </article>
+          ); })}
         </div>
       </section>
-
-      {/* Trusted by */}
-      <section aria-label="Dipercaya oleh" className="border-b border-white/[0.08] px-5 py-6 md:px-10 lg:px-16">
-        <div className="mx-auto flex max-w-[1500px] items-center gap-10 overflow-hidden">
-          <p className="shrink-0 text-[11px] font-bold uppercase tracking-[0.35em] text-[#F6B400]">Dipercaya oleh</p>
-          <div className="scrollbar-hide flex min-w-0 flex-1 items-center justify-between gap-10 overflow-x-auto">
-            {clients.map((client) => (
-              <span key={client.id} className="shrink-0">
-                {client.logo_url ? (
-                  <img src={getImageUrl(client.logo_url)} alt={client.name} height={32} loading="lazy" className="h-8 w-auto max-w-[150px] object-contain opacity-70 grayscale" />
-                ) : (
-                  <span className="font-display text-xl text-[#A1A1A6]">{client.name}</span>
-                )}
-              </span>
-            ))}
-          </div>
-        </div>
+      <section className="home-container home-audience">
+        <h2>Untuk individu, kreator, dan pemilik usaha</h2>
+        <div>{[
+          { icon: UserRound, title: 'Individu', text: 'Wujudkan ide dan proyek pribadi.' },
+          { icon: Camera, title: 'Kreator', text: 'Bangun karya dan jangkau audiens lebih luas.' },
+          { icon: Store, title: 'Pemilik Usaha', text: 'Kelola dan kembangkan bisnis dengan lebih mudah.' },
+        ].map(({ icon: Icon, title, text }) => <article key={title}><span><Icon /></span><div><h3>{title}</h3><p>{text}</p></div></article>)}</div>
       </section>
-
-      {/* Apps teaser */}
-      <section className="border-b border-white/[0.08] px-5 py-20 md:px-10 lg:px-16">
-        <div className="mx-auto max-w-[1500px]">
-          <Reveal>
-            <SectionLabel>Aplikasi Unggulan</SectionLabel>
-            <h2 className="max-w-3xl font-display text-4xl font-medium leading-tight md:text-5xl">
-              Siapkan aplikasi untuk bantu bisnismu <span className="text-[#F6B400]">naik kelas.</span>
-            </h2>
-          </Reveal>
-          <div className="mt-10 grid gap-5 md:grid-cols-2">
-            {flagshipApps.map((app, index) => {
-              const Icon = app.icon;
-              return (
-                <Reveal key={app.key} delay={index * 0.08}>
-                  <Link
-                    to={`/aplikasi/${app.key}`}
-                    className="group flex h-full flex-col overflow-hidden rounded-2xl border border-[#F6B400]/20 bg-white/[0.03] transition-colors hover:border-[#F6B400]/50"
-                  >
-                    {app.banner ? (
-                      <img
-                        src={app.banner}
-                        alt=""
-                        width={960}
-                        height={400}
-                        loading="lazy"
-                        decoding="async"
-                        className="aspect-[12/5] w-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
-                      />
-                    ) : null}
-                    <div className="flex flex-1 flex-col p-8">
-                    <span className="mb-6 flex h-12 w-12 items-center justify-center rounded-xl bg-[#F6B400]/12 text-[#F6B400]">
-                      <Icon className="h-6 w-6" />
-                    </span>
-                    <h3 className="font-display text-2xl">{app.name}</h3>
-                    <p className="mt-3 text-sm leading-7 text-[#A1A1A6]">{app.summary}</p>
-                    <span className="mt-6 inline-flex items-center gap-2 text-sm font-bold text-[#F6B400]">
-                      Lihat detail <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-                    </span>
-                    </div>
-                  </Link>
-                </Reveal>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* Index of pages */}
-      <section className="border-b border-white/[0.08] px-5 py-20 md:px-10 lg:px-16">
-        <div className="mx-auto max-w-[1500px]">
-          <Reveal>
-            <SectionLabel>Jelajahi Hellom</SectionLabel>
-          </Reveal>
-          <ul className="border-t border-white/[0.08]">
-            {INDEX_ROWS.map((row, index) => (
-              <Reveal as="li" key={row.path} delay={index * 0.04} className="border-b border-white/[0.08]">
-                <Link to={row.path} className="group grid grid-cols-[3rem_1fr_auto] items-center gap-4 py-7 md:grid-cols-[4rem_1fr_1.2fr_auto] md:py-9">
-                  <span className="text-xs text-[#A1A1A6]">{String(index + 1).padStart(2, '0')}</span>
-                  <span className="font-display text-3xl transition-colors group-hover:text-[#F6B400] md:text-5xl">{row.title}</span>
-                  <span className="hidden text-sm text-[#A1A1A6] md:block">{row.line}</span>
-                  <ArrowUpRight className="h-6 w-6 text-[#F6B400] transition-transform duration-500 group-hover:-translate-y-1 group-hover:translate-x-1" />
-                </Link>
-              </Reveal>
-            ))}
-          </ul>
-        </div>
-      </section>
-
-      {/* Contact CTA */}
-      <section className="relative overflow-hidden px-5 py-24 text-center md:px-10 lg:px-16">
-        <div aria-hidden className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(246,180,0,.14),transparent_35%)]" />
-        <Reveal className="relative mx-auto max-w-3xl">
-          <h2 className="font-display text-5xl font-medium leading-tight md:text-7xl">Yuk, bangun sesuatu yang berarti.</h2>
-          <div className="mt-9 flex flex-col items-center justify-center gap-4 sm:flex-row">
-            <MagneticLink to="/kontak" className={primaryCta}>
-              Mulai Proyek <ArrowRight className="h-4 w-4" />
-            </MagneticLink>
-            <Link to="/layanan" className={secondaryCta}>Lihat Layanan</Link>
-          </div>
-        </Reveal>
-      </section>
-    </>
+      {demoVisible && <section id="video-demo" className="home-container home-demo"><span className="home-eyebrow">LIHAT CARA KERJANYA</span><h2>{about?.demo_video_title || 'Kenalan lebih dekat dengan Hellom'}</h2>{about?.demo_video_description && <p>{about.demo_video_description}</p>}<DemoVideo url={about!.demo_video_url!} title={about?.demo_video_title || 'Video demo Hellom'} /></section>}
+      <section className="home-container home-explore"><span className="home-eyebrow">LEBIH BANYAK DI HELLOM SPACE</span><h2>Setiap ide punya ruang untuk tumbuh.</h2><nav aria-label="Jelajahi seluruh halaman">{SITE_PAGES.filter(page => page.path !== '/').map(page => <Link to={page.path} key={page.path}>{page.label}<ArrowRight size={18} /></Link>)}</nav></section>
+      <section className="home-container home-trust"><p>Dipercaya oleh</p><div>{clients.map(client => <span key={client.id}>{client.name}</span>)}</div></section>
+      <section className="home-closing"><h2>Siap memulai?</h2><p>Langkah kecil hari ini, kemungkinan besar esok hari.</p><div className="home-actions"><Link to="/aplikasi" className="home-button">Jelajahi Aplikasi <ArrowRight /></Link><Link to="/kontak" className="home-outline">Mulai Proyek <ArrowRight size={18} /></Link></div></section>
+    </div>
   );
 }

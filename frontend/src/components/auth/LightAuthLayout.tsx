@@ -27,16 +27,16 @@ export function LightAuthLayout({ children, aside, variant = 'register' }: {
             <h2 className="mt-5 max-w-md text-3xl font-semibold leading-[1.16] tracking-tight sm:text-4xl lg:text-[44px]">Ide besar dimulai<br />dari <span className="text-amber-600">langkah kecil.</span></h2>
             <p className="mt-4 max-w-sm text-sm leading-6 text-zinc-600">Dari toko pertama hingga bisnis yang terus tumbuh. Kelola semuanya bersama Hellom.</p>
           </div>
-          <img src="/images/auth/hellom-business.png" alt="Maskot Hellom membantu berjualan, mengelola toko, dan berbelanja" width={1536} height={1024} fetchPriority="high" className="mt-4 block w-full mix-blend-multiply" />
+          <img src="/images/auth/hellom-creative-partner.jpg" srcSet="/images/auth/hellom-creative-partner-768.jpg 768w, /images/auth/hellom-creative-partner.jpg 1536w" sizes="(min-width: 1024px) 600px, 220px" alt="Kreator dan pemilik usaha berkembang bersama Hellom" width={1536} height={1024} fetchPriority="high" decoding="async" className="mt-4 block w-full mix-blend-multiply" />
           <div className="grid grid-cols-3 gap-2 px-5 pb-6 sm:px-8">
             {[{ Icon: Store, label: 'POS Kasir' }, { Icon: ShoppingBag, label: 'Produk digital' }, { Icon: LayoutGrid, label: 'Halaman toko' }].map(({ Icon, label }) => (
               <div key={label} className="flex flex-col items-center gap-2 rounded-2xl border border-white bg-white/70 px-2 py-3 text-center text-xs font-medium text-zinc-700"><Icon size={18} className="text-amber-700" />{label}</div>
             ))}
           </div>
         </aside>
-        <section className="auth-form-enter mx-auto w-full max-w-[480px] rounded-[28px] border border-zinc-200/70 bg-white p-6 shadow-[0_18px_65px_-35px_rgba(65,45,0,0.22)] sm:p-9" aria-label={variant === 'login' ? 'Masuk akun' : variant === 'recovery' ? 'Pemulihan akun' : 'Pendaftaran akun'}>
+        <section className="mx-auto w-full max-w-[480px] rounded-[28px] border border-zinc-200/70 bg-white p-6 shadow-[0_18px_65px_-35px_rgba(65,45,0,0.22)] sm:p-9" aria-label={variant === 'login' ? 'Masuk akun' : variant === 'recovery' ? 'Pemulihan akun' : 'Pendaftaran akun'}>
           <div className="-mx-2 mb-5 flex items-center gap-3 rounded-2xl bg-[#fffcf4] p-3 lg:hidden">
-            <img src="/images/auth/hellom-business.png" alt="Ilustrasi maskot Hellom" width={1536} height={1024} className="w-[46%] rounded-lg mix-blend-multiply" />
+            <img src="/images/auth/hellom-creative-partner-768.jpg" srcSet="/images/auth/hellom-creative-partner-768.jpg 768w, /images/auth/hellom-creative-partner.jpg 1536w" sizes="(min-width: 1024px) 600px, 220px" alt="Ilustrasi kreator dan pemilik usaha Hellom" width={1536} height={1024} decoding="async" className="w-[46%] rounded-lg mix-blend-multiply" />
             <p className="text-sm font-semibold leading-5 text-zinc-700">Teman kreatif<br />untuk setiap<br /><span className="text-amber-700">langkah usahamu.</span></p>
           </div>
           <div className="mb-5 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-700"><span className="h-px w-5 bg-amber-500" />{variant === 'login' ? 'Selamat datang kembali' : variant === 'recovery' ? 'Kami bantu kembali masuk' : 'Ruang baru untuk usahamu'}</div>

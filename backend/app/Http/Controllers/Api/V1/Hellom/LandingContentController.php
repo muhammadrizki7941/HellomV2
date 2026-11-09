@@ -193,6 +193,10 @@ class LandingContentController extends BaseApiController
     public function updateAbout(Request $request): JsonResponse
     {
         $validated = $request->validate([
+            'demo_video_enabled' => ['sometimes', 'boolean'],
+            'demo_video_title' => ['nullable', 'string', 'max:255'],
+            'demo_video_description' => ['nullable', 'string', 'max:2000'],
+            'demo_video_url' => ['nullable', 'required_if:demo_video_enabled,true', 'string', 'max:2048', new \App\Rules\DemoVideoUrl()],
             'title' => ['required', 'string', 'max:255'],
             'subtitle' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string'],

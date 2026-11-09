@@ -13,8 +13,9 @@ import {
   uploadShowcaseMedia,
 } from '@/lib/hellomApi';
 import ArticleManager from '@/components/admin/ArticleManager';
+import DemoVideo, { demoVideoSource } from '@/components/site/DemoVideo';
 
-type Tab = 'about' | 'services' | 'articles';
+type Tab = 'about' | 'services' | 'articles' | 'demo';
 type Item = Record<string, unknown> & { id?: number };
 
 const emptyService = { title: '', slug: '', icon: 'Sparkles', short_description: '', long_description: '', featured_image: '', sort_order: 0, is_active: true };
@@ -40,6 +41,7 @@ export default function LandingContentManagement() {
   const [services, setServices] = useState<Item[]>([]);
   const [articles, setArticles] = useState<Item[]>([]);
 
+  const [uploadingVideo, setUploadingVideo] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -99,6 +101,27 @@ export default function LandingContentManagement() {
     return String(res.url || res.path || '');
   }, []);
 
+  const uploadDemoVideo = async (file: File) => {
+    setError(null);
+    setMessage(null);
+    if (!/\.(mp4|webm)$/i.test(file.name)) {
+      setError('Pilih video MP4 atau WebM.');
+      return;
+    }
+    setUploadingVideo(true);
+    try {
+      const result = await uploadShowcaseMedia(file);
+      const url = '/media/' + result.path;
+      if (!demoVideoSource(url)) throw new Error('File harus berupa video MP4 atau WebM yang valid.');
+      setAbout(current => ({ ...current, demo_video_url: url }));
+      setMessage('Video berhasil diunggah. Klik Simpan video demo untuk menerapkannya di beranda.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Video gagal diunggah. Coba lagi.');
+    } finally {
+      setUploadingVideo(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -111,10 +134,10 @@ export default function LandingContentManagement() {
       {error && <div className="rounded-lg border border-red-100 bg-red-50 p-3 text-sm text-red-600">{error}</div>}
       {message && !error && <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-sm text-zinc-800">{message}</div>}
 
-      <div className="flex w-fit gap-1 rounded-lg bg-zinc-100 p-1">
-        {(['about', 'services', 'articles'] as Tab[]).map((item) => (
+      <div className="flex max-w-full flex-wrap gap-1 rounded-lg bg-zinc-100 p-1">
+        {(['about', 'services', 'articles', 'demo'] as Tab[]).map((item) => (
           <button key={item} onClick={() => setTab(item)} className={`rounded-md px-4 py-2 text-sm font-semibold ${tab === item ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500'}`}>
-            {({ about: 'Tentang', services: 'Layanan', articles: 'Artikel' } as Record<Tab, string>)[item]}
+            {({ about: 'Tentang', services: 'Layanan', articles: 'Artikel', demo: 'Video Demo' } as Record<Tab, string>)[item]}
           </button>
         ))}
       </div>
@@ -153,6 +176,23 @@ export default function LandingContentManagement() {
             <Textarea label="Deskripsi" value={String(about.products_description || '')} onChange={(value) => setAbout({ ...about, products_description: value })} />
           </div>
           <button onClick={() => void saveAbout()} className="mt-5 inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-5 py-2 text-sm font-bold text-white"><Save className="h-4 w-4" /> Simpan teks produk</button>
+        </section>
+      )}
+
+      {tab === 'demo' && !loading && (
+        <section className="space-y-5 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <div><h2 className="font-bold text-zinc-900">Video demo halaman depan</h2><p className="mt-1 text-sm text-zinc-500">Unggah video MP4 atau WebM (maksimal 20 MB) ke server sendiri. Video diputar langsung di beranda saat pengunjung memilihnya.</p></div>
+          <label className="flex items-center gap-3 text-sm font-semibold"><input type="checkbox" checked={Boolean(about.demo_video_enabled)} onChange={event => setAbout({ ...about, demo_video_enabled: event.target.checked })} />Tampilkan video demo di beranda</label>
+          <Field label="Judul video" value={String(about.demo_video_title || '')} onChange={value => setAbout({ ...about, demo_video_title: value })} />
+          <Textarea label="Deskripsi video" value={String(about.demo_video_description || '')} onChange={value => setAbout({ ...about, demo_video_description: value })} />
+          <label className="block text-sm font-medium text-zinc-700">Unggah video
+            <input type="file" accept=".mp4,.webm,video/mp4,video/webm" disabled={uploadingVideo} className="mt-2 block w-full rounded-lg border border-zinc-300 p-3 disabled:opacity-50" onChange={event => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void uploadDemoVideo(file); }} />
+          </label>
+          {uploadingVideo && <p role="status" className="flex items-center gap-2 text-sm"><Loader2 className="h-4 w-4 animate-spin" /> Mengunggah video ke server…</p>}
+          {Boolean(about.demo_video_url) && <div className="flex flex-wrap items-center gap-3"><p className="break-all text-xs text-zinc-500">{String(about.demo_video_url)}</p><button type="button" disabled={uploadingVideo} onClick={() => setAbout({ ...about, demo_video_url: null, demo_video_enabled: false })} className="text-sm text-red-600">Lepas video</button></div>}
+          {Boolean(about.demo_video_url) && !demoVideoSource(String(about.demo_video_url)) && <p role="alert" className="text-sm text-red-600">Unggah video MP4/WebM ke server untuk mengganti sumber video sebelumnya.</p>}
+          {Boolean(about.demo_video_url) && <DemoVideo key={String(about.demo_video_url)} url={String(about.demo_video_url)} title={String(about.demo_video_title || 'Pratinjau video demo')} />}
+          <button disabled={uploadingVideo || (Boolean(about.demo_video_url) ? !demoVideoSource(String(about.demo_video_url)) : Boolean(about.demo_video_enabled))} onClick={() => void run(() => updateAdminLandingAbout(about), 'Pengaturan video demo disimpan.')} className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-5 py-2 text-sm font-bold text-white disabled:opacity-40"><Save className="h-4 w-4" /> Simpan video demo</button>
         </section>
       )}
 
