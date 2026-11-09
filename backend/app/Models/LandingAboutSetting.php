@@ -7,6 +7,10 @@ use Illuminate\Database\Eloquent\Model;
 class LandingAboutSetting extends Model
 {
     protected $fillable = [
+        'demo_video_enabled',
+        'demo_video_url',
+        'demo_video_title',
+        'demo_video_description',
         'title',
         'subtitle',
         'description',
@@ -24,6 +28,7 @@ class LandingAboutSetting extends Model
     protected function casts(): array
     {
         return [
+            'demo_video_enabled' => 'boolean',
             'years_experience' => 'integer',
             'projects_completed' => 'integer',
             'happy_clients' => 'integer',
