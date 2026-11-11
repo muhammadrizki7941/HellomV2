@@ -5,10 +5,13 @@ import cors from 'cors';
 import { Server as SocketIOServer } from 'socket.io';
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3001;
-const HOST = process.env.HOST || '0.0.0.0';
+const HOST = process.env.HOST || '127.0.0.1';
 // Shared secret must match backend REALTIME_SERVER_SECRET.
-// Defaulting to 'change-me' keeps local/dev working out-of-the-box.
-const SECRET = process.env.REALTIME_SERVER_SECRET || 'change-me';
+const SECRET = String(process.env.REALTIME_SERVER_SECRET || '').trim();
+
+if (!SECRET || SECRET === 'change-me') {
+  throw new Error('[realtime] REALTIME_SERVER_SECRET must be configured with a private value.');
+}
 
 // Comma-separated browser origins allowed to connect. Empty = allow any origin
 // (previous behaviour). Production: https://hellomspace.com
@@ -20,12 +23,7 @@ const CORS_ORIGIN = ALLOWED_ORIGINS.length > 0 ? ALLOWED_ORIGINS : true;
 
 // When true, sockets without a valid token (issued by Laravel) are rejected.
 // Anonymous sockets can join no room either way; they only receive global events.
-const REQUIRE_AUTH = String(process.env.REALTIME_REQUIRE_AUTH || 'false').toLowerCase() === 'true';
-
-if (SECRET === 'change-me') {
-  // eslint-disable-next-line no-console
-  console.warn('[realtime] WARNING: REALTIME_SERVER_SECRET is not set; using the public default "change-me". Set it in production.');
-}
+const REQUIRE_AUTH = String(process.env.REALTIME_REQUIRE_AUTH || 'true').toLowerCase() === 'true';
 
 /**
  * Verify a token of the form base64url(payload).base64url(HMAC-SHA256(payloadPart, SECRET)).

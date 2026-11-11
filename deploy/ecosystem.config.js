@@ -56,9 +56,8 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         PORT: '3001',
-        // Same as today. Once Nginx proxies /socket.io (deploy/nginx/*.conf.example),
-        // set HOST=127.0.0.1 in realtime/.env so port 3001 is not exposed publicly.
-        HOST: '0.0.0.0',
+        // Nginx proxies /socket.io; keep the realtime port private to the host.
+        HOST: '127.0.0.1',
         ...readEnvFile(path.join(root, 'realtime', '.env')),
       },
     },
